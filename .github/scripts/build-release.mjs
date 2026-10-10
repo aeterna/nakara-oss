@@ -87,7 +87,7 @@ const sums = readdirSync(out)
   .map((f) => `${createHash('sha256').update(readFileSync(path.join(out, f))).digest('hex')}  ${f}`)
   .join('\n');
 writeFileSync(path.join(out, 'SHA256SUMS'), sums + '\n');
-notes += `\n\n### Verify before you install\n\n\`\`\`bash\ngh attestation verify <asset> --repo aeterna/nakara-oss\nsha256sum -c SHA256SUMS\n\`\`\`\n`;
+notes += `\n\n### Verify before you install\n\n\`\`\`bash\ngh attestation verify <asset> --repo aeterna/nakara-oss --signer-workflow aeterna/nakara-oss/.github/workflows/release.yml\nsha256sum -c SHA256SUMS\n\`\`\`\n`;
 writeFileSync(path.join(out, 'RELEASE_NOTES.md'), notes);
 
 console.log(`${tag} (${kind})\n${sums}`);

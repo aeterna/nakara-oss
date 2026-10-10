@@ -1,7 +1,7 @@
 # Owner-only release. Triggered by hand; the `release` environment requires the owner's approval
 # before any job with write permissions starts. Releases are built here from the tagged commit —
 # never uploaded from a laptop — and every asset gets a build-provenance attestation that anyone
-# can check with:  gh attestation verify <zip> --repo aeterna/nakara-oss
+# can check with:  gh attestation verify <zip> --repo aeterna/nakara-oss --signer-workflow aeterna/nakara-oss/.github/workflows/release.yml
 name: release
 
 on:

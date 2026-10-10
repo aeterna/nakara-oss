@@ -56,7 +56,7 @@ Every release zip is built in CI and carries a build-provenance attestation. Che
 and the checksum before you put it on your server:
 
 ```sh
-gh attestation verify nakara_example-<version>.zip --repo aeterna/nakara-oss
+gh attestation verify nakara_example-<version>.zip --repo aeterna/nakara-oss --signer-workflow aeterna/nakara-oss/.github/workflows/release.yml
 sha256sum -c SHA256SUMS --ignore-missing
 ```
 

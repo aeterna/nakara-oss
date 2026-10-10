@@ -19,7 +19,8 @@ not need on a server.
 ## Verify before you install
 
 ```bash
-gh attestation verify nakara_cargen_fix-1.0.0.zip --repo aeterna/nakara-oss   # built by our CI from a tagged commit
+gh attestation verify nakara_cargen_fix-1.0.0.zip --repo aeterna/nakara-oss --signer-workflow aeterna/nakara-oss/.github/workflows/release.yml
+# ↑ proves the zip was built by our release workflow, not uploaded by hand
 sha256sum -c SHA256SUMS                                                    # file not altered
 npx @aeterna/fivem-devkit safety ./nakara_cargen_fix                       # scan it yourself
 ```
