@@ -25,13 +25,30 @@ local function applyRelief(on)
     )
 end
 
+-- Relief can be paused on THIS client only (exports below), e.g. by an admin test tool that needs a
+-- vanilla baseline. Never persisted: every (re)start of the resource begins with relief on.
+local reliefOn = true
+
 -- The engine re-enables generators on zone change / respawn, so re-assert periodically.
 CreateThread(function()
     applyRelief(true)
     while true do
         Wait(reassertMs)
-        applyRelief(true)
+        if reliefOn then applyRelief(true) end
     end
+end)
+
+--- exports.nakara_cargen_fix:setRelief(on) -- client-side, affects only the calling client.
+--- false = restore vanilla generators and stop re-asserting · true = disable them again right away.
+exports('setRelief', function(on)
+    reliefOn = on ~= false
+    applyRelief(reliefOn)
+    return reliefOn
+end)
+
+--- exports.nakara_cargen_fix:isRelief() -> boolean
+exports('isRelief', function()
+    return reliefOn
 end)
 
 AddEventHandler('onResourceStop', function(res)
