@@ -16,3 +16,4 @@ Initial public release.
   defaults).
 - `oss.json` capability manifest declaring no capabilities.
 - busted specs for the decision logic, the real client scripts and the `bNetworked = false` pin.
+
