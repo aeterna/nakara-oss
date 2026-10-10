@@ -98,6 +98,20 @@ through dense areas for about 15 minutes, die and respawn, and watch the client 
 
 `bNetworked` is not configurable.
 
+## Client exports (for testing)
+
+Both are client-side and affect **only the client that calls them** — nothing is synced.
+
+| Export | What it does |
+|---|---|
+| `exports.nakara_cargen_fix:setRelief(false)` | restore vanilla generators and stop re-asserting — use it to reproduce the overflow as a baseline |
+| `exports.nakara_cargen_fix:setRelief(true)` | disable generators again immediately and resume the loop |
+| `exports.nakara_cargen_fix:isRelief()` | `true` while relief is active |
+
+Relief is never persisted: every start of the resource begins with relief on. A typical A/B test:
+call `setRelief(false)`, drive through busy parking areas with F8 open until `Pool Full` appears, then
+`setRelief(true)` and confirm the line stops.
+
 ## Compatibility
 
 - Framework-independent (no dependency on ESX, QBCore, Qbox or ox_lib); client-side natives only.

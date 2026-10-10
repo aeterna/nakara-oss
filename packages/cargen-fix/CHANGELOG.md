@@ -14,5 +14,6 @@ Initial public release.
   generators map-wide with `bNetworked = false`, re-asserted every 5 s, restored on resource stop.
 - `config.lua` with `Config.Area` and `Config.ReassertMs` (validated; invalid values fall back to the
   defaults).
+- Client exports `setRelief(on)` / `isRelief()` to pause relief on one client for A/B testing.
 - `oss.json` capability manifest declaring no capabilities.
 - busted specs for the decision logic, the real client scripts and the `bNetworked = false` pin.
