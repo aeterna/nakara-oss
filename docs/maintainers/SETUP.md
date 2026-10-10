@@ -20,7 +20,9 @@ window with no gates.
    ```bash
    for f in .github/rulesets/*.json; do gh api repos/aeterna/nakara-oss/rulesets --method POST --input "$f"; done
    ```
-   `main-gates` has no bypass (CI must pass for everyone, owner included). `main-review` lets the
+   `release-tags` blocks moving or deleting any tag (GitHub refuses the Actions app as a ruleset
+   bypass actor, so tag *creation* cannot be limited to the workflow; only people with write access —
+   the owner — can create tags, and immutable releases lock a released tag). `main-gates` has no bypass (CI must pass for everyone, owner included). `main-review` lets the
    owner merge their own PRs without a second reviewer (there is no second maintainer yet) —
    every outside PR still needs owner approval of the latest push.
 6. Settings → Code security: **Secret scanning + push protection** on · **Private vulnerability reporting** on ·
@@ -33,7 +35,19 @@ window with no gates.
    before the first devkit release, not days ahead.
 8. Push once more, open a test PR from a fork account, confirm: CI waits for approval · DCO job
    fails on an unsigned commit · merge is blocked until approval.
-9. Flip visibility to **public**.
+9. Flip visibility to **public**, then **immediately** set what GitHub only allows on public repos
+   (checked 2026-10-10 on the Team plan — the API refuses these while private):
+   ```bash
+   R=aeterna/nakara-oss
+   gh api -X PUT repos/$R/actions/permissions/fork-pr-contributor-approval -f approval_policy=all_external_contributors
+   gh api -X PUT repos/$R/private-vulnerability-reporting
+   gh api -X PUT repos/$R/environments/release --input - <<JSON
+   {"reviewers":[{"type":"User","id":$(gh api users/tanakon8529 -q .id)}],"prevent_self_review":false,
+    "deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
+   JSON
+   ```
+   Until then the `release` environment has **no approval step** — only the branch policy (`main`).
+   That is acceptable while private because only the owner can dispatch a workflow.
 
 ## Releasing
 

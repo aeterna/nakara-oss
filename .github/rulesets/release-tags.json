@@ -1,14 +1,22 @@
 {
-  "name": "release tags: workflow only",
+  "name": "tags: no update or delete",
   "target": "tag",
   "enforcement": "active",
-  "conditions": { "ref_name": { "include": ["~ALL"], "exclude": [] } },
-  "bypass_actors": [
-    { "actor_id": 15368, "actor_type": "Integration", "bypass_mode": "always" }
-  ],
+  "conditions": {
+    "ref_name": {
+      "include": [
+        "~ALL"
+      ],
+      "exclude": []
+    }
+  },
+  "bypass_actors": [],
   "rules": [
-    { "type": "creation" },
-    { "type": "update" },
-    { "type": "deletion" }
+    {
+      "type": "update"
+    },
+    {
+      "type": "deletion"
+    }
   ]
 }
