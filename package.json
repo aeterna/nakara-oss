@@ -1,0 +1,16 @@
+{
+  "name": "fivem-oss",
+  "private": true,
+  "description": "Open-source FiveM resources and tooling from the Nakara City dev team",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": ["packages/devkit"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "npm run test --workspaces --if-present && npm run test:lua",
+    "test:lua": "busted --config-file=.busted",
+    "check": "node packages/devkit/bin/fivem-devkit.js check",
+    "safety": "node packages/devkit/bin/fivem-devkit.js safety",
+    "ci": "npm test && npm run check && npm run safety"
+  }
+}

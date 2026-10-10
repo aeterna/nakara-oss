@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "oss.schema.json",
+  "title": "fivem-oss package capability manifest (oss.json)",
+  "description": "Declares everything a resource is allowed to do to the server that runs it. `fivem-devkit safety` fails when code does something this file does not declare. Widening any list is a capability change and needs owner review.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "resource", "capabilities"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "name": { "type": "string", "description": "package folder name, e.g. cargen-fix" },
+    "resource": { "type": "string", "pattern": "^nakara_[a-z0-9_]+$", "description": "FiveM resource name (folder name after install)" },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["http", "commands", "convars", "netEvents", "nui", "db", "files"],
+      "properties": {
+        "http": { "type": "array", "items": { "type": "string" }, "description": "hosts/URL prefixes PerformHttpRequest/fetch may reach; ${convar} placeholders allowed" },
+        "commands": { "type": "array", "items": { "type": "string" }, "description": "command names passed to ExecuteCommand (first word)" },
+        "registeredCommands": { "type": "array", "items": { "type": "string" }, "description": "commands this resource registers with RegisterCommand" },
+        "convars": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "read": { "type": "array", "items": { "type": "string" }, "description": "convar names or prefix* globs read with GetConvar*" },
+            "write": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "netEvents": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "server": { "type": "array", "items": { "type": "string" }, "description": "net events the SERVER accepts from clients" },
+            "client": { "type": "array", "items": { "type": "string" }, "description": "net events the CLIENT accepts from the server" }
+          }
+        },
+        "nui": { "type": "boolean" },
+        "db": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "tables": { "type": "array", "items": { "type": "string" } },
+            "ddl": { "type": "boolean" }
+          }
+        },
+        "files": {
+          "type": "object", "additionalProperties": false,
+          "properties": { "write": { "type": "array", "items": { "type": "string" }, "description": "paths written with SaveResourceFile" } }
+        }
+      }
+    }
+  }
+}
