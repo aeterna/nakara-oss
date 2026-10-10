@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "oss.schema.json",
-  "title": "fivem-oss package capability manifest (oss.json)",
+  "title": "nakara-oss package capability manifest (oss.json)",
   "description": "Declares everything a resource is allowed to do to the server that runs it. `fivem-devkit safety` fails when code does something this file does not declare. Widening any list is a capability change and needs owner review.",
   "type": "object",
   "additionalProperties": false,

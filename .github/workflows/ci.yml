@@ -1,0 +1,84 @@
+# Runs on every PR (including forks). Security posture:
+#  - `pull_request` only, never `pull_request_target` — fork code must never run with a write token or secrets
+#  - token is read-only; no secrets are referenced anywhere in this workflow
+#  - every action is pinned to a full commit SHA (Dependabot bumps them)
+#  - `npm ci --ignore-scripts` — dependency install scripts never run
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  devkit:
+    name: devkit (tests · checks · safety)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts
+      - name: unit tests
+        run: npm test --workspace packages/devkit
+      - name: static checks (dogfood)
+        run: node packages/devkit/bin/fivem-devkit.js check
+      - name: safety scan (every package + template)
+        run: node packages/devkit/bin/fivem-devkit.js safety
+      - name: oss.json valid + capability diff vs base
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node .github/scripts/capability-report.mjs "$BASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+  lua:
+    name: lua (busted)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: leafo/gh-actions-lua@6919171ccf181b826f44b9bca76307b577217377 # v13.0.0
+        with:
+          luaVersion: "5.4"
+      - uses: leafo/gh-actions-luarocks@35d062def313a7699a0d513e996bcf4352f05389 # v6.1.0
+      - run: luarocks install busted
+      - run: busted --config-file=.busted
+
+  workflows:
+    name: workflow lint (actionlint · zizmor)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca # v1.7.12
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          advanced-security: false
+
+  dco:
+    name: DCO sign-off
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: every commit carries Signed-off-by matching its author
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node .github/scripts/check-dco.mjs "$BASE_SHA" "$HEAD_SHA"

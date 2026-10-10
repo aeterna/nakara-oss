@@ -1,5 +1,5 @@
 // Minimal fxmanifest.lua reader. Not a Lua interpreter — it understands the declarative shapes
-// manifests use in practice:  key 'value'  ·  key "value"  ·  key { 'a', "b", ... }  (multi-line).
+// manifests use in practice:  key 'value'  ·  key "value"  ·  key { 'a', "b", ... }  (multi-line), also key('v') / key({ … }).
 // Unknown/dynamic constructs are ignored, never guessed.
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -28,7 +28,7 @@ function strings(s) {
 export function parseManifest(src) {
   const text = stripComments(src);
   const m = { client: [], server: [], shared: [], files: [], dependencies: [] };
-  const re = /\b([a-z_0-9]+)\s*(\{[\s\S]*?\}|'[^'\n]*'|"[^"\n]*")/g;
+  const re = /\b([a-z_0-9]+)\s*\(?\s*(\{[\s\S]*?\}|'[^'\n]*'|"[^"\n]*")/g;
   for (const hit of text.matchAll(re)) {
     const [, key, value] = hit;
     if (LIST_KEYS[key]) m[LIST_KEYS[key]].push(...strings(value));
@@ -46,11 +46,13 @@ export function findResources(cwd, roots, ignore) {
       const base = path.basename(f);
       if (base !== 'fxmanifest.lua' && base !== '__resource.lua') continue;
       const dir = path.dirname(f);
+      const raw = readText(f);
       out.push({
         name: path.basename(dir),
         dir,
         manifestPath: f,
-        manifest: parseManifest(readText(f)),
+        manifestText: raw,
+        manifest: parseManifest(raw),
       });
     }
   }

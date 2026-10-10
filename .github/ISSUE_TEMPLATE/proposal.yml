@@ -1,0 +1,10 @@
+name: Proposal
+description: Suggest a feature, a new check, or a change to CI / the safety scanner
+labels: [proposal]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Proposal
+      description: "Changes to .github/, oss.schema.json or the safety scanner are written by the maintainer — describe them here instead of opening a PR."
+    validations: { required: true }

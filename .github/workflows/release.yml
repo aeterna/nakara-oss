@@ -1,0 +1,84 @@
+# Owner-only release. Triggered by hand; the `release` environment requires the owner's approval
+# before any job with write permissions starts. Releases are built here from the tagged commit —
+# never uploaded from a laptop — and every asset gets a build-provenance attestation that anyone
+# can check with:  gh attestation verify <zip> --repo aeterna/nakara-oss
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "package folder under packages/ (e.g. cargen-fix, devkit)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build + test ${{ inputs.package }}
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      kind: ${{ steps.meta.outputs.kind }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts
+      - run: npm test --workspace packages/devkit
+      - run: node packages/devkit/bin/fivem-devkit.js check
+      - run: node packages/devkit/bin/fivem-devkit.js safety
+      - id: meta
+        name: package metadata + bundle
+        env:
+          PKG: ${{ inputs.package }}
+        run: node .github/scripts/build-release.mjs "$PKG" out
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-out
+          path: out/
+          if-no-files-found: error
+
+  publish:
+    name: publish ${{ needs.build.outputs.tag }}
+    needs: build
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write        # create the tag + GitHub release
+      id-token: write        # OIDC for attestations and npm trusted publishing
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-out
+          path: out/
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: out/SHA256SUMS
+      - name: create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          shopt -s nullglob
+          gh release create "$TAG" out/*.zip out/*.tgz out/SHA256SUMS \
+            --target "$GITHUB_SHA" \
+            --title "$TAG" \
+            --notes-file out/RELEASE_NOTES.md
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: needs.build.outputs.kind == 'npm'
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: npm publish (trusted publishing, provenance)
+        if: needs.build.outputs.kind == 'npm'
+        run: npm publish out/*.tgz --provenance --access public

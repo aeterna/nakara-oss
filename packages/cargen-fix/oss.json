@@ -1,0 +1,15 @@
+{
+  "$schema": "../../oss.schema.json",
+  "name": "cargen-fix",
+  "resource": "nakara_cargen_fix",
+  "capabilities": {
+    "http": [],
+    "commands": [],
+    "registeredCommands": [],
+    "convars": { "read": [], "write": [] },
+    "netEvents": { "server": [], "client": [] },
+    "nui": false,
+    "db": { "tables": [], "ddl": false },
+    "files": { "write": [] }
+  }
+}

@@ -1,29 +1,52 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 // Plain recursive walk. Deliberately NOT a glob: FiveM category folders like `[local]` are glob
 // character classes, so a glob silently matches nothing and a check passes green on zero files.
-export function walk(dir, { exts = null, ignore = ['node_modules', '.git'] } = {}) {
+export function walk(dir, { exts = null, ignore = ['node_modules', '.git'] } = {}, seen = new Set()) {
   const out = [];
-  let entries;
+  let real, entries;
   try {
+    real = realpathSync(dir);
     entries = readdirSync(dir, { withFileTypes: true });
   } catch {
     return out;
   }
+  // Follow symlinked folders (servers often symlink asset packs into resources/) but never loop.
+  if (seen.has(real)) return out;
+  seen.add(real);
   for (const e of entries) {
     if (ignore.includes(e.name)) continue;
     const p = path.join(dir, e.name);
-    if (e.isDirectory()) out.push(...walk(p, { exts, ignore }));
+    let isDir = e.isDirectory();
+    if (e.isSymbolicLink()) isDir = isDirFollow(p);
+    if (isDir) out.push(...walk(p, { exts, ignore }, seen));
     else if (!exts || exts.some((x) => e.name.endsWith(x))) out.push(p);
   }
   return out;
 }
 
+function isDirFollow(p) {
+  try {
+    return statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+// Small LRU: several checks read the same Lua files, but a whole-tree scan must not pin every file in memory.
+const CACHE_MAX = 2000;
 const cache = new Map();
 export function readText(file) {
-  if (!cache.has(file)) cache.set(file, readFileSync(file, 'utf8'));
-  return cache.get(file);
+  let text = cache.get(file);
+  if (text !== undefined) {
+    cache.delete(file);
+  } else {
+    text = readFileSync(file, 'utf8');
+    if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value);
+  }
+  cache.set(file, text);
+  return text;
 }
 
 export function isDir(p) {

@@ -4,16 +4,37 @@
   "description": "Static checks, a code-safety scanner and a busted test harness for FiveM Lua/JS resources",
   "license": "MIT",
   "type": "module",
-  "bin": { "fivem-devkit": "bin/fivem-devkit.js" },
+  "bin": {
+    "fivem-devkit": "bin/fivem-devkit.js"
+  },
   "exports": {
     ".": "./src/index.js",
-    "./busted/*": "./busted/*"
+    "./busted/*": "./busted/*",
+    "./safety": "./src/safety/index.js"
   },
-  "files": ["bin", "src", "busted", "README.md", "LICENSE"],
-  "engines": { "node": ">=20" },
-  "keywords": ["fivem", "cfx", "qbox", "lua", "lint", "security", "busted"],
+  "files": [
+    "bin",
+    "src",
+    "busted",
+    "docs",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "fivem",
+    "cfx",
+    "qbox",
+    "lua",
+    "lint",
+    "security",
+    "busted"
+  ],
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test \"test/**/*.test.js\""
   },
   "dependencies": {
     "acorn": "8.12.1",

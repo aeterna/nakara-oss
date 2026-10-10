@@ -9,4 +9,24 @@
 //
 // severity defaults to 'error'. A check that found ZERO input files must return an error finding
 // saying so — a lint that silently scans nothing is how a gate goes green while broken.
-export const builtinChecks = [];
+import exportCalls from './export-calls.js';
+import exportFuncref from './export-funcref.js';
+import exportSelfParam from './export-self-param.js';
+import loadtimeGlobals from './loadtime-globals.js';
+import luaAndNilOr from './lua-and-nil-or.js';
+import luaChunkLocals from './lua-chunk-locals.js';
+import nuiCallbacks from './nui-callbacks.js';
+import nuiEscape from './nui-escape.js';
+import nulBytes from './nul-bytes.js';
+
+export const builtinChecks = [
+  exportCalls,
+  exportSelfParam,
+  exportFuncref,
+  nuiCallbacks,
+  nuiEscape,
+  luaAndNilOr,
+  luaChunkLocals,
+  loadtimeGlobals,
+  nulBytes,
+];

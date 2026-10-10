@@ -1,0 +1,12 @@
+# Every path needs the owner's review. The sensitive lines below are listed separately on purpose:
+# when a second maintainer joins, the default line widens to the team while these stay owner-only.
+*                          @tanakon8529
+
+# Owner-only, always: CI/release (a workflow change can leak tokens or ship unreviewed code),
+# capability manifests (widening = more power over servers that install us), the safety scanner
+# itself (weakening the gate would let anything through), and the schema it enforces.
+/.github/                  @tanakon8529
+**/oss.json                @tanakon8529
+/oss.schema.json           @tanakon8529
+/packages/devkit/src/safety/  @tanakon8529
+/SECURITY.md               @tanakon8529

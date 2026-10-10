@@ -1,0 +1,15 @@
+{
+  "$schema": "../../oss.schema.json",
+  "name": "example",
+  "resource": "nakara_example",
+  "capabilities": {
+    "http": [],
+    "commands": [],
+    "registeredCommands": [],
+    "convars": { "read": [], "write": [] },
+    "netEvents": { "server": [], "client": [] },
+    "nui": false,
+    "db": { "tables": [], "ddl": false },
+    "files": { "write": [] }
+  }
+}

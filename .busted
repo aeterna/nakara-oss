@@ -1,0 +1,9 @@
+-- busted config for nakara-oss. Run from the repo root:  busted --config-file=.busted  (npm run test:lua)
+-- Specs require the devkit harness as `helpers.natives` / `helpers.resource` (lpath below).
+return {
+    default = {
+        ROOT = { 'packages/cargen-fix/spec', 'packages/devkit/busted/spec_example', 'templates/resource/spec' },
+        pattern = '_spec',
+        lpath = './packages/devkit/busted/?.lua;./?.lua;./?/init.lua',
+    },
+}

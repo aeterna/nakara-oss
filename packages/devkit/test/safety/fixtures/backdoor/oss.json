@@ -1,0 +1,9 @@
+{
+  "name": "free-hud",
+  "resource": "nakara_free_hud",
+  "capabilities": {
+    "http": [], "commands": [], "convars": { "read": [], "write": [] },
+    "netEvents": { "server": [], "client": [] }, "nui": false,
+    "db": { "tables": [], "ddl": false }, "files": { "write": [] }
+  }
+}

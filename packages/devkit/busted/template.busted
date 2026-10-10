@@ -1,0 +1,17 @@
+-- .busted -- copy to the root of your FiveM project and adjust ROOT.
+-- Run from that root:  busted   (or: busted --config-file=.busted)
+--
+-- lpath makes the devkit harness requirable as `helpers.natives` / `helpers.resource`.
+-- Pick the line that matches how you installed the devkit:
+--   npm:     ./node_modules/@aeterna/fivem-devkit/busted/?.lua
+--   vendored copy (e.g. git submodule at tools/nakara-oss):  ./tools/nakara-oss/packages/devkit/busted/?.lua
+local DEVKIT = './node_modules/@aeterna/fivem-devkit/busted/?.lua'
+
+return {
+    default = {
+        ROOT = { 'spec' },             -- folders scanned for spec files
+        pattern = '_spec',             -- files ending in _spec.lua
+        lpath = DEVKIT .. ';./?.lua;./?/init.lua',
+        -- helper = 'spec/preload.lua', -- optional: a file run once before every spec file
+    },
+}

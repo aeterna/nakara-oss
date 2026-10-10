@@ -1,11 +1,11 @@
 {
-  "name": "fivem-oss",
+  "name": "nakara-oss",
   "private": true,
   "description": "Open-source FiveM resources and tooling from the Nakara City dev team",
   "license": "MIT",
   "type": "module",
   "workspaces": ["packages/devkit"],
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=22" },
   "scripts": {
     "test": "npm run test --workspaces --if-present && npm run test:lua",
     "test:lua": "busted --config-file=.busted",

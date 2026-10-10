@@ -6,6 +6,7 @@ import { createContext } from './context.js';
 
 export { loadConfig, createContext };
 export { parseManifest, findResources } from './manifest.js';
+export { runSafety, capabilityDiff } from './safety/index.js';
 
 export async function loadChecks(config, cwd) {
   const checks = [...builtinChecks];
