@@ -4,9 +4,10 @@
 
 # Owner-only, always: CI/release (a workflow change can leak tokens or ship unreviewed code),
 # capability manifests (widening = more power over servers that install us), the safety scanner
-# itself (weakening the gate would let anything through), and the schema it enforces.
+# itself (weakening the gate would let anything through), the schema it enforces, and the whole
+# devkit — it is executed by downstream CI runners, so any change there is supply-chain code.
 /.github/                  @tanakon8529
 **/oss.json                @tanakon8529
 /oss.schema.json           @tanakon8529
-/packages/devkit/src/safety/  @tanakon8529
+/packages/devkit/           @tanakon8529   # whole devkit: it runs inside other projects' CI (incl. ours)
 /SECURITY.md               @tanakon8529

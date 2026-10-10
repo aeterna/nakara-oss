@@ -3,3 +3,5 @@ dist/
 *.log
 .DS_Store
 /.devkit-cache/
+# copied in by .github/scripts/build-release.mjs before npm pack
+/packages/devkit/LICENSE

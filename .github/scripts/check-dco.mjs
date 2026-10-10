@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Every commit in BASE..HEAD must carry `Signed-off-by: <author name> <author email>` (Developer
+// Every commit in BASE..HEAD must carry a `Signed-off-by:` line whose EMAIL matches the commit author (Developer
 // Certificate of Origin, https://developercertificate.org). Fork-safe: reads git only, no token.
 import { execFileSync } from 'node:child_process';
 
@@ -13,11 +13,12 @@ const bad = [];
 for (const rec of raw.split('\x1e').map((s) => s.trim()).filter(Boolean)) {
   const [sha, name, email, body] = rec.split('\x00');
   const signoffs = [...body.matchAll(/^Signed-off-by:\s*(.+?)\s*<([^>]+)>\s*$/gim)];
-  const ok = signoffs.some(([, n, e]) => e.toLowerCase() === email.toLowerCase() && n.trim() === name.trim());
+  // email only: names drift (accents, nicknames, casing) far more often than addresses do
+  const ok = signoffs.some(([, , e]) => e.trim().toLowerCase() === email.trim().toLowerCase());
   if (!ok) bad.push(`${sha.slice(0, 10)} ${name} <${email}>`);
 }
 if (bad.length) {
-  console.error(`✗ ${bad.length} commit(s) without a matching Signed-off-by line:\n  ${bad.join('\n  ')}`);
+  console.error(`✗ ${bad.length} commit(s) without a Signed-off-by line matching the author email:\n  ${bad.join('\n  ')}`);
   console.error('\nFix: git rebase --signoff <base>  (or commit with -s), then force-push your branch.');
   process.exit(1);
 }

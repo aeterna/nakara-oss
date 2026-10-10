@@ -27,7 +27,10 @@ window with no gates.
    Dependabot alerts + security updates on
 7. npm: create org/scope for `@aeterna` (unverified whether the scope is free — check on npmjs.com),
    add a **trusted publisher** for `aeterna/nakara-oss` workflow `release.yml` environment `release`.
-   No npm token is ever stored in GitHub.
+   No npm token is ever stored in GitHub. Package settings → **"Require two-factor authentication
+   and disallow tokens"** so the package can only be published by the workflow.
+   ⚠️ A trusted-publisher config that is never used expires (npm, Oct 2026) — set it up right
+   before the first devkit release, not days ahead.
 8. Push once more, open a test PR from a fork account, confirm: CI waits for approval · DCO job
    fails on an unsigned commit · merge is blocked until approval.
 9. Flip visibility to **public**.
