@@ -9,9 +9,18 @@ if (!base || !head) {
   process.exit(2);
 }
 const raw = execFileSync('git', ['log', '--no-merges', '--format=%H%x00%an%x00%ae%x00%B%x1e', `${base}..${head}`], { encoding: 'utf8' });
+// GitHub's own bots cannot sign off. Commit author emails are NOT authenticated (anyone can set them),
+// so a bot commit is exempt only when the PR itself was opened by that bot account (PR_AUTHOR comes
+// from the event payload, which a contributor cannot forge). Bot PRs still need owner review + green CI.
+const BOTS = new Map([
+  ['dependabot[bot]', '49699333+dependabot[bot]@users.noreply.github.com'],
+  ['github-actions[bot]', '41898282+github-actions[bot]@users.noreply.github.com'],
+]);
+const botEmail = BOTS.get(process.env.PR_AUTHOR ?? '');
 const bad = [];
 for (const rec of raw.split('\x1e').map((s) => s.trim()).filter(Boolean)) {
   const [sha, name, email, body] = rec.split('\x00');
+  if (botEmail && email.trim().toLowerCase() === botEmail) continue;
   const signoffs = [...body.matchAll(/^Signed-off-by:\s*(.+?)\s*<([^>]+)>\s*$/gim)];
   // email only: names drift (accents, nicknames, casing) far more often than addresses do
   const ok = signoffs.some(([, , e]) => e.trim().toLowerCase() === email.trim().toLowerCase());
