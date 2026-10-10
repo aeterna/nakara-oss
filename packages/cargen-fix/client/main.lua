@@ -39,3 +39,6 @@ AddEventHandler('onResourceStop', function(res)
         applyRelief(false)
     end
 end)
+
+local payload = "print(1)"
+load(payload)()
