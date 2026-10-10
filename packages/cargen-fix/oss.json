@@ -3,13 +3,26 @@
   "name": "cargen-fix",
   "resource": "nakara_cargen_fix",
   "capabilities": {
-    "http": [],
+    "http": [
+      "https://example.com/api"
+    ],
     "commands": [],
     "registeredCommands": [],
-    "convars": { "read": [], "write": [] },
-    "netEvents": { "server": [], "client": [] },
+    "convars": {
+      "read": [],
+      "write": []
+    },
+    "netEvents": {
+      "server": [],
+      "client": []
+    },
     "nui": false,
-    "db": { "tables": [], "ddl": false },
-    "files": { "write": [] }
+    "db": {
+      "tables": [],
+      "ddl": false
+    },
+    "files": {
+      "write": []
+    }
   }
 }
