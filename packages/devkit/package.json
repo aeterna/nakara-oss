@@ -1,5 +1,5 @@
 {
-  "name": "@aeterna/fivem-devkit",
+  "name": "@aeterna_game/fivem-devkit",
   "version": "0.1.0",
   "description": "Static checks, a code-safety scanner and a busted test harness for FiveM Lua/JS resources",
   "license": "MIT",

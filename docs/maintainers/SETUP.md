@@ -27,12 +27,17 @@ window with no gates.
    every outside PR still needs owner approval of the latest push.
 6. Settings → Code security: **Secret scanning + push protection** on · **Private vulnerability reporting** on ·
    Dependabot alerts + security updates on
-7. npm: create org/scope for `@aeterna` (unverified whether the scope is free — check on npmjs.com),
-   add a **trusted publisher** for `aeterna/nakara-oss` workflow `release.yml` environment `release`.
-   No npm token is ever stored in GitHub. Package settings → **"Require two-factor authentication
-   and disallow tokens"** so the package can only be published by the workflow.
-   ⚠️ A trusted-publisher config that is never used expires (npm, Oct 2026) — set it up right
-   before the first devkit release, not days ahead.
+7. npm (org `aeterna_game` exists since 2026-10-11). npm cannot attach a trusted publisher to a package
+   that has never been published, so the first version is a hand-published stub:
+   1. `npm login --auth-type=web` (browser login — not a token; a 2FA-bypassing token makes `npm trust`
+      fail with E401)
+   2. publish the empty `0.0.0` stub under the `bootstrap` dist-tag (`--provenance=false`; `latest` stays
+      unset until CI publishes the real release)
+   3. package settings → **Trusted publisher**: GitHub Actions · `aeterna/nakara-oss` · workflow
+      `release.yml` · environment `release`; then **Require two-factor authentication and disallow tokens**
+   4. run the `release` workflow for `devkit` within the same day — an unused trusted-publisher config
+      expires (npm, Oct 2026)
+   5. revoke any npm token created while setting this up. No npm token is ever stored in GitHub.
 8. Push once more, open a test PR from a fork account, confirm: CI waits for approval · DCO job
    fails on an unsigned commit · merge is blocked until approval.
 9. Flip visibility to **public**, then **immediately** set what GitHub only allows on public repos
