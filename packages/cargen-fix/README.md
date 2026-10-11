@@ -1,19 +1,25 @@
 # nakara_cargen_fix
 
-Stops this client-log spam, and the `net.dll` crash it can escalate to:
+A guard against this client-log spam, and the `net.dll` crash it can escalate to:
 
 ```
 CNetworkCarGenWorldStateData Pool Full, Size == 100   (crash_hash net.dll+487A2)
 ```
 
-Client-only, framework-independent, no configuration required.
+…plus the two facts we wish we had known first: the popular `GAMECONFIG_FILE` "fix" does nothing, and the
+obvious way to call the native **causes** the overflow. Client-only, framework-independent, no
+configuration required.
+
+> **Read [What we have verified](#what-we-have-verified) before relying on it.** We have proven that this
+> resource does not fill the pool itself. We have **not** been able to reproduce the vanilla overflow it
+> guards against, so we cannot yet claim it fixes that case.
 
 ## The problem
 
 `CNetworkCarGenWorldStateData` is a network pool with a fixed size of 100. On OneSync servers whose map has
-more than 100 vehicle generators (the game's ambient *parked* cars), the pool fills up and every client
-logs the line above, roughly every 15 seconds while driving. On affected clients it can turn an ordinary
-disconnect into a `net.dll` crash.
+more than 100 vehicle generators (the game's ambient *parked* cars), the pool can fill up and the client
+logs the line above repeatedly. When it happens during a disconnect, an ordinary "connection lost" can
+escalate into a `net.dll` crash dump.
 
 ## Why the popular `GAMECONFIG_FILE` overlay does nothing
 
@@ -70,6 +76,20 @@ fills the 100-slot pool by itself and the fix becomes the bug. This has happened
 log lines spaced exactly at the re-assert interval. With `false` the call is purely local and the interval
 does not matter. `spec/cargen_fix_spec.lua` fails if any call passes anything other than the literal `false`.
 
+## What we have verified
+
+All on one live OneSync server, with the defaults in this repo.
+
+| Claim | Evidence | Status |
+|---|---|---|
+| Passing `bNetworked = true` on a timer fills the pool by itself | client crash dump: 1,270 `Pool Full` lines, 423 of them exactly 5,000 ms apart — the re-assert interval of a version that passed `true` | ✅ observed (game build: Legacy) |
+| This resource (`bNetworked = false`) does not allocate from the pool | busted spec pins the literal `false` in every call; live, 2.3 minutes with relief **on** (right after the 10.7-minute relief-off run below) with no `Pool Full` | ✅ spec · ⚠️ short live run (Enhanced / gen9) |
+| `data_file 'GAMECONFIG_FILE'` is a no-op | CitizenFX source + the client log line above | ✅ verified (every build) |
+| Disabling generators prevents the **vanilla** overflow | A/B test with relief **off**: 10.7 minutes driving with ~80 parked cars within 150 m, single player — **no `Pool Full` appeared**, so there was nothing to prevent | ⚠️ **not reproduced** — Enhanced, 1 player. Legacy and busy multi-player sessions not yet tested |
+
+If you can reproduce the vanilla overflow, please open an issue with your game build, player count and
+the A/B result from the exports below — that is the missing evidence.
+
 ## Install
 
 1. Download `nakara_cargen_fix-<version>.zip` from the
@@ -83,9 +103,10 @@ does not matter. `spec/cargen_fix_spec.lua` fails if any call passes anything ot
 
 4. Remove any `data_file 'GAMECONFIG_FILE'` overlay you added for this problem; it never worked.
 
-Ensure order does not matter (this is not a boot-time gameconfig override). To check that it works, drive
-through dense areas for about 15 minutes, die and respawn, and watch the client console (F8): the
-`CNetworkCarGenWorldStateData Pool Full` line should no longer appear.
+Ensure order does not matter (this is not a boot-time gameconfig override). To check it on your server,
+drive through dense areas for about 15 minutes, die and respawn, and watch the client console (F8): there
+should be no `CNetworkCarGenWorldStateData Pool Full` line and no `invalid type GAMECONFIG_FILE` line. To
+see whether your server suffers the vanilla overflow at all, use the A/B exports below.
 
 ## Config
 
@@ -116,8 +137,8 @@ call `setRelief(false)`, drive through busy parking areas with F8 open until `Po
 
 - Framework-independent (no dependency on ESX, QBCore, Qbox or ox_lib); client-side natives only.
 - The overflow was observed on a OneSync server; behaviour without OneSync has not been tested.
-- The `GAMECONFIG_FILE` analysis above applies to every game build. The fix itself has been verified
-  in-game on one production server; it is not yet verified on other game builds.
+- The `GAMECONFIG_FILE` analysis above applies to every game build. For what the resource itself has
+  been verified to do, and on which build, see [What we have verified](#what-we-have-verified).
 
 ## Capabilities
 

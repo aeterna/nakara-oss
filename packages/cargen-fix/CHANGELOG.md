@@ -16,4 +16,6 @@ Initial public release.
   defaults).
 - Client exports `setRelief(on)` / `isRelief()` to pause relief on one client for A/B testing.
 - `oss.json` capability manifest declaring no capabilities.
+- README section "What we have verified", including an A/B test that could not reproduce the vanilla
+  overflow (Enhanced, single player).
 - busted specs for the decision logic, the real client scripts and the `bNetworked = false` pin.

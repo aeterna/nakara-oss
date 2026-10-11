@@ -2,11 +2,11 @@
 --
 -- Problem: the network pool CNetworkCarGenWorldStateData has a fixed size of 100. It cannot be raised: it
 -- is not in gameconfig.xml <PoolSizes> and it is not on the `increase_pool_size` allow-list. On OneSync
--- maps with more than 100 vehicle generators (ambient parked cars) the pool fills and the client logs
+-- maps with more than 100 vehicle generators (ambient parked cars) the pool can fill and the client logs
 --     CNetworkCarGenWorldStateData Pool Full, Size == 100   (crash_hash net.dll+487A2)
--- about every 15 s while driving, which can escalate into a net.dll crash.
+-- repeatedly, which can escalate into a net.dll crash. (README: what has and has not been verified.)
 --
--- Fix: disable vehicle generators map-wide, locally. No networked car-gen world state is created, so the
+-- Guard: disable vehicle generators map-wide, locally. No networked car-gen world state is created, so the
 -- pool never fills. Player- and script-spawned vehicles are not generators and are not affected.
 --
 -- The decision logic lives in client/logic.lua (unit-tested); this file only calls natives.
