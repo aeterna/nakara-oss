@@ -80,7 +80,8 @@ jobs:
           if npm view "$NAME@$VER" version >/dev/null 2>&1; then
             echo "$NAME@$VER already on npm — skipping publish"
           else
-            npm publish out/*.tgz --provenance --access public
+            # ./ is required: npm reads `out/<file>.tgz` as a GitHub shorthand (owner/repo) and runs git
+            npm publish ./out/*.tgz --provenance --access public
           fi
       - name: create GitHub release
         env:
