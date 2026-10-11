@@ -64,6 +64,24 @@ jobs:
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-checksums: out/SHA256SUMS
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: needs.build.outputs.kind == 'npm'
+        with:
+          node-version: 24        # trusted publishing (OIDC) needs npm >= 11.5.1; Node 22 ships npm 10
+          registry-url: https://registry.npmjs.org
+      # npm BEFORE the GitHub release: the release + tag are immutable, so if npm failed after them a
+      # retry of the same version would be impossible. A version already on npm (a retry after the
+      # GitHub step failed) is skipped, not re-published.
+      - name: npm publish (trusted publishing, provenance)
+        if: needs.build.outputs.kind == 'npm'
+        run: |
+          NAME=$(node -p "require('./packages/devkit/package.json').name")
+          VER=$(node -p "require('./packages/devkit/package.json').version")
+          if npm view "$NAME@$VER" version >/dev/null 2>&1; then
+            echo "$NAME@$VER already on npm — skipping publish"
+          else
+            npm publish out/*.tgz --provenance --access public
+          fi
       - name: create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -74,11 +92,3 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "$TAG" \
             --notes-file out/RELEASE_NOTES.md
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: needs.build.outputs.kind == 'npm'
-        with:
-          node-version: 24        # trusted publishing (OIDC) needs npm >= 11.5.1; Node 22 ships npm 10
-          registry-url: https://registry.npmjs.org
-      - name: npm publish (trusted publishing, provenance)
-        if: needs.build.outputs.kind == 'npm'
-        run: npm publish out/*.tgz --provenance --access public
