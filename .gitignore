@@ -5,3 +5,6 @@ dist/
 /.devkit-cache/
 # copied in by .github/scripts/build-release.mjs before npm pack
 /packages/devkit/LICENSE
+# local secrets — never commit (GitHub push protection is the second net, not the first)
+.env
+.env.*
