@@ -1,4 +1,4 @@
-# @aeterna/fivem-devkit
+# @aeterna_game/fivem-devkit
 
 Tooling for FiveM resource authors and server owners:
 
@@ -14,9 +14,9 @@ Tooling for FiveM resource authors and server owners:
 ## Usage
 
 ```bash
-npx @aeterna/fivem-devkit list
-npx @aeterna/fivem-devkit check                 # uses ./.fivem-devkit.json
-npx @aeterna/fivem-devkit safety ./resources/[local]/some_resource
+npx @aeterna_game/fivem-devkit list
+npx @aeterna_game/fivem-devkit check                 # uses ./.fivem-devkit.json
+npx @aeterna_game/fivem-devkit safety ./resources/[local]/some_resource
 ```
 
 Exit code 1 when any error is found, so it works as a CI gate. `--format github` (automatic on

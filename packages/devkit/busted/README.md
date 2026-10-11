@@ -15,11 +15,11 @@ interpreter, without a FiveM server or client.
 ```sh
 # Lua + LuaRocks from your package manager (brew install lua luarocks, apt install lua5.1 luarocks, ...)
 luarocks install busted       # also installs dkjson and luafilesystem, which the harness uses when present
-npm install --save-dev @aeterna/fivem-devkit
-cp node_modules/@aeterna/fivem-devkit/busted/template.busted .busted
+npm install --save-dev @aeterna_game/fivem-devkit
+cp node_modules/@aeterna_game/fivem-devkit/busted/template.busted .busted
 ```
 
-`template.busted` points `lpath` at `node_modules/@aeterna/fivem-devkit/busted/`. If you vendor the devkit
+`template.busted` points `lpath` at `node_modules/@aeterna_game/fivem-devkit/busted/`. If you vendor the devkit
 some other way, change the `DEVKIT` line. Either way, specs load the harness with:
 
 ```lua

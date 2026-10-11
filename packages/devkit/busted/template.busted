@@ -3,9 +3,9 @@
 --
 -- lpath makes the devkit harness requirable as `helpers.natives` / `helpers.resource`.
 -- Pick the line that matches how you installed the devkit:
---   npm:     ./node_modules/@aeterna/fivem-devkit/busted/?.lua
+--   npm:     ./node_modules/@aeterna_game/fivem-devkit/busted/?.lua
 --   vendored copy (e.g. git submodule at tools/nakara-oss):  ./tools/nakara-oss/packages/devkit/busted/?.lua
-local DEVKIT = './node_modules/@aeterna/fivem-devkit/busted/?.lua'
+local DEVKIT = './node_modules/@aeterna_game/fivem-devkit/busted/?.lua'
 
 return {
     default = {
