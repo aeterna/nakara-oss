@@ -42,7 +42,11 @@ let kind, tag, version, notes;
 const pj = path.join(dir, 'package.json');
 if (existsSync(pj)) {
   kind = 'npm';
-  version = JSON.parse(readFileSync(pj, 'utf8')).version;
+  const pkgJson = JSON.parse(readFileSync(pj, 'utf8'));
+  version = pkgJson.version;
+  // npm rejects provenance (E422) unless repository.url matches the repo that built it
+  const repoUrl = typeof pkgJson.repository === 'string' ? pkgJson.repository : pkgJson.repository?.url;
+  if (!/github\.com\/aeterna\/nakara-oss(\.git)?$/.test(repoUrl ?? '')) die('package.json repository.url must point at github.com/aeterna/nakara-oss (npm provenance check)');
   tag = `fivem-${pkg}@${version}`;
   notes = changelogSection(version);
   cpSync(path.join(ROOT, 'LICENSE'), path.join(dir, 'LICENSE'));

@@ -3,6 +3,15 @@
   "version": "0.1.0",
   "description": "Static checks, a code-safety scanner and a busted test harness for FiveM Lua/JS resources",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aeterna/nakara-oss.git",
+    "directory": "packages/devkit"
+  },
+  "homepage": "https://github.com/aeterna/nakara-oss/tree/main/packages/devkit#readme",
+  "bugs": {
+    "url": "https://github.com/aeterna/nakara-oss/issues"
+  },
   "type": "module",
   "bin": {
     "fivem-devkit": "bin/fivem-devkit.js"
