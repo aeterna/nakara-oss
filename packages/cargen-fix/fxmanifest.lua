@@ -4,7 +4,7 @@ lua54 'yes'
 
 name 'nakara_cargen_fix'
 author 'Nakara City dev team'
-description 'Stops "CNetworkCarGenWorldStateData Pool Full, Size == 100" by disabling vehicle generators locally (never networked). Client-only.'
+description 'Guards against "CNetworkCarGenWorldStateData Pool Full, Size == 100" by disabling vehicle generators locally (never networked). Client-only.'
 version '1.0.0'
 repository 'https://github.com/aeterna/nakara-oss'
 

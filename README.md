@@ -10,7 +10,7 @@ every release is built in CI with a provenance attestation.
 
 | Package | What it is | Install |
 |---|---|---|
-| [`cargen-fix`](packages/cargen-fix) · resource `nakara_cargen_fix` | Stops the `CNetworkCarGenWorldStateData Pool Full` client crash | [Releases](https://github.com/aeterna/nakara-oss/releases?q=nakara_cargen_fix) → drop into `resources/` → `ensure nakara_cargen_fix` |
+| [`cargen-fix`](packages/cargen-fix) · resource `nakara_cargen_fix` | Guards against the `CNetworkCarGenWorldStateData Pool Full` client crash — and explains why the popular `GAMECONFIG_FILE` fix does nothing ([what is verified](packages/cargen-fix/README.md#what-we-have-verified)) | [Releases](https://github.com/aeterna/nakara-oss/releases?q=nakara_cargen_fix) → drop into `resources/` → `ensure nakara_cargen_fix` |
 | [`devkit`](packages/devkit) · npm `@aeterna/fivem-devkit` | Static checks for FiveM Lua/JS, a code-safety scanner, a busted test harness | `npx @aeterna/fivem-devkit check` |
 
 Download a **release asset**, not the repository ZIP — the repo contains tests and tooling you do
