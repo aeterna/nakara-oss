@@ -33,9 +33,28 @@ export default {
   description: 'every SetNuiFocus(true, true) resource has a written, still-valid escape in the registry',
   defaults: {
     registry: '.fivem-devkit/nui-focus-surfaces.json',
+    extraDirs: [],
   },
   run(ctx, opts) {
     const files = resourceFiles(ctx, ['.lua']);
+    const extraDirs = Array.isArray(opts?.extraDirs) ? opts.extraDirs.filter(Boolean) : [];
+    if (extraDirs.length) {
+      const seen = new Set(files.map((f) => f.file));
+      for (const extraDir of extraDirs) {
+        const absDir = path.resolve(ctx.cwd, extraDir);
+        for (const file of ctx.walk(extraDir, ['.lua'])) {
+          if (seen.has(file)) continue;
+          seen.add(file);
+          const rel = path.relative(absDir, file);
+          const name = rel.split(path.sep)[0];
+          files.push({
+            file,
+            resource: { name, dir: path.join(absDir, name) },
+            rel: rel.split(path.sep).join('/'),
+          });
+        }
+      }
+    }
     if (!files.length) return noFiles(ctx, 'Lua files');
 
     const sites = [];
