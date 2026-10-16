@@ -55,3 +55,44 @@ test('zero Lua files is an error', async () => {
   const out = await run(check, {});
   assert.match(out[0].message, /scanned 0/);
 });
+
+test('extraDirs discovers SetNuiFocus in non-manifest override folders', async () => {
+  const extraFiles = {
+    'resources/quiet/fxmanifest.lua': MANIFEST,
+    'resources/quiet/client/main.lua': 'print(1)\n',
+    'overrides/custom_ui/client.lua': 'SetNuiFocus(true, true)\n',
+    'reg.json': JSON.stringify({ surfaces: [] }),
+  };
+  const out = await run(check, extraFiles, {
+    checks: {
+      'nui-escape': {
+        extraDirs: ['overrides'],
+        registry: 'reg.json',
+      },
+    },
+  });
+  assert.equal(out.length, 1);
+  assert.match(out[0].message, /'custom_ui' has no entry in reg\.json/);
+});
+
+test('extraDirs passes when override resource is judged', async () => {
+  const extraFiles = {
+    'resources/quiet/fxmanifest.lua': MANIFEST,
+    'resources/quiet/client/main.lua': 'print(1)\n',
+    'overrides/custom_ui/client.lua': 'local function close() SetNuiFocus(false, false) end\nSetNuiFocus(true, true)\n',
+    'reg.json': JSON.stringify({
+      surfaces: [
+        { resource: 'custom_ui', file: 'overrides/custom_ui/client.lua', escape: 'close fn', evidence: 'close' },
+      ],
+    }),
+  };
+  const out = await run(check, extraFiles, {
+    checks: {
+      'nui-escape': {
+        extraDirs: ['overrides'],
+        registry: 'reg.json',
+      },
+    },
+  });
+  assert.deepEqual(out, []);
+});

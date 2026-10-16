@@ -189,6 +189,7 @@ Lines starting with `--` are ignored.
 | option | default | meaning |
 |---|---|---|
 | `registry` | `".fivem-devkit/nui-focus-surfaces.json"` | registry path |
+| `extraDirs` | `[]` | extra directories (relative to project root) to scan for Lua files outside `roots` (e.g. server overrides without `fxmanifest.lua`). The immediate subdirectory under each path is taken as the resource name. |
 
 ---
 
