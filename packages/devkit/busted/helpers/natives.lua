@@ -391,6 +391,100 @@ function M.set_convar(name, value) state.convars[name] = tostring(value) end
 --- Convar writes made by the script via SetConvar*: { { name, value, kind } ... }
 function M.convar_writes() return state.convar_writes end
 
+-------------------------------------------------------------------------------------------------------
+-- KVP (key-value storage) helpers
+-------------------------------------------------------------------------------------------------------
+
+--- Get a stored KVP string value.
+function M.get_kvp(key) return state.kvp[tostring(key)] end
+
+--- Set a KVP string value.
+function M.set_kvp(key, val)
+    if val == nil then state.kvp[tostring(key)] = nil
+    else state.kvp[tostring(key)] = tostring(val) end
+end
+
+--- Shallow copy of the full KVP store table.
+function M.kvp_table()
+    local copy = {}
+    for k, v in pairs(state.kvp) do copy[k] = v end
+    return copy
+end
+
+-------------------------------------------------------------------------------------------------------
+-- Statebags / routing / entity helpers
+-------------------------------------------------------------------------------------------------------
+
+--- Read raw statebag data table for handle `h`.
+function M.entity_state(h)
+    local key = tonumber(h) or h
+    return state.entity_state[key] or {}
+end
+
+--- Set a statebag key on handle `h`.
+function M.set_entity_state(h, key, val)
+    local k = tonumber(h) or h
+    state.entity_state[k] = state.entity_state[k] or {}
+    state.entity_state[k][key] = val
+end
+
+--- Get routing bucket for player `src` (default 0).
+function M.player_bucket(src) return state.player_buckets[tonumber(src)] or 0 end
+
+--- Set routing bucket for player `src`.
+function M.set_player_bucket(src, b) state.player_buckets[tonumber(src)] = tonumber(b) or 0 end
+
+--- Get routing bucket for entity `ent` (default 0).
+function M.entity_bucket(ent) return state.entity_buckets[tonumber(ent)] or 0 end
+
+--- Set routing bucket for entity `ent`.
+function M.set_entity_bucket(ent, b) state.entity_buckets[tonumber(ent)] = tonumber(b) or 0 end
+
+--- Register a mock vehicle for GetAllVehicles() / GetVehicle* queries.
+function M.add_vehicle(h, opts)
+    opts = opts or {}
+    local key = tonumber(h) or h
+    state.vehicles[key] = {
+        plate = opts.plate or '',
+        engine = opts.engine or 1000.0,
+        body = opts.body or 1000.0,
+        seats = opts.seats or {},
+    }
+    state.entities[key] = {
+        exist = true,
+        coords = opts.coords or vector3(0.0, 0.0, 0.0),
+        health = opts.health or 1000,
+        model = opts.model or 0,
+    }
+end
+
+--- Register a mock ped for GetAllPeds() queries.
+function M.add_ped(h, opts)
+    opts = opts or {}
+    local key = tonumber(h) or h
+    state.peds[key] = true
+    state.entities[key] = {
+        exist = true,
+        coords = opts.coords or vector3(0.0, 0.0, 0.0),
+        health = opts.health or 200,
+        model = opts.model or 0,
+    }
+end
+
+--- Set entity coords vector3.
+function M.set_entity_coords(h, coords)
+    local key = tonumber(h) or h
+    state.entities[key] = state.entities[key] or { exist = true }
+    state.entities[key].coords = coords
+end
+
+--- Set entity health.
+function M.set_entity_health(h, health)
+    local key = tonumber(h) or h
+    state.entities[key] = state.entities[key] or { exist = true }
+    state.entities[key].health = health
+end
+
 --- The current registries (advanced use / debugging).
 function M.state() return state end
 
@@ -419,9 +513,27 @@ function M.reset(opts)
         players = {},
         convars = {},
         convar_writes = {},
+        kvp = {},
+        entity_state = {},
+        player_buckets = {},
+        entity_buckets = {},
+        entities = {},
+        vehicles = {},
+        peds = {},
     }
     for k, v in pairs(opts.convars or {}) do state.convars[k] = tostring(v) end
     for id, name in pairs(opts.players or {}) do M.add_player(id, name) end
+    for k, v in pairs(opts.kvp or {}) do state.kvp[tostring(k)] = tostring(v) end
+    for h, s in pairs(opts.entity_state or {}) do
+        local key = tonumber(h) or h
+        state.entity_state[key] = {}
+        for k, v in pairs(s) do state.entity_state[key][k] = v end
+    end
+    for res, tbl in pairs(opts.exports or {}) do
+        for fname, fn in pairs(tbl) do M.stub_export(res, fname, fn) end
+    end
+    for h, vopts in pairs(opts.vehicles or {}) do M.add_vehicle(h, vopts) end
+    for h, popts in pairs(opts.peds or {}) do M.add_ped(h, popts) end
 
     -- threads / timers
     local function create_thread(fn) schedule_thread(fn) end
@@ -545,6 +657,107 @@ function M.reset(opts)
     set_global('PlayerPedId', function() return 1 end)
     set_global('PlayerId', function() return 0 end)
     set_global('GetHashKey', function(s) return tostring(s) end) -- not joaat on purpose: pin names, not hashes
+
+    -- KVP (key-value storage)
+    set_global('GetResourceKvpString', function(key) return state.kvp[tostring(key)] end)
+    set_global('GetResourceKvpInt', function(key)
+        local v = tonumber(state.kvp[tostring(key)])
+        return v and math.floor(v) or nil
+    end)
+    set_global('GetResourceKvpFloat', function(key)
+        local v = tonumber(state.kvp[tostring(key)])
+        return v
+    end)
+    set_global('SetResourceKvp', function(key, val) state.kvp[tostring(key)] = tostring(val) end)
+    set_global('SetResourceKvpInt', function(key, val) state.kvp[tostring(key)] = tostring(math.floor(tonumber(val) or 0)) end)
+    set_global('SetResourceKvpFloat', function(key, val) state.kvp[tostring(key)] = tostring(tonumber(val) or 0.0) end)
+    set_global('DeleteResourceKvp', function(key) state.kvp[tostring(key)] = nil end)
+
+    -- Statebags: Entity(h).state proxy with persistent fields and :set()
+    local function state_bag_for(h)
+        local key = tonumber(h) or h
+        state.entity_state[key] = state.entity_state[key] or {}
+        return state.entity_state[key]
+    end
+    set_global('Entity', function(h)
+        local data = state_bag_for(h)
+        local proxy = setmetatable({}, {
+            __index = function(_, k)
+                if k == 'set' then
+                    return function(_self, key, val, _replicated)
+                        data[key] = val
+                    end
+                end
+                return data[k]
+            end,
+            __newindex = function(_, k, v)
+                data[k] = v
+            end,
+        })
+        return { state = proxy }
+    end)
+
+    -- Routing buckets
+    set_global('GetPlayerRoutingBucket', function(src) return state.player_buckets[tonumber(src)] or 0 end)
+    set_global('SetPlayerRoutingBucket', function(src, b) state.player_buckets[tonumber(src)] = tonumber(b) or 0 end)
+    set_global('GetEntityRoutingBucket', function(ent) return state.entity_buckets[tonumber(ent)] or 0 end)
+    set_global('SetEntityRoutingBucket', function(ent, b) state.entity_buckets[tonumber(ent)] = tonumber(b) or 0 end)
+
+    -- World / Entity inspection
+    set_global('DoesEntityExist', function(h)
+        if not h or h == 0 then return false end
+        local key = tonumber(h) or h
+        if state.entities[key] and state.entities[key].exist ~= nil then return state.entities[key].exist end
+        if state.entity_state[key] or state.players[key] or state.vehicles[key] or state.peds[key] then
+            return true
+        end
+        return false
+    end)
+    set_global('GetEntityCoords', function(h)
+        local key = tonumber(h) or h
+        local e = state.entities[key]
+        return (e and e.coords) or vector3(0.0, 0.0, 0.0)
+    end)
+    set_global('GetEntityHealth', function(h)
+        local key = tonumber(h) or h
+        local e = state.entities[key]
+        return (e and e.health) or 200
+    end)
+    set_global('GetEntityModel', function(h)
+        local key = tonumber(h) or h
+        local e = state.entities[key]
+        return (e and e.model) or 0
+    end)
+    set_global('GetAllVehicles', function()
+        local list = {}
+        for h in pairs(state.vehicles) do list[#list + 1] = h end
+        table.sort(list, function(a, b) return tostring(a) < tostring(b) end)
+        return list
+    end)
+    set_global('GetAllPeds', function()
+        local list = {}
+        for h in pairs(state.peds) do list[#list + 1] = h end
+        table.sort(list, function(a, b) return tostring(a) < tostring(b) end)
+        return list
+    end)
+    set_global('GetVehicleNumberPlateText', function(veh)
+        local v = state.vehicles[tonumber(veh) or veh]
+        return (v and v.plate) or ''
+    end)
+    set_global('GetVehicleEngineHealth', function(veh)
+        local v = state.vehicles[tonumber(veh) or veh]
+        return (v and v.engine) or 1000.0
+    end)
+    set_global('GetVehicleBodyHealth', function(veh)
+        local v = state.vehicles[tonumber(veh) or veh]
+        return (v and v.body) or 1000.0
+    end)
+    set_global('GetPedInVehicleSeat', function(veh, seat)
+        local v = state.vehicles[tonumber(veh) or veh]
+        return (v and v.seats and v.seats[tonumber(seat)]) or 0
+    end)
+    set_global('NetworkGetNetworkIdFromEntity', function(h) return h end)
+    set_global('NetworkGetEntityFromNetworkId', function(netId) return netId end)
 
     -- Minimal ox_lib-style `lib` (opt in with reset{ lib = true }): only what is safe to fake.
     if opts.lib then
