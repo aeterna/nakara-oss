@@ -155,5 +155,80 @@ describe('devkit busted harness', function()
         it('round-trips json', function()
             assert.are.same({ a = { 1, 2 } }, json.decode(json.encode({ a = { 1, 2 } })))
         end)
+
+        it('stores and retrieves KVP values (strings, ints, floats)', function()
+            natives.reset({ kvp = { initial_flag = '1', initial_name = 'test' } })
+            assert.are.equal('test', GetResourceKvpString('initial_name'))
+            assert.are.equal(1, GetResourceKvpInt('initial_flag'))
+
+            SetResourceKvp('pref_mode', 'dark')
+            SetResourceKvpInt('pref_volume', 80)
+            SetResourceKvpFloat('pref_scale', 1.25)
+
+            assert.are.equal('dark', GetResourceKvpString('pref_mode'))
+            assert.are.equal(80, GetResourceKvpInt('pref_volume'))
+            assert.are.equal(1.25, GetResourceKvpFloat('pref_scale'))
+            assert.are.equal('dark', natives.get_kvp('pref_mode'))
+
+            DeleteResourceKvp('pref_mode')
+            assert.is_nil(GetResourceKvpString('pref_mode'))
+        end)
+
+        it('models persistent statebags via Entity(h).state with :set() and table indexing', function()
+            natives.reset({ entity_state = { [42] = { score = 10 } } })
+            assert.are.equal(10, Entity(42).state.score)
+
+            Entity(42).state.score = 25
+            assert.are.equal(25, Entity(42).state.score)
+
+            Entity(42).state:set('title', 'champion', true)
+            assert.are.equal('champion', Entity(42).state.title)
+            assert.are.same({ score = 25, title = 'champion' }, natives.entity_state(42))
+
+            natives.set_entity_state(99, 'health', 100)
+            assert.are.equal(100, Entity(99).state.health)
+        end)
+
+        it('tracks routing buckets per player and entity with bucket 0 default', function()
+            assert.are.equal(0, GetPlayerRoutingBucket(1))
+            assert.are.equal(0, GetEntityRoutingBucket(10))
+
+            SetPlayerRoutingBucket(1, 5)
+            SetEntityRoutingBucket(10, 5)
+
+            assert.are.equal(5, GetPlayerRoutingBucket(1))
+            assert.are.equal(5, GetEntityRoutingBucket(10))
+            assert.are.equal(5, natives.player_bucket(1))
+            assert.are.equal(5, natives.entity_bucket(10))
+        end)
+
+        it('models world entities, vehicles and peds inspection', function()
+            natives.reset()
+            assert.is_false(DoesEntityExist(123))
+
+            natives.add_vehicle(10, {
+                plate = 'ABC 123',
+                engine = 950.0,
+                body = 800.0,
+                seats = { [-1] = 1 },
+                coords = vector3(10.0, 20.0, 30.0),
+                model = 'adder',
+            })
+            natives.add_ped(1, { coords = vector3(10.0, 20.0, 30.0), health = 180 })
+
+            assert.is_true(DoesEntityExist(10))
+            assert.is_true(DoesEntityExist(1))
+            assert.are.same({ 10 }, GetAllVehicles())
+            assert.are.same({ 1 }, GetAllPeds())
+            assert.are.equal('ABC 123', GetVehicleNumberPlateText(10))
+            assert.are.equal(950.0, GetVehicleEngineHealth(10))
+            assert.are.equal(800.0, GetVehicleBodyHealth(10))
+            assert.are.equal(1, GetPedInVehicleSeat(10, -1))
+            assert.are.same(vector3(10.0, 20.0, 30.0), GetEntityCoords(10))
+            assert.are.equal(180, GetEntityHealth(1))
+            assert.are.equal('adder', GetEntityModel(10))
+            assert.are.equal(10, NetworkGetNetworkIdFromEntity(10))
+            assert.are.equal(10, NetworkGetEntityFromNetworkId(10))
+        end)
     end)
 end)

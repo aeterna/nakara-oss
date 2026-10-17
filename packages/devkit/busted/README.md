@@ -71,6 +71,10 @@ Stubbed globals:
 | Net events out | `TriggerClientEvent`, `TriggerServerEvent`, latent variants | recorded, not delivered |
 | Exports | `exports('name', fn)`, `exports.res:name(...)` | per-resource registry; a missing export raises `No such export` |
 | Convars | `GetConvar`, `GetConvarInt`, `GetConvarFloat`, `GetConvarBool`, `SetConvar*` | backed by a table; writes are recorded |
+| KVP | `GetResourceKvpString`, `GetResourceKvpInt`, `GetResourceKvpFloat`, `SetResourceKvp*`, `DeleteResourceKvp` | client/server key-value storage backed by state table |
+| Statebags | `Entity(h).state` | persistent per-handle statebag proxy supporting table access and `:set(k, v, rep)` |
+| Routing | `GetPlayerRoutingBucket`, `SetPlayerRoutingBucket`, `GetEntityRoutingBucket`, `SetEntityRoutingBucket` | routing buckets per player/entity (default 0) |
+| World & Entities | `DoesEntityExist`, `GetEntityCoords`, `GetEntityHealth`, `GetEntityModel`, `GetAllVehicles`, `GetAllPeds`, `GetVehicleNumberPlateText`, `GetVehicleEngineHealth`, `GetVehicleBodyHealth`, `GetPedInVehicleSeat`, `Network*` | world entity inspection and queries backed by harness registries |
 | Players | `GetPlayers`, `GetPlayerName`, `GetNumPlayerIndices`, `DropPlayer`, `source` | backed by `natives.add_player` |
 | Runtime | `GetCurrentResourceName`, `GetInvokingResource`, `IsDuplicityVersion`, `PlayerPedId`, `PlayerId`, `GetHashKey` | `GetHashKey` returns its input, not a joaat hash, so specs compare names |
 | Data | `json`, `vector3`, `vec3` | `json` uses dkjson when installed, else an encoder-only fallback |
@@ -85,6 +89,12 @@ Helpers for specs:
 | `natives.fire_net(name, src, ...)` | simulate client `src` sending a net event; only `RegisterNetEvent`-ed events are reachable, `source` is set |
 | `natives.emitted(kind, name?)`, `natives.last_emitted(kind, name?)` | captured events; `kind` is `'local'`, `'client'` or `'server'`; each entry has `name`, `target`, `args` (packed with `n`) |
 | `natives.is_net_event(name)`, `natives.handler_count(name)` | registration checks |
+| `natives.get_kvp(k)`, `natives.set_kvp(k, v)`, `natives.kvp_table()` | inspect and seed KVP storage directly |
+| `natives.entity_state(h)`, `natives.set_entity_state(h, k, v)` | inspect and mutate entity statebags directly |
+| `natives.player_bucket(src)`, `natives.set_player_bucket(src, b)` | read and set player routing buckets |
+| `natives.entity_bucket(ent)`, `natives.set_entity_bucket(ent, b)` | read and set entity routing buckets |
+| `natives.add_vehicle(h, opts)`, `natives.add_ped(h, opts)` | mock vehicle / ped entities with plates, health, seats and coords |
+| `natives.set_entity_coords(h, vec)`, `natives.set_entity_health(h, n)` | update entity coordinates and health |
 | `natives.spy(name, impl?)`, `natives.calls(name)` | install a recording stub for any native the harness does not model |
 | `natives.stub(name, value)` | install any other global; removed by the next `reset()` |
 | `natives.stub_export(res, name, fn)`, `natives.exports_of(res?)` | stub another resource's export; read registered exports |
