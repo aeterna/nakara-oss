@@ -89,7 +89,7 @@ jobs:
   # same block, so both pass together). Reads the PR's own commits: squash merges drop trailers on main.
   # The checker is tools/provenance of the private aeterna/org-standards (default branch, so a PR cannot change
   # the rules it is judged by), read with a short-lived token of the GitHub App aeterna-ci-org-standards-read
-  # (contents:read on org-standards only). Var ORG_STANDARDS_APP_ID + secret ORG_STANDARDS_APP_PRIVATE_KEY are
+  # (contents:read on org-standards only). Var ORG_STANDARDS_APP_CLIENT_ID + secret ORG_STANDARDS_APP_PRIVATE_KEY are
   # Pik's. Missing var/secret (fork PRs, before setup) or a failed mint/checkout => skip with a notice.
   # ADVISORY, never required: failures are a warning + step summary and the job always succeeds.
   provenance:
@@ -101,18 +101,18 @@ jobs:
       - name: app credentials present?
         id: creds
         env:
-          APP_ID: ${{ vars.ORG_STANDARDS_APP_ID }}
+          APP_CLIENT_ID: ${{ vars.ORG_STANDARDS_APP_CLIENT_ID }}
           APP_KEY_SET: ${{ secrets.ORG_STANDARDS_APP_PRIVATE_KEY != '' }}
         run: |
-          if [ -n "$APP_ID" ] && [ "$APP_KEY_SET" = "true" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
-          else echo "::notice title=provenance (advisory)::ORG_STANDARDS_APP_ID / ORG_STANDARDS_APP_PRIVATE_KEY not available (fork PR or not set up yet) — skipped"; fi
+          if [ -n "$APP_CLIENT_ID" ] && [ "$APP_KEY_SET" = "true" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice title=provenance (advisory)::ORG_STANDARDS_APP_CLIENT_ID / ORG_STANDARDS_APP_PRIVATE_KEY not available (fork PR or not set up yet) — skipped"; fi
       - name: mint org-standards read token
         id: app
         if: steps.creds.outputs.ok == 'true'
         continue-on-error: true
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ vars.ORG_STANDARDS_APP_ID }}
+          client-id: ${{ vars.ORG_STANDARDS_APP_CLIENT_ID }}
           private-key: ${{ secrets.ORG_STANDARDS_APP_PRIVATE_KEY }}
           owner: aeterna
           repositories: org-standards
