@@ -1,21 +1,37 @@
 -- Child process for the lua-rate-limit golden check. check.sh starts this WITHOUT AETERNA_GOLDEN_NONCE.
--- It loads fixture/ratelimit.lua and runs the expectations. Failures go to stderr. The success line goes to
--- stdout only when every expectation held.
-local fixtureDir = arg and arg[1]
+-- Parent/child design: check.sh holds the nonce and never loads fixture/. This child loads fixture/ratelimit.lua
+-- and runs the expectations. The success line goes to stdout only when every expectation held and the count is
+-- exactly EXPECTED; every other outcome exits 1. The fixture runs in this process without the nonce in its
+-- environment, so it never sees the nonce.
+-- Builtins are captured as locals BEFORE the fixture is loaded, so a fixture that replaces globals (os.exit,
+-- pcall, io.write, _G, ...) cannot change how failures are reported or counted.
+local EXPECTED = 39
+
+local pcall, next, tostring, type, require = pcall, next, tostring, type, require
+local sformat, tconcat = string.format, table.concat
+local exit = os.exit
+local G, argv, pkg = _G, arg, package
+local stdout, stderr = io.stdout, io.stderr
+local writeOut, writeErr = stdout.write, stderr.write
+
+local fixtureDir = argv and argv[1]
 if not fixtureDir then
-    io.stderr:write('child: missing fixture directory argument\n')
-    os.exit(1)
+    writeErr(stderr, 'child: missing fixture directory argument\n')
+    exit(1)
+    return
 end
 
 -- Snapshot the globals before the fixture is loaded, to detect state kept in globals.
+-- `next` is used directly so a metatable __pairs on _G cannot hide a leak.
 local globalsBefore = {}
-for k in pairs(_G) do globalsBefore[k] = true end
+for k in next, G do globalsBefore[k] = true end
 
-package.path = fixtureDir .. '/?.lua;' .. package.path
+pkg.path = fixtureDir .. '/?.lua;' .. pkg.path
 local okLoad, M = pcall(require, 'ratelimit')
 if not okLoad or type(M) ~= 'table' or type(M.allow) ~= 'function' then
-    io.stderr:write('FAIL: fixture/ratelimit.lua must return a table with an allow() function\n')
-    os.exit(1)
+    writeErr(stderr, 'FAIL: fixture/ratelimit.lua must return a table with an allow() function\n')
+    exit(1)
+    return
 end
 local allow = M.allow
 
@@ -26,7 +42,7 @@ local function expect(label, cond)
         passed = passed + 1
     else
         failed = failed + 1
-        io.stderr:write('FAIL: ' .. label .. '\n')
+        writeErr(stderr, 'FAIL: ' .. label .. '\n')
     end
 end
 
@@ -84,15 +100,39 @@ expect('E5 windowMs=0 raises', raises({}, 'a', 0, 1, 0))
 expect('E6 windowMs=-1 raises', raises({}, 'a', 0, 1, -1))
 expect("E7 windowMs='1000' raises", raises({}, 'a', 0, 1, '1000'))
 
+-- I: two sources interleaved in one state table (max=3, windowMs=500). Clock never goes backwards.
+s = {}
+expectResult('I1 g at 0 allowed', call(s, 'g', 0, 3, 500), true)
+expectResult('I2 h at 100 allowed (own history)', call(s, 'h', 100, 3, 500), true)
+expectResult('I3 g at 300 allowed', call(s, 'g', 300, 3, 500), true)
+expectResult('I4 g at 350 allowed (0 and 300 count)', call(s, 'g', 350, 3, 500), true)
+expectResult('I5 h at 350 allowed (only the call at 100 counts)', call(s, 'h', 350, 3, 500), true)
+expectResult('I6 g at 360 rejected (0, 300, 350 all count)', call(s, 'g', 360, 3, 500), false)
+expectResult('I7 h at 400 allowed (100 and 350 count)', call(s, 'h', 400, 3, 500), true)
+expectResult('I8 g at 500 allowed (the call at 0 has expired)', call(s, 'g', 500, 3, 500), true)
+expectResult('I9 h at 520 rejected (100, 350, 400 count)', call(s, 'h', 520, 3, 500), false)
+expectResult('I10 g at 800 allowed (300 expired; rejected 360 never counted)', call(s, 'g', 800, 3, 500), true)
+expectResult('I11 g at 801 rejected (350, 500, 800 count)', call(s, 'g', 801, 3, 500), false)
+
+-- N: an invalid call changes no state.
+s = {}
+expectResult('N1 first valid call allowed', call(s, 'a', 0, 2, 100), true)
+expect('N2 invalid max=0 call raises', raises(s, 'a', 10, 0, 100))
+expectResult('N3 next valid call sees only the call at 0', call(s, 'a', 20, 2, 100), true)
+expectResult('N4 third call sees the calls at 0 and 20', call(s, 'a', 30, 2, 100), false)
+
 -- F: no state leaked into globals.
 local leaked = {}
-for k in pairs(_G) do
+for k in next, G do
     if not globalsBefore[k] then leaked[#leaked + 1] = tostring(k) end
 end
-expect('F1 no new globals (leaked: ' .. table.concat(leaked, ',') .. ')', #leaked == 0)
+expect('F1 no new globals (leaked: ' .. tconcat(leaked, ',') .. ')', #leaked == 0)
 
-if failed > 0 then
-    io.stderr:write(string.format('%d of %d expectations failed\n', failed, passed + failed))
-    os.exit(1)
+-- Success line only when every expectation held and the count is the one this child defines.
+if failed == 0 and passed == EXPECTED then
+    writeOut(stdout, sformat('GOLDEN_OK lua-rate-limit expectations=%d\n', passed))
+else
+    writeErr(stderr, sformat('lua-rate-limit: %d failed, ran %d expectations, want %d\n',
+        failed, passed + failed, EXPECTED))
+    exit(1)
 end
-io.write('GOLDEN_OK lua-rate-limit expectations=' .. passed .. '\n')

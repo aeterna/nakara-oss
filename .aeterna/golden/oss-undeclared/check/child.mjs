@@ -1,25 +1,43 @@
 // Child process for the oss-undeclared golden check. check.sh starts this WITHOUT AETERNA_GOLDEN_NONCE.
-// It imports fixture/undeclared.mjs and runs the expectations. Failures go to stderr. The success line goes to
-// stdout only when every expectation held.
+// Parent/child design: check.sh holds the nonce and never imports fixture/. This child imports
+// fixture/undeclared.mjs via a file URL and runs the expectations. The success line goes to stdout only when every
+// expectation held and the count is exactly EXPECTED; every other outcome exits 1. The fixture runs in this process
+// without the nonce in its environment, so it never sees the nonce.
+// Builtins are captured BEFORE the fixture is imported, so a fixture that replaces globals or prototypes
+// (JSON.stringify, Array.isArray, TypeError[Symbol.hasInstance], process.exit, ...) cannot change how this child
+// compares values, detects TypeErrors or reports failures.
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { deepStrictEqual } from 'node:assert';
+
+const deepEqual = deepStrictEqual;
+const stringify = JSON.stringify;
+const structuredCopy = structuredClone;
+const getProto = Object.getPrototypeOf;
+const TYPE_ERROR_PROTO = TypeError.prototype;
+const resolvePath = resolve;
+const toFileUrl = pathToFileURL;
+const writeOut = process.stdout.write.bind(process.stdout);
+const writeErr = process.stderr.write.bind(process.stderr);
+const exitProcess = process.exit.bind(process);
+const EXPECTED = 17;
 
 const fixtureDir = process.argv[2];
 if (!fixtureDir) {
-    process.stderr.write('child: missing fixture directory argument\n');
-    process.exit(1);
+    writeErr('child: missing fixture directory argument\n');
+    exitProcess(1);
 }
 
 let mod;
 try {
-    mod = await import(pathToFileURL(resolve(fixtureDir, 'undeclared.mjs')).href);
+    mod = await import(toFileUrl(resolvePath(fixtureDir, 'undeclared.mjs')).href);
 } catch (err) {
-    process.stderr.write(`FAIL: fixture/undeclared.mjs did not load: ${err}\n`);
-    process.exit(1);
+    writeErr(`FAIL: fixture/undeclared.mjs did not load: ${err}\n`);
+    exitProcess(1);
 }
 if (typeof mod.undeclaredNetEvents !== 'function') {
-    process.stderr.write('FAIL: fixture/undeclared.mjs must export undeclaredNetEvents\n');
-    process.exit(1);
+    writeErr('FAIL: fixture/undeclared.mjs must export undeclaredNetEvents\n');
+    exitProcess(1);
 }
 const undeclaredNetEvents = mod.undeclaredNetEvents;
 
@@ -31,7 +49,7 @@ function expect(label, cond) {
         passed++;
     } else {
         failed++;
-        process.stderr.write(`FAIL: ${label}\n`);
+        writeErr(`FAIL: ${label}\n`);
     }
 }
 
@@ -44,13 +62,36 @@ function run(fn) {
     }
 }
 
+// Structural equality through the captured deepStrictEqual; returns false instead of throwing.
+function same(a, b) {
+    try {
+        deepEqual(a, b);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+// Printable form for failure messages only.
+function show(v) {
+    try {
+        return String(stringify(v));
+    } catch {
+        return '<unprintable>';
+    }
+}
+
 function expectList(label, got, want) {
-    const same = Array.isArray(got) && JSON.stringify(got) === JSON.stringify(want);
-    expect(`${label} (want ${JSON.stringify(want)}, got ${JSON.stringify(got)})`, same);
+    expect(`${label} (want ${show(want)}, got ${show(got)})`, same(got, want));
+}
+
+// True only for a value whose prototype is the intrinsic %TypeError.prototype% captured at startup.
+function isTypeError(v) {
+    return typeof v === 'object' && v !== null && getProto(v) === TYPE_ERROR_PROTO;
 }
 
 function expectTypeError(label, fn) {
-    expect(`${label} (expected TypeError)`, run(fn) instanceof TypeError);
+    expect(`${label} (expected TypeError)`, isTypeError(run(fn)));
 }
 
 const manifest = (server, client) => ({ capabilities: { netEvents: { server, client } } });
@@ -131,10 +172,57 @@ expectTypeError(
 expectTypeError('G2 client is a string, not an array', () => undeclaredNetEvents([], manifest(['a'], 'c')));
 expectTypeError('G3 server array holds a non-string', () => undeclaredNetEvents([], manifest([1], [])));
 expectTypeError('G4 capabilities missing', () => undeclaredNetEvents([], {}));
+expectTypeError('G5 client array holds a non-string', () => undeclaredNetEvents([], manifest([], ['ok', 2])));
 
-if (failed > 0) {
-    process.stderr.write(`${failed} of ${passed + failed} expectations failed\n`);
-    process.exitCode = 1;
+// H: larger mixed-side input with several declared and undeclared names on both sides.
+const bigManifest = manifest(
+    ['srv:login', 'srv:logout', 'srv:shared'],
+    ['cli:hud', 'cli:shared', 'cli:menu'],
+);
+const bigUsed = [
+    { name: 'srv:login', side: 'server' },
+    { name: 'srv:logout', side: 'client' },
+    { name: 'cli:hud', side: 'client' },
+    { name: 'cli:hud', side: 'server' },
+    { name: 'srv:bank', side: 'server' },
+    { name: 'cli:menu', side: 'client' },
+    { name: 'srv:shared', side: 'server' },
+    { name: 'cli:shared', side: 'server' },
+    { name: 'cli:shared', side: 'client' },
+    { name: 'srv:bank', side: 'client' },
+    { name: 'cli:zz', side: 'client' },
+    { name: 'srv:login', side: 'client' },
+];
+expectList(
+    'H1 larger mixed-side input',
+    run(() => undeclaredNetEvents(bigUsed, bigManifest)),
+    ['cli:hud', 'cli:shared', 'cli:zz', 'srv:bank', 'srv:login', 'srv:logout'],
+);
+
+// H2: default sort order (UTF-16 code units), not localeCompare: '10' < '9' < 'B' < 'a'.
+expectList(
+    'H2 default sort order',
+    run(() => undeclaredNetEvents([
+        { name: 'B', side: 'server' },
+        { name: 'a', side: 'server' },
+        { name: '10', side: 'server' },
+        { name: '9', side: 'server' },
+    ], manifest([], []))),
+    ['10', '9', 'B', 'a'],
+);
+
+// H3: the inputs are not mutated.
+const usedIn = [{ name: 'k', side: 'client' }, { name: 'a', side: 'server' }];
+const manifestIn = manifest(['a'], []);
+const usedBefore = structuredCopy(usedIn);
+const manifestBefore = structuredCopy(manifestIn);
+expectList('H3 result for a small input', run(() => undeclaredNetEvents(usedIn, manifestIn)), ['k']);
+expect('H3 used and manifest are not mutated', same(usedIn, usedBefore) && same(manifestIn, manifestBefore));
+
+// Success line only when every expectation held and the count is the one this child defines.
+if (failed === 0 && passed === EXPECTED) {
+    writeOut(`GOLDEN_OK oss-undeclared expectations=${passed}\n`);
 } else {
-    process.stdout.write(`GOLDEN_OK oss-undeclared expectations=${passed}\n`);
+    writeErr(`oss-undeclared: ${failed} failed, ran ${passed + failed} expectations, want ${EXPECTED}\n`);
+    exitProcess(1);
 }

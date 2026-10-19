@@ -3,7 +3,7 @@
 Implement a per-source sliding-window rate limiter for server net event handlers, in `fixture/ratelimit.lua`.
 
 `fixture/ratelimit.lua` is a natives-free Lua module shaped like `packages/cargen-fix/client/logic.lua`:
-`local L = {} ... return L`. It must run under stock Lua 5.4 with no game natives. It must not create or write
+`local L = {} ... return L`. It must run under Lua 5.4 or newer with no game natives. It must not create or write
 globals.
 
 ## Required API

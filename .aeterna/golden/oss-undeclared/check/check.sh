@@ -23,7 +23,8 @@ if [ "$rc" -ne 0 ]; then
     exit 1
 fi
 
-if ! [[ "$out" =~ ^GOLDEN_OK[[:space:]]oss-undeclared[[:space:]]expectations=([0-9]+)$ ]] || [ "${BASH_REMATCH[1]}" -lt 6 ]; then
+# The child defines the exact expectation count; any other count is not a pass.
+if ! [[ "$out" =~ ^GOLDEN_OK[[:space:]]oss-undeclared[[:space:]]expectations=([0-9]+)$ ]] || [ "${BASH_REMATCH[1]}" -ne 17 ]; then
     echo "oss-undeclared: child output was not the success line" >&2
     exit 1
 fi
