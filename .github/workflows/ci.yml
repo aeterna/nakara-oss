@@ -87,39 +87,68 @@ jobs:
   # AETERNA delegated delivery (T2): every commit of a team PR carries `Agent:`, product code carries
   # `Delegated-Run:`, the rest `Exempt:` — one trailer block with `Signed-off-by:` (the DCO job above reads the
   # same block, so both pass together). Reads the PR's own commits: squash merges drop trailers on main.
-  # The checker is a pinned, unmodified copy of aeterna/org-standards tools/provenance @ f79ec1a
-  # (sha256 c9f11e208b27695b2271709517371adc990e9ee94536f39881ae39ffb91cc131); refresh it by copying the file again.
-  # Fork and bot PRs fast-pass: outside contributors follow CONTRIBUTING.md (DCO), not the team's agent trailers.
-  # ADVISORY: failures are a warning + step summary and the job stays green. Making it blocking (drop the
-  # `exit 0`) and required in .github/rulesets/main-gates.json = Pik.
+  # The checker is tools/provenance of the private aeterna/org-standards (default branch, so a PR cannot change
+  # the rules it is judged by), read with a short-lived token of the GitHub App aeterna-ci-org-standards-read
+  # (contents:read on org-standards only). Var ORG_STANDARDS_APP_ID + secret ORG_STANDARDS_APP_PRIVATE_KEY are
+  # Pik's. Missing var/secret (fork PRs, before setup) or a failed mint/checkout => skip with a notice.
+  # ADVISORY, never required: failures are a warning + step summary and the job always succeeds.
   provenance:
     name: provenance
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04   # pinned: ubuntu-latest moves to 26.04 from 2026-10-19
     timeout-minutes: 5
     steps:
+      - name: app credentials present?
+        id: creds
+        env:
+          APP_ID: ${{ vars.ORG_STANDARDS_APP_ID }}
+          APP_KEY_SET: ${{ secrets.ORG_STANDARDS_APP_PRIVATE_KEY != '' }}
+        run: |
+          if [ -n "$APP_ID" ] && [ "$APP_KEY_SET" = "true" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice title=provenance (advisory)::ORG_STANDARDS_APP_ID / ORG_STANDARDS_APP_PRIVATE_KEY not available (fork PR or not set up yet) — skipped"; fi
+      - name: mint org-standards read token
+        id: app
+        if: steps.creds.outputs.ok == 'true'
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.ORG_STANDARDS_APP_ID }}
+          private-key: ${{ secrets.ORG_STANDARDS_APP_PRIVATE_KEY }}
+          owner: aeterna
+          repositories: org-standards
+          permission-contents: read
+      - name: checkout org-standards (checker)
+        id: org
+        if: steps.app.outcome == 'success'
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: aeterna/org-standards
+          token: ${{ steps.app.outputs.token }}
+          path: .org-standards
+          sparse-checkout: tools
+          persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.org.outcome == 'success'
         with:
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
       - name: provenance of the PR's commits (advisory)
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+          CREDS: ${{ steps.creds.outputs.ok }}
+          APP: ${{ steps.app.outcome }}
+          ORG: ${{ steps.org.outcome }}
         run: |
-          if [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ] || [ "$PR_AUTHOR_TYPE" = "Bot" ]; then
-            echo "fork or bot PR ($HEAD_REPO, $PR_AUTHOR_TYPE) — not a team PR, fast-pass"; exit 0
+          if [ "$CREDS" = "true" ] && [ "$ORG" != "success" ]; then
+            echo "::notice title=provenance (advisory)::could not read org-standards (token: $APP, checkout: $ORG) — skipped"
           fi
-          # Run the checker as it is on the BASE branch, so a PR cannot change the rules it is judged by.
-          # Only the PR that first adds it falls back to its own copy.
-          tool="$RUNNER_TEMP/provenance.py"
-          if git show "$BASE_SHA:.github/scripts/provenance.py" > "$tool" 2>/dev/null; then echo "checker from base $BASE_SHA"
-          else cp .github/scripts/provenance.py "$tool"; echo "::notice::provenance.py not on base — using the PR's copy"; fi
+          [ "$ORG" = "success" ] || exit 0
           rc=0
-          python3 "$tool" "$BASE_SHA..$HEAD_SHA" > provenance.txt 2>&1 || rc=$?
+          (cd pr && python3 ../.org-standards/tools/provenance "$BASE_SHA..$HEAD_SHA") > provenance.txt 2>&1 || rc=$?
           cat provenance.txt
           if [ "$rc" -ne 0 ]; then
             echo "::warning title=provenance (advisory)::exit $rc — commits without the trailers T2 asks for; see the step summary"
