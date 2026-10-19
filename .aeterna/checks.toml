@@ -1,0 +1,45 @@
+# Q2 repo checks for aeterna-delegate.
+#
+# aeterna-delegate reads this file from the base commit after every write run and runs each [[checks]] entry
+# twice: on a clean `git archive` copy of base, and on base + the patch. Both runs happen in a no-network
+# macOS seatbelt sandbox: the copy has no node_modules/ and no .git, writes are limited to the copy and a
+# scratch dir, HOME is that scratch dir, and the real ~/.npm cache is readable but not writable.
+# A check failing on both runs is reported as `pre-existing`; failing only on the patched run is `new-failure`.
+# Checks that need npm packages install them with `npm ci --offline --ignore-scripts --cache /Users/$USER/.npm`,
+# which reads the read-only cache directly (no copy). If that install fails, the check fails (non-zero); it never
+# passes silently. A patch that adds a dependency missing from the local npm cache makes the npm checks fail
+# (reported as new-failure), which is not necessarily a code failure.
+# Report lines look like `q2 <name>: pass|new-failure|pre-existing|...`.
+# A repo with no file reports `not-configured`.
+# To skip the checks once: aeterna-delegate -m write ... --skip-checks
+
+# Devkit unit and safety-scanner tests (node --test). Covers the devkit package manifest and its test files and fixtures.
+[[checks]]
+name = "devkit-tests"
+cmd = 'set -e; npm ci --offline --ignore-scripts --no-audit --no-fund --cache "/Users/$USER/.npm"; npm test --workspace packages/devkit'
+timeout = 120
+deps = ["package.json", "package-lock.json", ".npmrc", "packages/devkit/package.json", "packages/devkit/test/*"]
+
+# Static checks (dogfood) over the devkit and every resource. Covers the root manifests, the capability manifests
+# (oss.json, oss.schema.json), the devkit check config and the nui-escape waiver file.
+[[checks]]
+name = "fivem-check"
+cmd = 'set -e; npm ci --offline --ignore-scripts --no-audit --no-fund --cache "/Users/$USER/.npm"; node packages/devkit/bin/fivem-devkit.js check'
+timeout = 120
+deps = ["package.json", "package-lock.json", ".npmrc", ".fivem-devkit.json", ".fivem-devkit/*", "*/oss.json", "oss.schema.json"]
+
+# Safety scanner and oss.json capability verification (structural oss.json check, no JSON-schema validator offline).
+# Covers the root manifests, the capability manifests (oss.json, oss.schema.json), the safety config read by the
+# scanner and the nui-escape waiver file.
+[[checks]]
+name = "fivem-safety"
+cmd = 'set -e; npm ci --offline --ignore-scripts --no-audit --no-fund --cache "/Users/$USER/.npm"; node packages/devkit/bin/fivem-devkit.js safety'
+timeout = 120
+deps = ["package.json", "package-lock.json", ".npmrc", ".fivem-devkit.json", ".fivem-devkit/*", "*/oss.json", "oss.schema.json"]
+
+# Busted Lua specs (--config-file=.busted). Covers the busted config and the devkit harness the specs require.
+[[checks]]
+name = "busted-specs"
+cmd = 'busted --config-file=.busted'
+timeout = 60
+deps = [".busted", "packages/devkit/busted/*"]
