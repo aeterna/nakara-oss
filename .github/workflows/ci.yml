@@ -83,3 +83,46 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: node .github/scripts/check-dco.mjs "$BASE_SHA" "$HEAD_SHA"
+
+  # AETERNA delegated delivery (T2): every commit of a team PR carries `Agent:`, product code carries
+  # `Delegated-Run:`, the rest `Exempt:` — one trailer block with `Signed-off-by:` (the DCO job above reads the
+  # same block, so both pass together). Reads the PR's own commits: squash merges drop trailers on main.
+  # The checker is a pinned, unmodified copy of aeterna/org-standards tools/provenance @ f79ec1a
+  # (sha256 c9f11e208b27695b2271709517371adc990e9ee94536f39881ae39ffb91cc131); refresh it by copying the file again.
+  # Fork and bot PRs fast-pass: outside contributors follow CONTRIBUTING.md (DCO), not the team's agent trailers.
+  # ADVISORY: failures are a warning + step summary and the job stays green. Making it blocking (drop the
+  # `exit 0`) and required in .github/rulesets/main-gates.json = Pik.
+  provenance:
+    name: provenance
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04   # pinned: ubuntu-latest moves to 26.04 from 2026-10-19
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: provenance of the PR's commits (advisory)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+        run: |
+          if [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ] || [ "$PR_AUTHOR_TYPE" = "Bot" ]; then
+            echo "fork or bot PR ($HEAD_REPO, $PR_AUTHOR_TYPE) — not a team PR, fast-pass"; exit 0
+          fi
+          # Run the checker as it is on the BASE branch, so a PR cannot change the rules it is judged by.
+          # Only the PR that first adds it falls back to its own copy.
+          tool="$RUNNER_TEMP/provenance.py"
+          if git show "$BASE_SHA:.github/scripts/provenance.py" > "$tool" 2>/dev/null; then echo "checker from base $BASE_SHA"
+          else cp .github/scripts/provenance.py "$tool"; echo "::notice::provenance.py not on base — using the PR's copy"; fi
+          rc=0
+          python3 "$tool" "$BASE_SHA..$HEAD_SHA" > provenance.txt 2>&1 || rc=$?
+          cat provenance.txt
+          if [ "$rc" -ne 0 ]; then
+            echo "::warning title=provenance (advisory)::exit $rc — commits without the trailers T2 asks for; see the step summary"
+            { echo '### provenance (advisory)'; echo '```'; cat provenance.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit 0
