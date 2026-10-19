@@ -1,0 +1,3 @@
+# Golden task: check/check.sh runs fixture/ in a child process without the nonce and prints the nonce only on a full pass.
+check = "bash check/check.sh"
+timeout = 60
