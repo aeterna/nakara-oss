@@ -83,3 +83,82 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: node .github/scripts/check-dco.mjs "$BASE_SHA" "$HEAD_SHA"
+
+  # AETERNA delegated delivery (T2): every commit of a team PR carries `Agent:`, product code carries
+  # `Delegated-Run:`, the rest `Exempt:` — one trailer block with `Signed-off-by:` (the DCO job above reads the
+  # same block, so both pass together). Reads the PR's own commits: squash merges drop trailers on main.
+  # The checker is tools/provenance of the private aeterna/org-standards (default branch, so a PR cannot change
+  # the rules it is judged by), read with a short-lived token of the GitHub App aeterna-ci-org-standards-read
+  # (contents:read on org-standards only). Var ORG_STANDARDS_APP_ID + secret ORG_STANDARDS_APP_PRIVATE_KEY are
+  # Pik's. Missing var/secret (fork PRs, before setup) or a failed mint/checkout => skip with a notice.
+  # ADVISORY, never required: failures are a warning + step summary and the job always succeeds.
+  provenance:
+    name: provenance
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04   # pinned: ubuntu-latest moves to 26.04 from 2026-10-19
+    timeout-minutes: 5
+    steps:
+      - name: app credentials present?
+        id: creds
+        env:
+          APP_ID: ${{ vars.ORG_STANDARDS_APP_ID }}
+          APP_KEY_SET: ${{ secrets.ORG_STANDARDS_APP_PRIVATE_KEY != '' }}
+        run: |
+          if [ -n "$APP_ID" ] && [ "$APP_KEY_SET" = "true" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice title=provenance (advisory)::ORG_STANDARDS_APP_ID / ORG_STANDARDS_APP_PRIVATE_KEY not available (fork PR or not set up yet) — skipped"; fi
+      - name: mint org-standards read token
+        id: app
+        if: steps.creds.outputs.ok == 'true'
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.ORG_STANDARDS_APP_ID }}
+          private-key: ${{ secrets.ORG_STANDARDS_APP_PRIVATE_KEY }}
+          owner: aeterna
+          repositories: org-standards
+          permission-contents: read
+      - name: checkout org-standards (checker)
+        id: org
+        if: steps.app.outcome == 'success'
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: aeterna/org-standards
+          token: ${{ steps.app.outputs.token }}
+          path: .org-standards
+          sparse-checkout: tools
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.org.outcome == 'success'
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
+      - name: provenance of the PR's commits (advisory)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CREDS: ${{ steps.creds.outputs.ok }}
+          APP: ${{ steps.app.outcome }}
+          ORG: ${{ steps.org.outcome }}
+        run: |
+          if [ "$CREDS" = "true" ] && [ "$ORG" != "success" ]; then
+            echo "::notice title=provenance (advisory)::could not read org-standards (token: $APP, checkout: $ORG) — skipped"
+          fi
+          [ "$ORG" = "success" ] || exit 0
+          if [ ! -f .org-standards/tools/provenance ]; then
+            echo "::notice title=provenance (advisory)::tools/provenance not found in org-standards — skipped"; exit 0
+          fi
+          rc=0
+          (cd pr && python3 ../.org-standards/tools/provenance "$BASE_SHA..$HEAD_SHA") > provenance.txt 2>&1 || rc=$?
+          # The output quotes PR commit subjects: never let a line act as a workflow command or as Markdown.
+          stop="stop-$(openssl rand -hex 16)"
+          echo "::stop-commands::$stop"; cat provenance.txt; echo "::$stop::"
+          if [ "$rc" -eq 1 ]; then
+            echo "::warning title=provenance (advisory)::commits without the trailers T2 asks for; see the step summary"
+            { echo '### provenance (advisory)'; echo; sed 's/^/    /' provenance.txt; } >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$rc" -ne 0 ]; then
+            echo "::notice title=provenance (advisory)::checker exited $rc (usage or git error) — not judged"
+          fi
+          exit 0
