@@ -190,11 +190,14 @@ function parseEnvelope(envelopeJson) {
     return env;
 }
 
-module.exports = {
-    EnvelopeError,
-    agree,
-    deriveKey,
-    generateKeyPair,
-    openEnvelope,
-    sealEnvelope,
-};
+// Loaded directly as a server_script FXServer provides no CommonJS `module`; the specs still get the export.
+if (typeof module !== 'undefined') {
+    module.exports = {
+        EnvelopeError,
+        agree,
+        deriveKey,
+        generateKeyPair,
+        openEnvelope,
+        sealEnvelope,
+    };
+}

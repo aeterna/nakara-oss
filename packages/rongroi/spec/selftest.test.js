@@ -47,6 +47,38 @@ test('the result is one line and contains no private key material', () => {
     }
 });
 
+// FXServer resolves './envelope.js' against the resource root, where it does not exist. Simulate that by
+// making the sibling require fail and checking that selftest asks for the resource-root path instead.
+test('it loads envelope.js through the resource-root fallback when the sibling file is missing', () => {
+    const Module = module.constructor;
+    const originalLoad = Module._load;
+    const requests = [];
+    Module._load = function (request, parent, isMain) {
+        if (parent && parent.filename === selftestPath) {
+            requests.push(request);
+            if (request === './envelope.js') {
+                const err = new Error("Cannot find module './envelope.js'");
+                err.code = 'MODULE_NOT_FOUND';
+                throw err;
+            }
+            if (request === './server/js/envelope.js') {
+                return originalLoad.call(this, require.resolve('../server/js/envelope.js'), parent, isMain);
+            }
+        }
+        return originalLoad.call(this, request, parent, isMain);
+    };
+    delete require.cache[selftestPath];
+    let loaded;
+    try {
+        loaded = require(selftestPath);
+    } finally {
+        Module._load = originalLoad;
+        delete require.cache[selftestPath];
+    }
+    assert.deepEqual(requests, ['./envelope.js', './server/js/envelope.js']);
+    assert.equal(loaded.runSelfTest(vectors), OK);
+});
+
 test('started as a resource it prints exactly the one self-test line', () => {
     const lines = [];
     const originalLog = console.log;

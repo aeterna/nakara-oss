@@ -4,7 +4,24 @@
 // (test-vectors/envelope-v1.json, also used by Connect) and prints exactly one line. The line never contains
 // key material. A failure names the step: x25519, hkdf or aes-gcm.
 
-const envelope = require('./envelope.js');
+// FXServer resolves a relative require() against the resource root, not against the requiring file, so
+// './envelope.js' only exists on plain Node. Try the file-relative path first and fall back to the
+// resource-root path. This needs no fs probe beyond require() itself.
+function isMissingModule(err) {
+    if (!err) return false;
+    return err.code === 'MODULE_NOT_FOUND' || /^Cannot find module\b/.test(err.message || '');
+}
+
+function loadEnvelope() {
+    try {
+        return require('./envelope.js');
+    } catch (err) {
+        if (!isMissingModule(err)) throw err;
+        return require('./server/js/envelope.js');
+    }
+}
+
+const envelope = loadEnvelope();
 
 const PREFIX = 'nakara_rongroi selftest: ';
 const VECTOR_FILE = 'test-vectors/envelope-v1.json';
@@ -75,4 +92,7 @@ if (typeof LoadResourceFile === 'function' && typeof GetCurrentResourceName === 
     runOnStart();
 }
 
-module.exports = { runSelfTest };
+// Loaded directly as a server_script FXServer provides no CommonJS `module`; the specs still get the export.
+if (typeof module !== 'undefined') {
+    module.exports = { runSelfTest };
+}
