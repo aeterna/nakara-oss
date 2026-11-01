@@ -15,6 +15,7 @@ export default {
     unused(caps.http, used.http, 'http');
     unused(caps.commands, used.commands, 'commands');
     unused(caps.registeredCommands, used.registeredCommands, 'registeredCommands');
+    unused(caps.httpHandlers, used.httpHandlers, 'httpHandlers');
     unused(caps.convars.read, used.convarsRead, 'convars.read');
     unused(caps.convars.write, used.convarsWrite, 'convars.write');
     unused(caps.netEvents.server, used.netServer, 'netEvents.server');

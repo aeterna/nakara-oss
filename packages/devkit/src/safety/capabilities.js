@@ -9,7 +9,7 @@ export const OSS_FILE = 'oss.json';
 
 // list-valued capabilities, as dotted paths into `capabilities`
 export const LIST_CAPS = [
-  'http', 'commands', 'registeredCommands', 'convars.read', 'convars.write',
+  'http', 'commands', 'registeredCommands', 'httpHandlers', 'convars.read', 'convars.write',
   'netEvents.server', 'netEvents.client', 'db.tables', 'files.write',
 ];
 export const BOOL_CAPS = ['nui', 'db.ddl'];
@@ -24,6 +24,7 @@ export function normalizeCaps(caps = {}) {
     http: list(c.http),
     commands: list(c.commands),
     registeredCommands: list(c.registeredCommands),
+    httpHandlers: list(c.httpHandlers),
     convars: { read: list(c.convars?.read), write: list(c.convars?.write) },
     netEvents: { server: list(c.netEvents?.server), client: list(c.netEvents?.client) },
     nui: c.nui === true,
@@ -40,7 +41,7 @@ export function validateOss(data) {
   for (const k of ['name', 'resource', 'capabilities']) if (!(k in data)) problems.push(`missing "${k}"`);
   const caps = data.capabilities;
   if (caps && typeof caps === 'object') {
-    const known = new Set(['http', 'commands', 'registeredCommands', 'convars', 'netEvents', 'nui', 'db', 'files']);
+    const known = new Set(['http', 'commands', 'registeredCommands', 'httpHandlers', 'convars', 'netEvents', 'nui', 'db', 'files']);
     for (const k of Object.keys(caps)) if (!known.has(k)) problems.push(`unknown capability "${k}"`);
     for (const k of ['http', 'commands', 'convars', 'netEvents', 'nui', 'db', 'files']) if (!(k in caps)) problems.push(`missing capabilities.${k}`);
     for (const p of LIST_CAPS) {

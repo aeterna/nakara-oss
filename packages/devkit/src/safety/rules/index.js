@@ -35,6 +35,7 @@ import undeclaredConvar from './undeclared-convar.js';
 import undeclaredDb from './undeclared-db.js';
 import undeclaredFileWrite from './undeclared-file-write.js';
 import undeclaredHttp from './undeclared-http.js';
+import undeclaredHttpHandler from './undeclared-http-handler.js';
 import undeclaredNetEvent from './undeclared-net-event.js';
 import undeclaredNui from './undeclared-nui.js';
 import undeclaredRegisteredCommand from './undeclared-registered-command.js';
@@ -43,8 +44,8 @@ import undeclaredRegisteredCommand from './undeclared-registered-command.js';
 export const safetyRules = [
   dynamicLoad, hostExec, hostAccess, codeEval, envTamper, invokeNative, secretConvar, aceCommand,
   commandInjection, obfuscation, opaqueFile,
-  missingManifest, undeclaredHttp, undeclaredCommand, undeclaredRegisteredCommand, undeclaredConvar,
-  undeclaredNetEvent, undeclaredNui, undeclaredFileWrite, undeclaredDb,
+  missingManifest, undeclaredHttp, undeclaredHttpHandler, undeclaredCommand, undeclaredRegisteredCommand,
+  undeclaredConvar, undeclaredNetEvent, undeclaredNui, undeclaredFileWrite, undeclaredDb,
   netEventRateLimit, nuiHtmlInjection,
   overDeclared,
 ];

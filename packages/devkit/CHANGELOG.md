@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `safety`: add the optional `capabilities.httpHandlers` field and the `undeclared-http-handler` rule for `SetHttpHandler`; unused entries are reported as `over-declared`.
+
 ## 0.1.2
 
 - `busted`: expand FiveM native stubs with client/server KVP storage (`GetResourceKvp*`, `SetResourceKvp*`, `DeleteResourceKvp`), persistent statebags (`Entity(h).state` with `:set()`), routing buckets (`Get/SetPlayerRoutingBucket`, `Get/SetEntityRoutingBucket`), and world entity inspection stubs (`DoesEntityExist`, `GetEntityCoords`, `GetEntityHealth`, `GetEntityModel`, `GetAllVehicles`, `GetAllPeds`, `GetVehicle*`, `Network*`).

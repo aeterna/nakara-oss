@@ -33,7 +33,7 @@ Exit code 1 when there is at least one error. Warnings never fail the run.
 | Running host commands or touching host files: `os.execute`, `io.popen`, `io.open(…, 'w')`, `child_process`, `vm`, `fs` | `host-exec`, `host-access` |
 | Calling a native by hash to dodge name-based rules (`Citizen.InvokeNative`, `_in`) on the server | `invoke-native` |
 | Shipping what nobody can review: DLLs, archives, Lua bytecode, minified bundles, streamed assets | `opaque-file` |
-| Quietly widening what a package does: new HTTP destinations, commands, net events, convars, tables, file writes, NUI | `undeclared-*`, `over-declared`, `capabilityDiff` |
+| Quietly widening what a package does: new HTTP destinations, HTTP handlers, commands, net events, convars, tables, file writes, NUI | `undeclared-*`, `over-declared`, `capabilityDiff` |
 | Exploit surface: net events with no rate limit; player text rendered as HTML in NUI | `net-event-rate-limit`, `nui-html-injection` |
 
 ### What it can NOT catch — human review stays required
@@ -115,6 +115,7 @@ for them (`invalid-allow`).
 |---|---|---|
 | `missing-manifest` | no `oss.json` next to `fxmanifest.lua`, or an invalid one | — |
 | `undeclared-http` | `PerformHttpRequest`, `fetch`, `http(s).request/get`, `axios*`, `node-fetch`, `undici`, `WebSocket`, `EventSource`, `navigator.sendBeacon`, remote `ui_page`/`loadscreen`; `XMLHttpRequest` and `PerformHttpRequestInternal*` are always reported (destination not checkable) | `capabilities.http` (URL prefix) |
+| `undeclared-http-handler` | `SetHttpHandler` (any call, Lua or JS) | `capabilities.httpHandlers` (non-empty) |
 | `undeclared-command` | `ExecuteCommand` (each command's first word) | `capabilities.commands` |
 | `undeclared-registered-command` | `RegisterCommand`, `lib.addCommand` (string or list) | `capabilities.registeredCommands` |
 | `undeclared-convar` | `GetConvar`, `GetConvarInt`, `GetConvarBool`, `GetConvarFloat` / `SetConvar`, `SetConvarReplicated`, `SetConvarServerInfo` | `capabilities.convars.read` / `.write` |
@@ -215,6 +216,10 @@ release.
   accepts any runtime value.
 - **`commands`, `registeredCommands`, `convars.*`, `netEvents.*`, `db.tables`, `files.write`** —
   exact names, or globs with `*` (`nakara_metrics_*`, `nakara_metrics:*`).
+- **`httpHandlers`** — paths under `/<resource>/` answered by `SetHttpHandler`; a trailing `*`
+  matches a prefix. Optional. The scanner sees only that a handler exists, so any `SetHttpHandler`
+  makes every declared entry used; entries with no `SetHttpHandler` in the package are
+  `over-declared`.
 - **`nui`**, **`db.ddl`** — booleans.
 - Declare exactly what the code uses: unused entries are `over-declared` warnings.
 
