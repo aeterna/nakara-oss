@@ -1,6 +1,6 @@
 # ADR 0001 — Rongroi Server Kit (`nakara_rongroi`)
 
-- Status: proposed
+- Status: accepted — owner, 2026-11-01 (every owner question answered as recommended)
 - Date: 2026-11-01
 - Related: aeterna-rongroi ADR 0089, "Rongroi product line and schema 2" (not merged yet:
   [aeterna/aeterna-rongroi#252](https://github.com/aeterna/aeterna-rongroi/pull/252)); aeterna-rongroi
@@ -47,7 +47,7 @@ game only · gate only on machine requirements (posture), never on cheat traces 
 mode for 7 days · privacy template, retention setting, delete on request (each server is the data
 controller) · Lua API `api(1)` plus events · plug-ins are rule packs, data only · WASM later.
 
-### Kit proposals for owner check
+### Kit proposals (accepted by the owner, 2026-11-01)
 
 Per-player exceptions · the upload page for saved reports, chunked like Connect · every change to a gate's
 rule list reruns 7 days of shadow mode · the framework list Qbox, QBCore, ESX, standalone · the reading of
@@ -223,10 +223,10 @@ anything from a record.
 - Staff permission is the ACE `nakara_rongroi.staff` via `IsPlayerAceAllowed`.
 - External resources the Kit may touch, each only when `GetResourceState` says it is started: `qbx_core`,
   `qb-core`, `es_extended` (names and identifiers), `ox_lib` (callbacks, rate limit), `oxmysql` (storage).
-  Hard rule 5 allows only `ox_lib` and `qbx_core`. `qb-core`, `es_extended` and `oxmysql` need the owner to
-  change hard rule 5; auto-detect is the owner's decision (Q14), so this is an owner question, not a reason to
-  drop a framework.
-- The 4 UI levels, as proposed: (1) texts and language, (2) CSS variables, (3) a server's own NUI page on a
+  The owner extended hard rule 5 for them on 2026-11-01: `qb-core` and `es_extended` are read only (names and
+  identifiers), `oxmysql` is used for this Kit's own storage, and none of the three is a dependency in
+  `fxmanifest.lua`.
+- The 4 UI levels (accepted): (1) texts and language, (2) CSS variables, (3) a server's own NUI page on a
   documented message format, (4) no Kit UI, the server's own on `api(1)`.
 
 ### 12. Saved-file upload page
