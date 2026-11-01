@@ -1,0 +1,22 @@
+{
+  "description": "Envelope v1 test vector (ADR 0089 section 5). Fixed inputs; test keys only, not a Server Kit key. Server Kit and Connect both test against this file.",
+  "ticket": "5f0c2a9e8b1d4c7a9e3f6b2d8a1c4e70",
+  "kit": {
+    "privateKey": "PoCIecWmY6a-HIbJnUVbxlj1KUmHU-uJ-nrjyZLkVjw",
+    "publicKey": "ovol0Vile5zOPb8MVWv4hi3YXxnWwdhDWs2VxaLj5yA"
+  },
+  "ephemeral": {
+    "privateKey": "WFRdTLA_3ztH3Cwka4mYi_1vP8Ds3FTpyWW4tq75VQA",
+    "publicKey": "Uw7I0S2JC8TxzsQ_BZ3OBp1ixLRS6Xn1xupds1t9i3c"
+  },
+  "iv": "UyWYMnn8GE3YwSb8",
+  "plaintext": "{\"schema\":2,\"nonce\":\"vector-nonce-01\",\"note\":\"test vector, not a report\"}",
+  "sharedSecret": "c6GpoLMjQEdUs79PIb1gm_eFaLfLBMmCn-EMlyhTXng",
+  "derivedKey": "kSHv5qXfsDYSWyIhq3OlOvXXNq_5V163TuLq0fUlLq8",
+  "envelope": {
+    "v": 1,
+    "epk": "Uw7I0S2JC8TxzsQ_BZ3OBp1ixLRS6Xn1xupds1t9i3c",
+    "iv": "UyWYMnn8GE3YwSb8",
+    "ct": "lVdIdXIftuFp86dXxcHUrZkb8GISx0GdkDOK6hwFh0kvHiJj38Wwgb4vJa34lOoqp4IgwTMDUq49_hRZ4iZp-4tJczuQzt4QPcpRfAuMtSR3wPTIgqTru2s"
+  }
+}

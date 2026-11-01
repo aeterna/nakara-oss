@@ -1,0 +1,15 @@
+{
+  "$schema": "../../oss.schema.json",
+  "name": "rongroi",
+  "resource": "nakara_rongroi",
+  "capabilities": {
+    "http": [],
+    "commands": [],
+    "registeredCommands": [],
+    "convars": { "read": [], "write": [] },
+    "netEvents": { "server": [], "client": [] },
+    "nui": false,
+    "db": { "tables": [], "ddl": false },
+    "files": { "write": [] }
+  }
+}
