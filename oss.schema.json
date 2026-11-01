@@ -18,6 +18,7 @@
         "http": { "type": "array", "items": { "type": "string" }, "description": "hosts/URL prefixes PerformHttpRequest/fetch may reach; ${convar} placeholders allowed" },
         "commands": { "type": "array", "items": { "type": "string" }, "description": "command names passed to ExecuteCommand (first word)" },
         "registeredCommands": { "type": "array", "items": { "type": "string" }, "description": "commands this resource registers with RegisterCommand" },
+        "httpHandlers": { "type": "array", "items": { "type": "string" }, "description": "paths under /<resource>/ that SetHttpHandler answers; a trailing * matches a prefix" },
         "convars": {
           "type": "object", "additionalProperties": false,
           "properties": {

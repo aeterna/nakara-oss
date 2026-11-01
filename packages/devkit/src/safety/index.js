@@ -68,7 +68,8 @@ export function validateAllow(allow, configFile) {
 
 function newUsed() {
   return {
-    http: new Set(), commands: new Set(), registeredCommands: new Set(), convarsRead: new Set(), convarsWrite: new Set(),
+    http: new Set(), commands: new Set(), registeredCommands: new Set(), httpHandlers: new Set(),
+    convarsRead: new Set(), convarsWrite: new Set(),
     netServer: new Set(), netClient: new Set(), nui: false, tables: new Set(), ddl: false, filesWrite: new Set(),
   };
 }
