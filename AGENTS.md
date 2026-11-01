@@ -26,6 +26,7 @@ Read before changing code: [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`packages/de
 5. **Package boundaries & naming.**
    - Resource names use the `nakara_` prefix (`nakara_cargen_fix`, `nakara_core`, …).
    - Resource packages may depend only on the shared core package (`nakara_core` when present) and optional `ox_lib`/`qbx_core` defaults — **never** on each other, and **never** on any private `aeterna_*` resource or identifier.
+   - Optional framework resources `qb-core` and `es_extended` (read only: names and identifiers) and `oxmysql` (a package's own storage) may be touched only when `GetResourceState` says they are started, never listed as a dependency, and only by a package whose ADR names them (owner, 2026-11-01; `docs/adr/0001-rongroi-server-kit.md` §11).
 6. **Upstream-first.** This repository is the single upstream source for all `[oss]/` packages vendored into `nakara-city`. Never hand-edit vendored copies downstream; land the change here via PR, release with CI attestation, and bump downstream via `oss-vendor.mjs`.
 7. **Protected paths require a Proposal issue from external contributors.** Changes touching `.github/`, `oss.schema.json`, any `oss.json` capability, or `packages/devkit/src/safety/` are maintainer-controlled (`CODEOWNERS`).
 8. **Workflow hygiene.** Every GitHub Action in `.github/workflows/*.yml` must be pinned to a full commit SHA, use `persist-credentials: false` on `actions/checkout`, keep default `permissions: contents: read`, and pass `actionlint` + `zizmor`.
