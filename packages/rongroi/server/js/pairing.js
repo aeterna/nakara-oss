@@ -72,6 +72,11 @@ function checkExpiresAt(expiresAt) {
     return expiresAt;
 }
 
+// ISO-8601 UTC without milliseconds, the only form the Connect pairing reader accepts.
+function formatExpiresAt(expiresAt) {
+    return new Date(expiresAt).toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
 function checkPolicyHash(hash) {
     if (typeof hash !== 'string' || !POLICY_HASH_RE.test(hash)) {
         throw new TypeError('policyHash must be 16 lowercase hex characters');
@@ -107,7 +112,7 @@ function pairingCode(input) {
         server_origin: serverOrigin,
         ticket,
         nonce,
-        expires_at: expiresAt,
+        expires_at: formatExpiresAt(expiresAt),
         policy_hash: hash,
         kit_public_key: kitPublicKey,
     };

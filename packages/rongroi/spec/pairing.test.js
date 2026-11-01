@@ -30,7 +30,7 @@ test('a pairing code round-trips to exactly the six members in order', () => {
         server_origin: input.serverOrigin,
         ticket: input.ticket,
         nonce: input.nonce,
-        expires_at: input.expiresAt,
+        expires_at: '2030-01-01T00:00:00Z',
         policy_hash: input.policyHash,
         kit_public_key: input.kitPublicKey,
     });
@@ -42,6 +42,12 @@ test('a pairing code round-trips to exactly the six members in order', () => {
         'policy_hash',
         'kit_public_key',
     ]);
+});
+
+test('expires_at is an ISO-8601 UTC timestamp with no milliseconds', () => {
+    const decoded = decode(pairingCode({ ...input, expiresAt: 1893456000789 }));
+    assert.match(decoded.expires_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    assert.equal(decoded.expires_at, '2030-01-01T00:00:00Z');
 });
 
 test('http and https origins with names, IPv4 and bracketed IPv6 are accepted', () => {
