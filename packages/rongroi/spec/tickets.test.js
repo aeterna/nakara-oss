@@ -137,6 +137,56 @@ test('issued -> expired at expires_at: expireDue(), a lazy 410, then 410 for upl
     assert.equal(store.stateOf(late), 'expired');
 });
 
+test('consume without an open upload is 409 and leaves an issued ticket issued', () => {
+    const { store } = makeStore();
+    const { ticket } = issue(store);
+    assert.deepEqual(store.consume(ticket, SHA_A), { ok: false, status: 409 });
+    assert.equal(store.stateOf(ticket), 'issued');
+    // A failed upload that dropped its last buffer also leaves nothing for consume to accept.
+    const { uploadId } = store.beginUpload(ticket, SHA_A);
+    store.drop(uploadId);
+    assert.deepEqual(store.consume(ticket, SHA_A), { ok: false, status: 409 });
+    assert.equal(store.stateOf(ticket), 'issued');
+    // With an open upload the ticket is uploading and consume succeeds.
+    const open = store.beginUpload(ticket, SHA_A);
+    assert.deepEqual(store.consume(ticket, SHA_A), {
+        ok: true,
+        status: 200,
+        caseId: 'case-1',
+        policy: { collectors: [] },
+        dropped: [open.uploadId],
+    });
+    assert.equal(store.stateOf(ticket), 'consumed');
+});
+
+test('an expired ticket is 410 just after expiry and 404 an hour past expiresAt plus expireDue()', () => {
+    const { store, advance } = makeStore();
+    const { ticket } = issue(store);
+    advance(TTL); // exactly at expiresAt
+    assert.equal(store.expireDue(), 1);
+    assert.equal(store.stateOf(ticket), 'expired');
+    assert.deepEqual(store.beginUpload(ticket, SHA_A), { ok: false, status: 410 });
+    assert.deepEqual(store.consume(ticket, SHA_A), { ok: false, status: 410 });
+
+    advance(3600000 + 1); // more than an hour past expiresAt
+    store.expireDue();
+    assert.equal(store.stateOf(ticket), 'unknown');
+    assert.deepEqual(store.beginUpload(ticket, SHA_A), { ok: false, status: 404 });
+    assert.deepEqual(store.consume(ticket, SHA_A), { ok: false, status: 404 });
+});
+
+test('a consumed ticket survives expireDue() more than an hour past expiresAt', () => {
+    const { store, advance } = makeStore();
+    const { ticket } = issue(store);
+    store.beginUpload(ticket, SHA_A);
+    store.consume(ticket, SHA_A);
+    advance(TTL + 3600000 + 1);
+    store.expireDue();
+    assert.equal(store.stateOf(ticket), 'consumed');
+    assert.deepEqual(store.beginUpload(ticket, SHA_A), { ok: true, status: 200, repeat: true });
+    assert.equal(store.consume(ticket, SHA_A).repeat, true);
+});
+
 test('lookup returns the state, nonce and policy, or null for an unknown ticket', () => {
     const { store } = makeStore();
     const issued = issue(store, { caseId: 'case-7', policy: { name: 'Nakara' } });

@@ -12,8 +12,9 @@
 // time may finish past expires_at, bounded by the idle limit instead); -> consumed only by consume(), which
 // the handler calls only after the envelope authenticates and the record's nonce matches. At most 2 open
 // uploads per ticket, 16 in total. A consumed ticket is kept with its case: any further upload gets 409,
-// unless it repeats the accepted envelope and gets 200 again. A restart drops issued and uploading tickets;
-// the caller persists consumed ones with snapshotConsumed() and feeds them back with restoreConsumed().
+// unless it repeats the accepted envelope and gets 200 again. expireDue() drops an expired ticket once it is
+// more than an hour past expires_at. A restart drops issued and uploading tickets; the caller persists
+// consumed ones with snapshotConsumed() and feeds them back with restoreConsumed().
 
 const TICKET_RE = /^[0-9a-f]{32}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
@@ -21,6 +22,7 @@ const TICKET_BYTES = 16;       // 128 bits of ticket, 32 lowercase hex character
 const NONCE_BYTES = 6;         // 12 hex characters, compared with the record's nonce
 const DEFAULT_TTL_MS = 300000; // 5 minutes (ADR 0001, section 3)
 const IDLE_MS = 60000;         // a buffer is dropped after 60 s with no new slice
+const EXPIRED_RETENTION_MS = 3600000; // an expired ticket is kept for an hour past expires_at
 const MAX_OPEN_PER_TICKET = 2;
 const MAX_OPEN_TOTAL = 16;
 
@@ -156,12 +158,12 @@ class TicketStore {
         }
     }
 
-    // Consume the ticket once the envelope authenticated and the nonce matched. Like beginUpload, with the
-    // ADR 0089 statuses:
+    // Consume the ticket once the envelope authenticated and the nonce matched, only while an upload is
+    // open. Like beginUpload, with the ADR 0089 statuses:
     //   { ok: true,  status: 200, caseId, policy, dropped }  the ticket is now consumed; dropped lists the
     //                                                        open uploads the handler must free
     //   { ok: true,  status: 200, repeat, caseId, policy }   already consumed with the same envelope
-    //   { ok: false, status: 404|410|409 }
+    //   { ok: false, status: 404|410|409 }                   unknown, expired, no open upload or consumed
     consume(ticket, reportSha256) {
         checkTicket(ticket);
         checkReportSha256(reportSha256);
@@ -174,6 +176,7 @@ class TicketStore {
             }
             return { ok: false, status: 409 };
         }
+        if (record.state !== 'uploading') return { ok: false, status: 409 };
         record.state = 'consumed';
         record.reportSha256 = reportSha256;
         record.consumedAt = this.now();
@@ -198,14 +201,18 @@ class TicketStore {
         return dropped;
     }
 
-    // issued -> expired at expires_at, by the server's clock. Returns the number of tickets expired.
+    // issued -> expired at expires_at, by the server's clock, then drop expired tickets more than an hour
+    // past expires_at so they answer 404; consumed tickets are kept. Returns the number of tickets expired.
     expireDue() {
         const now = this.now();
         let expired = 0;
-        for (const record of this.tickets.values()) {
+        for (const [ticket, record] of this.tickets) {
             if (record.state === 'issued' && now >= record.expiresAt) {
                 record.state = 'expired';
                 expired += 1;
+            }
+            if (record.state === 'expired' && now > record.expiresAt + EXPIRED_RETENTION_MS) {
+                this.tickets.delete(ticket);
             }
         }
         return expired;
