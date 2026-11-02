@@ -33,6 +33,10 @@
         () => require('./pairing.js'),
         () => require('./server/js/pairing.js'),
     );
+    const { clampDays, dueCases } = loadModule(
+        () => require('./retention.js'),
+        () => require('./server/js/retention.js'),
+    );
     const { createStorage, createKvpBackend, detectEdition } = loadModule(
         () => require('./storage.js'),
         () => require('./server/js/storage.js'),
@@ -65,6 +69,42 @@
         storage.load();
         store.restoreConsumed(storage.consumedSnapshot());
         log(`storage ${edition}`);
+
+        // One case every 250 ms: a storage write blocks the tick, and Enhanced's writes are the slowest
+        // (ADR 0001, section 4). A second sweep waits for the running one.
+        let retentionRunning = false;
+
+        function runRetention() {
+            if (retentionRunning) return;
+            retentionRunning = true;
+            const storedDays = GetResourceKvpString('rongroi:settings:retentionDays');
+            const days = clampDays(
+                storedDays === null || storedDays === undefined ? undefined : Number(storedDays),
+            );
+            const due = dueCases(storage.entries(), Date.now(), days);
+            let index = 0;
+            let removed = 0;
+            function removeNext() {
+                if (index >= due.length) {
+                    retentionRunning = false;
+                    if (removed > 0) log(`retention removed ${removed} cases`);
+                    return;
+                }
+                const caseId = due[index];
+                index += 1;
+                try {
+                    if (storage.deleteCase(caseId)) removed += 1;
+                } catch {
+                    log('retention failed to remove one case');
+                }
+                setTimeout(removeNext, 250);
+            }
+            removeNext();
+        }
+
+        runRetention();
+        setInterval(runRetention, 3600000);
+
         const handler = createHandler({ store, kit, now: Date.now, onReport, log });
 
         function openCase({ caseId, policy, serverOrigin, ttlMs } = {}) {
