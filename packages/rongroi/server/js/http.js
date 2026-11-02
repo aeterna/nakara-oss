@@ -34,7 +34,7 @@ const SHA256_RE = /^[0-9a-f]{64}$/;
 const DECIMAL_RE = /^[0-9]+$/;
 const MAX_DIRECT_BYTES = 7168; // ADR 0089's direct POST limit
 function reply(res, status, headers) {
-    res.writeHead(status, headers || {});
+    res.writeHead(status, { 'Content-Type': 'application/json', ...headers });
     res.send(JSON.stringify({ status }));
 }
 
@@ -60,7 +60,7 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
         if (found.state === 'expired' || found.policy === null) {
             return fail(res, 410, 'rongroi http: policy ticket unavailable', ticket);
         }
-        res.writeHead(200, {});
+        res.writeHead(200, { 'Content-Type': 'application/json' });
         res.send(JSON.stringify({ ...found.policy, policy_hash: policyHash(found.policy) }));
     }
 
@@ -143,6 +143,7 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
                 store.drop(uploadId);
                 return fail(res, consumed.status, 'rongroi http: report consume refused', ticket);
             }
+            if (consumed.repeat) return reply(res, 200);
             try {
                 const event = { caseId: consumed.caseId, ticket, reportSha256: sha, receivedAt: now() };
                 if (declined) event.declined = true;

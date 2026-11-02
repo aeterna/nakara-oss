@@ -83,6 +83,7 @@ test('GET policy returns the issued policy with its policy_hash', () => {
     const { ticket } = issue(h);
     const { res, json } = call(h, 'GET', `/policy/${ticket}`);
     assert.equal(res.status, 200);
+    assert.equal(res.headers['Content-Type'], 'application/json');
     assert.deepEqual(json(), { ...POLICY, policy_hash: policyHash(POLICY) });
 });
 
@@ -104,6 +105,7 @@ test('POST report accepts a sealed report and a declined answer with the case fa
     assert.equal(h.reports.length, 0);
     report.req.deliver();
     assert.equal(report.res.status, 200);
+    assert.equal(report.res.headers['Content-Type'], 'application/json');
     assert.deepEqual(report.json(), { status: 200 });
     assert.deepEqual(h.reports, [{ caseId: 'case-42', ticket: first.ticket, reportSha256: sha(reportBody), receivedAt: 1000000, record }]);
     assert.equal(h.store.stateOf(first.ticket), 'consumed');
@@ -186,15 +188,38 @@ test('size, headers and expiry are refused before the body is read', () => {
     assert.equal(late.req.dataHandler, null);
 });
 
+test('two concurrent uploads of one envelope report once', () => {
+    const h = makeHarness();
+    const { ticket, nonce } = issue(h);
+    const body = envelope({ schema: 2, binding: { ticket, nonce } }, ticket);
+    const first = postReport(h, ticket, body);
+    const second = postReport(h, ticket, body);
+    assert.equal(first.res.status, null);
+    assert.equal(second.res.status, null);
+    assert.equal(typeof first.req.dataHandler, 'function');
+    assert.equal(typeof second.req.dataHandler, 'function');
+    first.req.deliver();
+    second.req.deliver();
+    assert.equal(first.res.status, 200);
+    assert.equal(second.res.status, 200);
+    assert.equal(h.reports.length, 1);
+    assert.equal(h.store.stateOf(ticket), 'consumed');
+});
+
 test('a third open upload on one ticket is 429 with Retry-After: 5', () => {
     const h = makeHarness();
     const { ticket, nonce } = issue(h);
     const body = envelope({ schema: 2, binding: { ticket, nonce } }, ticket);
-    assert.equal(postReport(h, ticket, body).res.status, 200);
-    assert.equal(postReport(h, ticket, body).res.status, 200);
+    const first = postReport(h, ticket, body);
+    const second = postReport(h, ticket, body);
+    for (const open of [first, second]) {
+        assert.equal(open.res.status, null);
+        assert.equal(typeof open.req.dataHandler, 'function');
+    }
     const third = postReport(h, ticket, body);
     assert.equal(third.res.status, 429);
     assert.equal(third.res.headers['Retry-After'], '5');
+    assert.equal(third.res.headers['Content-Type'], 'application/json');
     assert.equal(third.req.dataHandler, null);
 });
 
