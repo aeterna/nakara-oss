@@ -1,7 +1,8 @@
 'use strict';
 
-// Rongroi HTTP handler (ADR 0001, section 6): GET policy/<ticket> and a direct POST report. Chunked
-// uploads, rate limits and the upload page are not part of this file; no client bytes are logged.
+// Rongroi HTTP handler (ADR 0001, section 6): GET policy/<ticket>, a direct POST report and chunked
+// POST report/chunk uploads. Rate limits and the upload page are not part of this file; no client bytes
+// are logged.
 
 const crypto = require('crypto');
 
@@ -33,6 +34,8 @@ const TICKET_RE = /^[0-9a-f]{32}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const DECIMAL_RE = /^[0-9]+$/;
 const MAX_DIRECT_BYTES = 7168; // ADR 0089's direct POST limit
+const MAX_SLICE_BYTES = 4096;  // ADR 0001 section 6's slice size
+const MAX_CHUNK_TOTAL = 512;   // 2 MiB at 4 KiB per slice
 function reply(res, status, headers) {
     res.writeHead(status, { 'Content-Type': 'application/json', ...headers });
     res.send(JSON.stringify({ status }));
@@ -45,10 +48,26 @@ function requestPath(path) {
     return (query === -1 ? path : path.slice(0, query)).replace(/^\/+/, '');
 }
 function createHandler({ store, kit, now, onReport, log = () => {} }) {
+    const buffers = new Map(); // `${ticket}:${reportSha}` -> one chunked upload in progress
+
     function fail(res, status, message, ticket, headers) {
         if (ticket === undefined) log(message);
         else log(message, ticket);
         return reply(res, status, headers);
+    }
+
+    // Forget the reassembly bytes of upload ids that the store dropped or consumed.
+    function freeDropped(dropped) {
+        if (!Array.isArray(dropped)) return;
+        for (const [key, buffer] of buffers) {
+            if (dropped.includes(buffer.uploadId)) buffers.delete(key);
+        }
+    }
+
+    // Drop one chunked upload in the store and forget its reassembly bytes.
+    function dropBuffer(key, buffer) {
+        store.drop(buffer.uploadId);
+        buffers.delete(key);
     }
 
     function handlePolicy(res, ticket) {
@@ -62,6 +81,66 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.send(JSON.stringify({ ...found.policy, policy_hash: policyHash(found.policy) }));
+    }
+
+    // Shared by a direct POST and the last chunk: verify the whole report and answer it.
+    function finish(res, ticket, sha, uploadId, raw) {
+        if (crypto.createHash('sha256').update(raw).digest('hex') !== sha) {
+            store.drop(uploadId);
+            return fail(res, 422, 'rongroi http: report sha mismatch', ticket);
+        }
+        let opened;
+        try {
+            opened = openEnvelope(raw.toString('utf8'), kit.privateKey, kit.publicKey, ticket);
+        } catch (err) {
+            store.drop(uploadId);
+            if (err instanceof EnvelopeError && err.code === 'malformed') {
+                return fail(res, 400, 'rongroi http: report envelope malformed', ticket);
+            }
+            if (err instanceof EnvelopeError && err.code === 'not_authentic') {
+                return fail(res, 422, 'rongroi http: report envelope not authentic', ticket);
+            }
+            return fail(res, 500, 'rongroi http: report envelope check failed', ticket);
+        }
+        let record;
+        try {
+            record = JSON.parse(opened);
+        } catch {
+            record = undefined;
+        }
+        if (record === null || typeof record !== 'object' || Array.isArray(record)) {
+            store.drop(uploadId);
+            return fail(res, 422, 'rongroi http: report record rejected', ticket);
+        }
+        const found = store.lookup(ticket);
+        const nonce = found ? found.nonce : null;
+        const binding = record.binding;
+        if (binding === null || typeof binding !== 'object' || Array.isArray(binding)
+            || binding.ticket !== ticket || binding.nonce !== nonce) {
+            store.drop(uploadId);
+            return fail(res, 422, 'rongroi http: report binding rejected', ticket);
+        }
+        const declined = record.scan === 'declined';
+        if (!declined && record.schema !== 2) {
+            store.drop(uploadId);
+            return fail(res, 422, 'rongroi http: report schema rejected', ticket);
+        }
+        const consumed = store.consume(ticket, sha);
+        if (!consumed.ok) {
+            store.drop(uploadId);
+            return fail(res, consumed.status, 'rongroi http: report consume refused', ticket);
+        }
+        if (consumed.repeat) return reply(res, 200);
+        freeDropped(consumed.dropped);
+        try {
+            const event = { caseId: consumed.caseId, ticket, reportSha256: sha, receivedAt: now() };
+            if (declined) event.declined = true;
+            else event.record = record;
+            onReport(event);
+        } catch {
+            log('rongroi http: onReport failed', ticket);
+        }
+        return reply(res, 200);
     }
 
     function handleReport(req, res) {
@@ -98,64 +177,100 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
                 store.drop(uploadId);
                 return fail(res, 413, 'rongroi http: report body too large', ticket);
             }
-            if (crypto.createHash('sha256').update(raw).digest('hex') !== sha) {
-                store.drop(uploadId);
-                return fail(res, 422, 'rongroi http: report sha mismatch', ticket);
-            }
-            let opened;
-            try {
-                opened = openEnvelope(raw.toString('utf8'), kit.privateKey, kit.publicKey, ticket);
-            } catch (err) {
-                store.drop(uploadId);
-                if (err instanceof EnvelopeError && err.code === 'malformed') {
-                    return fail(res, 400, 'rongroi http: report envelope malformed', ticket);
-                }
-                if (err instanceof EnvelopeError && err.code === 'not_authentic') {
-                    return fail(res, 422, 'rongroi http: report envelope not authentic', ticket);
-                }
-                return fail(res, 500, 'rongroi http: report envelope check failed', ticket);
-            }
-            let record;
-            try {
-                record = JSON.parse(opened);
-            } catch {
-                record = undefined;
-            }
-            if (record === null || typeof record !== 'object' || Array.isArray(record)) {
-                store.drop(uploadId);
-                return fail(res, 422, 'rongroi http: report record rejected', ticket);
-            }
-            const found = store.lookup(ticket);
-            const nonce = found ? found.nonce : null;
-            const binding = record.binding;
-            if (binding === null || typeof binding !== 'object' || Array.isArray(binding)
-                || binding.ticket !== ticket || binding.nonce !== nonce) {
-                store.drop(uploadId);
-                return fail(res, 422, 'rongroi http: report binding rejected', ticket);
-            }
-            const declined = record.scan === 'declined';
-            if (!declined && record.schema !== 2) {
-                store.drop(uploadId);
-                return fail(res, 422, 'rongroi http: report schema rejected', ticket);
-            }
-            const consumed = store.consume(ticket, sha);
-            if (!consumed.ok) {
-                store.drop(uploadId);
-                return fail(res, consumed.status, 'rongroi http: report consume refused', ticket);
-            }
-            if (consumed.repeat) return reply(res, 200);
-            try {
-                const event = { caseId: consumed.caseId, ticket, reportSha256: sha, receivedAt: now() };
-                if (declined) event.declined = true;
-                else event.record = record;
-                onReport(event);
-            } catch {
-                log('rongroi http: onReport failed', ticket);
-            }
-            return reply(res, 200);
+            return finish(res, ticket, sha, uploadId, raw);
         });
     }
-    return (req, res) => {
+
+    function handleChunk(req, res) {
+        const headers = req.headers || {};
+        const ticket = headers['x-rongroi-upload-id'];
+        const reportSha = headers['x-rongroi-report-sha256'];
+        const chunkSha = headers['x-rongroi-chunk-sha256'];
+        const indexHeader = headers['x-rongroi-chunk-index'];
+        const totalHeader = headers['x-rongroi-chunk-total'];
+        if (typeof ticket !== 'string' || !TICKET_RE.test(ticket)
+            || typeof reportSha !== 'string' || !SHA256_RE.test(reportSha)
+            || typeof chunkSha !== 'string' || !SHA256_RE.test(chunkSha)
+            || typeof indexHeader !== 'string' || !DECIMAL_RE.test(indexHeader)
+            || typeof totalHeader !== 'string' || !DECIMAL_RE.test(totalHeader)) {
+            return fail(res, 400, 'rongroi http: chunk headers rejected');
+        }
+        const index = Number(indexHeader);
+        const total = Number(totalHeader);
+        if (total === 0 || index >= total) {
+            return fail(res, 400, 'rongroi http: chunk range rejected', ticket);
+        }
+        if (total > MAX_CHUNK_TOTAL) {
+            return fail(res, 413, 'rongroi http: chunk total too large', ticket);
+        }
+        const claimedLength = headers['content-length'];
+        if (claimedLength !== undefined) {
+            if (typeof claimedLength !== 'string' || !DECIMAL_RE.test(claimedLength)) {
+                return fail(res, 400, 'rongroi http: chunk content-length rejected', ticket);
+            }
+            if (Number(claimedLength) > MAX_SLICE_BYTES) {
+                return fail(res, 413, 'rongroi http: chunk content-length too large', ticket);
+            }
+        }
+
+        const key = `${ticket}:${reportSha}`;
+        let buffer = buffers.get(key);
+        if (!buffer) {
+            const begun = store.beginUpload(ticket, reportSha);
+            if (!begun.ok) {
+                if (begun.status === 429) {
+                    return fail(res, 429, 'rongroi http: chunk upload refused', ticket, { 'Retry-After': '5' });
+                }
+                return fail(res, begun.status, 'rongroi http: chunk upload refused', ticket);
+            }
+            if (begun.repeat) return reply(res, 200);
+            if (index > 0) {
+                store.drop(begun.uploadId);
+                return fail(res, 422, 'rongroi http: chunk upload missing', ticket);
+            }
+            buffer = { uploadId: begun.uploadId, total, next: 0, chunks: [], lastSha: null };
+            buffers.set(key, buffer);
+        } else {
+            if (!store.touch(buffer.uploadId)) {
+                buffers.delete(key);
+                return fail(res, 422, 'rongroi http: chunk upload gone', ticket);
+            }
+            if (buffer.total !== total) {
+                dropBuffer(key, buffer);
+                return fail(res, 422, 'rongroi http: chunk total changed', ticket);
+            }
+            if (index === buffer.next - 1 && chunkSha === buffer.lastSha) return reply(res, 200);
+            if (index !== buffer.next) {
+                dropBuffer(key, buffer);
+                return fail(res, 422, 'rongroi http: chunk out of order', ticket);
+            }
+        }
+
+        req.setDataHandler((body) => {
+            const raw = Buffer.isBuffer(body) ? body : Buffer.from(typeof body === 'string' ? body : '', 'utf8');
+            if (raw.length > MAX_SLICE_BYTES) {
+                dropBuffer(key, buffer);
+                return fail(res, 413, 'rongroi http: chunk body too large', ticket);
+            }
+            if (crypto.createHash('sha256').update(raw).digest('hex') !== chunkSha) {
+                dropBuffer(key, buffer);
+                return fail(res, 422, 'rongroi http: chunk sha mismatch', ticket);
+            }
+            if (index !== total - 1 && raw.length !== MAX_SLICE_BYTES) {
+                dropBuffer(key, buffer);
+                return fail(res, 422, 'rongroi http: chunk length rejected', ticket);
+            }
+            buffer.chunks.push(raw);
+            buffer.next += 1;
+            buffer.lastSha = chunkSha;
+            if (index !== total - 1) return reply(res, 200);
+            const whole = Buffer.concat(buffer.chunks);
+            buffers.delete(key);
+            return finish(res, ticket, reportSha, buffer.uploadId, whole);
+        });
+    }
+
+    const handler = (req, res) => {
         const path = requestPath(req.path);
         const policy = /^policy\/([^/]+)$/.exec(path);
         if (policy) {
@@ -166,9 +281,23 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
             if (req.method !== 'POST') return reply(res, 405);
             return handleReport(req, res);
         }
+        if (path === 'report/chunk') {
+            if (req.method !== 'POST') return reply(res, 405);
+            // A transport always adds headers; a bare request with none is still an unknown path.
+            if (Object.keys(req.headers || {}).length === 0) {
+                log('rongroi http: unknown path');
+                return reply(res, 404);
+            }
+            return handleChunk(req, res);
+        }
         log('rongroi http: unknown path');
         return reply(res, 404);
     };
+    handler.sweep = () => {
+        store.expireDue();
+        freeDropped(store.sweepIdle());
+    };
+    return handler;
 }
 
 // Loaded directly as a server_script FXServer provides no CommonJS `module`; the specs still get the export.
