@@ -33,6 +33,14 @@
         () => require('./pairing.js'),
         () => require('./server/js/pairing.js'),
     );
+    const { createStorage, createKvpBackend, detectEdition } = loadModule(
+        () => require('./storage.js'),
+        () => require('./server/js/storage.js'),
+    );
+    const { createFileBackend } = loadModule(
+        () => require('./filestore.js'),
+        () => require('./server/js/filestore.js'),
+    );
     const crypto = require('crypto');
 
     function log(...parts) {
@@ -43,14 +51,25 @@
         const kvp = {
             get(key) { return GetResourceKvpString(key); },
             set(key, value) { SetResourceKvp(key, value); },
+            del(key) { DeleteResourceKvp(key); },
         };
+        const edition = detectEdition(GetConvar);
+        const backend = edition === 'enhanced' ? createFileBackend() : createKvpBackend(kvp);
+        const storage = createStorage(backend);
         const kit = loadOrCreateKitKey(kvp);
         const store = new TicketStore({ now: Date.now, randomBytes: crypto.randomBytes });
-        const onReport = (event) => log(`report received ${event.ticket}`);
+        const onReport = (event) => {
+            storage.saveReport(event);
+            log(`report received ${event.ticket}`);
+        };
+        storage.load();
+        store.restoreConsumed(storage.consumedSnapshot());
+        log(`storage ${edition}`);
         const handler = createHandler({ store, kit, now: Date.now, onReport, log });
 
         function openCase({ caseId, policy, serverOrigin, ttlMs } = {}) {
             const issued = store.issue({ caseId, policy, ttlMs });
+            storage.openCase({ caseId, ticket: issued.ticket, openedAt: issued.issuedAt });
             return {
                 ticket: issued.ticket,
                 nonce: issued.nonce,

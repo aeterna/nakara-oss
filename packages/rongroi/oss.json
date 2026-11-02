@@ -11,6 +11,6 @@
     "netEvents": { "server": [], "client": [] },
     "nui": false,
     "db": { "tables": [], "ddl": false },
-    "files": { "write": [] }
+    "files": { "write": ["cache/rongroi-reports/*"] }
   }
 }
