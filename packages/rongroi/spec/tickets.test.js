@@ -187,11 +187,12 @@ test('a consumed ticket survives expireDue() more than an hour past expiresAt', 
     assert.equal(store.consume(ticket, SHA_A).repeat, true);
 });
 
-test('lookup returns the state, nonce and policy, or null for an unknown ticket', () => {
+test('lookup returns the state, case id, nonce and policy, or null for an unknown ticket', () => {
     const { store } = makeStore();
     const issued = issue(store, { caseId: 'case-7', policy: { name: 'Nakara' } });
     assert.deepEqual(store.lookup(issued.ticket), {
         state: 'issued',
+        caseId: 'case-7',
         nonce: issued.nonce,
         policy: { name: 'Nakara' },
     });

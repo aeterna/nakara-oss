@@ -136,16 +136,6 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
         if (buffers.get(key) === buffer) buffers.delete(key);
     }
 
-    // lookup() carries the nonce and policy; the case id stays on the ticket record. Read it before
-    // consume(), so a throwing report handler can leave the ticket unconsumed instead of losing the report.
-    function caseIdOf(ticket, found) {
-        if (found && typeof found.caseId === 'string') return found.caseId;
-        const record = store.tickets && typeof store.tickets.get === 'function'
-            ? store.tickets.get(ticket)
-            : null;
-        return record && typeof record.caseId === 'string' ? record.caseId : undefined;
-    }
-
     function handlePolicy(res, ticket) {
         if (typeof ticket !== 'string' || !TICKET_RE.test(ticket)) {
             return fail(res, 400, 'rongroi http: policy ticket rejected');
@@ -210,7 +200,7 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
             }
             return reply(res, 200);
         }
-        const event = { caseId: caseIdOf(ticket, found), ticket, reportSha256: sha, receivedAt: now() };
+        const event = { caseId: found.caseId, ticket, reportSha256: sha, receivedAt: now() };
         if (declined) event.declined = true;
         else event.record = record;
         try {

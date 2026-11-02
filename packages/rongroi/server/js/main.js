@@ -66,7 +66,8 @@
             storage.saveReport(event);
             log(`report received ${event.ticket}`);
         };
-        storage.load();
+        const { damaged } = storage.load();
+        if (damaged > 0) log(`index damaged: ${damaged} pages`);
         store.restoreConsumed(storage.consumedSnapshot());
         log(`storage ${edition}`);
 

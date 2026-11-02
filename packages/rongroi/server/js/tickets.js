@@ -110,14 +110,15 @@ class TicketStore {
         return { ok: true, status: 200, uploadId };
     }
 
-    // State, nonce and policy for the HTTP handler, or null for an unknown ticket; expires a due issued one.
+    // State, case id, nonce and policy for the HTTP handler, or null for an unknown ticket; expires a due
+    // issued one.
     lookup(ticket) {
         const record = this.tickets.get(ticket);
         if (!record) return null;
         if (record.state === 'issued' && this.now() >= record.expiresAt) {
             record.state = 'expired';
         }
-        return { state: record.state, nonce: record.nonce, policy: record.policy };
+        return { state: record.state, caseId: record.caseId, nonce: record.nonce, policy: record.policy };
     }
 
     openForTicket(ticket) {
