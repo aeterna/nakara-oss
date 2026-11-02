@@ -289,16 +289,32 @@ test('a wrong method on a known path is 405 and an unknown path is 404', () => {
     assert.equal(call(h, 'GET', '/upload').res.status, 404);
 });
 
-test('an onReport exception still answers 200 and logs a fixed string', () => {
-    const h = makeHarness({ onReport: () => { throw new Error('boom'); } });
+test('an onReport exception answers 500 and leaves the ticket to upload again', () => {
+    let fail = true;
+    const h = makeHarness({
+        onReport: (event) => {
+            if (fail) throw new Error('boom');
+            h.reports.push(event);
+        },
+    });
     const { ticket, nonce } = issue(h);
     const body = envelope({ schema: 2, binding: { ticket, nonce } }, ticket);
     const { req, res, json } = postReport(h, ticket, body);
     req.deliver();
-    assert.equal(res.status, 200);
-    assert.deepEqual(json(), { status: 200 });
-    assert.equal(h.store.stateOf(ticket), 'consumed');
+    assert.equal(res.status, 500);
+    assert.deepEqual(json(), { status: 500 });
+    assert.equal(h.store.stateOf(ticket), 'issued');
     assert.match(JSON.stringify(h.logs), /onReport failed/);
+    assert.equal(JSON.stringify(h.logs).includes(ticket), true);
+
+    fail = false;
+    const retry = postReport(h, ticket, body);
+    retry.req.deliver();
+    assert.equal(retry.res.status, 200);
+    assert.equal(h.store.stateOf(ticket), 'consumed');
+    assert.equal(h.reports.length, 1);
+    assert.equal(h.reports[0].ticket, ticket);
+    assert.equal(h.reports[0].caseId, 'case-1');
 });
 
 test('the log never sees the body or an unvalidated path', () => {

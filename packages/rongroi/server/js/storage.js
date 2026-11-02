@@ -8,7 +8,9 @@ const crypto = require('crypto');
 
 const NAME_RE = /^(case|index|report)-[0-9a-f]{1,64}$/;
 const TICKET_RE = /^[0-9a-f]{32}$/;
+const SHA256_RE = /^[0-9a-f]{64}$/;
 const PAGE_SIZE = 100;
+const EMPTY_RUN = 16;
 
 function checkName(name) {
     if (typeof name !== 'string' || !NAME_RE.test(name)) {
@@ -54,6 +56,7 @@ function createStorage(backend) {
         throw new TypeError('storage needs a backend with read, write, writeOnce and remove');
     }
     const pages = [];
+    const damagedPages = new Set();
 
     function caseKey(caseId) {
         if (typeof caseId !== 'string' || caseId.length === 0) throw new TypeError('caseId must be a non-empty string');
@@ -69,20 +72,47 @@ function createStorage(backend) {
     }
     function load() {
         pages.length = 0;
+        damagedPages.clear();
+        let pending = 0; // consecutive missing page numbers, kept only if a later page exists
         for (let page = 0; ; page += 1) {
             const entries = backend.read(`index-${page}`);
-            if (entries === null) return;
-            pages.push(Array.isArray(entries) ? entries : []);
+            if (entries === null) {
+                pending += 1;
+                if (pending >= EMPTY_RUN) break;
+                continue;
+            }
+            while (pending > 0) {
+                damagedPages.add(pages.length);
+                pages.push([]);
+                pending -= 1;
+            }
+            if (Array.isArray(entries)) {
+                pages.push(entries);
+            } else {
+                damagedPages.add(pages.length);
+                pages.push([]);
+            }
         }
+        return { damaged: damagedPages.size };
     }
 
     function openCase({ caseId, ticket, openedAt, ...facts } = {}) {
         caseKey(caseId);
         if (findEntry(caseId)) throw new TypeError('case id is already open');
         let page = pages[pages.length - 1];
-        if (!page || page.length >= PAGE_SIZE) pages.push(page = []);
+        let addedPage = false;
+        if (!page || page.length >= PAGE_SIZE || damagedPages.has(pages.length - 1)) {
+            pages.push(page = []);
+            addedPage = true;
+        }
         page.push({ caseId, ticket, openedAt, reportSha256: null, consumedAt: null });
-        backend.write(`index-${pages.length - 1}`, page);
+        try {
+            backend.write(`index-${pages.length - 1}`, page);
+        } catch (err) {
+            page.pop();
+            if (addedPage) pages.pop();
+            throw err;
+        }
         backend.write(caseKey(caseId), { caseId, ticket, openedAt, ...facts });
     }
 
@@ -98,6 +128,9 @@ function createStorage(backend) {
     function saveReport({ caseId, ticket, reportSha256, receivedAt, record, declined } = {}) {
         const found = findEntry(caseId);
         if (!found) throw new Error('rongroi storage: case is not in the index');
+        if (ticket !== found.entry.ticket) {
+            throw new Error('rongroi storage: ticket does not match the case');
+        }
         backend.writeOnce(`report-${ticket}`, declined ? { declined: true } : { record });
         const stored = backend.read(caseKey(caseId));
         const data = stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
@@ -122,10 +155,12 @@ function createStorage(backend) {
     function deleteCase(caseId) {
         const found = findEntry(caseId);
         if (found === null) return false;
+        const remaining = pages[found.page].slice();
+        remaining.splice(found.index, 1);
         backend.remove(`report-${found.entry.ticket}`);
         backend.remove(caseKey(caseId));
-        pages[found.page].splice(found.index, 1);
-        backend.write(`index-${found.page}`, pages[found.page]);
+        backend.write(`index-${found.page}`, remaining);
+        pages[found.page] = remaining;
         return true;
     }
 
@@ -133,6 +168,9 @@ function createStorage(backend) {
         const snapshot = [];
         for (const entry of entries()) {
             if (entry.consumedAt === null || entry.consumedAt === undefined) continue;
+            if (typeof entry.ticket !== 'string' || !TICKET_RE.test(entry.ticket)) continue;
+            if (typeof entry.reportSha256 !== 'string' || !SHA256_RE.test(entry.reportSha256)) continue;
+            if (typeof entry.consumedAt !== 'number' || !Number.isFinite(entry.consumedAt)) continue;
             snapshot.push({
                 ticket: entry.ticket,
                 caseId: entry.caseId,

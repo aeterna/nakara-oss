@@ -5,6 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createFileBackend } = require('../server/js/filestore.js');
 const { createKvpBackend, createStorage, detectEdition } = require('../server/js/storage.js');
+const { TicketStore } = require('../server/js/tickets.js');
 
 const SHA_A = 'a'.repeat(64);
 const SHA_B = 'b'.repeat(64);
@@ -186,4 +187,113 @@ test('crash order: a failed case write leaves its index entry; a failed case del
     const restarted = createStorage(second.backend);
     restarted.load();
     assert.deepEqual(restarted.entries().map((entry) => entry.caseId), ['case-b']);
+});
+
+function reload(env) {
+    const storage = createStorage(env.backend);
+    const result = storage.load();
+    return { storage, result };
+}
+
+test('openCase write failures leave disk consistent and a retry works', () => {
+    const caseEnv = fileEnv();
+    const cases = createStorage(caseEnv.backend);
+    caseEnv.fail((path) => path.includes('/case-'));
+    assert.throws(() => open(cases, 'case-a'), /write failed/);
+    const afterCase = reload(caseEnv).storage;
+    assert.deepEqual([afterCase.entries().map((e) => e.caseId), afterCase.getCase('case-a')], [['case-a'], null]);
+
+    const indexEnv = fileEnv();
+    const index = createStorage(indexEnv.backend);
+    indexEnv.fail((path) => path.includes('/index-0.'));
+    assert.throws(() => open(index, 'case-a'), /write failed/);
+    assert.deepEqual([index.entries(), index.listCases({ page: 0 })], [[], []]);
+    assert.deepEqual(reload(indexEnv).result, { damaged: 0 });
+    indexEnv.fail(() => false);
+    open(index, 'case-a');
+    assert.deepEqual(index.entries().map((entry) => entry.caseId), ['case-a']);
+    assert.deepEqual(reload(indexEnv).storage.entries().map((entry) => entry.caseId), ['case-a']);
+});
+
+test('saveReport failing at each write leaves the completed writes on disk', () => {
+    const report = { caseId: 'case-a', ticket: TICKET_A, reportSha256: SHA_A, receivedAt: 200, record: { value: 7 } };
+    for (const [name, path] of [['report', '/report-'], ['case', '/case-'], ['index', '/index-']]) {
+        const env = fileEnv();
+        const storage = createStorage(env.backend);
+        open(storage, 'case-a', TICKET_A);
+        env.fail((candidate) => candidate.includes(path));
+        assert.throws(() => storage.saveReport(report), /write failed/, name);
+        const restarted = reload(env).storage;
+        assert.equal(restarted.getReport(TICKET_A) !== null, name !== 'report', name);
+        assert.equal(restarted.getCase('case-a').state, name === 'index' ? 'received' : undefined, name);
+        assert.equal(restarted.entries()[0].reportSha256, null, name);
+        env.fail(() => false);
+        restarted.saveReport(report);
+        assert.equal(restarted.entries()[0].reportSha256, SHA_A, name);
+    }
+});
+
+test('saveReport refuses a ticket that is not the index entry ticket before writing', () => {
+    const env = fileEnv();
+    const storage = createStorage(env.backend);
+    open(storage, 'case-a', TICKET_A);
+    const before = env.ops();
+    const report = { caseId: 'case-a', ticket: TICKET_B, reportSha256: SHA_A, receivedAt: 200, record: {} };
+    assert.throws(() => storage.saveReport(report), /ticket does not match the case/);
+    assert.equal(env.ops(), before);
+    assert.deepEqual(storage.entries()[0],
+        { caseId: 'case-a', ticket: TICKET_A, openedAt: 100, reportSha256: null, consumedAt: null });
+    const restarted = reload(env).storage;
+    assert.equal(restarted.getReport(TICKET_B), null);
+    assert.equal(restarted.getCase('case-a').state, undefined);
+});
+
+test('a missing middle page is damaged while later pages load and stay writable', () => {
+    const env = fileEnv();
+    const storage = createStorage(env.backend);
+    const ticket = (i) => i.toString(16).padStart(32, '0');
+    for (let i = 0; i < 201; i += 1) open(storage, `case-${i}`, ticket(i), i);
+    env.backend.remove('index-0');
+    const { storage: restarted, result } = reload(env);
+    assert.deepEqual([result, restarted.listCases({ page: 0 }).length], [{ damaged: 1 }, 0]);
+    assert.deepEqual([restarted.listCases({ page: 1 }).length, restarted.listCases({ page: 2 }).map((e) => e.caseId)],
+        [100, ['case-200']]);
+    open(restarted, 'case-201', ticket(201), 201);
+    assert.deepEqual([restarted.listCases({ page: 0 }).length, restarted.listCases({ page: 2 }).map((e) => e.caseId)],
+        [0, ['case-200', 'case-201']]);
+    const { storage: saved, result: again } = reload(env);
+    assert.deepEqual([again, saved.listCases({ page: 0 }).length, saved.listCases({ page: 1 }).length,
+        saved.listCases({ page: 2 }).map((e) => e.caseId)], [{ damaged: 1 }, 0, 100, ['case-200', 'case-201']]);
+    assert.equal(env.backend.read('index-0'), null);
+});
+
+test('a non-array page stays damaged in memory and is never written', () => {
+    const env = fileEnv();
+    env.backend.write('index-0', { not: 'an array' });
+    const storage = createStorage(env.backend);
+    assert.deepEqual([storage.load(), storage.listCases({ page: 0 })], [{ damaged: 1 }, []]);
+    open(storage, 'case-a', TICKET_A);
+    assert.deepEqual([env.backend.read('index-0'), storage.listCases({ page: 1 }).map((e) => e.caseId)],
+        [{ not: 'an array' }, ['case-a']]);
+    const { storage: restarted, result } = reload(env);
+    assert.deepEqual(result, { damaged: 1 });
+    assert.deepEqual([restarted.listCases({ page: 0 }), restarted.listCases({ page: 1 }).map((e) => e.caseId)], [[], ['case-a']]);
+});
+
+test('consumedSnapshot omits entries restoreConsumed would reject', () => {
+    const env = fileEnv();
+    const storage = createStorage(env.backend);
+    open(storage, 'case-a', TICKET_A);
+    storage.saveReport({ caseId: 'case-a', ticket: TICKET_A, reportSha256: SHA_A, receivedAt: 200, record: { value: 7 } });
+    const page = env.backend.read('index-0').slice();
+    page.push(
+        { caseId: 'bad-ticket', ticket: 'A'.repeat(32), reportSha256: SHA_A, consumedAt: 1 },
+        { caseId: 'bad-sha', ticket: TICKET_B, reportSha256: 'Z'.repeat(64), consumedAt: 1 },
+        { caseId: 'bad-time', ticket: '3'.repeat(32), reportSha256: SHA_A, consumedAt: 'later' });
+    env.backend.write('index-0', page);
+    const snapshot = reload(env).storage.consumedSnapshot();
+    assert.deepEqual(snapshot, [{ ticket: TICKET_A, caseId: 'case-a', reportSha256: SHA_A, consumedAt: 200 }]);
+    const tickets = new TicketStore({ now: () => 1000, randomBytes: (n) => Buffer.alloc(n, 7) });
+    tickets.restoreConsumed(snapshot);
+    assert.equal(tickets.stateOf(TICKET_A), 'consumed');
 });

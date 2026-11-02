@@ -136,6 +136,16 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
         if (buffers.get(key) === buffer) buffers.delete(key);
     }
 
+    // lookup() carries the nonce and policy; the case id stays on the ticket record. Read it before
+    // consume(), so a throwing report handler can leave the ticket unconsumed instead of losing the report.
+    function caseIdOf(ticket, found) {
+        if (found && typeof found.caseId === 'string') return found.caseId;
+        const record = store.tickets && typeof store.tickets.get === 'function'
+            ? store.tickets.get(ticket)
+            : null;
+        return record && typeof record.caseId === 'string' ? record.caseId : undefined;
+    }
+
     function handlePolicy(res, ticket) {
         if (typeof ticket !== 'string' || !TICKET_RE.test(ticket)) {
             return fail(res, 400, 'rongroi http: policy ticket rejected');
@@ -192,21 +202,29 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
             store.drop(uploadId);
             return fail(res, 422, 'rongroi http: report schema rejected', ticket);
         }
+        if (store.stateOf(ticket) === 'consumed') {
+            const consumed = store.consume(ticket, sha);
+            if (!consumed.ok) {
+                store.drop(uploadId);
+                return fail(res, consumed.status, 'rongroi http: report consume refused', ticket);
+            }
+            return reply(res, 200);
+        }
+        const event = { caseId: caseIdOf(ticket, found), ticket, reportSha256: sha, receivedAt: now() };
+        if (declined) event.declined = true;
+        else event.record = record;
+        try {
+            onReport(event);
+        } catch {
+            store.drop(uploadId);
+            return fail(res, 500, 'rongroi http: onReport failed', ticket);
+        }
         const consumed = store.consume(ticket, sha);
         if (!consumed.ok) {
             store.drop(uploadId);
             return fail(res, consumed.status, 'rongroi http: report consume refused', ticket);
         }
-        if (consumed.repeat) return reply(res, 200);
         freeDropped(consumed.dropped);
-        try {
-            const event = { caseId: consumed.caseId, ticket, reportSha256: sha, receivedAt: now() };
-            if (declined) event.declined = true;
-            else event.record = record;
-            onReport(event);
-        } catch {
-            log('rongroi http: onReport failed', ticket);
-        }
         return reply(res, 200);
     }
 
