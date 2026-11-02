@@ -33,6 +33,10 @@
         {
           "path": "packages/rongroi/server/js/filestore.js",
           "reason": "nakara_rongroi names one file per case; the name is checked against (case|index|report)-<hex> before a path is built, inside the declared cache/rongroi-reports/ folder (ADR 0001 section 4)"
+        },
+        {
+          "path": "packages/rongroi/spec/storage.test.js",
+          "reason": "the spec installs a fake SaveResourceFile on globalThis to test filestore.js; specs are never shipped in release zips"
         }
       ],
       "over-declared": [
