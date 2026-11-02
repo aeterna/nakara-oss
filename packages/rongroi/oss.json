@@ -7,7 +7,7 @@
     "commands": [],
     "registeredCommands": [],
     "httpHandlers": ["policy/*", "report", "report/chunk"],
-    "convars": { "read": [], "write": [] },
+    "convars": { "read": ["gamename"], "write": [] },
     "netEvents": { "server": [], "client": [] },
     "nui": false,
     "db": { "tables": [], "ddl": false },

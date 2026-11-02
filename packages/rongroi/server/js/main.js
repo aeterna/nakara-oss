@@ -53,7 +53,7 @@
             set(key, value) { SetResourceKvp(key, value); },
             del(key) { DeleteResourceKvp(key); },
         };
-        const edition = detectEdition(GetConvar);
+        const edition = detectEdition((_, fallback) => GetConvar('gamename', fallback));
         const backend = edition === 'enhanced' ? createFileBackend() : createKvpBackend(kvp);
         const storage = createStorage(backend);
         const kit = loadOrCreateKitKey(kvp);
