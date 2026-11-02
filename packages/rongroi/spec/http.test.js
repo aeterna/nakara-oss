@@ -228,7 +228,7 @@ test('a wrong method on a known path is 405 and an unknown path is 404', () => {
     const { ticket } = issue(h);
     assert.equal(call(h, 'GET', '/report').res.status, 405);
     assert.equal(call(h, 'POST', `/policy/${ticket}`).res.status, 405);
-    assert.equal(call(h, 'POST', '/report/chunk').res.status, 404);
+    assert.equal(call(h, 'POST', '/report/other').res.status, 404);
     assert.equal(call(h, 'GET', '/upload').res.status, 404);
 });
 

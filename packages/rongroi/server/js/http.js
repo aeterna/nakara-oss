@@ -36,6 +36,9 @@ const DECIMAL_RE = /^[0-9]+$/;
 const MAX_DIRECT_BYTES = 7168; // ADR 0089's direct POST limit
 const MAX_SLICE_BYTES = 4096;  // ADR 0001 section 6's slice size
 const MAX_CHUNK_TOTAL = 512;   // 2 MiB at 4 KiB per slice
+const RATE_WINDOW_MS = 60000;  // fixed rate-limit window
+const MAX_ADDRESS_REQUESTS = 30; // policy GETs and unknown report/chunk per address
+const MAX_SLICES_PER_TICKET = 600; // chunk requests per ticket
 function reply(res, status, headers) {
     res.writeHead(status, { 'Content-Type': 'application/json', ...headers });
     res.send(JSON.stringify({ status }));
@@ -49,6 +52,47 @@ function requestPath(path) {
 }
 function createHandler({ store, kit, now, onReport, log = () => {} }) {
     const buffers = new Map(); // `${ticket}:${reportSha}` -> one chunked upload in progress
+    const addressWindows = new Map(); // source address -> { end, count } for one window
+    const ticketWindows = new Map();  // ticket -> { end, count } for one window
+
+    // Count one request in a fixed 60 s window anchored at the first request. Returns the Retry-After
+    // value when the limit is exceeded, or null.
+    function bump(windows, key, limit) {
+        const at = now();
+        let window = windows.get(key);
+        if (!window || at >= window.end) {
+            window = { end: at + RATE_WINDOW_MS, count: 0 };
+            windows.set(key, window);
+        }
+        window.count += 1;
+        if (window.count <= limit) return null;
+        return String(Math.max(1, Math.ceil((window.end - at) / 1000)));
+    }
+
+    // req.address without a single trailing :port, so 1.2.3.4:1 and 1.2.3.4:2 share a key. IPv6 values
+    // hold several colons and are kept whole.
+    function addressKey(req) {
+        const address = req.address;
+        if (typeof address !== 'string' || address.length === 0) return 'unknown';
+        const colon = address.indexOf(':');
+        if (colon !== -1 && colon === address.lastIndexOf(':')) return address.slice(0, colon);
+        return address;
+    }
+
+    function limitAddress(req) {
+        return bump(addressWindows, addressKey(req), MAX_ADDRESS_REQUESTS);
+    }
+
+    function limitTicket(ticket) {
+        return bump(ticketWindows, ticket, MAX_SLICES_PER_TICKET);
+    }
+
+    function dropEnded(windows) {
+        const at = now();
+        for (const [key, window] of windows) {
+            if (at >= window.end) windows.delete(key);
+        }
+    }
 
     function fail(res, status, message, ticket, headers) {
         if (ticket === undefined) log(message);
@@ -163,6 +207,12 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
 
         const begun = store.beginUpload(ticket, sha);
         if (!begun.ok) {
+            if (begun.status === 404 || begun.status === 410) {
+                const retryAfter = limitAddress(req);
+                if (retryAfter) {
+                    return fail(res, 429, 'rongroi http: report upload refused', ticket, { 'Retry-After': retryAfter });
+                }
+            }
             if (begun.status === 429) {
                 return fail(res, 429, 'rongroi http: report upload refused', ticket, { 'Retry-After': '5' });
             }
@@ -214,10 +264,17 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
         }
 
         const key = `${ticket}:${reportSha}`;
+        let retried = false;
         let buffer = buffers.get(key);
         if (!buffer) {
             const begun = store.beginUpload(ticket, reportSha);
             if (!begun.ok) {
+                if (begun.status === 404 || begun.status === 410) {
+                    const retryAfter = limitAddress(req);
+                    if (retryAfter) {
+                        return fail(res, 429, 'rongroi http: chunk upload refused', ticket, { 'Retry-After': retryAfter });
+                    }
+                }
                 if (begun.status === 429) {
                     return fail(res, 429, 'rongroi http: chunk upload refused', ticket, { 'Retry-After': '5' });
                 }
@@ -239,12 +296,19 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
                 dropBuffer(key, buffer);
                 return fail(res, 422, 'rongroi http: chunk total changed', ticket);
             }
-            if (index === buffer.next - 1 && chunkSha === buffer.lastSha) return reply(res, 200);
-            if (index !== buffer.next) {
+            if (index === buffer.next - 1 && chunkSha === buffer.lastSha) {
+                retried = true;
+            } else if (index !== buffer.next) {
                 dropBuffer(key, buffer);
                 return fail(res, 422, 'rongroi http: chunk out of order', ticket);
             }
         }
+
+        const retryAfter = limitTicket(ticket);
+        if (retryAfter) {
+            return fail(res, 429, 'rongroi http: chunk rate limited', ticket, { 'Retry-After': retryAfter });
+        }
+        if (retried) return reply(res, 200);
 
         req.setDataHandler((body) => {
             const raw = Buffer.isBuffer(body) ? body : Buffer.from(typeof body === 'string' ? body : '', 'utf8');
@@ -275,6 +339,8 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
         const policy = /^policy\/([^/]+)$/.exec(path);
         if (policy) {
             if (req.method !== 'GET') return reply(res, 405);
+            const retryAfter = limitAddress(req);
+            if (retryAfter) return reply(res, 429, { 'Retry-After': retryAfter });
             return handlePolicy(res, policy[1]);
         }
         if (path === 'report') {
@@ -283,11 +349,6 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
         }
         if (path === 'report/chunk') {
             if (req.method !== 'POST') return reply(res, 405);
-            // A transport always adds headers; a bare request with none is still an unknown path.
-            if (Object.keys(req.headers || {}).length === 0) {
-                log('rongroi http: unknown path');
-                return reply(res, 404);
-            }
             return handleChunk(req, res);
         }
         log('rongroi http: unknown path');
@@ -296,6 +357,8 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
     handler.sweep = () => {
         store.expireDue();
         freeDropped(store.sweepIdle());
+        dropEnded(addressWindows);
+        dropEnded(ticketWindows);
     };
     return handler;
 }
