@@ -180,7 +180,7 @@ test('slice, total and header limits are refused before the body is read', () =>
     const h = makeHarness();
     const { ticket } = issue(h);
     const large = Buffer.alloc(SLICE + 1, 3);
-    const bodyTooLarge = post(h, ticket, sha(large), 0, 2, large, { 'content-length': undefined });
+    const bodyTooLarge = post(h, ticket, sha(large), 0, 2, large, { 'content-length': '1' });
     bodyTooLarge.req.deliver();
     assert.equal(bodyTooLarge.res.status, 413);
     const tiny = Buffer.alloc(1, 4);

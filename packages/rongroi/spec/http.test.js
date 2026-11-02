@@ -127,9 +127,7 @@ test('FXServer header casing is matched for direct and chunked reports', () => {
         'X-Rongroi-Report-Sha256': sha(directBody),
         'Content-Length': String(Buffer.byteLength(directBody)),
     }, directBody);
-    posted.req.address = '172.17.0.1:46074';
     assert.equal(typeof directBody, 'string'); // FXServer hands the body to the handler as a string
-    assert.equal(posted.req.address, '172.17.0.1:46074');
     posted.req.deliver();
     assert.equal(posted.res.status, 200);
     assert.equal(h.reports.length, 1);
@@ -145,9 +143,7 @@ test('FXServer header casing is matched for direct and chunked reports', () => {
         'X-Rongroi-Chunk-Sha256': sha(chunkBody),
         'Content-Length': String(Buffer.byteLength(chunkBody)),
     }, chunkBody);
-    chunk.req.address = '172.17.0.1';
     assert.equal(typeof chunkBody, 'string');
-    assert.equal(chunk.req.address, '172.17.0.1');
     chunk.req.deliver();
     assert.equal(chunk.res.status, 200);
     assert.equal(h.reports.length, 2);
@@ -237,7 +233,7 @@ test('size, headers and expiry are refused before the body is read', () => {
         assert.equal(bad.res.status, 400);
         assert.equal(bad.req.dataHandler, null);
     }
-    const oversize = postReport(h, ticket, 'x'.repeat(7169), { 'content-length': undefined });
+    const oversize = postReport(h, ticket, 'x'.repeat(7169), { 'content-length': '1' });
     oversize.req.deliver();
     assert.equal(oversize.res.status, 413);
     assert.equal(h.store.stateOf(ticket), 'issued');
@@ -318,6 +314,16 @@ test('the log never sees the body or an unvalidated path', () => {
     const { ticket: second } = issue(h, { caseId: 'case-2' });
     const malformed = postReport(h, second, bodySentinel);
     malformed.req.deliver();
+    const { ticket: third } = issue(h, { caseId: 'case-3' });
+    const chunked = call(h, 'POST', '/report/chunk', {
+        'x-rongroi-upload-id': third,
+        'x-rongroi-report-sha256': sha(bodySentinel),
+        'x-rongroi-chunk-sha256': sha(bodySentinel),
+        'x-rongroi-chunk-index': '0',
+        'x-rongroi-chunk-total': '1',
+        'content-length': String(Buffer.byteLength(bodySentinel)),
+    }, bodySentinel);
+    chunked.req.deliver();
     const logged = JSON.stringify(h.logs);
     assert.equal(logged.includes(bodySentinel), false);
     assert.equal(logged.includes(pathSentinel), false);

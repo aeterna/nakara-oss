@@ -145,6 +145,16 @@ test('address keys share a count, strip one trailing port and keep IPv6 whole', 
     assert.equal(call(h, 'GET', `/policy/${ticket}`, null, undefined, '2001:db8::1:999').res.status, 200);
 });
 
+test('a bracketed IPv6 address shares one count across ports', () => {
+    const h = makeHarness();
+    const { ticket } = issue(h);
+    for (let i = 0; i < 30; i += 1) {
+        assert.equal(call(h, 'GET', `/policy/${ticket}`, null, undefined, '[::1]:30120').res.status, 200);
+    }
+    assert.equal(call(h, 'GET', `/policy/${ticket}`, null, undefined, '[::1]:30121').res.status, 429);
+    assert.equal(call(h, 'GET', `/policy/${ticket}`, null, undefined, '[::2]:30120').res.status, 200);
+});
+
 test('an unknown ticket counts per address on report and chunk, and the 31st is 429', () => {
     const h = makeHarness();
     const reportAddress = '10.0.0.1';

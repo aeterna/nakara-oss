@@ -42,6 +42,7 @@ const MAX_SLICES_PER_TICKET = 600; // chunk requests per ticket
 function reply(res, status, headers) {
     res.writeHead(status, { 'Content-Type': 'application/json', ...headers });
     res.send(JSON.stringify({ status }));
+    return status;
 }
 
 // The path relative to the resource, without leading slashes or a query string.
@@ -63,6 +64,8 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
     const buffers = new Map(); // `${ticket}:${reportSha}` -> one chunked upload in progress
     const addressWindows = new Map(); // source address -> { end, count } for one window
     const ticketWindows = new Map();  // ticket -> { end, count } for one window
+    let refused = 0;                 // refused requests without a known ticket, logged by sweep()
+    let lastRefusedAt = null;        // when sweep() last logged the refused counter
 
     // Count one request in a fixed 60 s window anchored at the first request. Returns the Retry-After
     // value when the limit is exceeded, or null.
@@ -78,11 +81,13 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
         return String(Math.max(1, Math.ceil((window.end - at) / 1000)));
     }
 
-    // req.address without a single trailing :port, so 1.2.3.4:1 and 1.2.3.4:2 share a key. IPv6 values
-    // hold several colons and are kept whole.
+    // req.address without a trailing :port, so 1.2.3.4:1 and 1.2.3.4:2 share a key. A bracketed IPv6
+    // address keeps its brackets; an unbracketed IPv6 value holds several colons and is kept whole.
     function addressKey(req) {
         const address = req.address;
         if (typeof address !== 'string' || address.length === 0) return 'unknown';
+        const bracketed = /^(\[[^\]]*\]):\d+$/.exec(address);
+        if (bracketed) return bracketed[1];
         const colon = address.indexOf(':');
         if (colon !== -1 && colon === address.lastIndexOf(':')) return address.slice(0, colon);
         return address;
@@ -104,9 +109,16 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
     }
 
     function fail(res, status, message, ticket, headers) {
-        if (ticket === undefined) log(message);
+        if (ticket === undefined) refused += 1;
         else log(message, ticket);
         return reply(res, status, headers);
+    }
+
+    // A thrown handler still answers: log a fixed string, and the ticket only when it is well formed.
+    function internalError(res, ticket) {
+        if (typeof ticket === 'string' && TICKET_RE.test(ticket)) log('rongroi http: request failed', ticket);
+        else log('rongroi http: request failed');
+        try { reply(res, 500); } catch { /* the reply itself may have thrown */ }
     }
 
     // Forget the reassembly bytes of upload ids that the store dropped or consumed.
@@ -117,10 +129,11 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
         }
     }
 
-    // Drop one chunked upload in the store and forget its reassembly bytes.
+    // Drop one chunked upload in the store and forget its reassembly bytes, without deleting a newer
+    // buffer that took over the same key.
     function dropBuffer(key, buffer) {
         store.drop(buffer.uploadId);
-        buffers.delete(key);
+        if (buffers.get(key) === buffer) buffers.delete(key);
     }
 
     function handlePolicy(res, ticket) {
@@ -132,8 +145,9 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
         if (found.state === 'expired' || found.policy === null) {
             return fail(res, 410, 'rongroi http: policy ticket unavailable', ticket);
         }
+        const body = JSON.stringify({ ...found.policy, policy_hash: policyHash(found.policy) });
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.send(JSON.stringify({ ...found.policy, policy_hash: policyHash(found.policy) }));
+        res.send(body);
     }
 
     // Shared by a direct POST and the last chunk: verify the whole report and answer it.
@@ -204,6 +218,9 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
             return fail(res, 400, 'rongroi http: report headers rejected');
         }
         const claimedLength = headers['content-length'];
+        if (claimedLength === undefined) {
+            return fail(res, 400, 'rongroi http: report content-length rejected', ticket);
+        }
         if (claimedLength !== undefined) {
             if (typeof claimedLength !== 'string' || !DECIMAL_RE.test(claimedLength)) {
                 return fail(res, 400, 'rongroi http: report content-length rejected', ticket);
@@ -229,14 +246,31 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
         if (begun.repeat) return reply(res, 200);
 
         const uploadId = begun.uploadId;
+        let settled = false;
+        let cancelled = false;
         req.setDataHandler((body) => {
-            const raw = Buffer.isBuffer(body) ? body : Buffer.from(typeof body === 'string' ? body : '', 'utf8');
-            if (raw.length > MAX_DIRECT_BYTES) {
+            try {
+                if (cancelled) return;
+                const raw = Buffer.isBuffer(body) ? body : Buffer.from(typeof body === 'string' ? body : '', 'utf8');
+                if (raw.length > MAX_DIRECT_BYTES) {
+                    store.drop(uploadId);
+                    return fail(res, 413, 'rongroi http: report body too large', ticket);
+                }
+                return finish(res, ticket, sha, uploadId, raw);
+            } catch {
                 store.drop(uploadId);
-                return fail(res, 413, 'rongroi http: report body too large', ticket);
+                internalError(res, ticket);
+            } finally {
+                settled = true;
             }
-            return finish(res, ticket, sha, uploadId, raw);
         });
+        if (typeof req.setCancelHandler === 'function') {
+            req.setCancelHandler(() => {
+                if (settled) return;
+                cancelled = true;
+                store.drop(uploadId);
+            });
+        }
     }
 
     function handleChunk(req, res, headers) {
@@ -261,6 +295,9 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
             return fail(res, 413, 'rongroi http: chunk total too large', ticket);
         }
         const claimedLength = headers['content-length'];
+        if (claimedLength === undefined) {
+            return fail(res, 400, 'rongroi http: chunk content-length rejected', ticket);
+        }
         if (claimedLength !== undefined) {
             if (typeof claimedLength !== 'string' || !DECIMAL_RE.test(claimedLength)) {
                 return fail(res, 400, 'rongroi http: chunk content-length rejected', ticket);
@@ -296,7 +333,7 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
             buffers.set(key, buffer);
         } else {
             if (!store.touch(buffer.uploadId)) {
-                buffers.delete(key);
+                if (buffers.get(key) === buffer) buffers.delete(key);
                 return fail(res, 422, 'rongroi http: chunk upload gone', ticket);
             }
             if (buffer.total !== total) {
@@ -317,34 +354,62 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
         }
         if (retried) return reply(res, 200);
 
+        let settled = false;
+        let cancelled = false;
         req.setDataHandler((body) => {
-            const raw = Buffer.isBuffer(body) ? body : Buffer.from(typeof body === 'string' ? body : '', 'utf8');
-            if (raw.length > MAX_SLICE_BYTES) {
+            try {
+                if (cancelled) return;
+                if (buffers.get(key) !== buffer) {
+                    if (buffer.finished && index === buffer.next - 1 && chunkSha === buffer.lastSha) {
+                        return reply(res, 200);
+                    }
+                    return fail(res, 422, 'rongroi http: chunk upload gone', ticket);
+                }
+                if (index === buffer.next - 1 && chunkSha === buffer.lastSha) return reply(res, 200);
+                if (index !== buffer.next) return fail(res, 422, 'rongroi http: chunk out of order', ticket);
+                const raw = Buffer.isBuffer(body) ? body : Buffer.from(typeof body === 'string' ? body : '', 'utf8');
+                if (raw.length > MAX_SLICE_BYTES) {
+                    dropBuffer(key, buffer);
+                    return fail(res, 413, 'rongroi http: chunk body too large', ticket);
+                }
+                if (crypto.createHash('sha256').update(raw).digest('hex') !== chunkSha) {
+                    dropBuffer(key, buffer);
+                    return fail(res, 422, 'rongroi http: chunk sha mismatch', ticket);
+                }
+                if (index !== total - 1 && raw.length !== MAX_SLICE_BYTES) {
+                    dropBuffer(key, buffer);
+                    return fail(res, 422, 'rongroi http: chunk length rejected', ticket);
+                }
+                buffer.chunks.push(raw);
+                buffer.next += 1;
+                buffer.lastSha = chunkSha;
+                if (index !== total - 1) return reply(res, 200);
+                const whole = Buffer.concat(buffer.chunks);
+                buffers.delete(key);
+                const status = finish(res, ticket, reportSha, buffer.uploadId, whole);
+                if (status === 200) buffer.finished = true;
+                return status;
+            } catch {
                 dropBuffer(key, buffer);
-                return fail(res, 413, 'rongroi http: chunk body too large', ticket);
+                internalError(res, ticket);
+            } finally {
+                settled = true;
             }
-            if (crypto.createHash('sha256').update(raw).digest('hex') !== chunkSha) {
-                dropBuffer(key, buffer);
-                return fail(res, 422, 'rongroi http: chunk sha mismatch', ticket);
-            }
-            if (index !== total - 1 && raw.length !== MAX_SLICE_BYTES) {
-                dropBuffer(key, buffer);
-                return fail(res, 422, 'rongroi http: chunk length rejected', ticket);
-            }
-            buffer.chunks.push(raw);
-            buffer.next += 1;
-            buffer.lastSha = chunkSha;
-            if (index !== total - 1) return reply(res, 200);
-            const whole = Buffer.concat(buffer.chunks);
-            buffers.delete(key);
-            return finish(res, ticket, reportSha, buffer.uploadId, whole);
         });
+        if (typeof req.setCancelHandler === 'function') {
+            req.setCancelHandler(() => {
+                if (settled) return;
+                cancelled = true;
+                if (buffer.next === 0) dropBuffer(key, buffer);
+            });
+        }
     }
 
-    const handler = (req, res) => {
+    function route(req, res, state) {
         const path = requestPath(req.path);
         const headers = lowerCaseHeaders(req.headers);
         const policy = /^policy\/([^/]+)$/.exec(path);
+        state.ticket = policy ? policy[1] : headers['x-rongroi-upload-id'];
         if (policy) {
             if (req.method !== 'GET') return reply(res, 405);
             const retryAfter = limitAddress(req);
@@ -359,14 +424,28 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
             if (req.method !== 'POST') return reply(res, 405);
             return handleChunk(req, res, headers);
         }
-        log('rongroi http: unknown path');
+        refused += 1;
         return reply(res, 404);
+    }
+    const handler = (req, res) => {
+        const state = {};
+        try {
+            return route(req, res, state);
+        } catch {
+            internalError(res, state.ticket);
+        }
     };
     handler.sweep = () => {
         store.expireDue();
         freeDropped(store.sweepIdle());
         dropEnded(addressWindows);
         dropEnded(ticketWindows);
+        const at = now();
+        if (refused > 0 && (lastRefusedAt === null || at - lastRefusedAt >= RATE_WINDOW_MS)) {
+            log(`rongroi http: refused ${refused} requests`);
+            lastRefusedAt = at;
+            refused = 0;
+        }
     };
     return handler;
 }
