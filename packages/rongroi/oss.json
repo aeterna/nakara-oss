@@ -6,6 +6,7 @@
     "http": [],
     "commands": [],
     "registeredCommands": [],
+    "httpHandlers": ["policy/*", "report", "report/chunk"],
     "convars": { "read": [], "write": [] },
     "netEvents": { "server": [], "client": [] },
     "nui": false,
