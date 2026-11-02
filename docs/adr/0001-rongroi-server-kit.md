@@ -126,8 +126,10 @@ Windows, so not on a native Linux disk, and with no players connected (median ms
   false), so the package ships the folder with a `.gitkeep`. ADR 0089 names `server-data/cache/rongroi-reports/`,
   which the Kit cannot write under this repo's rules; the same change is proposed for ADR 0089.
 - **Scanner exception.** `undeclared-file-write` refuses a path built at runtime, and a file name per case cannot be
-  a literal. `.fivem-devkit.json` allows it for one file, `packages/rongroi/server/js/filestore.js`, which holds the
-  Kit's only `SaveResourceFile` call and refuses any name outside `(case|index|report)-<hex>` before it builds a path.
+  a literal. `.fivem-devkit.json` allows it for one shipped file, `packages/rongroi/server/js/filestore.js`, which holds
+  the Kit's only `SaveResourceFile` call and refuses any name outside `(case|index|report)-<hex>` before it builds a
+  path. Two more entries follow from it: the spec that fakes the native, which never ships, and `over-declared` for
+  `oss.json`, since the scanner cannot match a runtime path to the declaration.
 - **Torn writes.** A file write is not atomic and `fs` is refused, so nothing can rename. Case and index files
   alternate between two slots, `.a.json` and `.b.json`, each holding `{ seq, data }`. A reader takes the highest `seq`
   that parses. A report is written once, to one file, and one that does not parse reads as missing.
@@ -136,6 +138,8 @@ Windows, so not on a native Linux disk, and with no players connected (median ms
   file, which reads as missing, and never a file that retention cannot reach.
 - oxmysql is not in v1 of this table: `db` stays undeclared until a later ADR adds it with `sql/install.sql`.
 - Only the validated record is stored, never the envelope.
+- A report is saved before its ticket is consumed. If the save fails, the upload answers `500` and the ticket stays
+  usable; `500` is proposed for ADR 0089's table.
 
 ### 5. Retention and deletion
 
@@ -285,8 +289,7 @@ cheat-trace finding · any score or verdict · HTTPS through `users.cfx.re` · p
   rates, but anyone who can reach the port can use them.
 - Anyone holding the code can upload, and a player can forge or decline. A gate raises the cost of entry
   without a matching machine; it does not prove one.
-- File reports on Enhanced are emptied, not removed, until FiveM offers a delete call or the server uses
-  oxmysql.
+- File reports on Enhanced are emptied, not removed, until FiveM offers a delete call.
 - The private key in KVP can be read by anyone with access to the server's files: the server's own boundary.
 - Servers behind the Cfx proxy cannot use v1.
 - KVP use is not a declared capability in `oss.schema.json`; this ADR does not add one.
