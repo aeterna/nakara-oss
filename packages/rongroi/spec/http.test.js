@@ -117,6 +117,67 @@ test('POST report accepts a sealed report and a declined answer with the case fa
     assert.deepEqual(h.reports[1], { caseId: 'case-2', ticket: second.ticket, reportSha256: sha(declinedBody), receivedAt: 1000000, declined: true });
 });
 
+test('FXServer header casing is matched for direct and chunked reports', () => {
+    const h = makeHarness();
+
+    const direct = issue(h);
+    const directBody = envelope({ schema: 2, binding: { ticket: direct.ticket, nonce: direct.nonce } }, direct.ticket);
+    const posted = call(h, 'POST', '/report', {
+        'X-Rongroi-Upload-Id': direct.ticket,
+        'X-Rongroi-Report-Sha256': sha(directBody),
+        'Content-Length': String(Buffer.byteLength(directBody)),
+    }, directBody);
+    posted.req.address = '172.17.0.1:46074';
+    assert.equal(typeof directBody, 'string'); // FXServer hands the body to the handler as a string
+    assert.equal(posted.req.address, '172.17.0.1:46074');
+    posted.req.deliver();
+    assert.equal(posted.res.status, 200);
+    assert.equal(h.reports.length, 1);
+    assert.equal(h.reports[0].reportSha256, sha(directBody));
+
+    const chunked = issue(h, { caseId: 'case-2' });
+    const chunkBody = envelope({ schema: 2, binding: { ticket: chunked.ticket, nonce: chunked.nonce } }, chunked.ticket);
+    const chunk = call(h, 'POST', '/report/chunk', {
+        'X-Rongroi-Upload-Id': chunked.ticket,
+        'X-Rongroi-Report-Sha256': sha(chunkBody),
+        'X-Rongroi-Chunk-Index': '0',
+        'X-Rongroi-Chunk-Total': '1',
+        'X-Rongroi-Chunk-Sha256': sha(chunkBody),
+        'Content-Length': String(Buffer.byteLength(chunkBody)),
+    }, chunkBody);
+    chunk.req.address = '172.17.0.1';
+    assert.equal(typeof chunkBody, 'string');
+    assert.equal(chunk.req.address, '172.17.0.1');
+    chunk.req.deliver();
+    assert.equal(chunk.res.status, 200);
+    assert.equal(h.reports.length, 2);
+    assert.equal(h.reports[1].reportSha256, sha(chunkBody));
+    assert.equal(h.store.stateOf(chunked.ticket), 'consumed');
+
+    const tooLarge = issue(h, { caseId: 'case-3' });
+    const largeBody = envelope({ schema: 2, binding: { ticket: tooLarge.ticket, nonce: tooLarge.nonce } }, tooLarge.ticket);
+    const directTooLarge = call(h, 'POST', '/report', {
+        'X-Rongroi-Upload-Id': tooLarge.ticket,
+        'X-Rongroi-Report-Sha256': sha(largeBody),
+        'Content-Length': '7169',
+    }, largeBody);
+    assert.equal(directTooLarge.res.status, 413);
+    assert.equal(directTooLarge.req.dataHandler, null);
+
+    const chunkTooLarge = call(h, 'POST', '/report/chunk', {
+        'X-Rongroi-Upload-Id': tooLarge.ticket,
+        'X-Rongroi-Report-Sha256': sha(largeBody),
+        'X-Rongroi-Chunk-Index': '0',
+        'X-Rongroi-Chunk-Total': '1',
+        'X-Rongroi-Chunk-Sha256': sha(largeBody),
+        'Content-Length': '4097',
+    }, largeBody);
+    assert.equal(chunkTooLarge.res.status, 413);
+    assert.equal(chunkTooLarge.req.dataHandler, null);
+    assert.equal(h.reports.length, 2);
+    assert.equal(h.store.stateOf(tooLarge.ticket), 'issued');
+});
+
 test('a repeat is 200 and a different envelope is 409, both without reading the body', () => {
     const h = makeHarness();
     const { ticket, nonce } = issue(h);

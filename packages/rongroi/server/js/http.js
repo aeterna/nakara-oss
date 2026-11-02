@@ -50,6 +50,15 @@ function requestPath(path) {
     const query = path.indexOf('?');
     return (query === -1 ? path : path.slice(0, query)).replace(/^\/+/, '');
 }
+
+// FXServer keeps the case the client sent (Content-Length, X-Rongroi-Upload-Id), so lower-case every
+// name once for the handlers. A missing or non-object req.headers reads as an empty set.
+function lowerCaseHeaders(headers) {
+    const copy = Object.create(null);
+    if (headers === null || typeof headers !== 'object') return copy;
+    for (const name of Object.keys(headers)) copy[name.toLowerCase()] = headers[name];
+    return copy;
+}
 function createHandler({ store, kit, now, onReport, log = () => {} }) {
     const buffers = new Map(); // `${ticket}:${reportSha}` -> one chunked upload in progress
     const addressWindows = new Map(); // source address -> { end, count } for one window
@@ -187,8 +196,7 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
         return reply(res, 200);
     }
 
-    function handleReport(req, res) {
-        const headers = req.headers || {};
+    function handleReport(req, res, headers) {
         const ticket = headers['x-rongroi-upload-id'];
         const sha = headers['x-rongroi-report-sha256'];
         if (typeof ticket !== 'string' || !TICKET_RE.test(ticket)
@@ -231,8 +239,7 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
         });
     }
 
-    function handleChunk(req, res) {
-        const headers = req.headers || {};
+    function handleChunk(req, res, headers) {
         const ticket = headers['x-rongroi-upload-id'];
         const reportSha = headers['x-rongroi-report-sha256'];
         const chunkSha = headers['x-rongroi-chunk-sha256'];
@@ -336,6 +343,7 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
 
     const handler = (req, res) => {
         const path = requestPath(req.path);
+        const headers = lowerCaseHeaders(req.headers);
         const policy = /^policy\/([^/]+)$/.exec(path);
         if (policy) {
             if (req.method !== 'GET') return reply(res, 405);
@@ -345,11 +353,11 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
         }
         if (path === 'report') {
             if (req.method !== 'POST') return reply(res, 405);
-            return handleReport(req, res);
+            return handleReport(req, res, headers);
         }
         if (path === 'report/chunk') {
             if (req.method !== 'POST') return reply(res, 405);
-            return handleChunk(req, res);
+            return handleChunk(req, res, headers);
         }
         log('rongroi http: unknown path');
         return reply(res, 404);
