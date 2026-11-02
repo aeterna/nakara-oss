@@ -1,6 +1,7 @@
 # ADR 0001 — Rongroi Server Kit (`nakara_rongroi`)
 
 - Status: accepted — owner, 2026-11-01 (every owner question answered as recommended)
+- Amended: 2026-11-02, section 4 after the section 2 probe (owner chose files on Enhanced); Claude Code - Claude Opus 5.5
 - Date: 2026-11-01
 - Related: aeterna-rongroi ADR 0089, "Rongroi product line and schema 2" (not merged yet:
   [aeterna/aeterna-rongroi#252](https://github.com/aeterna/aeterna-rongroi/pull/252)); aeterna-rongroi
@@ -94,18 +95,46 @@ on Enhanced costs a visible hitch, section 4's index design is revisited before 
 
 ### 4. Storage per edition
 
+Amended 2026-11-02 after section 2's probe; owner chose files on Enhanced. Measured on a Docker bind mount from
+Windows, so not on a native Linux disk, and with no players connected (median ms; longest tick while writing):
+
+| Write | Legacy 35245 (tick 50 ms) | Enhanced b170 (tick 20 ms) |
+|---|---|---|
+| KVP 200 B | 2.2; 56 | 29.6; 47 |
+| KVP, two in a row | 3.8; 56 | 63.3; 83 |
+| File 200 B | 7.7; 60 | 7.7; 30 |
+| File 3.4 KB | 7.1; 62 | 7.5; 30 |
+| File 1 MiB | 17.5; 74 | 18.1; 33 |
+
+`SetResourceKvpNoSync` does not help on Enhanced (median 30.4 ms). Crypto passed on both editions.
+
 | What | Legacy | Enhanced |
 |---|---|---|
-| Case (metadata, state, facts) | one KVP key `rongroi:case:<id>` | same |
-| Case index | KVP pages `rongroi:index:<n>`, 100 ids each | same (pending the W2 probe) |
-| Report body (decrypted record) | KVP `rongroi:report:<id>` | file `cache/rongroi-reports/<ticket>.json`, or oxmysql if started |
-| Settings, exceptions, gate log | small KVP keys | same |
+| Case (metadata, state, facts) | KVP `rongroi:case:<hash>` | file `case-<hash>` |
+| Case index, 100 entries per page | KVP `rongroi:index:<n>` | file `index-<n>` |
+| Report body (decrypted record) | KVP `rongroi:report:<ticket>` | file `report-<ticket>` |
+| Key pair, settings, exceptions | small KVP keys, written rarely | same |
+| Gate log (lane 3b) | small KVP keys | file pages, since it is written at every connect |
 
-- ADR 0089 names `server-data/cache/rongroi-reports/`. The Kit cannot write there under this repo's rules, so
-  the folder is `<resource>/cache/rongroi-reports/`, declared as `files.write: ["cache/rongroi-reports/*"]`.
-  The same change is proposed for ADR 0089.
-- The panel can override the detected backend with `kvp`, `file` or `oxmysql`. oxmysql is used only when it
-  is started, with table `nakara_rongroi_reports`; `sql/install.sql` makes `db.ddl` true.
+- The edition is `GetConvar('gamename', '') === 'gta5enhanced'`; `GetConvar('version')` also differs. **Unverified:**
+  a Legacy server that sets `gamename` itself. The panel can override the detected backend with `kvp` or `file`.
+- `<hash>` is the first 32 hex characters of SHA-256 of the case id, so no file name carries a case id or a
+  player's data. An index entry holds what a restart and the retention sweep need without reading each case:
+  case id, ticket, opened-at, report SHA-256, consumed-at.
+- **Folder.** Files live in `<resource>/cache/rongroi-reports/`, declared as
+  `files.write: ["cache/rongroi-reports/*"]`. `SaveResourceFile` does not create folders (measured: it returns
+  false), so the package ships the folder with a `.gitkeep`. ADR 0089 names `server-data/cache/rongroi-reports/`,
+  which the Kit cannot write under this repo's rules; the same change is proposed for ADR 0089.
+- **Scanner exception.** `undeclared-file-write` refuses a path built at runtime, and a file name per case cannot be
+  a literal. `.fivem-devkit.json` allows it for one file, `packages/rongroi/server/js/filestore.js`, which holds the
+  Kit's only `SaveResourceFile` call and refuses any name outside `(case|index|report)-<hex>` before it builds a path.
+- **Torn writes.** A file write is not atomic and `fs` is refused, so nothing can rename. Case and index files
+  alternate between two slots, `.a.json` and `.b.json`, each holding `{ seq, data }`. A reader takes the highest `seq`
+  that parses. A report is written once, to one file, and one that does not parse reads as missing.
+- **No orphans.** No native lists a folder, so the index is the only way to find a file. A case is added to the index
+  before its case file is written, and removed after its files are emptied. A crash leaves an index entry with no
+  file, which reads as missing, and never a file that retention cannot reach.
+- oxmysql is not in v1 of this table: `db` stays undeclared until a later ADR adds it with `sql/install.sql`.
 - Only the validated record is stored, never the envelope.
 
 ### 5. Retention and deletion
@@ -113,9 +142,9 @@ on Enhanced costs a visible hitch, section 4's index design is revisited before 
 - `PRIVACY-TEMPLATE.md` is filled in by the server: what is collected, why, how long, how to ask for deletion.
 - Retention is a setting in days, default 30, range 1 to 365. A sweep runs at start and hourly.
 - Staff delete one case, or every case and gate-log entry of one identifier, from the panel or the API.
-- On the file backend, deletion overwrites the file with an empty one and drops it from the index. The
-  zero-byte file is named by a random ticket and holds no player data. The README tells servers this and
-  that KVP and oxmysql deletes are real deletes.
+- On the file backend, deletion overwrites the files with empty ones and drops them from the index. A
+  zero-byte file is named by a random ticket or a hash and holds no player data. The README tells servers this and
+  that KVP deletes are real deletes.
 
 ### 6. HTTP endpoints, limits and abuse
 
