@@ -137,6 +137,30 @@ test('issued -> expired at expires_at: expireDue(), a lazy 410, then 410 for upl
     assert.equal(store.stateOf(late), 'expired');
 });
 
+test('lookup returns the state, nonce and policy, or null for an unknown ticket', () => {
+    const { store } = makeStore();
+    const issued = issue(store, { caseId: 'case-7', policy: { name: 'Nakara' } });
+    assert.deepEqual(store.lookup(issued.ticket), {
+        state: 'issued',
+        nonce: issued.nonce,
+        policy: { name: 'Nakara' },
+    });
+    assert.equal(store.lookup('e'.repeat(32)), null);
+    assert.equal(store.lookup('nothex'), null);
+});
+
+test('lookup expires an issued ticket at expires_at and leaves an uploading one alone', () => {
+    const { store, advance } = makeStore();
+    const first = issue(store);
+    const second = issue(store, { caseId: 'case-2' });
+    store.beginUpload(second.ticket, SHA_A);
+    advance(TTL);
+    assert.equal(store.lookup(first.ticket).state, 'expired');
+    assert.equal(store.stateOf(first.ticket), 'expired');
+    assert.equal(store.lookup(second.ticket).state, 'uploading');
+    assert.equal(store.stateOf(second.ticket), 'uploading');
+});
+
 test('a consumed ticket answers 409, or 200 repeat for the same accepted envelope', () => {
     const { store } = makeStore();
     const { ticket } = issue(store);
