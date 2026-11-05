@@ -78,11 +78,18 @@
         function runRetention() {
             if (retentionRunning) return;
             retentionRunning = true;
-            const storedDays = GetResourceKvpString('rongroi:settings:retentionDays');
-            const days = clampDays(
-                storedDays === null || storedDays === undefined ? undefined : Number(storedDays),
-            );
-            const due = dueCases(storage.entries(), Date.now(), days);
+            let due;
+            try {
+                const storedDays = GetResourceKvpString('rongroi:settings:retentionDays');
+                const days = clampDays(
+                    storedDays === null || storedDays === undefined ? undefined : Number(storedDays),
+                );
+                due = dueCases(storage.entries(), Date.now(), days);
+            } catch {
+                retentionRunning = false;
+                log('retention scan failed');
+                return;
+            }
             let index = 0;
             let removed = 0;
             function removeNext() {
@@ -109,21 +116,27 @@
         const handler = createHandler({ store, kit, now: Date.now, onReport, log });
 
         function openCase({ caseId, policy, serverOrigin, ttlMs } = {}) {
+            if (storage.hasCase(caseId)) throw new TypeError('case id is already open');
             const issued = store.issue({ caseId, policy, ttlMs });
-            storage.openCase({ caseId, ticket: issued.ticket, openedAt: issued.issuedAt });
-            return {
-                ticket: issued.ticket,
-                nonce: issued.nonce,
-                expiresAt: issued.expiresAt,
-                pairingCode: pairingCode({
-                    serverOrigin,
+            try {
+                storage.openCase({ caseId, ticket: issued.ticket, openedAt: issued.issuedAt });
+                return {
                     ticket: issued.ticket,
                     nonce: issued.nonce,
                     expiresAt: issued.expiresAt,
-                    policyHash: policyHash(policy),
-                    kitPublicKey: kit.publicKey,
-                }),
-            };
+                    pairingCode: pairingCode({
+                        serverOrigin,
+                        ticket: issued.ticket,
+                        nonce: issued.nonce,
+                        expiresAt: issued.expiresAt,
+                        policyHash: policyHash(policy),
+                        kitPublicKey: kit.publicKey,
+                    }),
+                };
+            } catch (err) {
+                store.cancel(issued.ticket);
+                throw err;
+            }
         }
 
         exports('api', (version) => (version === 1 ? { openCase } : null));

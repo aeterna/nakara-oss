@@ -11,6 +11,7 @@ const { createHandler } = require('../server/js/http.js');
 const kit = require('../test-vectors/envelope-v1.json').kit;
 const POLICY = { collectors: ['a'], version: 2 };
 const SLICE = 4096;
+const TTL = 300000;
 
 function makeHarness() {
     let ms = 1000000;
@@ -130,6 +131,49 @@ test('a stale copy after the buffer was dropped does not delete a newer buffer',
     last.req.deliver();
     assert.equal(last.res.status, 200);
     assert.equal(h.reports.length, 1);
+});
+test('a direct POST whose upload slot was swept answers 422 and leaves the ticket usable', () => {
+    const h = makeHarness();
+    const { ticket, nonce } = issue(h);
+    const body = envelope({ schema: 2, binding: { ticket, nonce } }, ticket);
+    const pending = report(h, ticket, body);
+    h.advance(60000);
+    h.handler.sweep();
+    assert.equal(h.store.stateOf(ticket), 'issued');
+    pending.req.deliver();
+    assert.deepEqual([pending.res.status, h.reports.length], [422, 0]);
+    assert.match(JSON.stringify(h.logs), /upload slot gone/);
+    const retry = report(h, ticket, body);
+    retry.req.deliver();
+    assert.equal(retry.res.status, 200);
+    assert.equal(h.reports.length, 1);
+    assert.equal(h.store.stateOf(ticket), 'consumed');
+});
+test('a direct POST for an expired ticket answers 410 and never reports', () => {
+    const h = makeHarness();
+    const { ticket, nonce } = issue(h);
+    const body = envelope({ schema: 2, binding: { ticket, nonce } }, ticket);
+    const pending = report(h, ticket, body);
+    h.advance(TTL);
+    h.handler.sweep();
+    assert.equal(h.store.stateOf(ticket), 'expired');
+    pending.req.deliver();
+    assert.deepEqual([pending.res.status, h.reports.length], [410, 0]);
+});
+test('a chunked upload finishes on its last slice while its slot stays open', () => {
+    const h = makeHarness();
+    const { ticket, nonce } = issue(h);
+    const body = envelope({ schema: 2, binding: { ticket, nonce }, note: 'x'.repeat(5000) }, ticket);
+    const reportSha = sha(body);
+    const slices = split(body);
+    assert.equal(slices.length, 2);
+    post(h, ticket, reportSha, slices[0], 0, 2).req.deliver();
+    h.handler.sweep();
+    const last = post(h, ticket, reportSha, slices[1], 1, 2);
+    last.req.deliver();
+    assert.equal(last.res.status, 200);
+    assert.equal(h.reports.length, 1);
+    assert.equal(h.store.stateOf(ticket), 'consumed');
 });
 test('an aborted request drops only what is unsafe and a cancel after reply does nothing', () => {
     const h = makeHarness();

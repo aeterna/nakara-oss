@@ -120,6 +120,10 @@ function createStorage(backend) {
         return backend.read(caseKey(caseId));
     }
 
+    function hasCase(caseId) {
+        return findEntry(caseId) !== null;
+    }
+
     function listCases({ page } = {}) {
         const entries = pages[page];
         return entries ? entries.map((entry) => ({ ...entry })) : [];
@@ -171,6 +175,7 @@ function createStorage(backend) {
             if (typeof entry.ticket !== 'string' || !TICKET_RE.test(entry.ticket)) continue;
             if (typeof entry.reportSha256 !== 'string' || !SHA256_RE.test(entry.reportSha256)) continue;
             if (typeof entry.consumedAt !== 'number' || !Number.isFinite(entry.consumedAt)) continue;
+            if (typeof entry.caseId !== 'string' || entry.caseId.length === 0) continue;
             snapshot.push({
                 ticket: entry.ticket,
                 caseId: entry.caseId,
@@ -189,7 +194,7 @@ function createStorage(backend) {
         return all;
     }
 
-    return { caseKey, load, openCase, getCase, listCases, saveReport, getReport, deleteCase, consumedSnapshot, entries };
+    return { caseKey, load, openCase, getCase, hasCase, listCases, saveReport, getReport, deleteCase, consumedSnapshot, entries };
 }
 
 // Loaded directly as a server_script FXServer provides no CommonJS `module`; the specs still get the export.

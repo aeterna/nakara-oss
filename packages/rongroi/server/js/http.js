@@ -200,6 +200,10 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
             }
             return reply(res, 200);
         }
+        if (!store.isOpen(uploadId)) {
+            const gone = !found || found.state === 'expired';
+            return fail(res, gone ? 410 : 422, 'rongroi http: report upload slot gone', ticket);
+        }
         const event = { caseId: found.caseId, ticket, reportSha256: sha, receivedAt: now() };
         if (declined) event.declined = true;
         else event.record = record;

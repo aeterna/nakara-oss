@@ -122,6 +122,17 @@ for (const [label, make] of [['file', fileEnv], ['kvp', kvpEnv]]) {
     });
 }
 
+test('hasCase follows the index', () => {
+    const env = fileEnv();
+    const storage = createStorage(env.backend);
+    assert.equal(storage.hasCase('case-a'), false);
+    open(storage, 'case-a', TICKET_A);
+    assert.equal(storage.hasCase('case-a'), true);
+    assert.equal(storage.hasCase('case-b'), false);
+    assert.equal(storage.deleteCase('case-a'), true);
+    assert.equal(storage.hasCase('case-a'), false);
+});
+
 test('detectEdition follows gamename and passes the default', () => {
     assert.equal(detectEdition(() => 'gta5enhanced'), 'enhanced');
     assert.equal(detectEdition(() => 'gta5'), 'legacy');
@@ -290,6 +301,23 @@ test('consumedSnapshot omits entries restoreConsumed would reject', () => {
         { caseId: 'bad-ticket', ticket: 'A'.repeat(32), reportSha256: SHA_A, consumedAt: 1 },
         { caseId: 'bad-sha', ticket: TICKET_B, reportSha256: 'Z'.repeat(64), consumedAt: 1 },
         { caseId: 'bad-time', ticket: '3'.repeat(32), reportSha256: SHA_A, consumedAt: 'later' });
+    env.backend.write('index-0', page);
+    const snapshot = reload(env).storage.consumedSnapshot();
+    assert.deepEqual(snapshot, [{ ticket: TICKET_A, caseId: 'case-a', reportSha256: SHA_A, consumedAt: 200 }]);
+    const tickets = new TicketStore({ now: () => 1000, randomBytes: (n) => Buffer.alloc(n, 7) });
+    tickets.restoreConsumed(snapshot);
+    assert.equal(tickets.stateOf(TICKET_A), 'consumed');
+});
+
+test('consumedSnapshot omits an entry whose caseId is not a non-empty string', () => {
+    const env = fileEnv();
+    const storage = createStorage(env.backend);
+    open(storage, 'case-a', TICKET_A);
+    storage.saveReport({ caseId: 'case-a', ticket: TICKET_A, reportSha256: SHA_A, receivedAt: 200, record: { value: 7 } });
+    const page = env.backend.read('index-0').slice();
+    page.push(
+        { caseId: '', ticket: TICKET_B, reportSha256: SHA_B, consumedAt: 1 },
+        { caseId: 7, ticket: '3'.repeat(32), reportSha256: SHA_A, consumedAt: 1 });
     env.backend.write('index-0', page);
     const snapshot = reload(env).storage.consumedSnapshot();
     assert.deepEqual(snapshot, [{ ticket: TICKET_A, caseId: 'case-a', reportSha256: SHA_A, consumedAt: 200 }]);

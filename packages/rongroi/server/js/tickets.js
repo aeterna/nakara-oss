@@ -82,6 +82,15 @@ class TicketStore {
         return { ticket, nonce: record.nonce, issuedAt, expiresAt: record.expiresAt };
     }
 
+    // Delete an issued ticket that never started uploading, returning true when it was removed. An
+    // uploading or consumed ticket is left alone.
+    cancel(ticket) {
+        const record = this.tickets.get(ticket);
+        if (!record || record.state !== 'issued') return false;
+        this.tickets.delete(ticket);
+        return true;
+    }
+
     // Accept a direct POST or a slice for the ticket. Statuses follow the ADR 0089 table:
     //   { ok: true,  status: 200, uploadId }    a new open upload; the ticket is now uploading
     //   { ok: true,  status: 200, repeat }      consumed ticket repeating the accepted envelope
@@ -127,6 +136,11 @@ class TicketStore {
             if (upload.ticket === ticket) open += 1;
         }
         return open;
+    }
+
+    // True while the upload id still has an open slot in this store.
+    isOpen(uploadId) {
+        return this.uploads.has(uploadId);
     }
 
     // Mark activity on a slice: true while the upload is still open, false when the buffer is gone.
