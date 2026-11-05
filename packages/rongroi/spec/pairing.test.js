@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const { generateKeyPair } = require('../server/js/envelope.js');
-const { pairingCode, policyHash } = require('../server/js/pairing.js');
+const { pairingCode, policyHash, checkOrigin } = require('../server/js/pairing.js');
 
 const kit = generateKeyPair();
 const input = {
@@ -80,6 +80,19 @@ test('hostile origins are refused', () => {
     ];
     for (const serverOrigin of hostile) {
         assert.throws(() => pairingCode({ ...input, serverOrigin }), TypeError, serverOrigin);
+    }
+});
+
+test('checkOrigin is exported and accepts only a bare http(s) origin', () => {
+    assert.equal(checkOrigin('https://server.example:30120'), 'https://server.example:30120');
+    for (const origin of [
+        'https://server.example/path',
+        'https://user@server.example',
+        'https://user:pass@server.example',
+        'https://server.example?query',
+        'https://server.example#fragment',
+    ]) {
+        assert.throws(() => checkOrigin(origin), TypeError, origin);
     }
 });
 

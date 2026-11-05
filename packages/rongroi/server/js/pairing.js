@@ -132,5 +132,5 @@ function policyHash(policy) {
 
 // Loaded directly as a server_script FXServer provides no CommonJS `module`; the specs still get the export.
 if (typeof module !== 'undefined') {
-    module.exports = { pairingCode, policyHash };
+    module.exports = { pairingCode, policyHash, checkOrigin };
 }
