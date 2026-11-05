@@ -123,6 +123,24 @@ test('cancel deletes an issued ticket only', () => {
     assert.equal(store.stateOf(consumed), 'consumed');
 });
 
+test('forget removes a consumed ticket and any open uploads', () => {
+    const { store } = makeStore();
+    const { ticket } = issue(store);
+    store.beginUpload(ticket, SHA_A);
+    store.consume(ticket, SHA_A);
+    assert.equal(store.forget(ticket), true);
+    assert.equal(store.stateOf(ticket), 'unknown');
+    assert.deepEqual(store.beginUpload(ticket, SHA_A), { ok: false, status: 404 });
+    assert.deepEqual(store.consume(ticket, SHA_A), { ok: false, status: 404 });
+    assert.equal(store.forget(ticket), false);
+
+    const uploading = issue(store, { caseId: 'case-2' }).ticket;
+    const { uploadId } = store.beginUpload(uploading, SHA_A);
+    assert.equal(store.forget(uploading), true);
+    assert.equal(store.isOpen(uploadId), false);
+    assert.equal(store.stateOf(uploading), 'unknown');
+});
+
 test('touch keeps a buffer alive and sweepIdle drops it after 60 s with no new slice', () => {
     const { store, advance } = makeStore();
     const { ticket } = issue(store);

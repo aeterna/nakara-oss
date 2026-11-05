@@ -30,6 +30,10 @@ const { policyHash } = loadModule(
     () => require('./pairing.js'),
     () => require('./server/js/pairing.js'),
 );
+const { checkRecordCaps } = loadModule(
+    () => require('./record.js'),
+    () => require('./server/js/record.js'),
+);
 const TICKET_RE = /^[0-9a-f]{32}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const DECIMAL_RE = /^[0-9]+$/;
@@ -151,7 +155,7 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
     }
 
     // Shared by a direct POST and the last chunk: verify the whole report and answer it.
-    function finish(res, ticket, sha, uploadId, raw) {
+    function finish(req, res, ticket, sha, uploadId, raw) {
         if (crypto.createHash('sha256').update(raw).digest('hex') !== sha) {
             store.drop(uploadId);
             return fail(res, 422, 'rongroi http: report sha mismatch', ticket);
@@ -179,6 +183,11 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
             store.drop(uploadId);
             return fail(res, 422, 'rongroi http: report record rejected', ticket);
         }
+        // K1 section 10: refuse a record past the shape caps before it reaches storage.
+        if (!checkRecordCaps(record).ok) {
+            store.drop(uploadId);
+            return fail(res, 422, 'rongroi http: report record caps rejected', ticket);
+        }
         const found = store.lookup(ticket);
         const nonce = found ? found.nonce : null;
         const binding = record.binding;
@@ -205,6 +214,8 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
             return fail(res, gone ? 410 : 422, 'rongroi http: report upload slot gone', ticket);
         }
         const event = { caseId: found.caseId, ticket, reportSha256: sha, receivedAt: now() };
+        // The uploader's address is a raw fact, not parsed: its shape differs between FXServer editions.
+        if (typeof req.address === 'string') event.address = req.address;
         if (declined) event.declined = true;
         else event.record = record;
         try {
@@ -268,7 +279,7 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
                     store.drop(uploadId);
                     return fail(res, 413, 'rongroi http: report body too large', ticket);
                 }
-                return finish(res, ticket, sha, uploadId, raw);
+                return finish(req, res, ticket, sha, uploadId, raw);
             } catch {
                 store.drop(uploadId);
                 internalError(res, ticket);
@@ -398,7 +409,7 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
                 if (index !== total - 1) return reply(res, 200);
                 const whole = Buffer.concat(buffer.chunks);
                 buffers.delete(key);
-                const status = finish(res, ticket, reportSha, buffer.uploadId, whole);
+                const status = finish(req, res, ticket, reportSha, buffer.uploadId, whole);
                 if (status === 200) buffer.finished = true;
                 return status;
             } catch {
