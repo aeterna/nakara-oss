@@ -4,7 +4,13 @@
 // carries. The adapter is a plain in-memory map, so no test needs FXServer or a real KVP store.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createSettings, buildPolicy, canOpenCase } = require('../server/js/settings.js');
+const {
+    createSettings,
+    buildPolicy,
+    canOpenCase,
+    POSTURE_COLLECTORS,
+    STANDARD_COLLECTORS,
+} = require('../server/js/settings.js');
 const { policyHash } = require('../server/js/pairing.js');
 
 const POSTURE = [
@@ -14,6 +20,29 @@ const POSTURE = [
     'defender_exclusion',
     'net_config',
     'driver_service',
+];
+
+const STANDARD = [
+    'antivirus_product',
+    'autostart',
+    'bam',
+    'defender_exclusion',
+    'driver_service',
+    'event_fields',
+    'evtx',
+    'fivem_dir',
+    'hid_device',
+    'install_marker',
+    'net_config',
+    'os_image',
+    'pca',
+    'pci_device',
+    'posture',
+    'prefetch',
+    'process',
+    'userassist',
+    'usn',
+    'windows_start',
 ];
 
 function memoryKvp(initial) {
@@ -40,7 +69,7 @@ test('every setting reads its documented default', () => {
         backendOverride: 'auto',
         uploadPageEnabled: false,
         serverName: null,
-        policy: { profile: 'standard', require_elevation: false },
+        policy: { profile: 'posture', require_elevation: false },
         ttlMs: 300000,
         corrupt: [],
     });
@@ -124,7 +153,7 @@ test('a corrupt stored value falls back to its default and is listed in corrupt'
     assert.equal(stored.backendOverride, 'auto');
     assert.equal(stored.uploadPageEnabled, false);
     assert.equal(stored.serverName, null);
-    assert.deepEqual(stored.policy, { profile: 'standard', require_elevation: false });
+    assert.deepEqual(stored.policy, { profile: 'posture', require_elevation: false });
     assert.equal(stored.ttlMs, 300000);
     assert.deepEqual(stored.corrupt, [
         'publicOrigin',
@@ -174,6 +203,8 @@ test('posture fixes required_collectors to exactly the six posture collectors', 
         'net_config',
         'driver_service',
     ]);
+    assert.deepEqual(POSTURE_COLLECTORS, POSTURE);
+    assert.equal(Object.isFrozen(POSTURE_COLLECTORS), true);
     const settings = createSettings(memoryKvp());
     assert.deepEqual(
         settings.set('policy', { profile: 'posture', required_collectors: ['wrong'] }),
@@ -220,16 +251,79 @@ test('custom policy refuses an empty list, a non-string and a duplicate', () => 
     );
 });
 
-test('standard stores no collector list', () => {
+test('standard fixes required_collectors to the twenty standard collectors', () => {
+    assert.deepEqual(STANDARD, [
+        'antivirus_product',
+        'autostart',
+        'bam',
+        'defender_exclusion',
+        'driver_service',
+        'event_fields',
+        'evtx',
+        'fivem_dir',
+        'hid_device',
+        'install_marker',
+        'net_config',
+        'os_image',
+        'pca',
+        'pci_device',
+        'posture',
+        'prefetch',
+        'process',
+        'userassist',
+        'usn',
+        'windows_start',
+    ]);
+    assert.deepEqual(STANDARD_COLLECTORS, STANDARD);
+    assert.equal(Object.isFrozen(STANDARD_COLLECTORS), true);
+    assert.equal(STANDARD.length, 20);
+    assert.equal(new Set(STANDARD).size, 20);
+    assert.deepEqual([...STANDARD].sort(), STANDARD);
+    for (const fullTier of ['powershell_text', 'fivem_servers', 'recorded_files']) {
+        assert.equal(STANDARD.includes(fullTier), false, fullTier);
+    }
+
     const settings = createSettings(memoryKvp());
-    settings.set('policy', {
+    assert.deepEqual(
+        settings.set('policy', {
+            profile: 'standard',
+            required_collectors: ['posture'],
+            require_elevation: false,
+        }),
+        { ok: true },
+    );
+    assert.deepEqual(settings.get().policy, {
         profile: 'standard',
-        required_collectors: ['posture'],
+        required_collectors: STANDARD,
         require_elevation: false,
     });
-    assert.deepEqual(settings.get().policy, { profile: 'standard', require_elevation: false });
     const built = buildPolicy(settings);
-    assert.equal(Object.prototype.hasOwnProperty.call(built, 'required_collectors'), false);
+    assert.deepEqual(built.required_collectors, STANDARD);
+});
+
+test('buildPolicy always carries required_collectors', () => {
+    const settings = createSettings(memoryKvp());
+    settings.set('serverName', 'Example City');
+
+    settings.set('policy', { profile: 'posture', require_elevation: false });
+    const posture = buildPolicy(settings);
+    assert.equal(Object.prototype.hasOwnProperty.call(posture, 'required_collectors'), true);
+    assert.deepEqual(posture.required_collectors, POSTURE);
+
+    settings.set('policy', { profile: 'standard', require_elevation: true });
+    const standard = buildPolicy(settings);
+    assert.equal(Object.prototype.hasOwnProperty.call(standard, 'required_collectors'), true);
+    assert.deepEqual(standard.required_collectors, STANDARD);
+    assert.equal(standard.require_elevation, true);
+
+    settings.set('policy', {
+        profile: 'custom',
+        required_collectors: ['posture', 'net_config'],
+        require_elevation: false,
+    });
+    const custom = buildPolicy(settings);
+    assert.equal(Object.prototype.hasOwnProperty.call(custom, 'required_collectors'), true);
+    assert.deepEqual(custom.required_collectors, ['posture', 'net_config']);
 });
 
 test('buildPolicy is stable through policyHash and changes when serverName changes', () => {
@@ -238,7 +332,8 @@ test('buildPolicy is stable through policyHash and changes when serverName chang
     const first = buildPolicy(settings);
     const second = buildPolicy(settings);
     assert.deepEqual(first, {
-        profile: 'standard',
+        profile: 'posture',
+        required_collectors: POSTURE,
         require_elevation: false,
         server_name: 'Example City',
     });

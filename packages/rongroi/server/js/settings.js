@@ -50,6 +50,30 @@ const POSTURE_COLLECTORS = Object.freeze([
     'net_config',
     'driver_service',
 ]);
+// The standard-tier collectors of the client this Kit version targets. The three full-tier ids are left out
+// because a client never scans them without its own question (ADR 0052 in aeterna-rongroi).
+const STANDARD_COLLECTORS = Object.freeze([
+    'antivirus_product',
+    'autostart',
+    'bam',
+    'defender_exclusion',
+    'driver_service',
+    'event_fields',
+    'evtx',
+    'fivem_dir',
+    'hid_device',
+    'install_marker',
+    'net_config',
+    'os_image',
+    'pca',
+    'pci_device',
+    'posture',
+    'prefetch',
+    'process',
+    'userassist',
+    'usn',
+    'windows_start',
+]);
 const MAX_COLLECTORS = 64;
 const MIN_TTL_MS = 60000;
 const MAX_TTL_MS = 3600000;
@@ -58,7 +82,7 @@ const DEFAULT_TTL_MS = 300000;
 const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]/;
 
 function defaultPolicy() {
-    return { profile: 'standard', require_elevation: false };
+    return { profile: 'posture', require_elevation: false };
 }
 
 function defaultFor(name) {
@@ -97,7 +121,11 @@ function normalizePolicy(value) {
     if (value.profile === 'standard') {
         return {
             ok: true,
-            value: { profile: 'standard', require_elevation: elevation },
+            value: {
+                profile: 'standard',
+                required_collectors: [...STANDARD_COLLECTORS],
+                require_elevation: elevation,
+            },
         };
     }
 
@@ -251,20 +279,17 @@ function createSettings(kvp) {
     return { get, set };
 }
 
-// The policy object a ticket carries: the fixed posture list, the custom list, or no list for standard.
+// The policy object a ticket carries: the profile's collector list, elevation, and the server name.
 function buildPolicy(settings) {
     const values = valuesOf(settings);
     const checked = normalizePolicy(values.policy);
-    const policy = checked.ok ? checked.value : defaultPolicy();
-    const built = { profile: policy.profile };
-    if (policy.profile === 'posture') {
-        built.required_collectors = [...POSTURE_COLLECTORS];
-    } else if (policy.profile === 'custom') {
-        built.required_collectors = [...policy.required_collectors];
-    }
-    built.require_elevation = policy.require_elevation;
-    built.server_name = typeof values.serverName === 'string' ? values.serverName : null;
-    return built;
+    const policy = checked.ok ? checked.value : normalizePolicy(defaultPolicy()).value;
+    return {
+        profile: policy.profile,
+        required_collectors: [...policy.required_collectors],
+        require_elevation: policy.require_elevation,
+        server_name: typeof values.serverName === 'string' ? values.serverName : null,
+    };
 }
 
 function canOpenCase(settings) {
@@ -280,5 +305,11 @@ function canOpenCase(settings) {
 
 // Loaded directly as a server_script FXServer provides no CommonJS `module`; the specs still get the export.
 if (typeof module !== 'undefined') {
-    module.exports = { createSettings, buildPolicy, canOpenCase };
+    module.exports = {
+        createSettings,
+        buildPolicy,
+        canOpenCase,
+        POSTURE_COLLECTORS,
+        STANDARD_COLLECTORS,
+    };
 }
