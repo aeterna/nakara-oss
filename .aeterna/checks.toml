@@ -13,6 +13,12 @@
 # A repo with no file reports `not-configured`.
 # To skip the checks once: aeterna-delegate -m write ... --skip-checks
 
+# Rongroi Server Kit specs (node --test). Plain Node, no npm packages.
+[[checks]]
+name = "rongroi-specs"
+cmd = 'npm test --workspace packages/rongroi --if-present'
+timeout = 120
+
 # Devkit unit and safety-scanner tests (node --test). Covers the devkit package manifest and its test files and fixtures.
 [[checks]]
 name = "devkit-tests"

@@ -1,0 +1,14 @@
+{
+  "name": "@aeterna_game/nakara-rongroi",
+  "version": "0.0.0",
+  "private": true,
+  "description": "nakara_rongroi Server Kit: envelope crypto (server/js) and its test vectors",
+  "license": "MIT",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test \"spec/**/*.test.js\""
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

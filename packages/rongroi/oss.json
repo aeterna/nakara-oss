@@ -1,0 +1,16 @@
+{
+  "$schema": "../../oss.schema.json",
+  "name": "rongroi",
+  "resource": "nakara_rongroi",
+  "capabilities": {
+    "http": [],
+    "commands": [],
+    "registeredCommands": [],
+    "httpHandlers": ["policy/*", "report", "report/chunk"],
+    "convars": { "read": ["gamename"], "write": [] },
+    "netEvents": { "server": [], "client": [] },
+    "nui": false,
+    "db": { "tables": [], "ddl": false },
+    "files": { "write": ["cache/rongroi-reports/*"] }
+  }
+}
