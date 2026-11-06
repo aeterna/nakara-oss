@@ -131,9 +131,10 @@
         }
 
         function getPlayer(src) {
-            if (typeof src !== 'number' || !Number.isInteger(src) || src <= 0) return null;
-            const identifier = GetPlayerIdentifierByType(src, 'license');
-            const endpoint = GetPlayerEndpoint(src);
+            const id = Number(src);
+            if (!Number.isSafeInteger(id) || id <= 0) return null;
+            const identifier = GetPlayerIdentifierByType(id, 'license');
+            const endpoint = GetPlayerEndpoint(id);
             if (typeof identifier !== 'string' || identifier.length === 0) return null;
             return { identifier, endpoint: typeof endpoint === 'string' ? endpoint : '' };
         }
@@ -294,36 +295,38 @@
             return window.count <= NET_LIMIT;
         }
 
-        onNet('nakara_rongroi:requestCode', (src) => {
+        onNet('nakara_rongroi:requestCode', () => {
+            const src = source;
             if (!rateLimit(src)) return;
             panel.requestCode(src);
         });
-        onNet('nakara_rongroi:panel:open', (src) => {
+        onNet('nakara_rongroi:panel:open', () => {
+            const src = source;
             if (!rateLimit(src)) return;
             panel.panelOpen(src);
         });
-        onNet('nakara_rongroi:panel:case', (src, payload) => {
+        onNet('nakara_rongroi:panel:case', (payload) => {
+            const src = source;
             if (!rateLimit(src)) return;
             panel.panelCase(src, asCaseId(payload));
         });
-        onNet('nakara_rongroi:panel:openCase', (src, payload) => {
+        onNet('nakara_rongroi:panel:openCase', (payload) => {
+            const src = source;
             if (!rateLimit(src)) return;
             panel.panelOpenCase(src, asTarget(payload));
         });
-        onNet('nakara_rongroi:settings:save', (src, payload) => {
+        onNet('nakara_rongroi:settings:save', (payload) => {
+            const src = source;
             if (!rateLimit(src)) return;
             panel.saveSettings(src, asSettingsPatch(payload));
         });
-        onNet('nakara_rongroi:exception:set', (src, payload) => {
-            if (!rateLimit(src)) return;
-            // panel.js has no exception setter yet; keep the declared event gated for the slice that adds it.
-            if (typeof panel.setException === 'function') panel.setException(src, payload);
-        });
-        onNet('nakara_rongroi:case:delete', (src, payload) => {
+        onNet('nakara_rongroi:case:delete', (payload) => {
+            const src = source;
             if (!rateLimit(src)) return;
             panel.deleteCase(src, asCaseId(payload));
         });
-        onNet('nakara_rongroi:player:delete', (src, payload) => {
+        onNet('nakara_rongroi:player:delete', (payload) => {
+            const src = source;
             if (!rateLimit(src)) return;
             panel.deletePlayer(src, asIdentifier(payload));
         });

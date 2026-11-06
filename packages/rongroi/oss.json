@@ -15,7 +15,6 @@
         "nakara_rongroi:panel:case",
         "nakara_rongroi:panel:openCase",
         "nakara_rongroi:settings:save",
-        "nakara_rongroi:exception:set",
         "nakara_rongroi:case:delete",
         "nakara_rongroi:player:delete"
       ],
