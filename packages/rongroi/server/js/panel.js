@@ -28,9 +28,6 @@ const { createSettings, buildPolicy, canOpenCase } = loadModule(
 const { pairingCode, policyHash } = loadModule(
     () => require('./pairing.js'), () => require('./server/js/pairing.js'),
 );
-const envelope = loadModule(
-    () => require('./envelope.js'), () => require('./server/js/envelope.js'),
-);
 
 const STAFF_LIMIT = 20;
 const CODE_LIMIT = 3;
@@ -72,6 +69,9 @@ function createPanel(deps) {
         ? deps.randomBytes
         : (typeof store.randomBytes === 'function' ? store.randomBytes : null);
     if (typeof randomBytes !== 'function') throw new TypeError('deps.randomBytes must be a function');
+    if (typeof deps.rotateKitKey !== 'function') {
+        throw new TypeError('deps.rotateKitKey must be a function');
+    }
     const caseFacts = deps.caseFacts;
 
     const windows = new Map(); // `${kind}:${source}` -> { end, count }
@@ -164,12 +164,9 @@ function createPanel(deps) {
         throw new Error('could not allocate a case id');
     }
 
-    // A kit adapter may rotate itself. The injected pair is otherwise rotated in memory, which is what the
-    // pure specs exercise; main.js supplies an adapter that also persists the new pair.
+    // rotateKitKey() stores the new pair under the kit KVP and returns it; main.js passes keys.js rotateKitKey.
     function rotateKit() {
-        const rotate = [kit.rotate, kit.rotateKey, deps.rotateKit, deps.rotateKey, deps.rotateKitKey]
-            .find((fn) => typeof fn === 'function');
-        const pair = typeof rotate === 'function' ? rotate.call(kit) : envelope.generateKeyPair();
+        const pair = deps.rotateKitKey();
         if (isObject(pair) && nonEmptyString(pair.publicKey)) {
             kit.publicKey = pair.publicKey;
             if (nonEmptyString(pair.privateKey)) kit.privateKey = pair.privateKey;
@@ -217,10 +214,9 @@ function createPanel(deps) {
     // Key rotation invalidates open tickets only: consumed and expired tickets keep their state.
     function forgetOpenTickets() {
         const forgotten = new Set();
-        const tickets = store.tickets;
-        if (!(tickets instanceof Map)) return forgotten;
-        for (const [ticket, record] of tickets) {
-            if (!isObject(record) || (record.state !== 'issued' && record.state !== 'uploading')) continue;
+        if (typeof store.openTickets !== 'function') return forgotten;
+        for (const ticket of store.openTickets()) {
+            if (!nonEmptyString(ticket)) continue;
             if (forgetTicket(ticket)) forgotten.add(ticket);
         }
         return forgotten;

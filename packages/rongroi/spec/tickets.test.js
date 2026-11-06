@@ -141,6 +141,23 @@ test('forget removes a consumed ticket and any open uploads', () => {
     assert.equal(store.stateOf(uploading), 'unknown');
 });
 
+test('openTickets returns only issued and uploading tickets', () => {
+    const { store, advance } = makeStore();
+    const expired = issue(store, { caseId: 'case-expired' });
+    advance(TTL);
+    store.expireDue();
+    const issued = issue(store, { caseId: 'case-issued' });
+    const uploading = issue(store, { caseId: 'case-uploading' });
+    store.beginUpload(uploading.ticket, SHA_A);
+    const consumed = issue(store, { caseId: 'case-consumed' });
+    store.beginUpload(consumed.ticket, SHA_A);
+    store.consume(consumed.ticket, SHA_A);
+
+    assert.deepEqual(store.openTickets(), [issued.ticket, uploading.ticket]);
+    assert.equal(store.stateOf(expired.ticket), 'expired');
+    assert.equal(store.stateOf(consumed.ticket), 'consumed');
+});
+
 test('touch keeps a buffer alive and sweepIdle drops it after 60 s with no new slice', () => {
     const { store, advance } = makeStore();
     const { ticket } = issue(store);

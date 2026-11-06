@@ -267,6 +267,16 @@ class TicketStore {
         return record ? record.state : 'unknown';
     }
 
+    // The tickets still open for business: issued or uploading, in insertion order. Key rotation forgets
+    // these; consumed and expired tickets stay so their case history keeps answering.
+    openTickets() {
+        const open = [];
+        for (const [ticket, record] of this.tickets) {
+            if (record.state === 'issued' || record.state === 'uploading') open.push(ticket);
+        }
+        return open;
+    }
+
     // The consumed tickets as plain JSON, for the caller to persist (KVP or a resource-folder file).
     snapshotConsumed() {
         const snapshot = [];

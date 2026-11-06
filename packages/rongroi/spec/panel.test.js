@@ -45,27 +45,42 @@ function makeHarness({ publicOrigin = ORIGIN, serverName = 'Example City' } = {}
     const sent = [];
     const caseCalls = [];
     const caseSeed = { value: 100 };
-    const panelKit = {
-        ...kit,
-        rotate() {
-            const pair = envelope.generateKeyPair();
-            this.publicKey = pair.publicKey;
-            this.privateKey = pair.privateKey;
-            return pair;
-        },
-    };
+    const panelKit = { ...kit };
+    let rotateCalls = 0;
     const panel = createPanel({
         settings, storage, store, kit: panelKit, now: () => ms,
         isStaff: (src) => staff.has(src),
         getPlayer: (src) => players.get(src) || players.get(Number(src)) || null,
         send: (src, event, payload) => sent.push({ src, event, payload }),
         randomBytes: (n) => { caseCalls.push(n); return counted(caseSeed)(n); },
+        rotateKitKey: () => {
+            rotateCalls += 1;
+            const pair = envelope.generateKeyPair();
+            panelKit.publicKey = pair.publicKey;
+            panelKit.privateKey = pair.privateKey;
+            return pair;
+        },
     });
     return {
         panel, storage, store, settings, kit: panelKit, staff, sent, caseCalls,
+        rotateCalls: () => rotateCalls,
         advance: (delta) => { ms += delta; },
     };
 }
+
+test('createPanel requires a rotateKitKey dependency', () => {
+    assert.throws(() => createPanel({
+        settings: { get: () => ({}) },
+        storage: { getCase: () => null, openCase: () => {} },
+        store: { issue: () => ({}) },
+        kit: {},
+        now: () => 0,
+        isStaff: () => false,
+        getPlayer: () => null,
+        send: () => {},
+        randomBytes: () => Buffer.alloc(16),
+    }), { name: 'TypeError', message: /rotateKitKey/ });
+});
 
 test('a non-staff source gets nothing from any entry point', () => {
     const h = makeHarness();
@@ -265,7 +280,7 @@ test('deleteCaseAndForget is the retention pass helper', () => {
     assert.equal(h.panel.deleteCaseAndForget(entry.caseId), false);
 });
 
-test('rotateKey replaces the kit key and invalidates open tickets only', () => {
+test('rotateKey calls rotateKitKey once and invalidates issued and uploading tickets only', () => {
     const h = makeHarness();
     const expired = h.store.issue({ caseId: 'case-expired', policy: {} });
     h.advance(300001);
@@ -286,6 +301,7 @@ test('rotateKey replaces the kit key and invalidates open tickets only', () => {
     const oldPrivateKey = h.kit.privateKey;
     h.sent.length = 0;
     assert.equal(h.panel.rotateKey(STAFF), true);
+    assert.equal(h.rotateCalls(), 1);
     assert.notEqual(h.kit.privateKey, oldPrivateKey);
     assert.equal(h.store.stateOf(openTicket), 'unknown');
     assert.equal(h.store.stateOf(uploading.ticket), 'unknown');
