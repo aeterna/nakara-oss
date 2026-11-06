@@ -99,6 +99,19 @@ test('policy view model keeps the field order, selection and grouped hash', () =
     assert.equal(policy.viewModel({ policyHash: '0123456789abcdef' }).policyHash, '0123456789abcdef');
 });
 
+test('the delete-player field has text in both languages', () => {
+    const keys = [
+        'deletePlayerLabel', 'deletePlayer', 'deletePlayerConfirmHint',
+        'deletePlayerConfirm', 'deletePlayerCancel',
+    ];
+    for (const lang of ['en', 'th']) {
+        for (const key of keys) {
+            assert.equal(typeof settingsStrings[lang][key], 'string', `${lang}.${key}`);
+            assert.ok(settingsStrings[lang][key].length > 0, `${lang}.${key}`);
+        }
+    }
+});
+
 test('the reason tables cover every code the controller can return', () => {
     for (const [name, table] of [['settings', settingsStrings], ['policy', policyStrings]]) {
         for (const lang of ['en', 'th']) {

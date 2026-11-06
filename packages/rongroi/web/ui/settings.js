@@ -122,6 +122,50 @@
         if (shell && typeof shell.call === 'function') return shell.call(name, data);
         return Promise.resolve();
     }
+    function addDeletePlayer(form, strings) {
+        var wrap = el('div', 'field field-delete-player');
+        var id = 'rongroi-settings-delete-identifier';
+        var label = el('label', 'field-label', strings.deletePlayerLabel || 'Player identifier');
+        label.htmlFor = id;
+        var input = el('input', 'control');
+        input.type = 'text';
+        input.id = id;
+        input.name = 'deleteIdentifier';
+        wrap.appendChild(label);
+        wrap.appendChild(input);
+        var actions = el('div', 'form-actions');
+        var button = el('button', 'button danger', strings.deletePlayer || 'Delete player data');
+        button.type = 'button';
+        var confirm = null;
+        function removeConfirm() {
+            if (!confirm) return;
+            if (confirm.parentNode) confirm.parentNode.removeChild(confirm);
+            confirm = null;
+        }
+        button.addEventListener('click', function () {
+            if (confirm) return;
+            var identifier = String(input.value).trim();
+            if (identifier === '') return;
+            confirm = el('div', 'confirm');
+            confirm.appendChild(el('p', 'confirm-text',
+                strings.deletePlayerConfirmHint || 'This removes every case and report for that player. This cannot be undone.'));
+            var yes = el('button', 'button danger', strings.deletePlayerConfirm || 'Delete player data');
+            yes.type = 'button';
+            yes.addEventListener('click', function () {
+                call('deletePlayer', { identifier: identifier });
+                removeConfirm();
+            });
+            var no = el('button', 'button secondary', strings.deletePlayerCancel || 'Cancel');
+            no.type = 'button';
+            no.addEventListener('click', removeConfirm);
+            confirm.appendChild(yes);
+            confirm.appendChild(no);
+            wrap.appendChild(confirm);
+        });
+        actions.appendChild(button);
+        wrap.appendChild(actions);
+        form.appendChild(wrap);
+    }
     function render(target, data, strings) {
         var model = viewModel(data), t = isObject(strings) ? strings : {};
         target.textContent = '';
@@ -167,6 +211,7 @@
             event.preventDefault();
             call('saveSettings', collect(form, model));
         });
+        addDeletePlayer(form, t);
         target.appendChild(form);
         if (model.rotation.confirming) showConfirm();
     }

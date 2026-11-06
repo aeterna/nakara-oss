@@ -10,7 +10,7 @@ local SCREENS = {
     case = true,
     settings = true,
     policy = true,
-    gate = true,
+    error = true,
 }
 
 local isOpen = false
@@ -44,7 +44,7 @@ end)
 
 RegisterNetEvent('nakara_rongroi:settings:data', function(data)
     if type(data) ~= 'table' then return end
-    show('settings', data)
+    show(data.screen == 'policy' and 'policy' or 'settings', data)
 end)
 
 RegisterNUICallback('close', function(data, cb)
@@ -64,9 +64,13 @@ answer('copy')
 local FORWARDS = {
     { 'openCase', 'nakara_rongroi:panel:openCase' },
     { 'selectCase', 'nakara_rongroi:panel:case' },
+    { 'openSettings', 'nakara_rongroi:settings:open' },
     { 'saveSettings', 'nakara_rongroi:settings:save' },
     { 'savePolicy', 'nakara_rongroi:settings:save' },
+    { 'rotateKey', 'nakara_rongroi:settings:rotateKey' },
     { 'deleteCase', 'nakara_rongroi:case:delete' },
+    { 'deletePlayer', 'nakara_rongroi:player:delete' },
+    { 'back', 'nakara_rongroi:panel:open' },
 }
 
 local function forward(name, event)

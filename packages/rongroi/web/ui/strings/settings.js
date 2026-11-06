@@ -16,6 +16,11 @@
             rotateConfirm: 'Rotate key',
             rotateCancel: 'Cancel',
             rotateConfirmHint: 'Open pairing codes stop working.',
+            deletePlayerLabel: 'Player identifier',
+            deletePlayer: 'Delete player data',
+            deletePlayerConfirmHint: 'This removes every case and report for that player. This cannot be undone.',
+            deletePlayerConfirm: 'Delete player data',
+            deletePlayerCancel: 'Cancel',
             corrupt: '{count} stored settings could not be read and use their defaults.',
             fields: {
                 publicOrigin: 'Public origin',
@@ -46,6 +51,11 @@
             rotateConfirm: 'หมุนกุญแจ',
             rotateCancel: 'ยกเลิก',
             rotateConfirmHint: 'รหัสจับคู่ที่เปิดอยู่จะใช้ไม่ได้',
+            deletePlayerLabel: 'รหัสผู้เล่น',
+            deletePlayer: 'ลบข้อมูลผู้เล่น',
+            deletePlayerConfirmHint: 'การลบนี้จะลบทุกเคสและรายงานของผู้เล่นนั้นและย้อนกลับไม่ได้',
+            deletePlayerConfirm: 'ลบข้อมูลผู้เล่น',
+            deletePlayerCancel: 'ยกเลิก',
             corrupt: 'อ่านการตั้งค่าที่บันทึกไว้ {count} รายการไม่ได้ จึงใช้ค่าเริ่มต้น',
             fields: {
                 publicOrigin: 'ที่อยู่สาธารณะ',

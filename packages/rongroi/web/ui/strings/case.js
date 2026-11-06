@@ -7,7 +7,7 @@
     else {
         var table = factory();
         root.Rongroi = root.Rongroi || {};
-        root.Rongroi.strings = Object.assign(root.Rongroi.strings || {}, { case: table, cases: table });
+        root.Rongroi.strings = Object.assign(root.Rongroi.strings || {}, { case: table, cases: table, error: table });
     }
 }(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     'use strict';
@@ -68,6 +68,18 @@
             listOpenedAt: 'Opened at',
             listReceivedAt: 'Received at',
             selectCase: 'Open case',
+            openCaseLabel: 'Player server id',
+            openCase: 'Open case',
+            settings: 'Settings',
+            policy: 'Policy',
+            deleteCase: 'Delete case',
+            deleteConfirmHint: 'This removes the case and its report. This cannot be undone.',
+            deleteConfirm: 'Delete case',
+            deleteCancel: 'Cancel',
+            back: 'Back',
+            errorTitle: 'Something went wrong',
+            errorBack: 'Back',
+            errorUnknown: 'The action did not finish.',
         },
         th: {
             title: 'เคส',
@@ -125,6 +137,18 @@
             listOpenedAt: 'เปิดเมื่อ',
             listReceivedAt: 'ได้รับเมื่อ',
             selectCase: 'เปิดเคส',
+            openCaseLabel: 'รหัสเซิร์ฟเวอร์ของผู้เล่น',
+            openCase: 'เปิดเคส',
+            settings: 'ตั้งค่า',
+            policy: 'นโยบาย',
+            deleteCase: 'ลบเคส',
+            deleteConfirmHint: 'การลบนี้จะลบเคสและรายงานออกถาวรและย้อนกลับไม่ได้',
+            deleteConfirm: 'ลบเคส',
+            deleteCancel: 'ยกเลิก',
+            back: 'ย้อนกลับ',
+            errorTitle: 'เกิดข้อผิดพลาด',
+            errorBack: 'ย้อนกลับ',
+            errorUnknown: 'ดำเนินการไม่สำเร็จ',
         },
     };
 }));

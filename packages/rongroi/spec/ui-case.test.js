@@ -9,6 +9,7 @@ const assert = require('node:assert/strict');
 const caseScreen = require('../web/ui/case.js');
 const casesScreen = require('../web/ui/cases.js');
 const caseStrings = require('../web/ui/strings/case.js');
+const shell = require('../web/ui/shell.js');
 
 const HASH = 'a1b2c3d4e5f60718';
 const DENY = ['score', 'verdict', 'verified', 'clean', 'risk', 'ban', 'color'];
@@ -123,6 +124,22 @@ test('the case list keeps the order the server sent', () => {
     });
 
     assert.deepEqual(model.cases.map((row) => row.caseId), ['case-b', 'case-a']);
+});
+
+test('the case view model carries the case id used by delete', () => {
+    const fromEnvelope = caseScreen.viewModel({ screen: 'case', caseId: 'case-envelope', case: fixture() });
+    assert.equal(fromEnvelope.caseId, 'case-envelope');
+
+    const fromCase = caseScreen.viewModel({ screen: 'case', case: { ...fixture(), caseId: 'case-view' } });
+    assert.equal(fromCase.caseId, 'case-view');
+
+    assert.equal(caseScreen.viewModel(fixture()).caseId, null);
+});
+
+test('the shell accepts exactly the contract screens', () => {
+    assert.deepEqual(Object.keys(shell.SCREENS).sort(), [
+        'case', 'cases', 'code', 'error', 'policy', 'settings',
+    ]);
 });
 
 test('case strings never contain a word from the deny list', () => {

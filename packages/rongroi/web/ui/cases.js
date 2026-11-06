@@ -68,11 +68,62 @@
         if (shell && typeof shell.call === 'function') shell.call(name, payload);
     }
 
+    function openCaseForm(root, t) {
+        var form = el('form', 'form case-open');
+        form.setAttribute('novalidate', 'novalidate');
+        var wrap = el('div', 'field');
+        var id = 'rongroi-open-case-target';
+        var label = el('label', 'field-label', t.openCaseLabel || 'Player server id');
+        label.htmlFor = id;
+        var input = el('input', 'control');
+        input.type = 'number';
+        input.id = id;
+        input.name = 'target';
+        input.min = '1';
+        input.step = '1';
+        wrap.appendChild(label);
+        wrap.appendChild(input);
+        form.appendChild(wrap);
+        var actions = el('div', 'form-actions');
+        var open = el('button', 'button primary', t.openCase || 'Open case');
+        open.type = 'submit';
+        actions.appendChild(open);
+        form.appendChild(actions);
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            var value = String(input.value).trim();
+            if (!/^[0-9]+$/.test(value)) return;
+            var target = Number(value);
+            if (!isFinite(target) || target <= 0) return;
+            callShell(root, 'openCase', { target: target });
+        });
+        root.appendChild(form);
+    }
+
+    function screenLinks(root, t) {
+        var actions = el('div', 'form-actions');
+        var settings = el('button', 'button secondary', t.settings || 'Settings');
+        settings.type = 'button';
+        settings.addEventListener('click', function () {
+            callShell(root, 'openSettings', { screen: 'settings' });
+        });
+        actions.appendChild(settings);
+        var policy = el('button', 'button secondary', t.policy || 'Policy');
+        policy.type = 'button';
+        policy.addEventListener('click', function () {
+            callShell(root, 'openSettings', { screen: 'policy' });
+        });
+        actions.appendChild(policy);
+        root.appendChild(actions);
+    }
+
     function render(root, data, strings) {
         var model = viewModel(data);
         var t = strings || {};
         setText(root, '');
         root.appendChild(el('h1', '', t.listTitle || 'Cases'));
+        openCaseForm(root, t);
+        screenLinks(root, t);
         if (model.cases.length === 0) {
             root.appendChild(el('p', 'empty', t.listEmpty || 'No cases yet.'));
             return;

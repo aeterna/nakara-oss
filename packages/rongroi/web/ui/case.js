@@ -75,10 +75,14 @@
 
     function viewModel(data) {
         var source = isObject(data) ? data : {};
+        var envelopeCaseId = member(source, 'caseId');
         if (isObject(source.case)) source = source.case;
+        var caseId = member(source, 'caseId');
+        if (caseId === null) caseId = envelopeCaseId;
         return {
             screen: 'case',
             built: true,
+            caseId: caseId,
             state: typeof source.state === 'string' ? source.state : 'unknown',
             origin: typeof source.origin === 'string' ? source.origin : 'connect',
             fixedLineKey: typeof source.fixedLineKey === 'string' ? source.fixedLineKey : 'rongroi.case.fixedLine',
@@ -88,6 +92,50 @@
             findings: Array.isArray(source.findings) ? source.findings.slice() : [],
             visualHash: hashOf(source),
         };
+    }
+
+    function callShell(root, name, payload) {
+        var doc = root && root.ownerDocument;
+        var win = doc && doc.defaultView ? doc.defaultView : (typeof globalThis !== 'undefined' ? globalThis : null);
+        var shell = win && win.Rongroi && win.Rongroi.shell;
+        if (shell && typeof shell.call === 'function') shell.call(name, payload);
+    }
+
+    function renderActions(root, model, strings) {
+        var actions = el('div', 'form-actions');
+        var back = el('button', 'button secondary', strings.back || 'Back');
+        back.type = 'button';
+        back.addEventListener('click', function () { callShell(root, 'back', {}); });
+        actions.appendChild(back);
+
+        var remove = el('button', 'button danger', strings.deleteCase || 'Delete case');
+        remove.type = 'button';
+        var confirm = null;
+        function removeConfirm() {
+            if (!confirm) return;
+            if (confirm.parentNode) confirm.parentNode.removeChild(confirm);
+            confirm = null;
+        }
+        remove.addEventListener('click', function () {
+            if (confirm) return;
+            confirm = el('div', 'confirm');
+            confirm.appendChild(el('p', 'confirm-text',
+                strings.deleteConfirmHint || 'This removes the case and its report. This cannot be undone.'));
+            var yes = el('button', 'button danger', strings.deleteConfirm || 'Delete case');
+            yes.type = 'button';
+            yes.addEventListener('click', function () {
+                callShell(root, 'deleteCase', { caseId: model.caseId });
+                removeConfirm();
+            });
+            var no = el('button', 'button secondary', strings.deleteCancel || 'Cancel');
+            no.type = 'button';
+            no.addEventListener('click', removeConfirm);
+            confirm.appendChild(yes);
+            confirm.appendChild(no);
+            root.appendChild(confirm);
+        });
+        actions.appendChild(remove);
+        root.appendChild(actions);
     }
 
     function wordFor(table, name, strings, fallback) { var key = table[name]; return key && strings[key] ? strings[key] : fallback; }
@@ -225,6 +273,8 @@
         if (model.findings.length === 0) findingsSection.appendChild(el('p', 'empty', t.findingsEmpty || 'No findings in this report.'));
         else findingsSection.appendChild(findingsTable(model.findings, t));
         root.appendChild(findingsSection);
+
+        renderActions(root, model, t);
     }
 
     return { viewModel: viewModel, render: render };
