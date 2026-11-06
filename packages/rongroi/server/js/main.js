@@ -50,7 +50,7 @@
         () => require('./settings.js'),
         () => require('./server/js/settings.js'),
     );
-    const { createPanel } = loadModule(
+    const { createPanel, nativeBool } = loadModule(
         () => require('./panel.js'),
         () => require('./server/js/panel.js'),
     );
@@ -134,7 +134,7 @@
         log(`storage ${edition}`);
 
         function isStaff(src) {
-            return IsPlayerAceAllowed(src, STAFF_ACE) === true;
+            return nativeBool(IsPlayerAceAllowed(src, STAFF_ACE));
         }
 
         function getPlayer(src) {

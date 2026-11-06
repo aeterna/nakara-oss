@@ -47,6 +47,11 @@ function nonEmptyString(value) {
     return typeof value === 'string' && value.length > 0;
 }
 
+// FXServer's native booleans arrive as the number 1 or 0, never a JS boolean. Accept only true and 1.
+function nativeBool(value) {
+    return value === true || value === 1;
+}
+
 function validSource(src) {
     return (typeof src === 'number' && Number.isInteger(src) && src > 0) || nonEmptyString(src);
 }
@@ -323,7 +328,7 @@ function createPanel(deps) {
             refuse(src, 'case_not_found');
             return false;
         }
-        send(src, PANEL_DATA, { screen: 'case', case: viewFor(data) });
+        send(src, PANEL_DATA, { screen: 'case', caseId, case: viewFor(data) });
         return true;
     }
 
@@ -396,6 +401,7 @@ function createPanel(deps) {
         try { data = storage.getCase(caseId); } catch { data = null; }
         send(src, PANEL_DATA, {
             screen: 'case',
+            caseId,
             case: viewFor(data || { caseId, ticket: issued.ticket, ...facts }),
         });
         return true;
@@ -489,5 +495,5 @@ function createPanel(deps) {
 
 // Loaded directly as a server_script FXServer provides no CommonJS `module`; the specs still get the export.
 if (typeof module !== 'undefined') {
-    module.exports = { createPanel, pruneRateWindows };
+    module.exports = { createPanel, nativeBool, pruneRateWindows };
 }

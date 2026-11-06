@@ -3,7 +3,7 @@
 // Staff panel controller: caller checks, per-source limits, case ids and only-safe payloads.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createPanel, pruneRateWindows } = require('../server/js/panel.js');
+const { createPanel, nativeBool, pruneRateWindows } = require('../server/js/panel.js');
 const { createSettings } = require('../server/js/settings.js');
 const { createStorage } = require('../server/js/storage.js');
 const { TicketStore } = require('../server/js/tickets.js');
@@ -71,6 +71,14 @@ function makeHarness({ publicOrigin = ORIGIN, serverName = 'Example City' } = {}
         advance: (delta) => { ms += delta; },
     };
 }
+
+test('nativeBool treats only true and the number 1 as true', () => {
+    assert.equal(nativeBool(true), true);
+    assert.equal(nativeBool(1), true);
+    for (const value of [0, false, null, undefined, '1', 2, NaN, {}, [], [1]]) {
+        assert.equal(nativeBool(value), false);
+    }
+});
 
 test('createPanel requires a rotateKitKey dependency', () => {
     assert.throws(() => createPanel({
@@ -151,6 +159,28 @@ test('panelOpenCase makes a 16-byte hex case, stores target facts and replies on
     assert.equal(h.panel.requestCode(PLAYER), true);
     assert.equal(h.sent[0].src, PLAYER);
     assert.equal(h.panel.requestCode(STAFF), false);
+});
+
+test('panelOpenCase replies with the opened case id at the envelope', () => {
+    const h = makeHarness();
+    assert.equal(h.panel.panelOpenCase(STAFF, PLAYER), true);
+    const message = h.sent.at(-1);
+    assert.equal(message.event, 'nakara_rongroi:panel:data');
+    assert.equal(message.payload.screen, 'case');
+    assert.match(message.payload.caseId, /^[0-9a-f]{32}$/);
+    assert.equal(message.payload.caseId, h.storage.entries()[0].caseId);
+});
+
+test('panelCase replies with the selected case id at the envelope', () => {
+    const h = makeHarness();
+    assert.equal(h.panel.panelOpenCase(STAFF, PLAYER), true);
+    const entry = h.storage.entries()[0];
+    h.sent.length = 0;
+    assert.equal(h.panel.panelCase(STAFF, entry.caseId), true);
+    const message = h.sent.at(-1);
+    assert.equal(message.event, 'nakara_rongroi:panel:data');
+    assert.equal(message.payload.screen, 'case');
+    assert.equal(message.payload.caseId, entry.caseId);
 });
 
 test('panelOpenCase forgets a live earlier ticket for the same target', () => {
