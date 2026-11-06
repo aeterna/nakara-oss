@@ -52,14 +52,32 @@ RegisterNUICallback('close', function(data, cb)
     cb(data or {})
 end)
 
-local function forward(name)
+local function answer(name)
     RegisterNUICallback(name, function(data, cb)
         cb(data or {})
     end)
 end
 
-for _, name in ipairs({ 'copy', 'openCase', 'selectCase', 'saveSettings', 'savePolicy', 'deleteCase' }) do
-    forward(name)
+answer('copy')
+
+-- Keep the shell thin: each screen sends its data straight to the matching server event.
+local FORWARDS = {
+    { 'openCase', 'nakara_rongroi:panel:openCase' },
+    { 'selectCase', 'nakara_rongroi:panel:case' },
+    { 'saveSettings', 'nakara_rongroi:settings:save' },
+    { 'savePolicy', 'nakara_rongroi:settings:save' },
+    { 'deleteCase', 'nakara_rongroi:case:delete' },
+}
+
+local function forward(name, event)
+    RegisterNUICallback(name, function(data, cb)
+        TriggerServerEvent(event, data or {})
+        cb(data or {})
+    end)
+end
+
+for _, entry in ipairs(FORWARDS) do
+    forward(entry[1], entry[2])
 end
 
 CreateThread(function()

@@ -1,9 +1,10 @@
 # nakara_rongroi
 
-The Rongroi Server Kit. Lane 2b so far: envelope crypto, tickets, the HTTP handler, storage and retention.
-**There is no UI, no staff panel and no gate yet**, and `api(1)` has only `openCase`. See
+The Rongroi Server Kit. Lane 2b so far: envelope crypto, tickets, the HTTP handler, storage, retention, and
+the staff/settings panel wiring. **The NUI screens are placeholders and the gate has no behaviour yet.** See
 [ADR 0001](../../docs/adr/0001-rongroi-server-kit.md) for the layout. The protocol is aeterna-rongroi ADR 0089,
-sections 4 and 5.
+sections 4 and 5. `api(1)` has `openCase`, `getCase`, `listCases`, `deleteCase`, `deletePlayerData` and
+`getPairingCode`.
 
 ## Envelope v1
 
@@ -71,12 +72,32 @@ A sweep at start and every hour removes cases older than the setting in KVP `ron
 1 to 365 days, default 30. A case's age counts from its report, or from when it was opened if none arrived. The
 sweep removes one case every 250 ms.
 
+## Commands, net events and API
+
+`/rongroi` opens the staff panel for a holder of the `nakara_rongroi.staff` ACE and asks for the player's own
+pairing code otherwise. The checks, the panel logic and its per-kind rate limits live in
+`server/js/panel.js`; `server/js/main.js` wires it up and adds a coarse per-source guard.
+
+Client to server net events (ADR 0001 section 10):
+
+- `nakara_rongroi:requestCode` — the player's own open case.
+- `nakara_rongroi:panel:open`, `nakara_rongroi:panel:case`, `nakara_rongroi:panel:openCase` — staff.
+- `nakara_rongroi:settings:save`, `nakara_rongroi:exception:set` — staff.
+- `nakara_rongroi:case:delete`, `nakara_rongroi:player:delete` — staff.
+
+Server to client events: `nakara_rongroi:showCode`, `nakara_rongroi:panel:data` and
+`nakara_rongroi:settings:data`, sent only to the player or staff member the handler checked.
+
+`api(1)` adds `getCase`, `listCases`, `deleteCase`, `deletePlayerData` and `getPairingCode`. It never returns the
+private key or an envelope.
+
 ## Capabilities
 
 From [`oss.json`](oss.json): SetHttpHandler paths `policy/*`, `report` and `report/chunk`; the convar read
-`gamename`; file writes in `cache/rongroi-reports/*`. No outgoing HTTP, no commands, no net events, no NUI, no
-database. `.fivem-devkit.json` carries a scanner exception for `server/js/filestore.js`, whose file names are
-built at runtime and checked before use (ADR 0001 section 4).
+`gamename`; file writes in `cache/rongroi-reports/*`; the `rongroi` command the resource registers; the server
+and client net events above; and NUI. No outgoing HTTP, no `ExecuteCommand`, no database. The root
+`.fivem-devkit.json` carries a scanner exception for `server/js/filestore.js`, whose file names are built at
+runtime and checked before use (ADR 0001 section 4).
 
 ## Tests
 
