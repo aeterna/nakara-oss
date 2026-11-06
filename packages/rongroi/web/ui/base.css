@@ -1,0 +1,86 @@
+/* nakara_rongroi — Rongroi Server Kit
+   SPDX-License-Identifier: MIT */
+:root {
+    --bg: #0f1520f2;
+    --surface: #161d2a;
+    --raised: #1d2636;
+    --line: #d6e4f514;
+    --line-strong: #d6e4f529;
+    --text: #e8eef7;
+    --text-2: #a9b6c9;
+    --text-3: #7d8aa0;
+    --accent: #4aa3e8;
+    --accent-ink: #0b1622;
+    --found: #f0a35a;
+    --not-found: #8a93a3;
+    --unmeasured: #8b97f0;
+    --danger: #f07a6e;
+    --sans: "Leelawadee UI", "Segoe UI", system-ui, sans-serif;
+    --mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+    --r-control: 8px;
+    --r-card: 14px;
+    --r-panel: 18px;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: transparent; }
+body { color: var(--text); font-family: var(--sans); font-size: 14px; font-weight: 400; }
+[hidden] { display: none !important; }
+
+.app { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: var(--bg); }
+.panel {
+    width: min(560px, 100%);
+    max-height: calc(100vh - 48px);
+    overflow: auto;
+    padding: 28px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-panel);
+}
+h1 { margin: 0 0 8px; font-size: 20px; font-weight: 500; line-height: 1.4; }
+p { margin: 0; }
+.hint { color: var(--text-2); line-height: 1.5; }
+
+.code {
+    margin: 20px 0;
+    padding: 20px;
+    background: var(--raised);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r-card);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: 0.02em;
+    overflow-wrap: anywhere;
+    text-align: center;
+}
+.code:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.code.is-expired { color: var(--text-3); }
+.expiry { color: var(--text-2); font-size: 14px; font-variant-numeric: tabular-nums; }
+.expiry.is-expired { color: var(--text-3); }
+.actions { margin-top: 16px; }
+button { font: inherit; }
+
+.copy {
+    padding: 8px 20px;
+    background: var(--accent);
+    border: 1px solid transparent;
+    border-radius: var(--r-control);
+    color: var(--accent-ink);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+}
+.copy:hover { opacity: 0.9; }
+.copy:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.copy:disabled { cursor: default; opacity: 0.5; }
+
+.notice { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--text-3); font-size: 12px; line-height: 1.5; }
+.empty { color: var(--text-3); font-size: 14px; line-height: 1.5; }
+@media (max-width: 520px) {
+    .app { padding: 16px; }
+    .panel { padding: 20px; }
+    .code { padding: 16px; }
+}
