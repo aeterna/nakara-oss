@@ -22,11 +22,14 @@ function loadModule(relative, rootRelative) {
 const { caseList, caseView } = loadModule(
     () => require('./caseview.js'), () => require('./server/js/caseview.js'),
 );
-const { buildPolicy, canOpenCase } = loadModule(
+const { createSettings, buildPolicy, canOpenCase } = loadModule(
     () => require('./settings.js'), () => require('./server/js/settings.js'),
 );
 const { pairingCode, policyHash } = loadModule(
     () => require('./pairing.js'), () => require('./server/js/pairing.js'),
+);
+const envelope = loadModule(
+    () => require('./envelope.js'), () => require('./server/js/envelope.js'),
 );
 
 const STAFF_LIMIT = 20;
@@ -35,6 +38,7 @@ const RATE_WINDOW_MS = 10000;
 const CASE_ID_BYTES = 16;
 const CASE_ID_RE = /^[0-9a-f]{32}$/;
 const PANEL_DATA = 'nakara_rongroi:panel:data';
+const SETTINGS_DATA = 'nakara_rongroi:settings:data';
 const SHOW_CODE = 'nakara_rongroi:showCode';
 
 function isObject(value) {
@@ -160,11 +164,74 @@ function createPanel(deps) {
         throw new Error('could not allocate a case id');
     }
 
+    // A kit adapter may rotate itself. The injected pair is otherwise rotated in memory, which is what the
+    // pure specs exercise; main.js supplies an adapter that also persists the new pair.
+    function rotateKit() {
+        const rotate = [kit.rotate, kit.rotateKey, deps.rotateKit, deps.rotateKey, deps.rotateKitKey]
+            .find((fn) => typeof fn === 'function');
+        const pair = typeof rotate === 'function' ? rotate.call(kit) : envelope.generateKeyPair();
+        if (isObject(pair) && nonEmptyString(pair.publicKey)) {
+            kit.publicKey = pair.publicKey;
+            if (nonEmptyString(pair.privateKey)) kit.privateKey = pair.privateKey;
+        }
+        return nonEmptyString(kit.publicKey);
+    }
+
+    // Validate the whole patch against a throw-away settings instance before touching the real one, so a
+    // bad value cannot leave the earlier members of the same patch applied.
+    function checkSettingsPatch(patch) {
+        if (!isObject(patch)) return { ok: false, reason: 'invalid_settings' };
+        const probe = createSettings({ get: () => undefined, set: () => {} });
+        for (const [name, value] of Object.entries(patch)) {
+            const result = probe.set(name, value);
+            if (!isObject(result) || result.ok !== true) {
+                return {
+                    ok: false,
+                    reason: isObject(result) && nonEmptyString(result.reason)
+                        ? result.reason
+                        : 'invalid_settings',
+                };
+            }
+        }
+        return { ok: true };
+    }
+
+    function forgetTicket(ticket) {
+        if (!nonEmptyString(ticket) || typeof store.forget !== 'function') return false;
+        try { return store.forget(ticket) === true; } catch { return false; }
+    }
+
+    // Delete one case and forget its ticket, the pair main.js's retention pass needs later.
+    function deleteCaseAndForget(caseId) {
+        const ticket = storage.deleteCase(caseId);
+        if (nonEmptyString(ticket)) forgetTicket(ticket);
+        return ticket;
+    }
+
+    function dropPlayerCases(match) {
+        for (const [key, entry] of playerCases) {
+            if (isObject(entry) && match(entry)) playerCases.delete(key);
+        }
+    }
+
+    // Key rotation invalidates open tickets only: consumed and expired tickets keep their state.
+    function forgetOpenTickets() {
+        const forgotten = new Set();
+        const tickets = store.tickets;
+        if (!(tickets instanceof Map)) return forgotten;
+        for (const [ticket, record] of tickets) {
+            if (!isObject(record) || (record.state !== 'issued' && record.state !== 'uploading')) continue;
+            if (forgetTicket(ticket)) forgotten.add(ticket);
+        }
+        return forgotten;
+    }
+
     function liveCaseFor(src) {
-        const entry = playerCases.get(src);
+        const key = String(src);
+        const entry = playerCases.get(key);
         if (!entry) return null;
         if (now() >= entry.expiresAt) {
-            playerCases.delete(src);
+            playerCases.delete(key);
             return null;
         }
         return entry;
@@ -242,7 +309,6 @@ function createPanel(deps) {
             openedBy: `staff:${String(src)}`,
             openedAt: issued.issuedAt,
             identifier: player.identifier,
-            address: player.endpoint,
             connectAddress: player.endpoint,
             policy,
             expiresAt: issued.expiresAt,
@@ -258,7 +324,7 @@ function createPanel(deps) {
         }
         let code = null;
         try { code = makePairingCode(values.publicOrigin, issued, policy); } catch { code = null; }
-        playerCases.set(target, {
+        playerCases.set(String(target), {
             caseId,
             ticket: issued.ticket,
             nonce: issued.nonce,
@@ -275,8 +341,101 @@ function createPanel(deps) {
         });
         return true;
     }
-    // Slice 5b adds saveSettings, deleteCase, deletePlayer and rotateKey here.
-    return { requestCode, panelOpen, panelCase, panelOpenCase };
+    function saveSettings(src, patch) {
+        if (!isStaff(src) || !rateLimit('staff', src, STAFF_LIMIT)) return false;
+        const checked = checkSettingsPatch(patch);
+        if (checked.ok !== true) {
+            refuse(src, checked.reason);
+            return false;
+        }
+        for (const [name, value] of Object.entries(patch)) {
+            const result = settings.set(name, value);
+            if (!isObject(result) || result.ok !== true) {
+                refuse(src, isObject(result) && nonEmptyString(result.reason)
+                    ? result.reason
+                    : 'invalid_settings');
+                return false;
+            }
+        }
+        let values;
+        try { values = settings.get(); } catch {
+            refuse(src, 'settings_unavailable');
+            return false;
+        }
+        send(src, SETTINGS_DATA, values);
+        return true;
+    }
+
+    function deleteCase(src, caseId) {
+        if (!isStaff(src) || !rateLimit('staff', src, STAFF_LIMIT)) return false;
+        if (!nonEmptyString(caseId)) {
+            refuse(src, 'invalid_case_id');
+            return false;
+        }
+        let ticket;
+        try { ticket = deleteCaseAndForget(caseId); } catch {
+            refuse(src, 'delete_failed');
+            return false;
+        }
+        if (!nonEmptyString(ticket)) {
+            refuse(src, 'case_not_found');
+            return false;
+        }
+        dropPlayerCases((entry) => entry.caseId === caseId);
+        send(src, PANEL_DATA, { screen: 'list', cases: listRows() });
+        return true;
+    }
+
+    function deletePlayer(src, identifier) {
+        if (!isStaff(src) || !rateLimit('staff', src, STAFF_LIMIT)) return false;
+        if (!nonEmptyString(identifier)) {
+            refuse(src, 'invalid_identifier');
+            return false;
+        }
+        if (typeof storage.deletePlayerData !== 'function') {
+            refuse(src, 'delete_failed');
+            return false;
+        }
+        let tickets;
+        try { tickets = storage.deletePlayerData(identifier); } catch {
+            refuse(src, 'delete_failed');
+            return false;
+        }
+        const deleted = Array.isArray(tickets) ? tickets.filter(nonEmptyString) : [];
+        for (const ticket of deleted) forgetTicket(ticket);
+        const removed = new Set(deleted);
+        dropPlayerCases((entry) => removed.has(entry.ticket));
+        send(src, PANEL_DATA, { screen: 'list', cases: listRows() });
+        return true;
+    }
+
+    function rotateKey(src) {
+        if (!isStaff(src) || !rateLimit('staff', src, STAFF_LIMIT)) return false;
+        let rotated = false;
+        try { rotated = rotateKit(); } catch { rotated = false; }
+        if (!rotated) {
+            refuse(src, 'key_rotation_failed');
+            return false;
+        }
+        const forgotten = forgetOpenTickets();
+        dropPlayerCases((entry) => forgotten.has(entry.ticket));
+        let values;
+        try { values = settings.get(); } catch { values = {}; }
+        send(src, SETTINGS_DATA, values);
+        return true;
+    }
+
+    return {
+        requestCode,
+        panelOpen,
+        panelCase,
+        panelOpenCase,
+        saveSettings,
+        deleteCase,
+        deletePlayer,
+        rotateKey,
+        deleteCaseAndForget,
+    };
 }
 
 // Loaded directly as a server_script FXServer provides no CommonJS `module`; the specs still get the export.
