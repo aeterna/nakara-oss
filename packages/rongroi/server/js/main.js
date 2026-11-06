@@ -59,6 +59,7 @@
     const STAFF_ACE = 'nakara_rongroi.staff';
     const NET_WINDOW_MS = 10000;
     const NET_LIMIT = 60;
+    const NET_WINDOW_MAX = 256;
 
     function log(...parts) {
         console.log(`nakara_rongroi: ${parts.join(' ')}`);
@@ -91,6 +92,12 @@
     function asIdentifier(payload) {
         if (typeof payload === 'string') return payload;
         const value = field(payload, ['identifier', 'playerIdentifier']);
+        return typeof value === 'string' ? value : undefined;
+    }
+
+    function asScreen(payload) {
+        if (typeof payload === 'string') return payload;
+        const value = field(payload, ['screen']);
         return typeof value === 'string' ? value : undefined;
     }
 
@@ -244,10 +251,8 @@
 
         function deletePlayerData(identifier) {
             if (typeof identifier !== 'string' || identifier.length === 0) return 0;
-            const tickets = storage.deletePlayerData(identifier);
-            const deleted = Array.isArray(tickets) ? tickets : [];
-            for (const ticket of deleted) store.forget(ticket);
-            return deleted.length;
+            const deleted = panel.deletePlayerDataAndForget(identifier);
+            return Array.isArray(deleted) ? deleted.length : 0;
         }
 
         function getPairingCode(caseId) {
@@ -283,6 +288,12 @@
         // A fixed 10 s guard per source in front of the panel's own per-kind limits. Every handler below
         // still checks the ACE, or the player's own open case, inside panel.js.
         const netWindows = new Map();
+        function pruneNetWindows(at) {
+            if (netWindows.size <= NET_WINDOW_MAX) return;
+            for (const [key, window] of netWindows) {
+                if (!isObject(window) || at >= window.end) netWindows.delete(key);
+            }
+        }
         function rateLimit(src) {
             const key = String(src);
             const at = Date.now();
@@ -292,6 +303,7 @@
                 netWindows.set(key, window);
             }
             window.count += 1;
+            pruneNetWindows(at);
             return window.count <= NET_LIMIT;
         }
 
@@ -320,6 +332,16 @@
             if (!rateLimit(src)) return;
             panel.saveSettings(src, asSettingsPatch(payload));
         });
+        onNet('nakara_rongroi:settings:open', (payload) => {
+            const src = source;
+            if (!rateLimit(src)) return;
+            panel.settingsOpen(src, asScreen(payload));
+        });
+        onNet('nakara_rongroi:settings:rotateKey', () => {
+            const src = source;
+            if (!rateLimit(src)) return;
+            panel.rotateKey(src);
+        });
         onNet('nakara_rongroi:case:delete', (payload) => {
             const src = source;
             if (!rateLimit(src)) return;
@@ -329,6 +351,11 @@
             const src = source;
             if (!rateLimit(src)) return;
             panel.deletePlayer(src, asIdentifier(payload));
+        });
+
+        on('playerDropped', () => {
+            const src = source;
+            panel.playerDropped(src);
         });
 
         RegisterCommand('rongroi', (src) => {

@@ -3,15 +3,17 @@
 // Staff panel controller: caller checks, per-source limits, case ids and only-safe payloads.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createPanel } = require('../server/js/panel.js');
+const { createPanel, pruneRateWindows } = require('../server/js/panel.js');
 const { createSettings } = require('../server/js/settings.js');
 const { createStorage } = require('../server/js/storage.js');
 const { TicketStore } = require('../server/js/tickets.js');
+const { policyHash } = require('../server/js/pairing.js');
 const envelope = require('../server/js/envelope.js');
 const kit = require('../test-vectors/envelope-v1.json').kit;
 
 const STAFF = 1;
 const PLAYER = 42;
+const ALT_PLAYER = 43;
 const ORIGIN = 'http://192.0.2.10:30120';
 
 function memoryBackend() {
@@ -40,6 +42,8 @@ function makeHarness({ publicOrigin = ORIGIN, serverName = 'Example City' } = {}
     storage.load();
     const players = new Map([[PLAYER, {
         name: 'Player One', identifier: 'license:player', endpoint: '203.0.113.55',
+    }], [ALT_PLAYER, {
+        name: 'Player One Alt', identifier: 'license:player', endpoint: '203.0.113.56',
     }]]);
     const staff = new Set([STAFF]);
     const sent = [];
@@ -89,6 +93,7 @@ test('a non-staff source gets nothing from any entry point', () => {
     assert.equal(h.panel.panelOpenCase(2, PLAYER), false);
     assert.equal(h.panel.requestCode(2), false);
     assert.equal(h.panel.saveSettings(2, { serverName: 'Other City' }), false);
+    assert.equal(h.panel.settingsOpen(2, 'settings'), false);
     assert.equal(h.panel.deleteCase(2, 'case-a'), false);
     assert.equal(h.panel.deletePlayer(2, 'license:player'), false);
     assert.equal(h.panel.rotateKey(2), false);
@@ -148,6 +153,21 @@ test('panelOpenCase makes a 16-byte hex case, stores target facts and replies on
     assert.equal(h.panel.requestCode(STAFF), false);
 });
 
+test('panelOpenCase forgets a live earlier ticket for the same target', () => {
+    const h = makeHarness();
+    assert.equal(h.panel.panelOpenCase(STAFF, PLAYER), true);
+    const first = h.storage.entries()[0];
+    assert.equal(h.store.stateOf(first.ticket), 'issued');
+    assert.equal(h.panel.panelOpenCase(STAFF, PLAYER), true);
+    const second = h.storage.entries()[1];
+    assert.notEqual(second.ticket, first.ticket);
+    assert.equal(h.store.stateOf(first.ticket), 'unknown');
+    assert.equal(h.store.stateOf(second.ticket), 'issued');
+    h.sent.length = 0;
+    assert.equal(h.panel.requestCode(PLAYER), true);
+    assert.match(h.sent[0].payload.code, /^rr1\./);
+});
+
 test('panel payloads never carry the private key, the envelope or a stored record body', () => {
     const h = makeHarness();
     h.panel.panelOpenCase(STAFF, PLAYER);
@@ -159,6 +179,7 @@ test('panel payloads never carry the private key, the envelope or a stored recor
     });
     h.sent.length = 0;
     assert.equal(h.panel.panelOpen(STAFF), true);
+    assert.equal(h.sent[0].payload.screen, 'cases');
     assert.equal(h.panel.panelCase(STAFF, entry.caseId), true);
     assert.deepEqual(Object.keys(h.sent[0].payload.cases[0]).sort(),
         ['caseId', 'openedAt', 'openedBy', 'origin', 'receivedAt', 'state']);
@@ -217,14 +238,28 @@ test('playerCases normalises a source to String on set and get', () => {
     assert.equal(stringOpen.sent[0].src, PLAYER);
 });
 
+test('playerDropped removes the open pairing so a reused source gets no old code', () => {
+    const h = makeHarness();
+    assert.equal(h.panel.panelOpenCase(STAFF, PLAYER), true);
+    h.sent.length = 0;
+    assert.equal(h.panel.playerDropped(String(PLAYER)), true);
+    assert.equal(h.panel.requestCode(PLAYER), false);
+    assert.deepEqual(h.sent, []);
+    assert.equal(h.panel.playerDropped(PLAYER), false);
+});
+
 test('saveSettings applies a valid patch and refuses a bad one whole', () => {
     const h = makeHarness();
     assert.equal(h.panel.saveSettings(STAFF, { serverName: 'Other City', ttlMs: 60000 }), true);
     assert.equal(h.settings.get().serverName, 'Other City');
     assert.equal(h.settings.get().ttlMs, 60000);
-    assert.equal(h.sent.at(-1).event, 'nakara_rongroi:settings:data');
-    assert.equal(h.sent.at(-1).payload.serverName, 'Other City');
-    assert.equal(h.sent.at(-1).payload.ttlMs, 60000);
+    const saved = h.sent.at(-1);
+    assert.equal(saved.event, 'nakara_rongroi:settings:data');
+    assert.equal(saved.payload.screen, 'settings');
+    assert.equal(saved.payload.settings.serverName, 'Other City');
+    assert.equal(saved.payload.settings.ttlMs, 60000);
+    assert.equal(saved.payload.policy.server_name, 'Other City');
+    assert.equal(saved.payload.policyHash, policyHash(saved.payload.policy));
 
     const before = h.settings.get();
     assert.equal(h.panel.saveSettings(STAFF, { serverName: 'Half Applied', ttlMs: 1 }), false);
@@ -232,6 +267,37 @@ test('saveSettings applies a valid patch and refuses a bad one whole', () => {
     const after = h.settings.get();
     assert.equal(after.serverName, before.serverName);
     assert.equal(after.ttlMs, before.ttlMs);
+});
+
+test('settingsOpen sends the settings, policy and hash for either screen to staff only', () => {
+    const h = makeHarness();
+    assert.equal(h.panel.settingsOpen(2, 'settings'), false);
+    assert.deepEqual(h.sent, []);
+
+    assert.equal(h.panel.settingsOpen(STAFF, 'settings'), true);
+    const settingsMessage = h.sent.at(-1);
+    assert.equal(settingsMessage.src, STAFF);
+    assert.equal(settingsMessage.event, 'nakara_rongroi:settings:data');
+    assert.equal(settingsMessage.payload.screen, 'settings');
+    assert.equal(settingsMessage.payload.settings.serverName, 'Example City');
+    assert.equal(settingsMessage.payload.policy.profile, 'posture');
+    assert.equal(settingsMessage.payload.policy.server_name, 'Example City');
+    assert.equal(settingsMessage.payload.policyHash, policyHash(settingsMessage.payload.policy));
+
+    assert.equal(h.panel.settingsOpen(STAFF, 'policy'), true);
+    assert.equal(h.sent.at(-1).payload.screen, 'policy');
+    assert.equal(h.panel.settingsOpen(STAFF, 'cases'), false);
+    assert.deepEqual(h.sent.at(-1).payload, { screen: 'error', reason: 'invalid_screen' });
+});
+
+test('saveSettings replies with the policy screen when the patch carried a policy', () => {
+    const h = makeHarness();
+    assert.equal(h.panel.saveSettings(STAFF, { policy: { profile: 'standard' } }), true);
+    const saved = h.sent.at(-1).payload;
+    assert.equal(saved.screen, 'policy');
+    assert.equal(saved.settings.policy.profile, 'standard');
+    assert.equal(saved.policy.profile, 'standard');
+    assert.equal(saved.policyHash, policyHash(saved.policy));
 });
 
 test('deleteCase removes the case, forgets its ticket and drops the player code', () => {
@@ -244,7 +310,7 @@ test('deleteCase removes the case, forgets its ticket and drops the player code'
     assert.equal(h.storage.getCase(entry.caseId), null);
     assert.equal(h.store.stateOf(entry.ticket), 'unknown');
     assert.equal(h.sent.at(-1).event, 'nakara_rongroi:panel:data');
-    assert.equal(h.sent.at(-1).payload.screen, 'list');
+    assert.equal(h.sent.at(-1).payload.screen, 'cases');
     assert.deepEqual(h.sent.at(-1).payload.cases, []);
     h.sent.length = 0;
     assert.equal(h.panel.requestCode(PLAYER), false);
@@ -256,7 +322,7 @@ test('deleteCase removes the case, forgets its ticket and drops the player code'
 test('deletePlayer removes every case of the identifier and forgets each ticket', () => {
     const h = makeHarness();
     assert.equal(h.panel.panelOpenCase(STAFF, PLAYER), true);
-    assert.equal(h.panel.panelOpenCase(STAFF, PLAYER), true);
+    assert.equal(h.panel.panelOpenCase(STAFF, ALT_PLAYER), true);
     const tickets = h.storage.entries().map((entry) => entry.ticket);
     assert.equal(tickets.length, 2);
     for (const ticket of tickets) assert.notEqual(h.store.stateOf(ticket), 'unknown');
@@ -264,8 +330,21 @@ test('deletePlayer removes every case of the identifier and forgets each ticket'
     assert.equal(h.panel.deletePlayer(STAFF, 'license:player'), true);
     assert.deepEqual(h.storage.entries(), []);
     for (const ticket of tickets) assert.equal(h.store.stateOf(ticket), 'unknown');
-    assert.equal(h.sent.at(-1).payload.screen, 'list');
+    assert.equal(h.sent.at(-1).payload.screen, 'cases');
     h.sent.length = 0;
+    assert.equal(h.panel.requestCode(PLAYER), false);
+    assert.equal(h.panel.requestCode(ALT_PLAYER), false);
+    assert.deepEqual(h.sent, []);
+});
+
+test('deletePlayerDataAndForget drops the identifier cases, tickets and player code', () => {
+    const h = makeHarness();
+    assert.equal(h.panel.panelOpenCase(STAFF, PLAYER), true);
+    const entry = h.storage.entries()[0];
+    h.sent.length = 0;
+    assert.deepEqual(h.panel.deletePlayerDataAndForget('license:player'), [entry.ticket]);
+    assert.deepEqual(h.storage.entries(), []);
+    assert.equal(h.store.stateOf(entry.ticket), 'unknown');
     assert.equal(h.panel.requestCode(PLAYER), false);
     assert.deepEqual(h.sent, []);
 });
@@ -277,6 +356,9 @@ test('deleteCaseAndForget is the retention pass helper', () => {
     assert.equal(h.panel.deleteCaseAndForget(entry.caseId), entry.ticket);
     assert.equal(h.storage.getCase(entry.caseId), null);
     assert.equal(h.store.stateOf(entry.ticket), 'unknown');
+    h.sent.length = 0;
+    assert.equal(h.panel.requestCode(PLAYER), false);
+    assert.deepEqual(h.sent, []);
     assert.equal(h.panel.deleteCaseAndForget(entry.caseId), false);
 });
 
@@ -307,8 +389,30 @@ test('rotateKey calls rotateKitKey once and invalidates issued and uploading tic
     assert.equal(h.store.stateOf(uploading.ticket), 'unknown');
     assert.equal(h.store.stateOf(expired.ticket), 'expired');
     assert.equal(h.store.stateOf(consumed.ticket), 'consumed');
-    assert.equal(h.sent.at(-1).event, 'nakara_rongroi:settings:data');
+    const rotated = h.sent.at(-1);
+    assert.equal(rotated.event, 'nakara_rongroi:settings:data');
+    assert.equal(rotated.payload.screen, 'settings');
+    assert.equal(rotated.payload.settings.serverName, 'Example City');
+    assert.equal(rotated.payload.policyHash, policyHash(rotated.payload.policy));
     h.sent.length = 0;
     assert.equal(h.panel.requestCode(PLAYER), false);
     assert.deepEqual(h.sent, []);
+});
+
+test('rate limit windows prune ended entries only above 256 entries', () => {
+    const windows = new Map();
+    for (let i = 0; i < 256; i += 1) windows.set(`staff:${i}`, { end: 2000, count: 1 });
+    windows.set('staff:ended', { end: 999, count: 1 });
+    assert.equal(windows.size, 257);
+    pruneRateWindows(windows, 1000);
+    assert.equal(windows.has('staff:ended'), false);
+    assert.equal(windows.has('staff:1'), true);
+    assert.equal(windows.size, 256);
+
+    windows.delete('staff:0');
+    windows.set('staff:ended-again', { end: 999, count: 1 });
+    assert.equal(windows.size, 256);
+    pruneRateWindows(windows, 1000);
+    assert.equal(windows.has('staff:ended-again'), true);
+    assert.equal(windows.size, 256);
 });

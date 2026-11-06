@@ -37,6 +37,7 @@ const CASE_ID_RE = /^[0-9a-f]{32}$/;
 const PANEL_DATA = 'nakara_rongroi:panel:data';
 const SETTINGS_DATA = 'nakara_rongroi:settings:data';
 const SHOW_CODE = 'nakara_rongroi:showCode';
+const RATE_WINDOW_MAX = 256;
 
 function isObject(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -48,6 +49,14 @@ function nonEmptyString(value) {
 
 function validSource(src) {
     return (typeof src === 'number' && Number.isInteger(src) && src > 0) || nonEmptyString(src);
+}
+
+// Keep a long-lived server from holding every ended per-source window. Only scan once the map is large.
+function pruneRateWindows(windows, at) {
+    if (!(windows instanceof Map) || windows.size <= RATE_WINDOW_MAX) return;
+    for (const [key, window] of windows) {
+        if (!isObject(window) || at >= window.end) windows.delete(key);
+    }
 }
 
 function createPanel(deps) {
@@ -87,6 +96,7 @@ function createPanel(deps) {
             windows.set(key, window);
         }
         window.count += 1;
+        pruneRateWindows(windows, at);
         return window.count <= limit;
     }
 
@@ -198,17 +208,31 @@ function createPanel(deps) {
         try { return store.forget(ticket) === true; } catch { return false; }
     }
 
-    // Delete one case and forget its ticket, the pair main.js's retention pass needs later.
-    function deleteCaseAndForget(caseId) {
-        const ticket = storage.deleteCase(caseId);
-        if (nonEmptyString(ticket)) forgetTicket(ticket);
-        return ticket;
-    }
-
     function dropPlayerCases(match) {
         for (const [key, entry] of playerCases) {
             if (isObject(entry) && match(entry)) playerCases.delete(key);
         }
+    }
+
+    // Delete one case, forget its ticket and drop the player's pairing entry. main.js's retention pass
+    // and exported deleteCase both go through this one path.
+    function deleteCaseAndForget(caseId) {
+        const ticket = storage.deleteCase(caseId);
+        dropPlayerCases((entry) => entry.caseId === caseId);
+        if (nonEmptyString(ticket)) forgetTicket(ticket);
+        return ticket;
+    }
+
+    // Delete every case of one identifier, forget each ticket and drop the matching pairing entries.
+    // main.js's exported deletePlayerData and the staff panel share this path.
+    function deletePlayerDataAndForget(identifier) {
+        if (!nonEmptyString(identifier) || typeof storage.deletePlayerData !== 'function') return null;
+        const tickets = storage.deletePlayerData(identifier);
+        const deleted = Array.isArray(tickets) ? tickets.filter(nonEmptyString) : [];
+        for (const ticket of deleted) forgetTicket(ticket);
+        const removed = new Set(deleted);
+        dropPlayerCases((entry) => removed.has(entry.ticket));
+        return deleted;
     }
 
     // Key rotation invalidates open tickets only: consumed and expired tickets keep their state.
@@ -232,6 +256,13 @@ function createPanel(deps) {
         }
         return entry;
     }
+    // A server id can be reused after a disconnect; drop the pairing so the next player cannot request it.
+    function playerDropped(src) {
+        const key = String(src);
+        if (!playerCases.has(key)) return false;
+        playerCases.delete(key);
+        return true;
+    }
     function requestCode(src) {
         const entry = liveCaseFor(src);
         if (!entry || !rateLimit('code', src, CODE_LIMIT)) return false;
@@ -246,8 +277,38 @@ function createPanel(deps) {
     }
     function panelOpen(src) {
         if (!isStaff(src) || !rateLimit('staff', src, STAFF_LIMIT)) return false;
-        send(src, PANEL_DATA, { screen: 'list', cases: listRows() });
+        send(src, PANEL_DATA, { screen: 'cases', cases: listRows() });
         return true;
+    }
+
+    // One reply shape for the settings and policy screens: the stored values, the ticket policy and its hash.
+    function replySettings(src, screen) {
+        let values;
+        let policy;
+        try {
+            values = settings.get();
+            policy = buildPolicy(values);
+        } catch {
+            refuse(src, 'settings_unavailable');
+            return false;
+        }
+        send(src, SETTINGS_DATA, {
+            screen,
+            settings: values,
+            policy,
+            policyHash: policyHash(policy),
+        });
+        return true;
+    }
+
+    function settingsOpen(src, screen) {
+        if (!isStaff(src) || !rateLimit('staff', src, STAFF_LIMIT)) return false;
+        const wanted = screen === undefined ? 'settings' : screen;
+        if (wanted !== 'settings' && wanted !== 'policy') {
+            refuse(src, 'invalid_screen');
+            return false;
+        }
+        return replySettings(src, wanted);
     }
 
     function panelCase(src, caseId) {
@@ -318,6 +379,8 @@ function createPanel(deps) {
             refuse(src, 'case_not_opened');
             return false;
         }
+        const previous = liveCaseFor(target);
+        if (previous) forgetTicket(previous.ticket);
         let code = null;
         try { code = makePairingCode(values.publicOrigin, issued, policy); } catch { code = null; }
         playerCases.set(String(target), {
@@ -353,13 +416,8 @@ function createPanel(deps) {
                 return false;
             }
         }
-        let values;
-        try { values = settings.get(); } catch {
-            refuse(src, 'settings_unavailable');
-            return false;
-        }
-        send(src, SETTINGS_DATA, values);
-        return true;
+        const screen = Object.prototype.hasOwnProperty.call(patch, 'policy') ? 'policy' : 'settings';
+        return replySettings(src, screen);
     }
 
     function deleteCase(src, caseId) {
@@ -377,8 +435,7 @@ function createPanel(deps) {
             refuse(src, 'case_not_found');
             return false;
         }
-        dropPlayerCases((entry) => entry.caseId === caseId);
-        send(src, PANEL_DATA, { screen: 'list', cases: listRows() });
+        send(src, PANEL_DATA, { screen: 'cases', cases: listRows() });
         return true;
     }
 
@@ -388,20 +445,16 @@ function createPanel(deps) {
             refuse(src, 'invalid_identifier');
             return false;
         }
-        if (typeof storage.deletePlayerData !== 'function') {
+        let deleted;
+        try { deleted = deletePlayerDataAndForget(identifier); } catch {
             refuse(src, 'delete_failed');
             return false;
         }
-        let tickets;
-        try { tickets = storage.deletePlayerData(identifier); } catch {
+        if (!Array.isArray(deleted)) {
             refuse(src, 'delete_failed');
             return false;
         }
-        const deleted = Array.isArray(tickets) ? tickets.filter(nonEmptyString) : [];
-        for (const ticket of deleted) forgetTicket(ticket);
-        const removed = new Set(deleted);
-        dropPlayerCases((entry) => removed.has(entry.ticket));
-        send(src, PANEL_DATA, { screen: 'list', cases: listRows() });
+        send(src, PANEL_DATA, { screen: 'cases', cases: listRows() });
         return true;
     }
 
@@ -415,26 +468,26 @@ function createPanel(deps) {
         }
         const forgotten = forgetOpenTickets();
         dropPlayerCases((entry) => forgotten.has(entry.ticket));
-        let values;
-        try { values = settings.get(); } catch { values = {}; }
-        send(src, SETTINGS_DATA, values);
-        return true;
+        return replySettings(src, 'settings');
     }
 
     return {
         requestCode,
+        playerDropped,
         panelOpen,
         panelCase,
         panelOpenCase,
+        settingsOpen,
         saveSettings,
         deleteCase,
         deletePlayer,
         rotateKey,
         deleteCaseAndForget,
+        deletePlayerDataAndForget,
     };
 }
 
 // Loaded directly as a server_script FXServer provides no CommonJS `module`; the specs still get the export.
 if (typeof module !== 'undefined') {
-    module.exports = { createPanel };
+    module.exports = { createPanel, pruneRateWindows };
 }
