@@ -3,13 +3,9 @@
 // Saved report records: shape caps and visual-hash facts.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const { checkRecordCaps, visualHash, visualHashFact } = require('../server/js/record.js');
 
-const vector = JSON.parse(
-    fs.readFileSync(path.join(__dirname, '..', 'test-vectors', 'visual-hash-v1.json'), 'utf8'),
-);
+const vector = require('../test-vectors/visual-hash-v1.json');
 
 function reverseKeys(value) {
     if (Array.isArray(value)) return value.map(reverseKeys);

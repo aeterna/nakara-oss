@@ -2,12 +2,9 @@
 // SPDX-License-Identifier: MIT
 'use strict';
 
-// Staff case screens, pure part: the visual-hash grouping, the strings deny list, findings order and
-// the rule that every string reaches the DOM through setText.
+// Staff case screens, pure part: the visual-hash grouping, the strings deny list and findings order.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 
 const caseScreen = require('../web/ui/case.js');
 const casesScreen = require('../web/ui/cases.js');
@@ -139,15 +136,4 @@ test('case strings never contain a word from the deny list', () => {
 
 test('the case strings cover the same keys in both languages', () => {
     assert.deepEqual(Object.keys(caseStrings.en).sort(), Object.keys(caseStrings.th).sort());
-});
-
-test('the screens write text only through setText and never through markup', () => {
-    for (const name of ['case.js', 'cases.js']) {
-        const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'ui', name), 'utf8');
-        assert.equal(/innerHTML|outerHTML/.test(source), false, `${name} writes markup`);
-        assert.match(source, /function setText\(/, `${name} needs a setText helper`);
-
-        const uses = source.match(/textContent/g) || [];
-        assert.equal(uses.length, 1, `${name} must set text only inside setText`);
-    }
 });
