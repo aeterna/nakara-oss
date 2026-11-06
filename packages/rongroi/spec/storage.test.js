@@ -66,6 +66,68 @@ for (const [label, make] of [['file', fileEnv], ['kvp', kvpEnv]]) {
         assert.throws(() => storage.getReport('abc'), TypeError);
     });
 
+    test(`${label}: openCase keeps facts and saveReport stores the uploader address as given`, () => {
+        const env = make();
+        const storage = createStorage(env.backend);
+        open(storage, 'case-a', TICKET_A, 100, {
+            connectAddress: '198.51.100.7:30120',
+            openedBy: 'staff',
+            identifier: 'license:abc',
+        });
+        assert.deepEqual(storage.getCase('case-a'), {
+            caseId: 'case-a',
+            ticket: TICKET_A,
+            openedAt: 100,
+            connectAddress: '198.51.100.7:30120',
+            openedBy: 'staff',
+            identifier: 'license:abc',
+        });
+        storage.saveReport({
+            caseId: 'case-a',
+            ticket: TICKET_A,
+            reportSha256: SHA_A,
+            receivedAt: 200,
+            record: { value: 7 },
+            address: '[2001:db8::1]:4242',
+        });
+        assert.deepEqual(storage.getCase('case-a'), {
+            caseId: 'case-a',
+            ticket: TICKET_A,
+            openedAt: 100,
+            connectAddress: '198.51.100.7:30120',
+            openedBy: 'staff',
+            identifier: 'license:abc',
+            address: '[2001:db8::1]:4242',
+            address_edition_form: 'as_given',
+            state: 'received',
+            receivedAt: 200,
+        });
+    });
+
+    test(`${label}: casesByIdentifier and deletePlayerData remove every case of one identifier`, () => {
+        const env = make();
+        const storage = createStorage(env.backend);
+        const ticketC = '3'.repeat(32);
+        open(storage, 'case-a', TICKET_A, 100, { identifier: 'license:abc' });
+        open(storage, 'case-b', TICKET_B, 200, { identifier: 'license:def' });
+        open(storage, 'case-c', ticketC, 300, { identifier: 'license:abc' });
+        storage.saveReport({ caseId: 'case-a', ticket: TICKET_A, reportSha256: SHA_A, receivedAt: 150, record: { a: 1 } });
+        storage.saveReport({ caseId: 'case-c', ticket: ticketC, reportSha256: SHA_B, receivedAt: 350, record: { c: 1 } });
+        assert.deepEqual(storage.getReport(TICKET_A), { record: { a: 1 } });
+        assert.deepEqual(storage.casesByIdentifier('license:abc'), ['case-a', 'case-c']);
+        assert.deepEqual(storage.casesByIdentifier('license:missing'), []);
+        assert.throws(() => storage.casesByIdentifier(''), TypeError);
+        assert.throws(() => storage.deletePlayerData(7), TypeError);
+        assert.deepEqual(storage.deletePlayerData('license:abc'), [TICKET_A, ticketC]);
+        assert.deepEqual(storage.listCases({ page: 0 }).map((entry) => entry.caseId), ['case-b']);
+        assert.equal(storage.getCase('case-a'), null);
+        assert.equal(storage.getCase('case-c'), null);
+        assert.equal(storage.getReport(TICKET_A), null);
+        assert.equal(storage.getReport(ticketC), null);
+        assert.equal(storage.getCase('case-b').identifier, 'license:def');
+        assert.deepEqual(storage.deletePlayerData('license:abc'), []);
+    });
+
     test(`${label}: report, declined, delete and invalid names`, () => {
         const env = make();
         const storage = createStorage(env.backend);
@@ -82,7 +144,7 @@ for (const [label, make] of [['file', fileEnv], ['kvp', kvpEnv]]) {
         assert.equal(storage.getCase('case-b').state, 'declined');
         assert.throws(() => storage.saveReport({ caseId: 'missing', ticket: TICKET_A, reportSha256: SHA_A, receivedAt: 1 }));
 
-        assert.equal(storage.deleteCase('case-a'), true);
+        assert.equal(storage.deleteCase('case-a'), TICKET_A);
         assert.equal(storage.getCase('case-a'), null);
         assert.equal(storage.getReport(TICKET_A), null);
         assert.equal(storage.deleteCase('case-a'), false);
@@ -129,8 +191,24 @@ test('hasCase follows the index', () => {
     open(storage, 'case-a', TICKET_A);
     assert.equal(storage.hasCase('case-a'), true);
     assert.equal(storage.hasCase('case-b'), false);
-    assert.equal(storage.deleteCase('case-a'), true);
+    assert.equal(storage.deleteCase('case-a'), TICKET_A);
     assert.equal(storage.hasCase('case-a'), false);
+});
+
+test('deleteCase returns the ticket to forget, so a deleted case stops answering a repeat', () => {
+    const env = fileEnv();
+    const storage = createStorage(env.backend);
+    const tickets = new TicketStore({ now: () => 1000, randomBytes: (n) => Buffer.alloc(n, 7) });
+    const issued = tickets.issue({ caseId: 'case-a', policy: {} });
+    open(storage, 'case-a', issued.ticket, 100);
+    tickets.beginUpload(issued.ticket, SHA_A);
+    storage.saveReport({ caseId: 'case-a', ticket: issued.ticket, reportSha256: SHA_A, receivedAt: 200, record: {} });
+    tickets.consume(issued.ticket, SHA_A);
+    assert.deepEqual(tickets.beginUpload(issued.ticket, SHA_A), { ok: true, status: 200, repeat: true });
+    const ticket = storage.deleteCase('case-a');
+    assert.equal(ticket, issued.ticket);
+    assert.equal(tickets.forget(ticket), true);
+    assert.deepEqual(tickets.beginUpload(issued.ticket, SHA_A), { ok: false, status: 404 });
 });
 
 test('detectEdition follows gamename and passes the default', () => {

@@ -5,11 +5,28 @@
   "capabilities": {
     "http": [],
     "commands": [],
-    "registeredCommands": [],
+    "registeredCommands": ["rongroi"],
     "httpHandlers": ["policy/*", "report", "report/chunk"],
     "convars": { "read": ["gamename"], "write": [] },
-    "netEvents": { "server": [], "client": [] },
-    "nui": false,
+    "netEvents": {
+      "server": [
+        "nakara_rongroi:requestCode",
+        "nakara_rongroi:panel:open",
+        "nakara_rongroi:panel:case",
+        "nakara_rongroi:panel:openCase",
+        "nakara_rongroi:settings:save",
+        "nakara_rongroi:settings:open",
+        "nakara_rongroi:settings:rotateKey",
+        "nakara_rongroi:case:delete",
+        "nakara_rongroi:player:delete"
+      ],
+      "client": [
+        "nakara_rongroi:showCode",
+        "nakara_rongroi:panel:data",
+        "nakara_rongroi:settings:data"
+      ]
+    },
+    "nui": true,
     "db": { "tables": [], "ddl": false },
     "files": { "write": ["cache/rongroi-reports/*"] }
   }

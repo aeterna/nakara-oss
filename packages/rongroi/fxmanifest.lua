@@ -8,7 +8,17 @@ description 'Rongroi Server Kit (lane 2b, part 2): answers policy reads and repo
 version '0.0.0'
 repository 'https://github.com/aeterna/nakara-oss'
 
--- Server-only. main.js wires the HTTP handler and loads its modules with require().
+-- main.js wires the HTTP handler and the panel, and loads every other module with require().
+client_scripts {
+    'client/main.lua',
+}
+
+ui_page 'web/ui/index.html'
+
+files {
+    'web/ui/**',
+}
+
 server_scripts {
     'server/js/selftest.js',
     'server/js/main.js',

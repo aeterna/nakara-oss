@@ -37,11 +37,12 @@ function issue(harness, changes = {}) {
     return harness.store.issue({ caseId: 'case-1', policy: POLICY, ...changes });
 }
 
-function call(harness, method, path, headers, body) {
+function call(harness, method, path, headers, body, address) {
     const req = {
         method,
         path,
         headers: headers || {},
+        address,
         dataHandler: null,
         setDataHandler(cb) { this.dataHandler = cb; },
         deliver() {
@@ -68,14 +69,14 @@ function envelope(record, ticket) {
     return sealEnvelope(JSON.stringify(record), kit.publicKey, ticket);
 }
 
-function postReport(harness, ticket, body, extra = {}) {
+function postReport(harness, ticket, body, extra = {}, address) {
     const headers = {
         'x-rongroi-upload-id': ticket,
         'x-rongroi-report-sha256': sha(body),
         'content-length': String(Buffer.byteLength(body)),
         ...extra,
     };
-    return call(harness, 'POST', '/report', headers, body);
+    return call(harness, 'POST', '/report', headers, body, address);
 }
 
 test('GET policy returns the issued policy with its policy_hash', () => {
@@ -115,6 +116,34 @@ test('POST report accepts a sealed report and a declined answer with the case fa
     declined.req.deliver();
     assert.equal(declined.res.status, 200);
     assert.deepEqual(h.reports[1], { caseId: 'case-2', ticket: second.ticket, reportSha256: sha(declinedBody), receivedAt: 1000000, declined: true });
+});
+
+test('POST report passes the raw uploader address to onReport', () => {
+    const h = makeHarness();
+    const { ticket, nonce } = issue(h);
+    const body = envelope({ schema: 2, binding: { ticket, nonce } }, ticket);
+    const address = '[2001:db8::1]:4242';
+    const report = postReport(h, ticket, body, {}, address);
+    report.req.deliver();
+    assert.equal(report.res.status, 200);
+    assert.equal(h.reports.length, 1);
+    assert.equal(h.reports[0].address, address);
+});
+
+test('a record past the caps is 422 and leaves the ticket usable', () => {
+    const h = makeHarness();
+    const { ticket, nonce } = issue(h);
+    let nested = 'leaf';
+    for (let i = 0; i < 32; i += 1) nested = { nested };
+    const tooDeep = { schema: 2, binding: { ticket, nonce }, nested };
+    const rejected = postReport(h, ticket, envelope(tooDeep, ticket));
+    rejected.req.deliver();
+    assert.equal(rejected.res.status, 422);
+    assert.equal(h.store.stateOf(ticket), 'issued');
+    const accepted = postReport(h, ticket, envelope({ schema: 2, binding: { ticket, nonce } }, ticket));
+    accepted.req.deliver();
+    assert.equal(accepted.res.status, 200);
+    assert.equal(h.store.stateOf(ticket), 'consumed');
 });
 
 test('FXServer header casing is matched for direct and chunked reports', () => {

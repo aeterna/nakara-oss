@@ -123,6 +123,41 @@ test('cancel deletes an issued ticket only', () => {
     assert.equal(store.stateOf(consumed), 'consumed');
 });
 
+test('forget removes a consumed ticket and any open uploads', () => {
+    const { store } = makeStore();
+    const { ticket } = issue(store);
+    store.beginUpload(ticket, SHA_A);
+    store.consume(ticket, SHA_A);
+    assert.equal(store.forget(ticket), true);
+    assert.equal(store.stateOf(ticket), 'unknown');
+    assert.deepEqual(store.beginUpload(ticket, SHA_A), { ok: false, status: 404 });
+    assert.deepEqual(store.consume(ticket, SHA_A), { ok: false, status: 404 });
+    assert.equal(store.forget(ticket), false);
+
+    const uploading = issue(store, { caseId: 'case-2' }).ticket;
+    const { uploadId } = store.beginUpload(uploading, SHA_A);
+    assert.equal(store.forget(uploading), true);
+    assert.equal(store.isOpen(uploadId), false);
+    assert.equal(store.stateOf(uploading), 'unknown');
+});
+
+test('openTickets returns only issued and uploading tickets', () => {
+    const { store, advance } = makeStore();
+    const expired = issue(store, { caseId: 'case-expired' });
+    advance(TTL);
+    store.expireDue();
+    const issued = issue(store, { caseId: 'case-issued' });
+    const uploading = issue(store, { caseId: 'case-uploading' });
+    store.beginUpload(uploading.ticket, SHA_A);
+    const consumed = issue(store, { caseId: 'case-consumed' });
+    store.beginUpload(consumed.ticket, SHA_A);
+    store.consume(consumed.ticket, SHA_A);
+
+    assert.deepEqual(store.openTickets(), [issued.ticket, uploading.ticket]);
+    assert.equal(store.stateOf(expired.ticket), 'expired');
+    assert.equal(store.stateOf(consumed.ticket), 'consumed');
+});
+
 test('touch keeps a buffer alive and sweepIdle drops it after 60 s with no new slice', () => {
     const { store, advance } = makeStore();
     const { ticket } = issue(store);
