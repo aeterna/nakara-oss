@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: MIT
+# An example profile for your own server. Copy this folder, edit the values, and build with
+#   AETERNA_LAUNCHER_PROFILE=profiles/<your-folder>/server.toml cargo build --release -p launcher-ui
+# Every field: launcher/schema/server.schema.json. A profile is data only; it cannot run code.
+schema = 1
+
+[server]
+id = "example-rp"
+name = "Example RP"
+game = "fivem-legacy"
+connect = "play.example.com:30120"
+operator = "Example RP Team"
+contact_email = "team@example.com"
+
+[theme]
+template = "classic"
+accent = "#3f6fd1"
+
+[features]

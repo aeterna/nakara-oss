@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: MIT
+# The AETERNA Game build of the launcher (ADR 0002 decision 3). Data only: names, hosts, theme tokens, feature flags.
+# Shape: launcher/schema/server.schema.json. Fork this file (see ../example) to ship a launcher for your own server.
+schema = 1
+
+[server]
+id = "nakara"
+name = "Nakara City"
+game = "fivem-enhanced"
+# Placeholder until the owner sets the public join address.
+connect = "play.example.com:30120"
+operator = "AETERNA Game"
+# Placeholder until the owner sets the public contact address (Creator PLA §2.3).
+contact_email = "contact@example.com"
+feed = "https://nakara-city.com/api/launcher/v1"
+release_repo = "aeterna/nakara-oss"
+
+[theme]
+template = "dusk"
+accent = "#0c7a60"
+
+[features]
+rongroi_connect = true
