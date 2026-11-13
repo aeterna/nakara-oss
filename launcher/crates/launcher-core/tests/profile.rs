@@ -82,10 +82,7 @@ fn invalid_email_is_rejected() {
 
 #[test]
 fn unknown_field_is_rejected() {
-    let text = variant(
-        "id = \"nakara\"",
-        "id = \"nakara\"\nunknown_field = \"x\"",
-    );
+    let text = variant("id = \"nakara\"", "id = \"nakara\"\nunknown_field = \"x\"");
     assert!(matches!(rejected(&text), ProfileError::Toml(_)));
 }
 
