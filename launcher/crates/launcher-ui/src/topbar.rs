@@ -6,13 +6,7 @@ use crate::Message;
 use iced::widget::{button, column, container, row, Space};
 use iced::{Background, Border, Color, Element, Length};
 
-const NAV: [&str; 5] = [
-    "หน้าหลัก",
-    "ข่าว",
-    "เซิร์ฟเวอร์",
-    "ตรวจเครื่อง",
-    "บันทึกแพตช์",
-];
+const NAV: [&str; 5] = ["หน้าหลัก", "ข่าว", "เซิร์ฟเวอร์", "ตรวจเครื่อง", "บันทึกแพตช์"];
 
 pub fn view<'a>() -> Element<'a, Message> {
     let nav = container(

@@ -7,13 +7,7 @@ use crate::Message;
 use iced::widget::{button, column, container, row, Space};
 use iced::{Element, Length, Padding};
 
-const NAV: [&str; 5] = [
-    "หน้าหลัก",
-    "ข่าว",
-    "เซิร์ฟเวอร์",
-    "ตรวจเครื่อง",
-    "บันทึกแพตช์",
-];
+const NAV: [&str; 5] = ["หน้าหลัก", "ข่าว", "เซิร์ฟเวอร์", "ตรวจเครื่อง", "บันทึกแพตช์"];
 
 pub fn view<'a>() -> Element<'a, Message> {
     let nav = container(
@@ -29,16 +23,11 @@ pub fn view<'a>() -> Element<'a, Message> {
     .padding(4)
     .style(glass::glass(14.0));
 
-    row![
-        nav,
-        Space::new().width(Length::Fill),
-        account(),
-        settings(),
-    ]
-    .spacing(12)
-    .width(Length::Fill)
-    .align_y(iced::Center)
-    .into()
+    row![nav, Space::new().width(Length::Fill), account(), settings(),]
+        .spacing(12)
+        .width(Length::Fill)
+        .align_y(iced::Center)
+        .into()
 }
 
 fn nav_button<'a>(title: &'static str, active: bool) -> Element<'a, Message> {

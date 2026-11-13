@@ -18,14 +18,12 @@ pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
         })
         .style(theme::panel(theme::SURF, 16.0));
 
-    let board = container(board)
-        .width(Length::Fill)
-        .padding(Padding {
-            top: 8.0,
-            right: 0.0,
-            bottom: 0.0,
-            left: 0.0,
-        });
+    let board = container(board).width(Length::Fill).padding(Padding {
+        top: 8.0,
+        right: 0.0,
+        bottom: 0.0,
+        left: 0.0,
+    });
 
     column![board, footer(inst)]
         .spacing(12)
@@ -104,14 +102,9 @@ fn news_card<'a>(title: &str, date: &str) -> Element<'a, Message> {
         .height(120)
         .style(theme::panel(theme::HI, 12.0));
 
-    let info = container(
-        column![
-            label(title, 14.0, theme::T1),
-            label(date, 11.0, theme::T3),
-        ]
-        .spacing(4),
-    )
-    .padding([10, 12]);
+    let info =
+        container(column![label(title, 14.0, theme::T1), label(date, 11.0, theme::T3),].spacing(4))
+            .padding([10, 12]);
 
     container(column![image, info].width(Length::Fill))
         .width(Length::Fill)
@@ -142,14 +135,12 @@ fn patch<'a>(inst: &'a Instance) -> Element<'a, Message> {
         );
     } else {
         for &(group, items) in inst.patch {
-            list = list.push(
-                container(label(group, 12.0, theme::T3)).padding(Padding {
-                    top: 12.0,
-                    right: 0.0,
-                    bottom: 0.0,
-                    left: 0.0,
-                }),
-            );
+            list = list.push(container(label(group, 12.0, theme::T3)).padding(Padding {
+                top: 12.0,
+                right: 0.0,
+                bottom: 0.0,
+                left: 0.0,
+            }));
 
             for &item in items {
                 list = list.push(label(&format!("• {item}"), 13.0, theme::T2));

@@ -6,9 +6,7 @@ use crate::text::label;
 use crate::theme;
 use crate::Message;
 use iced::widget::{button, column, container, row, Space};
-use iced::{
-    gradient, Background, Border, Color, Element, Gradient, Length, Padding, Radians,
-};
+use iced::{gradient, Background, Border, Color, Element, Gradient, Length, Padding, Radians};
 
 pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
     let board = container(
@@ -78,14 +76,8 @@ fn gallery<'a>() -> Element<'a, Message> {
             Length::FillPortion(2),
         ),
         column![
-            tile(
-                &[theme::rgb(0x0d1e2a), theme::rgb(0x2c3b4e)],
-                Length::Fill,
-            ),
-            tile(
-                &[theme::rgb(0x1c2a22), theme::rgb(0x4d6a46)],
-                Length::Fill,
-            ),
+            tile(&[theme::rgb(0x0d1e2a), theme::rgb(0x2c3b4e)], Length::Fill,),
+            tile(&[theme::rgb(0x1c2a22), theme::rgb(0x4d6a46)], Length::Fill,),
         ]
         .spacing(8)
         .width(Length::FillPortion(1))
@@ -148,14 +140,12 @@ fn patch<'a>(inst: &'a Instance) -> Element<'a, Message> {
         list = list.push(label("แพตช์แรกจะขึ้นที่นี่", 13.0, MUTED));
     } else {
         for &(group, items) in inst.patch {
-            list = list.push(
-                container(label(group, 12.0, MUTED)).padding(Padding {
-                    top: 6.0,
-                    right: 0.0,
-                    bottom: 0.0,
-                    left: 0.0,
-                }),
-            );
+            list = list.push(container(label(group, 12.0, MUTED)).padding(Padding {
+                top: 6.0,
+                right: 0.0,
+                bottom: 0.0,
+                left: 0.0,
+            }));
 
             for &item in items {
                 list = list.push(label(&format!("• {item}"), 13.0, theme::rgb(0xd7e3df)));

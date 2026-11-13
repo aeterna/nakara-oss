@@ -55,8 +55,6 @@ pub fn icon<'a>(which: Icon, size: f32, color: Color) -> Element<'a, Message> {
     svg(svg::Handle::from_memory(data.as_bytes()))
         .width(Length::Fixed(size))
         .height(Length::Fixed(size))
-        .style(move |_theme, _status| svg::Style {
-            color: Some(color),
-        })
+        .style(move |_theme, _status| svg::Style { color: Some(color) })
         .into()
 }

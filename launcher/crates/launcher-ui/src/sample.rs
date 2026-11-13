@@ -45,10 +45,7 @@ pub const INSTANCES: [Instance; 4] = [
         patch: &[
             (
                 "ใหม่",
-                &[
-                    "เว็บและเกมอ่านชั่วโมงเปิดจากที่เดียว",
-                    "หน้าเว็บแสดงเวลาเปิดตามจริง",
-                ],
+                &["เว็บและเกมอ่านชั่วโมงเปิดจากที่เดียว", "หน้าเว็บแสดงเวลาเปิดตามจริง"],
             ),
             ("แก้", &["แจ้งเหตุซ้ำในช่อง Discord หยุดแล้ว"]),
         ],
@@ -133,7 +130,4 @@ pub const INSTANCES: [Instance; 4] = [
 pub const TEMPLATE: launcher_core::Template = launcher_core::Template::Dusk;
 
 /// Sample featured event; the real one comes from the feed.
-pub const EVENT: (&str, &str) = (
-    "ลอยกระทงที่ท่าน้ำนคร",
-    "เสาร์ 22 พ.ย. · 20:00 ในเมือง",
-);
+pub const EVENT: (&str, &str) = ("ลอยกระทงที่ท่าน้ำนคร", "เสาร์ 22 พ.ย. · 20:00 ในเมือง");

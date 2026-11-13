@@ -58,14 +58,10 @@ impl App {
         let instances: &'static [sample::Instance; 4] = &sample::INSTANCES;
         let inst = &instances[self.selected];
 
-        let main = column![
-            topbar::view(),
-            hero::view(inst),
-            board::view(inst),
-        ]
-        .spacing(16)
-        .width(Length::Fill)
-        .height(Length::Fill);
+        let main = column![topbar::view(), hero::view(inst), board::view(inst),]
+            .spacing(16)
+            .width(Length::Fill)
+            .height(Length::Fill);
 
         container(
             row![sidebar::view(self.selected), main]

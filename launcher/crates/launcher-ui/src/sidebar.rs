@@ -22,9 +22,8 @@ pub fn view<'a>(selected: usize) -> Element<'a, Message> {
     list = list.push(Space::new().height(Length::Fill));
     list = list.push(discord_button());
     list = list.push(container(row![label("เว็บไซต์", 14.0, theme::T2)]).padding([8, 8]));
-    list = list.push(
-        container(row![label("Launcher 0.1.0 · ร่าง", 11.0, theme::T3)]).padding([4, 8]),
-    );
+    list =
+        list.push(container(row![label("Launcher 0.1.0 · ร่าง", 11.0, theme::T3)]).padding([4, 8]));
 
     container(list)
         .width(248)
@@ -48,10 +47,7 @@ fn brand<'a>() -> Element<'a, Message> {
     ]
     .spacing(0);
 
-    row![mark, name]
-        .spacing(10)
-        .align_y(iced::Center)
-        .into()
+    row![mark, name].spacing(10).align_y(iced::Center).into()
 }
 
 fn section<'a>(title: &str) -> Element<'a, Message> {
