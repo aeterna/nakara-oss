@@ -94,7 +94,11 @@ pub enum ProfileError {
     ContactEmail { field: &'static str, value: String },
 
     #[error("{field}: {value:?} is not valid for {game:?}")]
-    Connect { field: &'static str, value: String, game: Game },
+    Connect {
+        field: &'static str,
+        value: String,
+        game: Game,
+    },
 
     #[error("{field}: {value:?} is not a valid https URL")]
     Feed { field: &'static str, value: String },
@@ -125,18 +129,28 @@ pub fn parse(text: &str) -> Result<Profile, ProfileError> {
 /// Validate a parsed profile against schema 1.
 pub fn validate(p: &Profile) -> Result<(), ProfileError> {
     if p.schema != 1 {
-        return Err(ProfileError::Schema { field: "schema", value: p.schema });
+        return Err(ProfileError::Schema {
+            field: "schema",
+            value: p.schema,
+        });
     }
 
     let s = &p.server;
     if !valid_id(&s.id) {
-        return Err(ProfileError::Id { field: "server.id", value: s.id.clone() });
+        return Err(ProfileError::Id {
+            field: "server.id",
+            value: s.id.clone(),
+        });
     }
     if !(1..=64).contains(&s.name.chars().count()) {
-        return Err(ProfileError::Name { field: "server.name" });
+        return Err(ProfileError::Name {
+            field: "server.name",
+        });
     }
     if !(1..=128).contains(&s.operator.chars().count()) {
-        return Err(ProfileError::Operator { field: "server.operator" });
+        return Err(ProfileError::Operator {
+            field: "server.operator",
+        });
     }
     if !valid_email(&s.contact_email) {
         return Err(ProfileError::ContactEmail {
@@ -273,7 +287,9 @@ fn valid_feed(value: &str) -> bool {
     if value.chars().any(char::is_whitespace) {
         return false;
     }
-    let end = rest.find(|c| matches!(c, '/' | '?' | '#')).unwrap_or(rest.len());
+    let end = rest
+        .find(|c| matches!(c, '/' | '?' | '#'))
+        .unwrap_or(rest.len());
     if end == 0 || rest[..end].contains('@') {
         return false;
     }
@@ -290,7 +306,9 @@ fn valid_repo(value: &str) -> bool {
     };
     !owner.is_empty()
         && !name.is_empty()
-        && owner.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        && owner
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-')
         && name
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
