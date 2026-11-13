@@ -4,10 +4,8 @@ use launcher_core::first_run::{mark_seen, marker_path, seen};
 use std::path::PathBuf;
 
 fn test_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "launcher-first-run-{name}-{}",
-        std::process::id()
-    ));
+    let dir =
+        std::env::temp_dir().join(format!("launcher-first-run-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     dir
 }

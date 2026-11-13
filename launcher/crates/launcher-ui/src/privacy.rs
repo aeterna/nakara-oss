@@ -86,10 +86,7 @@ fn header<'a>() -> Element<'a, Message> {
     ]
     .spacing(2);
 
-    row![tile, lines]
-        .spacing(14)
-        .align_y(iced::Center)
-        .into()
+    row![tile, lines].spacing(14).align_y(iced::Center).into()
 }
 
 fn rows<'a>() -> Element<'a, Message> {
@@ -116,12 +113,9 @@ fn row_item<'a>(dot: Color, title: &'a str, body: &'a str) -> Element<'a, Messag
         left: 0.0,
     });
 
-    let lines = column![
-        label(title, 15.0, INK),
-        label(body, 13.0, BODY),
-    ]
-    .spacing(4)
-    .width(Length::Fill);
+    let lines = column![label(title, 15.0, INK), label(body, 13.0, BODY),]
+        .spacing(4)
+        .width(Length::Fill);
 
     container(
         row![mark, lines]
