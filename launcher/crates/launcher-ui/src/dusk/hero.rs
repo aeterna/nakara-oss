@@ -133,6 +133,10 @@ fn play_group<'a>(inst: &Instance) -> Element<'a, Message> {
             ..container::Style::default()
         });
 
+    let mut radius = iced::border::Radius::default();
+    radius.top_right = 14.0;
+    radius.bottom_right = 14.0;
+
     let more = button(
         container(icon(Icon::More, 18.0, Color::WHITE))
             .width(Length::Fill)
@@ -144,14 +148,14 @@ fn play_group<'a>(inst: &Instance) -> Element<'a, Message> {
     .height(58)
     .padding(0)
     .on_press(Message::Noop)
-    .style(|_theme, _status| button::Style {
+    .style(move |_theme, _status| button::Style {
         background: Some(Background::Color(Color {
             a: 0.14,
             ..Color::BLACK
         })),
         text_color: Color::WHITE,
         border: Border {
-            radius: [0.0, 14.0, 14.0, 0.0].into(),
+            radius,
             ..Border::default()
         },
         ..button::Style::default()
