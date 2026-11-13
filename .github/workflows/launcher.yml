@@ -36,6 +36,9 @@ jobs:
           "exe_bytes=$($exe.Length)" | Out-File -Encoding utf8 -Append out.txt
       - name: Run and take a screenshot
         run: |
+          # The runner's screen is 1024x768, smaller than the 1280x800 window. Not a gate: the screenshot is for review only.
+          try { Set-DisplayResolution -Width 1920 -Height 1080 -Force -ErrorAction Stop; "resolution=1920x1080" | Out-File -Encoding utf8 -Append out.txt }
+          catch { "resolution=unchanged ($($_.Exception.Message))" | Out-File -Encoding utf8 -Append out.txt }
           $p = Start-Process -FilePath target/release/aeterna-launcher.exe -PassThru
           Start-Sleep -Seconds 10
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
