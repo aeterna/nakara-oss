@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/aeterna/nakara-oss/launcher/schema/server.schema.json",
+  "title": "Launcher server profile (server.toml), schema 1",
+  "description": "Data only. Embedded at build time. ADR 0002 decisions 3, 5 and 9.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "server", "theme", "features"],
+  "properties": {
+    "schema": { "const": 1 },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "game", "connect", "operator", "contact_email"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,47}$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "game": { "enum": ["fivem-legacy", "fivem-enhanced", "roblox"] },
+        "connect": {
+          "description": "fivem-*: host:port; roblox: numeric placeId.",
+          "type": "string", "maxLength": 255, "pattern": "^([A-Za-z0-9.-]+:[0-9]{1,5}|[0-9]{1,20})$"
+        },
+        "operator": { "description": "Creator PLA §2.3", "type": "string", "minLength": 1, "maxLength": 128 },
+        "contact_email": { "description": "Creator PLA §2.3", "type": "string", "format": "email", "maxLength": 254 },
+        "feed": { "type": "string", "format": "uri", "pattern": "^https://[^/?#@]+(/[^?#]*)?$" },
+        "invite_url": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "release_repo": { "description": "owner/name of the GitHub repository this build updates from", "type": "string", "pattern": "^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$" }
+      }
+    },
+    "theme": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accent"],
+      "properties": {
+        "accent": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "wordmark": { "type": "string", "pattern": "^assets/[A-Za-z0-9._/-]+\\.(png|webp)$" },
+        "background": { "type": "string", "pattern": "^assets/[A-Za-z0-9._/-]+\\.(png|webp|jpg)$" }
+      }
+    },
+    "features": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rongroi_connect": { "type": "boolean", "default": false },
+        "allow_user_servers": { "type": "boolean", "default": false },
+        "allow_local_feed": { "type": "boolean", "default": false }
+      }
+    }
+  }
+}
