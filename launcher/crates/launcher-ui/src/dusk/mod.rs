@@ -14,7 +14,7 @@ use iced::widget::{column, container, row, stack, svg, Space};
 use iced::{ContentFit, Element, Length};
 
 pub fn view<'a>(selected: usize) -> Element<'a, Message> {
-    let instances: &'static [sample::Instance; 4] = &sample::INSTANCES;
+    let instances: &'static [sample::Instance; 4] = crate::sample::instances();
     let inst = &instances[selected];
 
     let scene = svg(svg::Handle::from_memory(

@@ -7,7 +7,6 @@ pub const INK: Color = rgb(0xeef4f1);
 pub const INK2: Color = rgb(0xc7d6d1);
 pub const MUTED: Color = rgb(0xa9bcb6);
 pub const FAINT: Color = rgb(0x93a7a1);
-pub const ACCENT: Color = rgb(0x0c7a60);
 pub const LINK: Color = rgb(0x7fd8c0);
 
 const GLASS_BG: Color = rgba(0x091418, 0.52);

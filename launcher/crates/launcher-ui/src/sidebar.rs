@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 
-use crate::sample::INSTANCES;
 use crate::text::label;
 use crate::theme;
 use crate::Message;
@@ -63,7 +62,7 @@ fn section<'a>(title: &str) -> Element<'a, Message> {
 }
 
 fn instance_button<'a>(index: usize, selected: usize) -> Element<'a, Message> {
-    let inst = &INSTANCES[index];
+    let inst = &crate::sample::instances()[index];
     let skin = theme::rgb(inst.skin);
 
     let tile = container(label(inst.initials, 13.0, skin))

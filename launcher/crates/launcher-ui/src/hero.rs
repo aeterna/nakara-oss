@@ -83,9 +83,11 @@ fn hours<'a>() -> Element<'a, Message> {
     right.radius.top_right = 4.0;
     right.radius.bottom_right = 4.0;
 
+    let accent = crate::profile::accent();
+
     let open = Color {
         a: 0.7,
-        ..theme::JADE_BTN
+        ..accent
     };
 
     let bar = row![
@@ -193,6 +195,7 @@ fn actions<'a>(inst: &Instance) -> Element<'a, Message> {
 fn play_button<'a>(inst: &Instance) -> Element<'a, Message> {
     let enabled = inst.play_enabled;
     let text_color = if enabled { Color::WHITE } else { theme::T3 };
+    let accent = crate::profile::accent();
 
     let content = container(label(inst.play_label, 18.0, text_color))
         .width(Length::Fill)
@@ -208,12 +211,12 @@ fn play_button<'a>(inst: &Instance) -> Element<'a, Message> {
             let background = if enabled {
                 match status {
                     button::Status::Hovered => Color {
-                        r: theme::JADE_BTN.r * 0.88,
-                        g: theme::JADE_BTN.g * 0.88,
-                        b: theme::JADE_BTN.b * 0.88,
+                        r: accent.r * 0.88,
+                        g: accent.g * 0.88,
+                        b: accent.b * 0.88,
                         a: 1.0,
                     },
-                    _ => theme::JADE_BTN,
+                    _ => accent,
                 }
             } else {
                 theme::RAISE
@@ -327,12 +330,14 @@ fn bordered(radius: f32) -> impl Fn(&iced::Theme) -> container::Style {
 }
 
 fn input_style(_theme: &iced::Theme, _status: text_input::Status) -> text_input::Style {
+    let accent = crate::profile::accent();
+
     text_input::Style {
         background: Background::Color(Color::TRANSPARENT),
         border: Border::default(),
         icon: theme::T2,
         placeholder: theme::T3,
         value: theme::T1,
-        selection: theme::JADE_BTN,
+        selection: accent,
     }
 }

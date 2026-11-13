@@ -15,7 +15,7 @@ pub fn view<'a>(selected: usize) -> Element<'a, Message> {
         .width(Length::Fill)
         .height(Length::Fill);
 
-    for index in 0..sample::INSTANCES.len() {
+    for index in 0..crate::sample::instances().len() {
         list = list.push(instance_button(index, selected));
     }
 
@@ -72,7 +72,7 @@ fn section<'a>(title: &'static str, top: f32) -> Element<'a, Message> {
 }
 
 fn instance_button<'a>(index: usize, selected: usize) -> Element<'a, Message> {
-    let inst = &sample::INSTANCES[index];
+    let inst = &crate::sample::instances()[index];
 
     let tile = container(label(inst.initials, 13.0, theme::rgb(inst.skin)))
         .width(38)

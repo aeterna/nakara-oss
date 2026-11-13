@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-use crate::dusk::glass::{self, ACCENT, INK, INK2, MUTED};
+use crate::dusk::glass::{self, INK, INK2, MUTED};
 use crate::dusk::icons::{icon, Icon};
 use crate::sample::Instance;
 use crate::text::{label, t};
@@ -98,7 +98,7 @@ fn title_tile<'a>(inst: &Instance) -> Element<'a, Message> {
 
 fn play_group<'a>(inst: &Instance) -> Element<'a, Message> {
     let background = if inst.play_enabled {
-        ACCENT
+        crate::profile::accent()
     } else {
         Color {
             a: 0.10,

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-use crate::dusk::glass::{self, ACCENT, FAINT, INK, LINK, MUTED};
+use crate::dusk::glass::{self, FAINT, INK, LINK, MUTED};
 use crate::dusk::icons::{icon, Icon};
 use crate::text::label;
 use crate::theme;
@@ -146,7 +146,7 @@ fn footer<'a>() -> Element<'a, Message> {
     .height(46)
     .padding([0, 28])
     .on_press(Message::PrivacyOk)
-    .style(glass::solid(ACCENT, 12.0));
+    .style(glass::solid(crate::profile::accent(), 12.0));
 
     row![Space::new().width(Length::Fill), ok]
         .width(Length::Fill)
