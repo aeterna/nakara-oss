@@ -12,9 +12,10 @@
 // time may finish past expires_at, bounded by the idle limit instead); -> consumed only by consume(), which
 // the handler calls only after the envelope authenticates and the record's nonce matches. At most 2 open
 // uploads per ticket, 16 in total. A consumed ticket is kept with its case: any further upload gets 409,
-// unless it repeats the accepted envelope and gets 200 again. expireDue() drops an expired ticket once it is
-// more than an hour past expires_at. A restart drops issued and uploading tickets; the caller persists
-// consumed ones with snapshotConsumed() and feeds them back with restoreConsumed().
+// unless it repeats the accepted envelope and gets 200 again; forget() removes it once its case is deleted.
+// expireDue() drops an expired ticket once it is more than an hour past expires_at. A restart drops issued
+// and uploading tickets; the caller persists consumed ones with snapshotConsumed() and feeds them back with
+// restoreConsumed().
 
 const TICKET_RE = /^[0-9a-f]{32}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
@@ -87,6 +88,15 @@ class TicketStore {
     cancel(ticket) {
         const record = this.tickets.get(ticket);
         if (!record || record.state !== 'issued') return false;
+        this.tickets.delete(ticket);
+        return true;
+    }
+
+    // Forget a ticket whose case was deleted, so a repeat stops answering 200 and a different envelope
+    // stops answering 409. Any open uploads are dropped too. Idempotent.
+    forget(ticket) {
+        if (!this.tickets.has(ticket)) return false;
+        this.dropTicketUploads(ticket);
         this.tickets.delete(ticket);
         return true;
     }
@@ -255,6 +265,16 @@ class TicketStore {
     stateOf(ticket) {
         const record = this.tickets.get(ticket);
         return record ? record.state : 'unknown';
+    }
+
+    // The tickets still open for business: issued or uploading, in insertion order. Key rotation forgets
+    // these; consumed and expired tickets stay so their case history keeps answering.
+    openTickets() {
+        const open = [];
+        for (const [ticket, record] of this.tickets) {
+            if (record.state === 'issued' || record.state === 'uploading') open.push(ticket);
+        }
+        return open;
     }
 
     // The consumed tickets as plain JSON, for the caller to persist (KVP or a resource-folder file).

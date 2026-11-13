@@ -129,7 +129,7 @@ function createStorage(backend) {
         return entries ? entries.map((entry) => ({ ...entry })) : [];
     }
 
-    function saveReport({ caseId, ticket, reportSha256, receivedAt, record, declined } = {}) {
+    function saveReport({ caseId, ticket, reportSha256, receivedAt, record, declined, address } = {}) {
         const found = findEntry(caseId);
         if (!found) throw new Error('rongroi storage: case is not in the index');
         if (ticket !== found.entry.ticket) {
@@ -138,11 +138,16 @@ function createStorage(backend) {
         backend.writeOnce(`report-${ticket}`, declined ? { declined: true } : { record });
         const stored = backend.read(caseKey(caseId));
         const data = stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+        // The uploader's address is kept as given: its shape differs between FXServer editions.
+        const addressFacts = typeof address === 'string'
+            ? { address, address_edition_form: 'as_given' }
+            : {};
         backend.write(caseKey(caseId), {
             ...data,
             caseId,
             ticket: found.entry.ticket,
             openedAt: found.entry.openedAt,
+            ...addressFacts,
             state: declined ? 'declined' : 'received',
             receivedAt,
         });
@@ -156,6 +161,8 @@ function createStorage(backend) {
         return backend.read(`report-${ticket}`);
     }
 
+    // Delete one case and return its ticket so the caller can forget it in the ticket store. Returns false
+    // when the case is not in the index.
     function deleteCase(caseId) {
         const found = findEntry(caseId);
         if (found === null) return false;
@@ -165,7 +172,34 @@ function createStorage(backend) {
         backend.remove(caseKey(caseId));
         backend.write(`index-${found.page}`, remaining);
         pages[found.page] = remaining;
-        return true;
+        return found.entry.ticket;
+    }
+
+    // The case ids whose case file carries this identifier. An unknown identifier returns no cases.
+    function casesByIdentifier(identifier) {
+        if (typeof identifier !== 'string' || identifier.length === 0) {
+            throw new TypeError('identifier must be a non-empty string');
+        }
+        const found = [];
+        for (const entry of entries()) {
+            if (typeof entry.caseId !== 'string' || entry.caseId.length === 0) continue;
+            const data = getCase(entry.caseId);
+            if (data !== null && typeof data === 'object' && !Array.isArray(data)
+                && data.identifier === identifier) {
+                found.push(entry.caseId);
+            }
+        }
+        return found;
+    }
+
+    // Delete every case of one identifier and return the tickets the caller must forget.
+    function deletePlayerData(identifier) {
+        const tickets = [];
+        for (const caseId of casesByIdentifier(identifier)) {
+            const ticket = deleteCase(caseId);
+            if (ticket !== false) tickets.push(ticket);
+        }
+        return tickets;
     }
 
     function consumedSnapshot() {
@@ -194,7 +228,21 @@ function createStorage(backend) {
         return all;
     }
 
-    return { caseKey, load, openCase, getCase, hasCase, listCases, saveReport, getReport, deleteCase, consumedSnapshot, entries };
+    return {
+        caseKey,
+        load,
+        openCase,
+        getCase,
+        hasCase,
+        listCases,
+        saveReport,
+        getReport,
+        deleteCase,
+        casesByIdentifier,
+        deletePlayerData,
+        consumedSnapshot,
+        entries,
+    };
 }
 
 // Loaded directly as a server_script FXServer provides no CommonJS `module`; the specs still get the export.

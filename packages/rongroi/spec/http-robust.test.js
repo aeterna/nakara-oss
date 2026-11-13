@@ -82,7 +82,9 @@ test('concurrent copies of a middle and of the last slice answer 200 and report 
     const h = makeHarness();
     const middle = issue(h);
     const middleBody = envelope({
-        schema: 2, binding: { ticket: middle.ticket, nonce: middle.nonce }, note: 'x'.repeat(9000),
+        schema: 2,
+        binding: { ticket: middle.ticket, nonce: middle.nonce },
+        note: ['x'.repeat(4000), 'x'.repeat(4000), 'x'.repeat(992)],
     }, middle.ticket);
     const middleSha = sha(middleBody);
     const slices = split(middleBody);
@@ -99,7 +101,9 @@ test('concurrent copies of a middle and of the last slice answer 200 and report 
 
     const ending = issue(h, { caseId: 'case-2' });
     const endBody = envelope({
-        schema: 2, binding: { ticket: ending.ticket, nonce: ending.nonce }, note: 'y'.repeat(5000),
+        schema: 2,
+        binding: { ticket: ending.ticket, nonce: ending.nonce },
+        note: ['y'.repeat(4000), 'y'.repeat(995)],
     }, ending.ticket);
     const endSha = sha(endBody);
     const endSlices = split(endBody);
