@@ -73,7 +73,7 @@
         root.appendChild(el('h1', '', t.title || 'Pairing code'));
         if (model.empty) {
             root.appendChild(el('p', 'empty', t.empty || 'No pairing code yet.'));
-            root.appendChild(el('p', 'notice', t.onlyPaste || 'Only paste this code from the game.'));
+            root.appendChild(el('p', 'notice', t.onlyPaste || 'Only paste a code you got in this game.'));
             return;
         }
         root.appendChild(el('p', 'hint', t.hint || 'Paste this code into Rongroi Connect.'));
@@ -107,7 +107,7 @@
         });
         actions.appendChild(copy);
         root.appendChild(actions);
-        root.appendChild(el('p', 'notice', t.onlyPaste || 'Only paste this code from the game.'));
+        root.appendChild(el('p', 'notice', t.onlyPaste || 'Only paste a code you got in this game.'));
         if (model.hasExpiry && !model.expired) {
             timer = setInterval(function () {
                 var next = viewModel(data, Date.now());
