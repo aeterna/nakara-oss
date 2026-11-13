@@ -17,7 +17,7 @@
             expiresIn: 'Expires in {time}',
             expired: 'This code has expired.',
             empty: 'No pairing code yet.',
-            onlyPaste: 'Only paste this code from the game.',
+            onlyPaste: 'Only paste a code you got in this game.',
         },
         th: {
             title: 'รหัสจับคู่',
@@ -28,7 +28,7 @@
             expiresIn: 'หมดอายุใน {time}',
             expired: 'รหัสนี้หมดอายุแล้ว',
             empty: 'ยังไม่มีรหัสจับคู่',
-            onlyPaste: 'วางรหัสนี้จากในเกมเท่านั้น',
+            onlyPaste: 'วางเฉพาะรหัสที่ได้จากในเกมนี้เท่านั้น',
         },
     };
 }));

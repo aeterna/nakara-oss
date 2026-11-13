@@ -45,10 +45,10 @@
         },
         th: {
             title: 'ตั้งค่า',
-            hint: 'การตั้งค่าเหล่านี้ใช้กับชุดเซิร์ฟเวอร์นี้',
+            hint: 'การตั้งค่านี้ใช้กับ Server Kit บนเซิร์ฟเวอร์นี้',
             save: 'บันทึกการตั้งค่า',
-            rotate: 'หมุนกุญแจ',
-            rotateConfirm: 'หมุนกุญแจ',
+            rotate: 'เปลี่ยนกุญแจ',
+            rotateConfirm: 'เปลี่ยนกุญแจ',
             rotateCancel: 'ยกเลิก',
             rotateConfirmHint: 'รหัสจับคู่ที่เปิดอยู่จะใช้ไม่ได้',
             deletePlayerLabel: 'รหัสผู้เล่น',
@@ -75,7 +75,7 @@
                 invalid_target: 'เลือกผู้เล่นก่อน', player_not_found: 'ไม่พบผู้เล่นนั้น',
                 settings_unavailable: 'อ่านการตั้งค่าไม่ได้', case_not_opened: 'เปิดเคสไม่ได้',
                 invalid_settings: 'การตั้งค่าไม่ถูกต้อง', delete_failed: 'การลบไม่สำเร็จ',
-                invalid_identifier: 'รหัสผู้เล่นไม่ถูกต้อง', key_rotation_failed: 'หมุนกุญแจไม่ได้',
+                invalid_identifier: 'รหัสผู้เล่นไม่ถูกต้อง', key_rotation_failed: 'เปลี่ยนกุญแจไม่ได้',
             },
         },
     };
