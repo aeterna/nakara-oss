@@ -287,9 +287,7 @@ fn valid_feed(value: &str) -> bool {
     if value.chars().any(char::is_whitespace) {
         return false;
     }
-    let end = rest
-        .find(|c| matches!(c, '/' | '?' | '#'))
-        .unwrap_or(rest.len());
+    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
     if end == 0 || rest[..end].contains('@') {
         return false;
     }
