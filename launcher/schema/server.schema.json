@@ -32,6 +32,7 @@
       "additionalProperties": false,
       "required": ["accent"],
       "properties": {
+        "template": { "enum": ["dusk", "classic"], "default": "dusk" },
         "accent": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
         "wordmark": { "type": "string", "pattern": "^assets/[A-Za-z0-9._/-]+\\.(png|webp)$" },
         "background": { "type": "string", "pattern": "^assets/[A-Za-z0-9._/-]+\\.(png|webp|jpg)$" }

@@ -8,4 +8,4 @@
 
 pub mod profile;
 
-pub use profile::{parse, validate, Features, Game, Profile, ProfileError, Server, Theme};
+pub use profile::{parse, validate, Features, Game, Profile, ProfileError, Server, Template, Theme};

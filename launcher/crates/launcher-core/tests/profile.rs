@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-use launcher_core::{parse, Game, ProfileError};
+use launcher_core::{parse, Game, ProfileError, Template};
 
 const VALID: &str = r##"schema = 1
 
@@ -227,4 +227,23 @@ fn roblox_numeric_connect_parses() {
     let profile = parse(&text).expect("numeric Roblox place id should parse");
     assert_eq!(profile.server.game, Game::Roblox);
     assert_eq!(profile.server.connect, "1234567890");
+}
+
+#[test]
+fn template_defaults_to_dusk() {
+    let profile = parse(VALID).expect("profile without a template should parse");
+    assert_eq!(profile.theme.template, Template::Dusk);
+}
+
+#[test]
+fn classic_template_parses() {
+    let text = replace_line(VALID, "[theme]", "[theme]\ntemplate = \"classic\"");
+    let profile = parse(&text).expect("classic template should parse");
+    assert_eq!(profile.theme.template, Template::Classic);
+}
+
+#[test]
+fn unknown_template_is_rejected() {
+    let text = replace_line(VALID, "[theme]", "[theme]\ntemplate = \"neon\"");
+    assert!(parse(&text).is_err());
 }

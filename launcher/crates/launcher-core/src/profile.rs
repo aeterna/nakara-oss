@@ -50,10 +50,22 @@ pub enum Game {
     Roblox,
 }
 
+/// Which Home layout the build uses. Dusk (the default) draws the screen over a full-window scene; Classic is flat panels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Template {
+    #[default]
+    Dusk,
+    Classic,
+}
+
 /// Visual tokens; asset paths are relative to `assets/`.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Theme {
+    /// Home layout; defaults to Dusk when omitted.
+    #[serde(default)]
+    pub template: Template,
     /// `#` followed by six hex digits.
     pub accent: String,
     pub wordmark: Option<String>,
