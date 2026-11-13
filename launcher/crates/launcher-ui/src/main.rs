@@ -6,6 +6,7 @@ mod board;
 mod dusk;
 mod hero;
 mod privacy;
+mod profile;
 mod sample;
 mod sidebar;
 mod text;
@@ -69,7 +70,7 @@ impl App {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let home: Element<'_, Message> = match sample::TEMPLATE {
+        let home: Element<'_, Message> = match profile::template() {
             launcher_core::Template::Dusk => dusk::view(self.selected),
             launcher_core::Template::Classic => self.classic(),
         };
@@ -85,7 +86,7 @@ impl App {
     }
 
     fn classic(&self) -> Element<'_, Message> {
-        let instances: &'static [sample::Instance; 4] = &sample::INSTANCES;
+        let instances: &'static [sample::Instance; 4] = sample::instances();
         let inst = &instances[self.selected];
 
         let main = column![topbar::view(), hero::view(inst), board::view(inst),]

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 /// Sample data for the Home screen. Real data comes from the profile and feed.
+#[derive(Clone, Copy)]
 pub struct Instance {
     pub initials: &'static str,
     pub name: &'static str,
@@ -22,7 +23,7 @@ pub struct Instance {
     pub contact: &'static str,
 }
 
-pub const INSTANCES: [Instance; 4] = [
+const SAMPLES: [Instance; 4] = [
     Instance {
         initials: "NC",
         name: "Nakara City",
@@ -126,8 +127,25 @@ pub const INSTANCES: [Instance; 4] = [
     },
 ];
 
-/// The profile will set this; Dusk is the default.
-pub const TEMPLATE: launcher_core::Template = launcher_core::Template::Dusk;
+/// The instances shown on Home. Entry 0 is the profile's server; the rest stay
+/// sample data until the feed lands. Status, news and patch notes are sample
+/// data for every entry.
+pub fn instances() -> &'static [Instance; 4] {
+    static INSTANCES: std::sync::OnceLock<[Instance; 4]> = std::sync::OnceLock::new();
+    INSTANCES.get_or_init(|| {
+        let p = crate::profile::get();
+        let mut instances = SAMPLES;
+
+        instances[0].name = &p.server.name;
+        instances[0].initials =
+            Box::leak(crate::profile::initials(&p.server.name).into_boxed_str());
+        instances[0].chips[0] = crate::profile::game_label(&p.server.game);
+        instances[0].operator = &p.server.operator;
+        instances[0].contact = &p.server.contact_email;
+
+        instances
+    })
+}
 
 /// Sample featured event; the real one comes from the feed.
 pub const EVENT: (&str, &str) = ("ลอยกระทงที่ท่าน้ำนคร", "เสาร์ 22 พ.ย. · 20:00 ในเมือง");
