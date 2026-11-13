@@ -5,6 +5,7 @@
 mod board;
 mod dusk;
 mod hero;
+mod privacy;
 mod sample;
 mod sidebar;
 mod text;
@@ -25,11 +26,23 @@ fn main() -> iced::Result {
 
 pub struct App {
     selected: usize,
+    state_dir: Option<std::path::PathBuf>,
+    show_privacy: bool,
 }
 
 impl Default for App {
     fn default() -> Self {
-        Self { selected: 0 }
+        let state_dir = dirs::config_dir().map(|d| d.join("AETERNA Game Launcher"));
+        let show_privacy = match &state_dir {
+            Some(d) => !launcher_core::first_run::seen(d),
+            None => true,
+        };
+
+        Self {
+            selected: 0,
+            state_dir,
+            show_privacy,
+        }
     }
 }
 
@@ -37,6 +50,7 @@ impl Default for App {
 pub enum Message {
     Select(usize),
     Noop,
+    PrivacyOk,
 }
 
 impl App {
@@ -44,13 +58,29 @@ impl App {
         match message {
             Message::Select(index) => self.selected = index,
             Message::Noop => {}
+            Message::PrivacyOk => {
+                self.show_privacy = false;
+
+                if let Some(dir) = &self.state_dir {
+                    let _ = launcher_core::first_run::mark_seen(dir);
+                }
+            }
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
-        match sample::TEMPLATE {
+        let home: Element<'_, Message> = match sample::TEMPLATE {
             launcher_core::Template::Dusk => dusk::view(self.selected),
             launcher_core::Template::Classic => self.classic(),
+        };
+
+        if self.show_privacy {
+            container(iced::widget::stack![home, privacy::view()])
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        } else {
+            home
         }
     }
 
