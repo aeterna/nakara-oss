@@ -101,7 +101,11 @@ fn removing_zwsp_restores_input() {
     for sentence in THAI_SENTENCES {
         let output = insert_zwsp(sentence);
 
-        assert_eq!(strip_zwsp(&output), *sentence, "round trip failed for {sentence:?}");
+        assert_eq!(
+            strip_zwsp(&output),
+            *sentence,
+            "round trip failed for {sentence:?}"
+        );
     }
 }
 
