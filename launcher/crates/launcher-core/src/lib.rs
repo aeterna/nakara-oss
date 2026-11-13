@@ -6,6 +6,7 @@
 //! build time and describes the server, theme and feature flags. It never holds
 //! HTML, scripts, plugins or executables.
 
+pub mod first_run;
 pub mod profile;
 
 pub use profile::{
