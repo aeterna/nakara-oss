@@ -3,6 +3,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod board;
+mod dusk;
 mod hero;
 mod sample;
 mod sidebar;
@@ -16,7 +17,7 @@ use iced::{Element, Length};
 fn main() -> iced::Result {
     iced::application(App::default, App::update, App::view)
         .title("AETERNA Game Launcher")
-        .window_size((1280.0, 780.0))
+        .window_size((1280.0, 800.0))
         .font(include_bytes!("../../../assets/Anuphan.ttf").as_slice())
         .default_font(iced::Font::with_name("Anuphan"))
         .run()
@@ -47,6 +48,13 @@ impl App {
     }
 
     fn view(&self) -> Element<'_, Message> {
+        match sample::TEMPLATE {
+            launcher_core::Template::Dusk => dusk::view(self.selected),
+            launcher_core::Template::Classic => self.classic(),
+        }
+    }
+
+    fn classic(&self) -> Element<'_, Message> {
         let instances: &'static [sample::Instance; 4] = &sample::INSTANCES;
         let inst = &instances[self.selected];
 

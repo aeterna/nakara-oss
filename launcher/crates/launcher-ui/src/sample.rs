@@ -128,3 +128,12 @@ pub const INSTANCES: [Instance; 4] = [
         contact: "contact@example.com",
     },
 ];
+
+/// The profile will set this; Dusk is the default.
+pub const TEMPLATE: launcher_core::Template = launcher_core::Template::Dusk;
+
+/// Sample featured event; the real one comes from the feed.
+pub const EVENT: (&str, &str) = (
+    "ลอยกระทงที่ท่าน้ำนคร",
+    "เสาร์ 22 พ.ย. · 20:00 ในเมือง",
+);
