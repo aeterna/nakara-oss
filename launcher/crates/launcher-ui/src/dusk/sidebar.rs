@@ -139,7 +139,7 @@ fn event_card<'a>() -> Element<'a, Message> {
 
 fn event_picture<'a>() -> Element<'a, Message> {
     let gradient = iced::Gradient::Linear(
-        iced::gradient::Linear::new(iced::Radians(std::f32::consts::FRAC_PI_2))
+        iced::gradient::Linear::new(iced::Radians(std::f32::consts::PI))
             .add_stop(0.0, rgba(0x0b2230, 1.0))
             .add_stop(0.5, rgba(0x17424a, 1.0))
             .add_stop(1.0, rgba(0xa8763f, 1.0)),
@@ -164,7 +164,9 @@ fn detail_button<'a>() -> Element<'a, Message> {
     button(
         container(label("ดูรายละเอียด", 14.0, glass::LINK))
             .width(Length::Fill)
-            .align_x(iced::Center),
+            .height(Length::Fill)
+            .align_x(iced::Center)
+            .align_y(iced::Center),
     )
     .width(Length::Fill)
     .height(36)
@@ -191,13 +193,19 @@ fn discord_button<'a>() -> Element<'a, Message> {
     .spacing(8)
     .align_y(iced::Center);
 
-    button(container(content).width(Length::Fill).align_x(iced::Center))
-        .width(Length::Fill)
-        .height(42)
-        .padding(0)
-        .on_press(Message::Noop)
-        .style(glass::solid(rgba(0xdcf0ea, 0.08), 12.0))
-        .into()
+    button(
+        container(content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_x(iced::Center)
+            .align_y(iced::Center),
+    )
+    .width(Length::Fill)
+    .height(42)
+    .padding(0)
+    .on_press(Message::Noop)
+    .style(glass::solid(rgba(0xdcf0ea, 0.08), 12.0))
+    .into()
 }
 
 fn website<'a>() -> Element<'a, Message> {

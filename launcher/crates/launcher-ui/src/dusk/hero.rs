@@ -106,11 +106,15 @@ fn play_group<'a>(inst: &Instance) -> Element<'a, Message> {
         }
     };
 
-    let content = row![
-        icon(Icon::Play, 18.0, Color::WHITE),
-        label(inst.play_label, 19.0, Color::WHITE),
-    ]
-    .spacing(10)
+    let content = container(
+        row![
+            icon(Icon::Play, 18.0, Color::WHITE),
+            label(inst.play_label, 19.0, Color::WHITE),
+        ]
+        .spacing(10)
+        .align_y(iced::Center),
+    )
+    .height(Length::Fill)
     .align_y(iced::Center);
 
     let mut play = button(content)
@@ -229,17 +233,21 @@ fn invite<'a>() -> Element<'a, Message> {
         .width(Length::Fill)
         .style(input_style);
 
-    let use_code = button(label("ใช้รหัส", 14.0, INK))
-        .height(42)
-        .padding([0, 16])
-        .on_press(Message::Noop)
-        .style(glass::solid(
-            Color {
-                a: 0.10,
-                ..theme::rgb(0xdcf0ea)
-            },
-            10.0,
-        ));
+    let use_code = button(
+        container(label("ใช้รหัส", 14.0, INK))
+            .height(Length::Fill)
+            .align_y(iced::Center),
+    )
+    .height(42)
+    .padding([0, 16])
+    .on_press(Message::Noop)
+    .style(glass::solid(
+        Color {
+            a: 0.10,
+            ..theme::rgb(0xdcf0ea)
+        },
+        10.0,
+    ));
 
     container(
         row![icon(Icon::AddUser, 18.0, MUTED), code, use_code]
