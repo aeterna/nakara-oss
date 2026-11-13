@@ -28,6 +28,5 @@ fn main() {
         .unwrap_or_else(|err| panic!("launcher profile {} is invalid: {err}", path.display()));
 
     let out = Path::new(&env::var("OUT_DIR").expect("OUT_DIR is set")).join("server.toml");
-    fs::write(&out, text)
-        .unwrap_or_else(|err| panic!("could not write {}: {err}", out.display()));
+    fs::write(&out, text).unwrap_or_else(|err| panic!("could not write {}: {err}", out.display()));
 }

@@ -85,10 +85,7 @@ fn hours<'a>() -> Element<'a, Message> {
 
     let accent = crate::profile::accent();
 
-    let open = Color {
-        a: 0.7,
-        ..accent
-    };
+    let open = Color { a: 0.7, ..accent };
 
     let bar = row![
         segment(299.0, 8.0, theme::RAISE, left),
