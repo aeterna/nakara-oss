@@ -9,7 +9,7 @@ const AETERNA: &str = include_str!("../../../profiles/aeterna/server.toml");
 
 fn profile_for(game: &str, connect: &str) -> Profile {
     let text = format!(
-        r#"schema = 1
+        r##"schema = 1
 
 [server]
 id = "nakara"
@@ -23,7 +23,7 @@ contact_email = "ops@nakara.example"
 accent = "#1a2b3c"
 
 [features]
-"#
+"##
     );
     parse(&text).expect("test profile should parse")
 }
@@ -42,7 +42,9 @@ struct RecordingOpener {
 
 impl RecordingOpener {
     fn new() -> Self {
-        Self { urls: RefCell::new(Vec::new()) }
+        Self {
+            urls: RefCell::new(Vec::new()),
+        }
     }
 
     fn urls(&self) -> Vec<String> {
