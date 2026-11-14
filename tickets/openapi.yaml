@@ -1,0 +1,1113 @@
+openapi: 3.1.0
+info:
+  title: Nakara Tickets API
+  version: 0.1.0
+  license:
+    name: MIT
+    identifier: MIT
+  description: |
+    The single contract between the dashboard, the server and FiveM game servers (ADR 0003 decision 7).
+    The dashboard's client is generated from this file; route stubs in apps/server follow it one file per tag.
+    Discord ids are snowflakes sent as strings. Times are RFC 3339 UTC. Lists use opaque cursors.
+servers:
+  - url: /
+tags:
+  - name: system
+  - name: auth
+  - name: me
+  - name: settings
+  - name: categories
+  - name: panels
+  - name: tickets
+  - name: actions
+  - name: tags
+  - name: blocks
+  - name: stats
+  - name: game-servers
+  - name: audit
+  - name: data
+  - name: bridge
+
+security:
+  - session: []
+
+paths:
+  /healthz:
+    get:
+      operationId: getHealthz
+      tags: [system]
+      security: []
+      summary: Liveness, database reachability and whether this process holds the gateway lock
+      responses:
+        '200':
+          description: Healthy
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+        '503':
+          description: Database unreachable
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+  /metrics:
+    get:
+      operationId: getMetrics
+      tags: [system]
+      security: []
+      summary: Prometheus text metrics (counts only, no personal data)
+      responses:
+        '200':
+          description: Metrics
+          content:
+            text/plain: { schema: { type: string } }
+
+  /auth/login:
+    get:
+      operationId: getAuthLogin
+      tags: [auth]
+      security: []
+      summary: Redirect to Discord OAuth2 (scopes identify guilds, with state and PKCE)
+      responses:
+        '302': { description: Redirect to discord.com }
+  /auth/callback:
+    get:
+      operationId: getAuthCallback
+      tags: [auth]
+      security: []
+      summary: OAuth2 callback; checks state, exchanges the code with the PKCE verifier, sets the session cookie
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string, maxLength: 512 } }
+        - { name: state, in: query, required: true, schema: { type: string, maxLength: 128 } }
+      responses:
+        '302': { description: Redirect to the dashboard }
+        '400': { $ref: '#/components/responses/Error' }
+  /auth/logout:
+    post:
+      operationId: postAuthLogout
+      tags: [auth]
+      security: [{ session: [], csrf: [] }]
+      summary: End the session
+      responses:
+        '204': { description: Logged out }
+
+  /api/v1/me:
+    get:
+      operationId: getMe
+      tags: [me]
+      summary: The signed-in user, the allowed guilds they can manage, and the CSRF token for writes
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '401': { $ref: '#/components/responses/Error' }
+  /api/v1/me/data:
+    delete:
+      operationId: deleteMeData
+      tags: [data]
+      security: [{ session: [], csrf: [] }]
+      summary: Delete the signed-in user's messages, attachments and ratings in every guild of this instance
+      responses:
+        '202':
+          description: Recorded; deletion runs in the worker
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataRequest' }
+
+  /api/v1/guilds/{guildId}/settings:
+    parameters: [{ $ref: '#/components/parameters/guildId' }]
+    get:
+      operationId: getSettings
+      summary: GET /api/v1/guilds/{guildId}/settings
+      tags: [settings]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GuildSettings' }
+        '403': { $ref: '#/components/responses/Error' }
+    put:
+      operationId: putSettings
+      summary: PUT /api/v1/guilds/{guildId}/settings
+      tags: [settings]
+      security: [{ session: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GuildSettings' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GuildSettings' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/v1/guilds/{guildId}/export:
+    parameters: [{ $ref: '#/components/parameters/guildId' }]
+    get:
+      operationId: getExport
+      tags: [data]
+      summary: Export the guild's data as JSON (staff with Manage Server only)
+      responses:
+        '200':
+          description: Export file
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            application/json: { schema: { type: object } }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /api/v1/guilds/{guildId}/categories:
+    parameters: [{ $ref: '#/components/parameters/guildId' }]
+    get:
+      operationId: getCategories
+      summary: GET /api/v1/guilds/{guildId}/categories
+      tags: [categories]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Category' } }
+    post:
+      operationId: postCategories
+      summary: POST /api/v1/guilds/{guildId}/categories
+      tags: [categories]
+      security: [{ session: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Category' }
+        '400': { $ref: '#/components/responses/Error' }
+  /api/v1/guilds/{guildId}/categories/{categoryId}:
+    parameters:
+      - { $ref: '#/components/parameters/guildId' }
+      - { $ref: '#/components/parameters/categoryId' }
+    put:
+      operationId: putCategory
+      summary: PUT /api/v1/guilds/{guildId}/categories/{categoryId}
+      tags: [categories]
+      security: [{ session: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryInput' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Category' }
+        '404': { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: deleteCategory
+      summary: DELETE /api/v1/guilds/{guildId}/categories/{categoryId}
+      tags: [categories]
+      security: [{ session: [], csrf: [] }]
+      responses:
+        '204': { description: Deleted }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /api/v1/guilds/{guildId}/panels:
+    parameters: [{ $ref: '#/components/parameters/guildId' }]
+    get:
+      operationId: getPanels
+      summary: GET /api/v1/guilds/{guildId}/panels
+      tags: [panels]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Panel' } }
+    post:
+      operationId: postPanels
+      summary: POST /api/v1/guilds/{guildId}/panels
+      tags: [panels]
+      security: [{ session: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PanelInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Panel' }
+        '400': { $ref: '#/components/responses/Error' }
+  /api/v1/guilds/{guildId}/panels/{panelId}:
+    parameters:
+      - { $ref: '#/components/parameters/guildId' }
+      - { $ref: '#/components/parameters/panelId' }
+    put:
+      operationId: putPanel
+      summary: PUT /api/v1/guilds/{guildId}/panels/{panelId}
+      tags: [panels]
+      security: [{ session: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PanelInput' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Panel' }
+    delete:
+      operationId: deletePanel
+      summary: DELETE /api/v1/guilds/{guildId}/panels/{panelId}
+      tags: [panels]
+      security: [{ session: [], csrf: [] }]
+      responses:
+        '204': { description: Deleted }
+  /api/v1/guilds/{guildId}/panels/{panelId}/send:
+    parameters:
+      - { $ref: '#/components/parameters/guildId' }
+      - { $ref: '#/components/parameters/panelId' }
+    post:
+      operationId: postPanelSend
+      tags: [panels]
+      security: [{ session: [], csrf: [] }]
+      summary: Post or update the panel message in its channel
+      responses:
+        '200':
+          description: Sent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Panel' }
+        '502': { $ref: '#/components/responses/Error' }
+
+  /api/v1/guilds/{guildId}/tickets:
+    parameters: [{ $ref: '#/components/parameters/guildId' }]
+    get:
+      operationId: getTickets
+      summary: GET /api/v1/guilds/{guildId}/tickets
+      tags: [tickets]
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/TicketStatus' } }
+        - { name: categoryId, in: query, schema: { type: string, format: uuid } }
+        - { name: openerId, in: query, schema: { $ref: '#/components/schemas/Snowflake' } }
+        - { name: claimerId, in: query, schema: { $ref: '#/components/schemas/Snowflake' } }
+        - { $ref: '#/components/parameters/cursor' }
+        - { $ref: '#/components/parameters/limit' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Ticket' } }
+                  next: { type: [string, 'null'] }
+  /api/v1/guilds/{guildId}/tickets/{ticketId}:
+    parameters:
+      - { $ref: '#/components/parameters/guildId' }
+      - { $ref: '#/components/parameters/ticketId' }
+    get:
+      operationId: getTicket
+      summary: GET /api/v1/guilds/{guildId}/tickets/{ticketId}
+      tags: [tickets]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ticket' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/v1/guilds/{guildId}/tickets/{ticketId}/messages:
+    parameters:
+      - { $ref: '#/components/parameters/guildId' }
+      - { $ref: '#/components/parameters/ticketId' }
+    get:
+      operationId: getTicketMessages
+      tags: [tickets]
+      summary: Transcript messages (staff, or the ticket's opener)
+      parameters:
+        - { $ref: '#/components/parameters/cursor' }
+        - { $ref: '#/components/parameters/limit' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Message' } }
+                  next: { type: [string, 'null'] }
+  /api/v1/guilds/{guildId}/tickets/{ticketId}/transcript:
+    parameters:
+      - { $ref: '#/components/parameters/guildId' }
+      - { $ref: '#/components/parameters/ticketId' }
+    get:
+      operationId: getTicketTranscript
+      tags: [tickets]
+      summary: Download the transcript as a self-contained HTML file with no scripts
+      responses:
+        '200':
+          description: File
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            text/html: { schema: { type: string } }
+  /api/v1/guilds/{guildId}/tickets/{ticketId}/{transition}:
+    parameters:
+      - { $ref: '#/components/parameters/guildId' }
+      - { $ref: '#/components/parameters/ticketId' }
+      - name: transition
+        in: path
+        required: true
+        schema: { type: string, enum: [claim, unclaim, transfer, close, reopen] }
+    post:
+      operationId: postTicketTransition
+      summary: POST /api/v1/guilds/{guildId}/tickets/{ticketId}/{transition}
+      tags: [tickets]
+      security: [{ session: [], csrf: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TransitionInput' }
+      responses:
+        '200':
+          description: New state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ticket' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/v1/guilds/{guildId}/attachments/{attachmentId}:
+    parameters:
+      - { $ref: '#/components/parameters/guildId' }
+      - { name: attachmentId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getAttachment
+      tags: [tickets]
+      summary: Download a stored attachment (Content-Disposition attachment, nosniff)
+      responses:
+        '200':
+          description: File
+          content:
+            application/octet-stream: { schema: { type: string, format: binary } }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/guilds/{guildId}/tickets/{ticketId}/actions:
+    parameters:
+      - { $ref: '#/components/parameters/guildId' }
+      - { $ref: '#/components/parameters/ticketId' }
+    get:
+      operationId: getTicketActions
+      summary: GET /api/v1/guilds/{guildId}/tickets/{ticketId}/actions
+      tags: [actions]
+      responses:
+        '200':
+          description: Actions queued from this ticket, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/GameAction' } }
+    post:
+      operationId: postTicketAction
+      tags: [actions]
+      security: [{ session: [], csrf: [] }]
+      summary: Queue an action for the ticket's player on the category's game server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionRequest' }
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GameAction' }
+        '409':
+          description: A matching give_item exists in the last 10 minutes and confirmRepeat was not true
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /api/v1/guilds/{guildId}/tags:
+    parameters: [{ $ref: '#/components/parameters/guildId' }]
+    get:
+      operationId: getTags
+      summary: GET /api/v1/guilds/{guildId}/tags
+      tags: [tags]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Tag' } }
+    post:
+      operationId: postTags
+      summary: POST /api/v1/guilds/{guildId}/tags
+      tags: [tags]
+      security: [{ session: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TagInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Tag' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/v1/guilds/{guildId}/tags/{tagId}:
+    parameters:
+      - { $ref: '#/components/parameters/guildId' }
+      - { name: tagId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: putTag
+      summary: PUT /api/v1/guilds/{guildId}/tags/{tagId}
+      tags: [tags]
+      security: [{ session: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TagInput' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Tag' }
+    delete:
+      operationId: deleteTag
+      summary: DELETE /api/v1/guilds/{guildId}/tags/{tagId}
+      tags: [tags]
+      security: [{ session: [], csrf: [] }]
+      responses:
+        '204': { description: Deleted }
+
+  /api/v1/guilds/{guildId}/blocks:
+    parameters: [{ $ref: '#/components/parameters/guildId' }]
+    get:
+      operationId: getBlocks
+      summary: GET /api/v1/guilds/{guildId}/blocks
+      tags: [blocks]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Block' } }
+    post:
+      operationId: postBlocks
+      summary: POST /api/v1/guilds/{guildId}/blocks
+      tags: [blocks]
+      security: [{ session: [], csrf: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BlockInput' }
+      responses:
+        '201':
+          description: Blocked
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Block' }
+  /api/v1/guilds/{guildId}/blocks/{userId}:
+    parameters:
+      - { $ref: '#/components/parameters/guildId' }
+      - { name: userId, in: path, required: true, schema: { $ref: '#/components/schemas/Snowflake' } }
+    delete:
+      operationId: deleteBlock
+      summary: DELETE /api/v1/guilds/{guildId}/blocks/{userId}
+      tags: [blocks]
+      security: [{ session: [], csrf: [] }]
+      responses:
+        '204': { description: Unblocked }
+
+  /api/v1/guilds/{guildId}/stats:
+    parameters: [{ $ref: '#/components/parameters/guildId' }]
+    get:
+      operationId: getStats
+      summary: GET /api/v1/guilds/{guildId}/stats
+      tags: [stats]
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Stats' }
+
+  /api/v1/guilds/{guildId}/game-servers:
+    parameters: [{ $ref: '#/components/parameters/guildId' }]
+    get:
+      operationId: getGameServers
+      summary: GET /api/v1/guilds/{guildId}/game-servers
+      tags: [game-servers]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/GameServer' } }
+  /api/v1/guilds/{guildId}/game-servers/pair-codes:
+    parameters: [{ $ref: '#/components/parameters/guildId' }]
+    post:
+      operationId: postGameServersPairCodes
+      tags: [game-servers]
+      security: [{ session: [], csrf: [] }]
+      summary: Issue a one-time pairing code (at least 40 bits, valid 10 minutes, bound to this guild)
+      responses:
+        '201':
+          description: Shown once; only its hash is stored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PairCode' }
+  /api/v1/guilds/{guildId}/game-servers/{serverId}:
+    parameters:
+      - { $ref: '#/components/parameters/guildId' }
+      - { $ref: '#/components/parameters/serverId' }
+    patch:
+      operationId: patchGameServer
+      tags: [game-servers]
+      security: [{ session: [], csrf: [] }]
+      summary: Confirm a newly paired server or rename it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name: { type: string, minLength: 1, maxLength: 64 }
+                confirmed: { type: boolean }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GameServer' }
+    delete:
+      operationId: deleteGameServer
+      tags: [game-servers]
+      security: [{ session: [], csrf: [] }]
+      summary: Revoke; the server's secret stops working at once
+      responses:
+        '204': { description: Revoked }
+
+  /api/v1/guilds/{guildId}/audit:
+    parameters: [{ $ref: '#/components/parameters/guildId' }]
+    get:
+      operationId: getAudit
+      summary: GET /api/v1/guilds/{guildId}/audit
+      tags: [audit]
+      parameters:
+        - { $ref: '#/components/parameters/cursor' }
+        - { $ref: '#/components/parameters/limit' }
+      responses:
+        '200':
+          description: Newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/AuditEntry' } }
+                  next: { type: [string, 'null'] }
+
+  /bridge/v1/pair:
+    post:
+      operationId: postBridgePair
+      tags: [bridge]
+      security: []
+      summary: Exchange a pairing code for a server id and secret (rate limited per address)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PairRequest' }
+      responses:
+        '200':
+          description: Paired, waiting for staff to confirm in the dashboard
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PairResponse' }
+        '400': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+  /bridge/v1/heartbeat:
+    post:
+      operationId: postBridgeHeartbeat
+      tags: [bridge]
+      security: [{ bridgeHmac: [] }]
+      summary: Report the online players so tickets can show who is in game (every 30 s)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Heartbeat' }
+      responses:
+        '200':
+          description: Accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ack' }
+        '401': { $ref: '#/components/responses/Error' }
+  /bridge/v1/actions:
+    get:
+      operationId: getBridgeActions
+      tags: [bridge]
+      security: [{ bridgeHmac: [] }]
+      summary: Long-poll for the next action; returns one leased action or none when the wait ends
+      parameters:
+        - { name: wait, in: query, schema: { type: integer, minimum: 0, maximum: 25, default: 25 } }
+      responses:
+        '200':
+          description: One action (leased for 30 s) or null
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [action]
+                properties:
+                  action:
+                    oneOf:
+                      - { $ref: '#/components/schemas/LeasedAction' }
+                      - { type: 'null' }
+        '401': { $ref: '#/components/responses/Error' }
+  /bridge/v1/actions/{actionId}/result:
+    parameters:
+      - { name: actionId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: postBridgeActionsResult
+      tags: [bridge]
+      security: [{ bridgeHmac: [] }]
+      summary: Report an action's result; safe to repeat with the same id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActionResult' }
+      responses:
+        '200':
+          description: Recorded (or already recorded with the same result)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ack' }
+        '401': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: nt_session
+      description: HttpOnly, SameSite=Lax session cookie set by /auth/callback
+    csrf:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: Token from GET /api/v1/me; required on every write
+    bridgeHmac:
+      type: apiKey
+      in: header
+      name: X-Tickets-Signature
+      description: |
+        Hex HMAC-SHA256 under the server's secret over
+        `<timestamp>\n<nonce>\n<METHOD>\n<path with query>\n<sha256 hex of body>`.
+        Also required: X-Tickets-Server (server id), X-Tickets-Timestamp (unix seconds, ±60 s),
+        X-Tickets-Nonce (16–64 url-safe chars, single use), X-Tickets-Protocol (integer, currently 1).
+
+  parameters:
+    guildId: { name: guildId, in: path, required: true, schema: { $ref: '#/components/schemas/Snowflake' } }
+    categoryId: { name: categoryId, in: path, required: true, schema: { type: string, format: uuid } }
+    panelId: { name: panelId, in: path, required: true, schema: { type: string, format: uuid } }
+    ticketId: { name: ticketId, in: path, required: true, schema: { type: string, format: uuid } }
+    serverId: { name: serverId, in: path, required: true, schema: { type: string, format: uuid } }
+    cursor: { name: cursor, in: query, schema: { type: string, maxLength: 256 } }
+    limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Snowflake: { type: string, pattern: '^[0-9]{17,20}$' }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, description: 'machine code, e.g. not_found, forbidden, invalid, conflict, rate_limited' }
+        message: { type: string }
+        details: { type: object }
+    Ack:
+      type: object
+      required: [ok]
+      properties: { ok: { type: boolean, const: true } }
+    Health:
+      type: object
+      required: [ok, db, gateway, version]
+      properties:
+        ok: { type: boolean }
+        db: { type: string, enum: [up, down] }
+        gateway: { type: string, enum: [connected, connecting, standby] }
+        version: { type: string }
+    Me:
+      type: object
+      required: [user, guilds, csrfToken]
+      properties:
+        user:
+          type: object
+          required: [id, username]
+          properties:
+            id: { $ref: '#/components/schemas/Snowflake' }
+            username: { type: string }
+            avatar: { type: [string, 'null'] }
+        guilds:
+          type: array
+          items:
+            type: object
+            required: [id, name, canManage]
+            properties:
+              id: { $ref: '#/components/schemas/Snowflake' }
+              name: { type: string }
+              icon: { type: [string, 'null'] }
+              canManage: { type: boolean, description: 'Manage Server, or a staff role of any category' }
+        csrfToken: { type: string }
+    GuildSettings:
+      type: object
+      additionalProperties: false
+      required: [locale, retentionDays, logChannelId, ratingDm, privacyPolicyUrl]
+      properties:
+        locale: { type: string, enum: [th, en] }
+        retentionDays: { type: integer, minimum: 1, maximum: 3650, default: 90 }
+        logChannelId: { oneOf: [{ $ref: '#/components/schemas/Snowflake' }, { type: 'null' }] }
+        ratingDm: { type: boolean, default: false, description: 'send one rating DM after close (opt-in)' }
+        privacyPolicyUrl: { type: [string, 'null'], format: uri }
+    FormField:
+      type: object
+      additionalProperties: false
+      required: [id, label, style, required]
+      properties:
+        id: { type: string, pattern: '^[a-z0-9_]{1,32}$' }
+        label: { type: string, minLength: 1, maxLength: 45 }
+        style: { type: string, enum: [short, paragraph] }
+        required: { type: boolean }
+        placeholder: { type: string, maxLength: 100 }
+        maxLength: { type: integer, minimum: 1, maximum: 4000 }
+    CategoryInput:
+      type: object
+      additionalProperties: false
+      required: [name, staffRoleIds, mode, parentChannelId]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 64 }
+        emoji: { type: [string, 'null'], maxLength: 64 }
+        staffRoleIds: { type: array, maxItems: 25, items: { $ref: '#/components/schemas/Snowflake' } }
+        mode: { type: string, enum: [thread, channel], default: thread }
+        parentChannelId: { $ref: '#/components/schemas/Snowflake', description: 'text channel for threads, category channel for channels' }
+        nameTemplate: { type: string, maxLength: 64, default: 'ticket-{number}' }
+        welcomeMessage: { type: string, maxLength: 2000 }
+        form: { type: array, maxItems: 5, items: { $ref: '#/components/schemas/FormField' } }
+        autoCloseHours: { type: [integer, 'null'], minimum: 1, maximum: 720 }
+        maxOpenPerUser: { type: integer, minimum: 1, maximum: 10, default: 1 }
+        gameServerId: { type: [string, 'null'], format: uuid }
+    Category:
+      allOf:
+        - { $ref: '#/components/schemas/CategoryInput' }
+        - type: object
+          required: [id, createdAt]
+          properties:
+            id: { type: string, format: uuid }
+            createdAt: { type: string, format: date-time }
+    PanelButton:
+      type: object
+      additionalProperties: false
+      required: [categoryId, label]
+      properties:
+        categoryId: { type: string, format: uuid }
+        label: { type: string, minLength: 1, maxLength: 80 }
+        emoji: { type: [string, 'null'], maxLength: 64 }
+        style: { type: string, enum: [primary, secondary, success, danger], default: primary }
+    PanelInput:
+      type: object
+      additionalProperties: false
+      required: [channelId, embed, kind, buttons]
+      properties:
+        channelId: { $ref: '#/components/schemas/Snowflake' }
+        embed:
+          type: object
+          additionalProperties: false
+          required: [title]
+          properties:
+            title: { type: string, maxLength: 256 }
+            description: { type: string, maxLength: 4096 }
+            color: { type: integer, minimum: 0, maximum: 16777215 }
+            imageUrl: { type: [string, 'null'], format: uri }
+            footer: { type: string, maxLength: 2048 }
+        kind: { type: string, enum: [buttons, select] }
+        buttons: { type: array, minItems: 1, maxItems: 25, items: { $ref: '#/components/schemas/PanelButton' } }
+    Panel:
+      allOf:
+        - { $ref: '#/components/schemas/PanelInput' }
+        - type: object
+          required: [id, messageId]
+          properties:
+            id: { type: string, format: uuid }
+            messageId: { oneOf: [{ $ref: '#/components/schemas/Snowflake' }, { type: 'null' }] }
+    TicketStatus: { type: string, enum: [open, claimed, closed] }
+    Ticket:
+      type: object
+      required: [id, number, guildId, categoryId, status, openerId, channelId, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: integer, minimum: 1 }
+        guildId: { $ref: '#/components/schemas/Snowflake' }
+        categoryId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/TicketStatus' }
+        openerId: { $ref: '#/components/schemas/Snowflake' }
+        claimerId: { oneOf: [{ $ref: '#/components/schemas/Snowflake' }, { type: 'null' }] }
+        channelId: { $ref: '#/components/schemas/Snowflake', description: 'thread or channel id' }
+        answers: { type: object, additionalProperties: { type: string, maxLength: 4000 } }
+        firstResponseAt: { type: [string, 'null'], format: date-time }
+        lastActivityAt: { type: [string, 'null'], format: date-time }
+        closedAt: { type: [string, 'null'], format: date-time }
+        closeReason: { type: [string, 'null'], maxLength: 512 }
+        reopenedCount: { type: integer, minimum: 0 }
+        player:
+          description: Matched in-game player on the category's server, when online
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [serverId, online]
+              properties:
+                serverId: { type: string, format: uuid }
+                online: { type: boolean }
+                playerId: { type: integer }
+                name: { type: string }
+                job: { type: string }
+        createdAt: { type: string, format: date-time }
+    TransitionInput:
+      type: object
+      additionalProperties: false
+      properties:
+        toUserId: { $ref: '#/components/schemas/Snowflake', description: 'transfer only' }
+        reason: { type: string, maxLength: 512, description: 'close only' }
+    Message:
+      type: object
+      required: [id, authorId, authorName, content, createdAt]
+      properties:
+        id: { $ref: '#/components/schemas/Snowflake' }
+        authorId: { $ref: '#/components/schemas/Snowflake' }
+        authorName: { type: string }
+        isStaff: { type: boolean }
+        isSystem: { type: boolean }
+        content: { type: string }
+        embeds: { type: array, items: { type: object } }
+        attachments: { type: array, items: { $ref: '#/components/schemas/Attachment' } }
+        editedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    Attachment:
+      type: object
+      required: [id, filename, size, sha256, stored]
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string, maxLength: 255 }
+        contentType: { type: [string, 'null'] }
+        size: { type: integer, minimum: 0 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        stored: { type: boolean, description: 'false when over a cap or the download failed' }
+    ActionName: { type: string, enum: [player.info, player.revive, player.teleport, player.give_item], description: 'built-ins; servers may register more (pattern ^[a-z0-9_.]{1,64}$)' }
+    ActionRequest:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action: { type: string, pattern: '^[a-z0-9_.]{1,64}$' }
+        params:
+          type: object
+          maxProperties: 16
+          description: 'player.teleport {spot}; player.give_item {item, count}; custom actions per their schema'
+        confirmRepeat: { type: boolean, default: false }
+    GameAction:
+      type: object
+      required: [id, ticketId, serverId, action, status, requestedBy, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        ticketId: { type: string, format: uuid }
+        serverId: { type: string, format: uuid }
+        action: { type: string }
+        params: { type: object }
+        status: { type: string, enum: [queued, leased, done, failed, expired] }
+        requestedBy: { $ref: '#/components/schemas/Snowflake' }
+        result: { oneOf: [{ $ref: '#/components/schemas/ActionResult' }, { type: 'null' }] }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    TagInput:
+      type: object
+      additionalProperties: false
+      required: [name, content]
+      properties:
+        name: { type: string, pattern: '^[a-z0-9-]{1,32}$' }
+        content: { type: string, minLength: 1, maxLength: 2000, description: 'variables {user} {ticket} {category} {staff}' }
+    Tag:
+      allOf:
+        - { $ref: '#/components/schemas/TagInput' }
+        - type: object
+          required: [id]
+          properties: { id: { type: string, format: uuid } }
+    BlockInput:
+      type: object
+      additionalProperties: false
+      required: [userId]
+      properties:
+        userId: { $ref: '#/components/schemas/Snowflake' }
+        reason: { type: string, maxLength: 512 }
+        expiresAt: { type: [string, 'null'], format: date-time }
+    Block:
+      allOf:
+        - { $ref: '#/components/schemas/BlockInput' }
+        - type: object
+          required: [createdBy, createdAt]
+          properties:
+            createdBy: { $ref: '#/components/schemas/Snowflake' }
+            createdAt: { type: string, format: date-time }
+    Stats:
+      type: object
+      required: [opened, closed, medianFirstResponseSeconds, medianResolutionSeconds, ratingAverage, ratingCount, byStaff]
+      properties:
+        opened: { type: integer }
+        closed: { type: integer }
+        medianFirstResponseSeconds: { type: [number, 'null'] }
+        medianResolutionSeconds: { type: [number, 'null'] }
+        ratingAverage: { type: [number, 'null'] }
+        ratingCount: { type: integer }
+        byStaff:
+          type: array
+          items:
+            type: object
+            required: [userId, claimed, closed]
+            properties:
+              userId: { $ref: '#/components/schemas/Snowflake' }
+              claimed: { type: integer }
+              closed: { type: integer }
+              ratingAverage: { type: [number, 'null'] }
+    GameServer:
+      type: object
+      required: [id, name, confirmed, lastSeenAt, revoked]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        confirmed: { type: boolean }
+        edition: { type: [string, 'null'], description: 'gamename convar, e.g. gta5 or gta5enhanced' }
+        resourceVersion: { type: [string, 'null'] }
+        playersOnline: { type: [integer, 'null'] }
+        lastSeenAt: { type: [string, 'null'], format: date-time }
+        revoked: { type: boolean }
+    PairCode:
+      type: object
+      required: [code, expiresAt]
+      properties:
+        code: { type: string, description: 'shown once; at least 40 bits, e.g. 8 groups of base32' }
+        expiresAt: { type: string, format: date-time }
+    PairRequest:
+      type: object
+      additionalProperties: false
+      required: [code, serverName, resourceVersion, protocol]
+      properties:
+        code: { type: string, maxLength: 64 }
+        serverName: { type: string, maxLength: 64, description: 'sv_projectName or hostname' }
+        edition: { type: string, maxLength: 32 }
+        resourceVersion: { type: string, maxLength: 32 }
+        protocol: { type: integer, const: 1 }
+    PairResponse:
+      type: object
+      required: [serverId, secret, guildName]
+      properties:
+        serverId: { type: string, format: uuid }
+        secret: { type: string, description: '32 random bytes, base64url; stored by the resource in KVP' }
+        guildName: { type: string }
+    Heartbeat:
+      type: object
+      additionalProperties: false
+      required: [players]
+      properties:
+        players:
+          type: array
+          maxItems: 2048
+          items:
+            type: object
+            additionalProperties: false
+            required: [playerId, discordId]
+            properties:
+              playerId: { type: integer, minimum: 0 }
+              discordId: { $ref: '#/components/schemas/Snowflake' }
+              name: { type: string, maxLength: 64 }
+              job: { type: string, maxLength: 64 }
+        executedIds:
+          type: array
+          maxItems: 64
+          items: { type: string, format: uuid }
+          description: 'ids executed in the last 60 s, so the API can settle leases whose result was lost'
+    LeasedAction:
+      type: object
+      required: [id, action, params, discordId, leaseUntil, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        action: { type: string }
+        params: { type: object }
+        discordId: { $ref: '#/components/schemas/Snowflake', description: 'the ticket opener; the resource maps it to a player' }
+        requestedBy: { type: string, description: 'staff display name for the in-game log line' }
+        leaseUntil: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    ActionResult:
+      type: object
+      additionalProperties: false
+      required: [ok, code]
+      properties:
+        ok: { type: boolean }
+        code: { type: string, description: 'done, player_offline, not_allowed, over_cap, adapter_missing, error' }
+        message: { type: string, maxLength: 512 }
+        data: { type: object, maxProperties: 16 }
+    DataRequest:
+      type: object
+      required: [id, kind, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [delete_user, export_guild, uninstall_guild] }
+        status: { type: string, enum: [pending, done, failed] }
+        createdAt: { type: string, format: date-time }
+    AuditEntry:
+      type: object
+      required: [id, actorId, kind, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        actorId: { type: string, description: 'Discord user id, or system / game:<serverId>' }
+        kind: { type: string, description: 'e.g. settings.update, category.create, ticket.close, action.queue, server.revoke' }
+        target: { type: [string, 'null'] }
+        detail: { type: object }
+        createdAt: { type: string, format: date-time }
