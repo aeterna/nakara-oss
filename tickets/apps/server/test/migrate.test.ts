@@ -82,7 +82,7 @@ describe('migrate acceptance tests', () => {
   });
 
   it('runMigrations never logs database URL, passwords, or secrets', async () => {
-    const sensitiveUrl = 'postgres://admin_user:super_secret_pw_98765@db.example.internal:5432/nakara_tickets';
+    const sensitiveUrl = 'postgres://admin_user:super_secret_pw_98765@db.example.internal:5432/nakara_tickets'; // gitleaks:allow (fake test fixture)
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
