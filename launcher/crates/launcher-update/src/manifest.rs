@@ -191,7 +191,7 @@ pub(crate) fn decode_sha256(value: &str) -> Option<[u8; 32]> {
         return None;
     }
     let mut digest = [0u8; 32];
-    for (pair, out) in bytes.chunks_exact(2).zip(digest.iter_mut()) {
+    for (pair, out) in bytes.as_chunks::<2>().0.iter().zip(digest.iter_mut()) {
         *out = (hex_value(pair[0]) << 4) | hex_value(pair[1]);
     }
     Some(digest)
