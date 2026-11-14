@@ -296,3 +296,77 @@ fn studio_games_true_parses() {
     let profile = parse(&text).expect("studio_games should parse");
     assert!(profile.features.studio_games);
 }
+
+#[test]
+fn name_with_newline_is_rejected() {
+    let text = variant("name = \"Nakara\"", "name = \"Nak\\nara\"");
+    assert!(matches!(
+        rejected(&text),
+        ProfileError::Name {
+            field: "server.name"
+        }
+    ));
+}
+
+#[test]
+fn brand_with_bidi_override_is_rejected() {
+    let text = replace_line(
+        VALID,
+        "[theme]",
+        "[theme]\nbrand = \"Aeterna\\u202E\"",
+    );
+    assert!(matches!(
+        rejected(&text),
+        ProfileError::Name {
+            field: "theme.brand"
+        }
+    ));
+}
+
+#[test]
+fn whitespace_only_operator_is_rejected() {
+    let text = variant("operator = \"Nakara Team\"", "operator = \"   \"");
+    assert!(matches!(
+        rejected(&text),
+        ProfileError::Operator {
+            field: "server.operator"
+        }
+    ));
+}
+
+#[test]
+fn contact_email_with_nul_is_rejected() {
+    let text = variant(
+        "contact_email = \"ops@nakara.example\"",
+        "contact_email = \"ops\\u0000@nakara.example\"",
+    );
+    assert!(matches!(
+        rejected(&text),
+        ProfileError::ContactEmail {
+            field: "server.contact_email",
+            ..
+        }
+    ));
+}
+
+#[test]
+fn invite_url_with_bidi_override_is_rejected() {
+    let text = variant(
+        "invite_url = \"https://discord.gg/nakara\"",
+        "invite_url = \"https://discord.gg/\\u202Eabc\"",
+    );
+    assert!(matches!(
+        rejected(&text),
+        ProfileError::InviteUrl {
+            field: "server.invite_url",
+            ..
+        }
+    ));
+}
+
+#[test]
+fn thai_name_parses() {
+    let text = variant("name = \"Nakara\"", "name = \"เมืองนคร\"");
+    let profile = parse(&text).expect("Thai name should parse");
+    assert_eq!(profile.server.name, "เมืองนคร");
+}

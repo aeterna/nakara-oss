@@ -14,14 +14,14 @@
       "required": ["id", "name", "game", "connect", "operator", "contact_email"],
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,47}$" },
-        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^(?=.*\\S)[^\\u0000-\\u001F\\u007F-\\u009F\\u061C\\u200E\\u200F\\u202A-\\u202E\\u2066-\\u2069]+$" },
         "game": { "enum": ["fivem-legacy", "fivem-enhanced", "roblox"] },
         "connect": {
           "description": "fivem-*: host:port; roblox: numeric placeId.",
           "type": "string", "maxLength": 255, "pattern": "^([A-Za-z0-9.-]+:[0-9]{1,5}|[0-9]{1,20})$"
         },
-        "operator": { "description": "Creator PLA §2.3", "type": "string", "minLength": 1, "maxLength": 128 },
-        "contact_email": { "description": "Creator PLA §2.3", "type": "string", "format": "email", "maxLength": 254 },
+        "operator": { "description": "Creator PLA §2.3", "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^(?=.*\\S)[^\\u0000-\\u001F\\u007F-\\u009F\\u061C\\u200E\\u200F\\u202A-\\u202E\\u2066-\\u2069]+$" },
+        "contact_email": { "description": "Creator PLA §2.3", "type": "string", "format": "email", "maxLength": 254, "pattern": "^(?=.*\\S)[^\\u0000-\\u001F\\u007F-\\u009F\\u061C\\u200E\\u200F\\u202A-\\u202E\\u2066-\\u2069]+$" },
         "feed": { "type": "string", "format": "uri", "pattern": "^https://[^/?#@]+(/[^?#]*)?$" },
         "invite_url": { "type": "string", "format": "uri", "pattern": "^https://" },
         "release_repo": { "description": "owner/name of the GitHub repository this build updates from", "type": "string", "pattern": "^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$" }
@@ -33,7 +33,7 @@
       "required": ["accent"],
       "properties": {
         "template": { "enum": ["dusk", "classic"], "default": "dusk" },
-        "brand": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "brand": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^(?=.*\\S)[^\\u0000-\\u001F\\u007F-\\u009F\\u061C\\u200E\\u200F\\u202A-\\u202E\\u2066-\\u2069]+$" },
         "accent": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
         "wordmark": { "type": "string", "pattern": "^assets/[A-Za-z0-9._/-]+\\.(png|webp)$" },
         "background": { "type": "string", "pattern": "^assets/[A-Za-z0-9._/-]+\\.(png|webp|jpg)$" }

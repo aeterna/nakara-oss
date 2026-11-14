@@ -159,17 +159,17 @@ pub fn validate(p: &Profile) -> Result<(), ProfileError> {
             value: s.id.clone(),
         });
     }
-    if !(1..=64).contains(&s.name.chars().count()) {
+    if !(1..=64).contains(&s.name.chars().count()) || !plain_text(&s.name) {
         return Err(ProfileError::Name {
             field: "server.name",
         });
     }
-    if !(1..=128).contains(&s.operator.chars().count()) {
+    if !(1..=128).contains(&s.operator.chars().count()) || !plain_text(&s.operator) {
         return Err(ProfileError::Operator {
             field: "server.operator",
         });
     }
-    if !valid_email(&s.contact_email) {
+    if !valid_email(&s.contact_email) || !plain_text(&s.contact_email) {
         return Err(ProfileError::ContactEmail {
             field: "server.contact_email",
             value: s.contact_email.clone(),
@@ -214,7 +214,7 @@ pub fn validate(p: &Profile) -> Result<(), ProfileError> {
         });
     }
     if let Some(brand) = &p.theme.brand {
-        if !(1..=64).contains(&brand.chars().count()) {
+        if !(1..=64).contains(&brand.chars().count()) || !plain_text(brand) {
             return Err(ProfileError::Name {
                 field: "theme.brand",
             });
@@ -246,6 +246,21 @@ fn valid_id(id: &str) -> bool {
         && b[1..]
             .iter()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
+}
+
+fn plain_text(s: &str) -> bool {
+    !s.trim().is_empty()
+        && !s.chars().any(|c| {
+            c.is_control()
+                || matches!(
+                    c,
+                    '\u{061C}'
+                        | '\u{200E}'
+                        | '\u{200F}'
+                        | '\u{202A}'..='\u{202E}'
+                        | '\u{2066}'..='\u{2069}'
+                )
+        })
 }
 
 fn valid_email(email: &str) -> bool {
@@ -297,7 +312,7 @@ fn valid_https(value: &str) -> bool {
     let Some(rest) = value.strip_prefix("https://") else {
         return false;
     };
-    if value.chars().any(char::is_whitespace) {
+    if value.chars().any(char::is_whitespace) || !plain_text(value) {
         return false;
     }
     let authority = rest.split('/').next().unwrap_or(rest);
@@ -308,7 +323,7 @@ fn valid_feed(value: &str) -> bool {
     let Some(rest) = value.strip_prefix("https://") else {
         return false;
     };
-    if value.chars().any(char::is_whitespace) {
+    if value.chars().any(char::is_whitespace) || !plain_text(value) {
         return false;
     }
     let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
