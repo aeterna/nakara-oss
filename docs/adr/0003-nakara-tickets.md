@@ -84,8 +84,12 @@ facts that shape the decisions below:
      `give_item` for the same ticket, item and player within 10 minutes.
    - Success is judged on a response body that matches the schema, never on the status code alone.
    - The resource reads one convar, `nakara_tickets_api`, into a `const` and builds every URL by concatenation.
-     Whether it uses `fetch` or `PerformHttpRequest`, and the outbound body limit on Enhanced, come from the W0 spike
-     (`spike/tickets-bridge`) and are recorded here before W1's bridge lane starts.
+   - **Transport: global `fetch` in server JS, never `PerformHttpRequest`.** The W0 spike (branch
+     `spike/tickets-bridge`, `tickets/spike/README.md`, 2026-11-14, Legacy 35245 and Enhanced b170) measured: `fetch`
+     exists in both editions, moves GET and POST bodies of 1–64 KiB intact, holds 25 s and 55 s requests, and throws on
+     a refused or unresolvable host. `PerformHttpRequest` on Enhanced stops at about 10 s and reports status 200 with
+     an empty body on that timeout and on refused and unresolvable hosts, so it can neither long-poll nor tell success
+     from failure there. Enhanced's 8 KiB limit (ADR 0001 S1) applies to inbound bodies only; outbound was not limited.
 9. **Actions and adapters.** Built in: `player.info` (standalone, `qbx_core`), `player.teleport` to named spots from
    the resource's config (standalone), `player.revive` through `qbx_medical`, `player.give_item` through
    `ox_inventory`. Other actions register with `exports.nakara_tickets:registerAction(name, schema, fn)`. The
@@ -112,6 +116,6 @@ facts that shape the decisions below:
   first; the resource passes the same scanner as every other package.
 - The serverless mode is not cheaper than a small VM; it trades OS upkeep for an always-on instance.
 - A compromised dashboard can queue actions, but cannot exceed the allowlist and caps in the game server's config.
-- The bridge depends on unmeasured runtime behaviour until the spike reports; decision 8's last bullet is the gate.
+- The bridge depends on `fetch` staying available in FXServer's server JS; the spike measured it on Legacy 35245 and Enhanced b170 only.
 - Transcripts are personal data under the operator's control; the project ships the tools, not the compliance.
 - Nakara runs it on its own small VM (Q4b), not on the production database VM, which has 2 GB and no public IP.
