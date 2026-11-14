@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "launcher-ui"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "aeterna-launcher"
+path = "src/main.rs"
+
+[dependencies]
+dirs = "=6.0.0"
+iced = { version = "=0.14.0", features = ["svg"] }
+launcher-core = { path = "../launcher-core" }
+launcher-thai = { path = "../launcher-thai" }
+
+[build-dependencies]
+launcher-core = { path = "../launcher-core" }

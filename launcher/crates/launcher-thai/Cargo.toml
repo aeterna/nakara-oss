@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "launcher-thai"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Insert U+200B ZERO WIDTH SPACE between Thai words for line-breaking UI toolkits"
+
+[dependencies]
+icu_segmenter = "2"

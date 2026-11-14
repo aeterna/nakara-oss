@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/aeterna/nakara-oss/launcher/schema/feed.schema.json",
+  "title": "Launcher feed, schema 1",
+  "description": "JSON served at server.feed. Data only; text is plain (no HTML or Markdown). ADR 0002 decision 4.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "generated_at", "status"],
+  "properties": {
+    "schema": { "const": 1 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": { "enum": ["open", "closed", "maintenance", "unknown"] },
+        "players": { "type": "integer", "minimum": 0 },
+        "max_players": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "hours": {
+      "description": "Same meaning as /api/game-hours: plan none = open all day.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plan", "tz"],
+      "properties": {
+        "plan": { "enum": ["none", "window"] },
+        "tz": { "type": "string", "maxLength": 64 },
+        "open": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
+        "close": { "type": "string", "pattern": "^([01][0-9]|2[0-4]):[0-5][0-9]$" }
+      }
+    },
+    "news": {
+      "type": "array", "maxItems": 20,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["title", "date"],
+        "properties": {
+          "title": { "type": "string", "maxLength": 120 },
+          "date": { "type": "string", "format": "date" },
+          "url": { "type": "string", "pattern": "^https://" },
+          "image": { "description": "path on the feed host only", "type": "string", "pattern": "^/[A-Za-z0-9._/-]+\\.(png|webp|jpg)$" }
+        }
+      }
+    },
+    "patch_notes": {
+      "type": "array", "maxItems": 10,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["title", "date", "groups"],
+        "properties": {
+          "title": { "type": "string", "maxLength": 120 },
+          "date": { "type": "string", "format": "date" },
+          "groups": {
+            "type": "array", "maxItems": 6,
+            "items": {
+              "type": "object", "additionalProperties": false, "required": ["label", "items"],
+              "properties": {
+                "label": { "type": "string", "maxLength": 40 },
+                "items": { "type": "array", "maxItems": 30, "items": { "type": "string", "maxLength": 300 } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
