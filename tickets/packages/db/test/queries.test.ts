@@ -1,13 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { PGlite } from '@electric-sql/pglite';
-import { drizzle } from 'drizzle-orm/pglite';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import * as schema from '../src/schema.js';
 import type { TicketsDb } from '../src/index.js';
+import { openTestDb, type TestDbHandle } from '../test-support/pglite.js';
 import {
   ensureGuild,
   getSettings,
@@ -27,30 +23,21 @@ import {
   TicketError,
 } from '../src/index.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationSql = readFileSync(join(__dirname, '../migrations/0000_init.sql'), 'utf-8');
-
-async function createTestDb(): Promise<{ db: TicketsDb; client: PGlite }> {
-  const client = new PGlite();
-  const statements = migrationSql
-    .split('--> statement-breakpoint')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-
-  for (const stmt of statements) {
-    await client.exec(stmt);
-  }
-
-  const db = drizzle(client, { schema }) as TicketsDb;
-  return { db, client };
-}
-
 describe('database queries acceptance tests (pglite)', () => {
+  let testDb: TestDbHandle;
   let db: TicketsDb;
 
-  beforeEach(async () => {
-    const testDb = await createTestDb();
+  beforeAll(async () => {
+    testDb = await openTestDb();
     db = testDb.db;
+  });
+
+  beforeEach(async () => {
+    await testDb.reset();
+  });
+
+  afterAll(async () => {
+    await testDb.close();
   });
 
   it('(q1) two guilds, same category name, listCategories returns only its own', async () => {

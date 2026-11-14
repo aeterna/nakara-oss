@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { eq, and, or, lt, sql } from 'drizzle-orm';
 import { sealBytes } from '@nakara-tickets/core';
 import {
@@ -10,20 +10,15 @@ import {
   auditLog,
   tickets,
 } from '@nakara-tickets/db';
+import { normalizePairCode, sha256hex } from '../bridge/pair-code.js';
+
+export { normalizePairCode, sha256hex };
 
 const serverPlayers = new Map<string, any[]>();
 const pairRateLimits = new Map<string, { count: number; resetAt: number }>();
 
 export function getOnlinePlayers(serverId: string): any[] {
   return serverPlayers.get(serverId) ?? [];
-}
-
-export function normalizePairCode(raw: string): string {
-  return raw
-    .trim()
-    .toUpperCase()
-    .replace(/[IL]/g, '1')
-    .replace(/O/g, '0');
 }
 
 function checkPairRateLimit(ip: string): boolean {
@@ -46,10 +41,6 @@ function checkPairRateLimit(ip: string): boolean {
   }
   entry.count++;
   return true;
-}
-
-function sha256hex(str: string): string {
-  return createHash('sha256').update(str).digest('hex');
 }
 
 function isDeepEqual(a: any, b: any): boolean {
@@ -92,9 +83,10 @@ export default async function (app: FastifyInstance) {
 
   const requireBridgeAuth = async (req: FastifyRequest, reply: FastifyReply) => {
     if (app.requireBridge) {
-      return app.requireBridge(req, reply);
+      await app.requireBridge(req, reply);
+      return;
     }
-    return reply.code(401).send({ code: 'unauthorized', message: 'unauthorized' });
+    reply.code(401).send({ code: 'unauthorized', message: 'unauthorized' });
   };
 
   // POST /bridge/v1/pair

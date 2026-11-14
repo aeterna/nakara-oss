@@ -9,11 +9,12 @@ export default async function (app: FastifyInstance) {
     '/api/v1/me',
     {
       preHandler: [
-        (req, reply) => {
+        async (req, reply) => {
           if (typeof app.requireUser !== 'function') {
-            return reply.code(500).send({ code: 'misconfigured', message: 'User auth misconfigured' });
+            reply.code(500).send({ code: 'misconfigured', message: 'User auth misconfigured' });
+            return;
           }
-          return app.requireUser(req, reply);
+          await app.requireUser(req, reply);
         },
       ],
     },

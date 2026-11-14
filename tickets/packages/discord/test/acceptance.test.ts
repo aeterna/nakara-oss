@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import { randomBytes } from 'node:crypto';
 import { acquireGatewayLock } from '../src/lock.js';
 import {
@@ -8,13 +8,28 @@ import {
   handleMessageCreate,
 } from '../src/handlers/index.js';
 import { FakeDiscordPort } from './fake-port.js';
-import { createTestDb } from './test-db.js';
-import { guilds, guildSettings, categories, tickets, messages } from '@nakara-tickets/db';
+import { guilds, guildSettings, categories, tickets, messages, type TicketsDb } from '@nakara-tickets/db';
+import { openTestDb, type TestDbHandle } from '../../db/test-support/pglite.js';
 import { openBytes } from '@nakara-tickets/core';
 import { startGateway } from '../src/gateway.js';
 import { eq } from 'drizzle-orm';
 
 describe('acceptance tests d1-d8', () => {
+  let testDb: TestDbHandle;
+  let db: TicketsDb;
+
+  beforeAll(async () => {
+    testDb = await openTestDb();
+    db = testDb.db;
+  });
+
+  beforeEach(async () => {
+    await testDb.reset();
+  });
+
+  afterAll(async () => {
+    await testDb.close();
+  });
   it('d1 lock: a second acquireGatewayLock on the same key keeps waiting until the first releases', async () => {
     const executedQueries: { sql: string; params: any[] }[] = [];
     let isLocked = false;
@@ -90,7 +105,6 @@ describe('acceptance tests d1-d8', () => {
   });
 
   it('d2 open without form creates thread with name ticket-0001 and posts claim/close buttons', async () => {
-    const { db } = await createTestDb();
     const guildId = '111111111111111111';
     await db.insert(guilds).values({ guild_id: guildId, name: 'Test Guild' });
     await db.insert(guildSettings).values({ guild_id: guildId, locale: 'th' });
@@ -139,7 +153,6 @@ describe('acceptance tests d1-d8', () => {
   });
 
   it('d3 open with form shows modal and nothing is written', async () => {
-    const { db } = await createTestDb();
     const guildId = '111111111111111112';
     await db.insert(guilds).values({ guild_id: guildId, name: 'Test Guild' });
     await db.insert(guildSettings).values({ guild_id: guildId, locale: 'en' });
@@ -180,7 +193,6 @@ describe('acceptance tests d1-d8', () => {
   });
 
   it('d4 limit → ephemeral reply, no thread', async () => {
-    const { db } = await createTestDb();
     const guildId = '111111111111111113';
     await db.insert(guilds).values({ guild_id: guildId, name: 'Test Guild' });
     await db.insert(guildSettings).values({ guild_id: guildId, locale: 'th' });
@@ -226,7 +238,6 @@ describe('acceptance tests d1-d8', () => {
   });
 
   it('d5 non-staff claim refused, staff claim updates row', async () => {
-    const { db } = await createTestDb();
     const guildId = '111111111111111114';
     await db.insert(guilds).values({ guild_id: guildId, name: 'Test Guild' });
     await db.insert(guildSettings).values({ guild_id: guildId, locale: 'en' });
@@ -298,7 +309,6 @@ describe('acceptance tests d1-d8', () => {
   });
 
   it('d6 close archives thread and status is closed', async () => {
-    const { db } = await createTestDb();
     const guildId = '111111111111111115';
     await db.insert(guilds).values({ guild_id: guildId, name: 'Test Guild' });
     await db.insert(guildSettings).values({ guild_id: guildId, locale: 'en' });
@@ -354,7 +364,6 @@ describe('acceptance tests d1-d8', () => {
   });
 
   it('d7 message in ticket thread stored encrypted, bot message ignored', async () => {
-    const { db } = await createTestDb();
     const dataKey = randomBytes(32);
     const guildId = '111111111111111116';
     await db.insert(guilds).values({ guild_id: guildId, name: 'Test Guild' });

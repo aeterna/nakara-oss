@@ -1,28 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import Fastify from 'fastify';
-import { PGlite } from '@electric-sql/pglite';
-import { drizzle } from 'drizzle-orm/pglite';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { createHash, createHmac } from 'node:crypto';
 import * as dbSchema from '@nakara-tickets/db';
 import { sessions } from '@nakara-tickets/db';
+import { openTestDb } from '../../../packages/db/test-support/pglite.js';
 import { installSession } from '../src/session.js';
 import routes from '../src/routes/index.js';
 import type { TicketsConfig } from '../src/config.js';
-
-async function createTestDb() {
-  const pglite = new PGlite();
-  const migrationPath = resolve(import.meta.dirname, '../../../packages/db/migrations/0000_init.sql');
-  const sql = readFileSync(migrationPath, 'utf8');
-  for (const statement of sql.split('--> statement-breakpoint')) {
-    const trimmed = statement.trim();
-    if (trimmed) {
-      await pglite.query(trimmed);
-    }
-  }
-  return drizzle(pglite, { schema: dbSchema });
-}
 
 describe('auth acceptance tests', () => {
   const mockConfig: TicketsConfig = {
@@ -38,17 +22,27 @@ describe('auth acceptance tests', () => {
     STORAGE_DIR: '/tmp/tickets',
   };
 
+  let testEnv: Awaited<ReturnType<typeof openTestDb>>;
   let testDb: any;
   let app: ReturnType<typeof Fastify>;
 
+  beforeAll(async () => {
+    testEnv = await openTestDb();
+    testDb = testEnv.db;
+  });
+
   beforeEach(async () => {
-    testDb = await createTestDb();
+    await testEnv.reset();
     app = Fastify();
     app.decorate('config', mockConfig);
     app.decorate('db', testDb);
     await installSession(app, { config: mockConfig, db: testDb });
     await app.register(routes);
     await app.ready();
+  });
+
+  afterAll(async () => {
+    await testEnv.close();
   });
 
   it('GET /auth/login redirects to Discord with state and PKCE S256', async () => {

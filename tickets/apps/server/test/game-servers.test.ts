@@ -1,38 +1,28 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { PGlite } from '@electric-sql/pglite';
-import { drizzle } from 'drizzle-orm/pglite';
-import { readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import * as schema from '@nakara-tickets/db';
 import { sealBytes } from '@nakara-tickets/core';
+import { openTestDb } from '../../../packages/db/test-support/pglite.js';
 import { buildApp } from '../src/app.js';
+import { sha256hex, normalizePairCode } from '../src/bridge/pair-code.js';
 import type { TicketsConfig } from '../src/config.js';
 
-function sha256hex(str: string): string {
-  return createHash('sha256').update(str).digest('hex');
-}
-
 describe('game-servers and actions API acceptance tests', () => {
-  let pglite: PGlite;
+  let testEnv: Awaited<ReturnType<typeof openTestDb>>;
+  let pglite: any;
   let db: any;
   let config: TicketsConfig;
   const dataKey = Buffer.alloc(32, 7);
   const guildId = '123456789012345678';
   const staffUserId = '987654321098765432';
 
+  beforeAll(async () => {
+    testEnv = await openTestDb();
+    db = testEnv.db;
+    pglite = testEnv.pg;
+  });
+
   beforeEach(async () => {
-    pglite = new PGlite();
-    const migrationSql = readFileSync(
-      new URL('../../../packages/db/migrations/0000_init.sql', import.meta.url),
-      'utf8'
-    );
-    for (const stmt of migrationSql.split('--> statement-breakpoint')) {
-      const trimmed = stmt.trim();
-      if (trimmed) {
-        await pglite.exec(trimmed);
-      }
-    }
-    db = drizzle(pglite, { schema });
+    await testEnv.reset();
 
     config = {
       ROLE: 'all',
@@ -52,6 +42,10 @@ describe('game-servers and actions API acceptance tests', () => {
       guild_id: guildId,
       name: 'Test Guild',
     });
+  });
+
+  afterAll(async () => {
+    await testEnv.close();
   });
 
   function createTestApp() {
@@ -83,7 +77,7 @@ describe('game-servers and actions API acceptance tests', () => {
     const codes = await db.select().from(schema.pairCodes);
     expect(codes.length).toBe(1);
     const stored = codes[0];
-    expect(stored.code_hash).toBe(sha256hex(body.code));
+    expect(stored.code_hash).toBe(sha256hex(normalizePairCode(body.code)));
     expect(JSON.stringify(stored)).not.toContain(body.code);
   });
 

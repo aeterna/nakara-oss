@@ -1,38 +1,28 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { PGlite } from '@electric-sql/pglite';
-import { drizzle } from 'drizzle-orm/pglite';
-import { readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import * as schema from '@nakara-tickets/db';
 import { signBridge, sealBytes } from '@nakara-tickets/core';
+import { openTestDb } from '../../../packages/db/test-support/pglite.js';
 import { buildApp } from '../src/app.js';
 import { installBridgeAuth } from '../src/bridge/auth.js';
+import { sha256hex, normalizePairCode } from '../src/bridge/pair-code.js';
 import type { TicketsConfig } from '../src/config.js';
 
-function sha256hex(str: string): string {
-  return createHash('sha256').update(str).digest('hex');
-}
-
 describe('bridge API acceptance tests', () => {
-  let pglite: PGlite;
+  let testEnv: Awaited<ReturnType<typeof openTestDb>>;
+  let pglite: any;
   let db: any;
   let config: TicketsConfig;
   const dataKey = Buffer.alloc(32, 5); // 32-byte test key
   const guildId = '123456789012345678';
 
+  beforeAll(async () => {
+    testEnv = await openTestDb();
+    db = testEnv.db;
+    pglite = testEnv.pg;
+  });
+
   beforeEach(async () => {
-    pglite = new PGlite();
-    const migrationSql = readFileSync(
-      new URL('../../../packages/db/migrations/0000_init.sql', import.meta.url),
-      'utf8'
-    );
-    for (const stmt of migrationSql.split('--> statement-breakpoint')) {
-      const trimmed = stmt.trim();
-      if (trimmed) {
-        await pglite.exec(trimmed);
-      }
-    }
-    db = drizzle(pglite, { schema });
+    await testEnv.reset();
 
     config = {
       ROLE: 'all',
@@ -54,6 +44,10 @@ describe('bridge API acceptance tests', () => {
     });
   });
 
+  afterAll(async () => {
+    await testEnv.close();
+  });
+
   function createTestApp(overrideConfig?: Partial<TicketsConfig>) {
     const finalConfig = overrideConfig ? { ...config, ...overrideConfig } : config;
     const app = buildApp({ db, config: finalConfig });
@@ -64,7 +58,7 @@ describe('bridge API acceptance tests', () => {
   it('(b1) pair with a valid code → serverId + secret, code unusable after', async () => {
     const app = createTestApp();
     const pairCodePlain = 'PAIRCODE10';
-    const codeHash = sha256hex(pairCodePlain);
+    const codeHash = sha256hex(normalizePairCode(pairCodePlain));
 
     await db.insert(schema.pairCodes).values({
       guild_id: guildId,
@@ -125,7 +119,7 @@ describe('bridge API acceptance tests', () => {
   it('(b2) expired code → 400', async () => {
     const app = createTestApp();
     const expiredCodePlain = 'EXPIRED100';
-    const codeHash = sha256hex(expiredCodePlain);
+    const codeHash = sha256hex(normalizePairCode(expiredCodePlain));
 
     await db.insert(schema.pairCodes).values({
       guild_id: guildId,
@@ -514,9 +508,7 @@ describe('bridge API acceptance tests', () => {
   it('(b7) pair → sign exactly as the resource does → API accepts', async () => {
     const app = createTestApp();
     const rawPairCode = 'CROCKFORD01';
-    // Test normalization with Crockford letters
-    const normCode = rawPairCode.trim().toUpperCase().replace(/[IL]/g, '1').replace(/O/g, '0');
-    const codeHash = sha256hex(normCode);
+    const codeHash = sha256hex(normalizePairCode(rawPairCode));
 
     await db.insert(schema.pairCodes).values({
       guild_id: guildId,
@@ -585,7 +577,7 @@ describe('bridge API acceptance tests', () => {
   it('pair fails with 500 misconfigured when TICKETS_DATA_KEY is missing', async () => {
     const appWithoutKey = createTestApp({ TICKETS_DATA_KEY: null as any });
     const pairCodePlain = 'KEYTEST100';
-    const codeHash = sha256hex(pairCodePlain);
+    const codeHash = sha256hex(normalizePairCode(pairCodePlain));
 
     await db.insert(schema.pairCodes).values({
       guild_id: guildId,

@@ -1,8 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { eq, and, sql } from 'drizzle-orm';
 import { gameServers, pairCodes, auditLog, inGuild } from '@nakara-tickets/db';
 import '../bridge/staff-types.js';
+import { normalizePairCode, sha256hex } from '../bridge/pair-code.js';
+
+export { normalizePairCode, sha256hex };
 
 const CROCKFORD_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
@@ -13,18 +16,6 @@ function generateCrockfordCode(): string {
     code += CROCKFORD_ALPHABET[bytes[i] % 32];
   }
   return code;
-}
-
-export function normalizePairCode(raw: string): string {
-  return raw
-    .trim()
-    .toUpperCase()
-    .replace(/[IL]/g, '1')
-    .replace(/O/g, '0');
-}
-
-function sha256hex(str: string): string {
-  return createHash('sha256').update(str).digest('hex');
 }
 
 function formatServer(r: typeof gameServers.$inferSelect) {
@@ -43,9 +34,10 @@ function formatServer(r: typeof gameServers.$inferSelect) {
 export default async function (app: FastifyInstance) {
   const requireStaffAuth = async (req: FastifyRequest, reply: FastifyReply) => {
     if (typeof app.requireStaff !== 'function') {
-      return reply.code(500).send({ code: 'misconfigured', message: 'Staff authentication not configured' });
+      reply.code(500).send({ code: 'misconfigured', message: 'Staff authentication not configured' });
+      return;
     }
-    return app.requireStaff(req, reply);
+    await app.requireStaff(req, reply);
   };
 
   // GET /api/v1/guilds/:guildId/game-servers

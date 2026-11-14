@@ -13,11 +13,12 @@ const guildSettingsSchema = z.object({
 });
 
 export default async function (app: FastifyInstance) {
-  const requireStaff = (req: FastifyRequest, reply: FastifyReply) => {
+  const requireStaff = async (req: FastifyRequest, reply: FastifyReply) => {
     if (typeof app.requireStaff !== 'function') {
-      return reply.code(500).send({ code: 'misconfigured', message: 'Staff auth misconfigured' });
+      reply.code(500).send({ code: 'misconfigured', message: 'Staff auth misconfigured' });
+      return;
     }
-    return app.requireStaff(req, reply);
+    await app.requireStaff(req, reply);
   };
 
   app.get(

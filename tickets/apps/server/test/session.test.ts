@@ -1,12 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import Fastify from 'fastify';
-import { PGlite } from '@electric-sql/pglite';
-import { drizzle } from 'drizzle-orm/pglite';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import * as dbSchema from '@nakara-tickets/db';
 import { sessions, guilds, categories } from '@nakara-tickets/db';
+import { openTestDb } from '../../../packages/db/test-support/pglite.js';
 import { installSession } from '../src/session.js';
 import { checkStaff, clearStaffCache } from '../src/staff.js';
 import routes from '../src/routes/index.js';
@@ -93,19 +90,6 @@ vi.mock('@nakara-tickets/db', async (importOriginal) => {
   };
 });
 
-async function createTestDb() {
-  const pglite = new PGlite();
-  const migrationPath = resolve(import.meta.dirname, '../../../packages/db/migrations/0000_init.sql');
-  const sql = readFileSync(migrationPath, 'utf8');
-  for (const statement of sql.split('--> statement-breakpoint')) {
-    const trimmed = statement.trim();
-    if (trimmed) {
-      await pglite.query(trimmed);
-    }
-  }
-  return drizzle(pglite, { schema: dbSchema });
-}
-
 describe('session & staff acceptance tests', () => {
   const GUILD_ALLOWED = '111111111111111111';
   const GUILD_NOT_ALLOWED = '999999999999999999';
@@ -127,12 +111,18 @@ describe('session & staff acceptance tests', () => {
     STORAGE_DIR: '/tmp/tickets',
   };
 
+  let testEnv: Awaited<ReturnType<typeof openTestDb>>;
   let testDb: any;
   let app: ReturnType<typeof Fastify>;
 
+  beforeAll(async () => {
+    testEnv = await openTestDb();
+    testDb = testEnv.db;
+  });
+
   beforeEach(async () => {
+    await testEnv.reset();
     clearStaffCache();
-    testDb = await createTestDb();
 
     // Seed guild
     await testDb.insert(guilds).values({
@@ -187,6 +177,10 @@ describe('session & staff acceptance tests', () => {
         json: async () => ({ message: 'Not found' }),
       };
     }));
+  });
+
+  afterAll(async () => {
+    await testEnv.close();
   });
 
   async function createSession(userId: string, rawToken: string, csrf: string) {

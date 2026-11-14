@@ -36,9 +36,9 @@ export function installStatic(app: FastifyInstance, dir: string): void {
     await scope.register(staticPlugin, {
       root: resolvedDir,
       wildcard: true,
-      setHeaders: (res: any) => {
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.setHeader('Content-Security-Policy', CSP_HEADER);
+      setHeaders: (reply: FastifyReply) => {
+        reply.header('X-Content-Type-Options', 'nosniff');
+        reply.header('Content-Security-Policy', CSP_HEADER);
       },
     });
 

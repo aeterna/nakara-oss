@@ -1,13 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import Fastify from 'fastify';
-import { PGlite } from '@electric-sql/pglite';
-import { drizzle } from 'drizzle-orm/pglite';
 import { eq } from 'drizzle-orm';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import * as dbSchema from '@nakara-tickets/db';
 import { sessions, guilds, categories, tickets } from '@nakara-tickets/db';
+import { openTestDb } from '../../../packages/db/test-support/pglite.js';
 import { installSession } from '../src/session.js';
 import { clearStaffCache } from '../src/staff.js';
 import routes from '../src/routes/index.js';
@@ -130,19 +127,6 @@ vi.mock('@nakara-tickets/db', async (importOriginal) => {
   };
 });
 
-async function createTestDb() {
-  const pglite = new PGlite();
-  const migrationPath = resolve(import.meta.dirname, '../../../packages/db/migrations/0000_init.sql');
-  const sql = readFileSync(migrationPath, 'utf8');
-  for (const statement of sql.split('--> statement-breakpoint')) {
-    const trimmed = statement.trim();
-    if (trimmed) {
-      await pglite.query(trimmed);
-    }
-  }
-  return drizzle(pglite, { schema: dbSchema });
-}
-
 describe('categories acceptance tests', () => {
   const GUILD_A = '111111111111111111';
   const GUILD_B = '222222222222222222';
@@ -164,12 +148,18 @@ describe('categories acceptance tests', () => {
     STORAGE_DIR: '/tmp/tickets',
   };
 
+  let testEnv: Awaited<ReturnType<typeof openTestDb>>;
   let testDb: any;
   let app: ReturnType<typeof Fastify>;
 
+  beforeAll(async () => {
+    testEnv = await openTestDb();
+    testDb = testEnv.db;
+  });
+
   beforeEach(async () => {
+    await testEnv.reset();
     clearStaffCache();
-    testDb = await createTestDb();
 
     // Seed guilds
     await testDb.insert(guilds).values([
@@ -219,6 +209,10 @@ describe('categories acceptance tests', () => {
       }
       return { ok: false, status: 404, json: async () => ({}) };
     }));
+  });
+
+  afterAll(async () => {
+    await testEnv.close();
   });
 
   it('GET /api/v1/guilds/:guildId/categories returns categories for guild', async () => {
