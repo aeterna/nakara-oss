@@ -6,7 +6,8 @@
   "type": "module",
   "workspaces": [
     "packages/devkit",
-    "packages/rongroi"
+    "packages/rongroi",
+    "packages/tickets"
   ],
   "engines": {
     "node": ">=22"

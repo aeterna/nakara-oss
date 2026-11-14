@@ -1,0 +1,131 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      POSTGRES_DB: tickets
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tickets"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    image: nakara-tickets:latest
+    build: .
+    restart: "no"
+    mem_limit: 256m
+    environment:
+      ROLE: migrate
+      DATABASE_URL_FILE: /run/secrets/database_url
+      TICKETS_DATA_KEY_FILE: /run/secrets/tickets_data_key
+    secrets:
+      - database_url
+      - tickets_data_key
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    image: nakara-tickets:latest
+    build: .
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      ROLE: all
+      PORT: "8080"
+      DATABASE_URL_FILE: /run/secrets/database_url
+      TICKETS_DATA_KEY_FILE: /run/secrets/tickets_data_key
+      DISCORD_TOKEN_FILE: /run/secrets/discord_token
+      DISCORD_CLIENT_SECRET_FILE: /run/secrets/discord_client_secret
+      DISCORD_APP_ID: ${DISCORD_APP_ID:?set DISCORD_APP_ID}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
+      ALLOWED_GUILD_IDS: ${ALLOWED_GUILD_IDS:?set ALLOWED_GUILD_IDS}
+      STORAGE_DIR: /data/files
+    secrets:
+      - database_url
+      - tickets_data_key
+      - discord_token
+      - discord_client_secret
+    volumes:
+      - app_storage:/data/files
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  caddy:
+    image: caddy:2-alpine
+    profiles:
+      - caddy
+    restart: unless-stopped
+    mem_limit: 128m
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-localhost}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+  cloudflared:
+    image: cloudflare/cloudflared:2024.11.0
+    profiles:
+      - cloudflared
+    restart: unless-stopped
+    mem_limit: 128m
+    command: tunnel --no-autoupdate run --token-file /run/secrets/cloudflared_token
+    secrets:
+      - cloudflared_token
+    depends_on:
+      - app
+
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    mem_limit: 256m
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: tickets
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - backup_data:/backups
+      - ./deploy/backup.sh:/backup.sh:ro
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  database_url:
+    file: ./secrets/database_url.txt
+  tickets_data_key:
+    file: ./secrets/tickets_data_key.txt
+  discord_token:
+    file: ./secrets/discord_token.txt
+  discord_client_secret:
+    file: ./secrets/discord_client_secret.txt
+  cloudflared_token:
+    file: ./secrets/cloudflared_token.txt
+
+volumes:
+  postgres_data:
+  app_storage:
+  caddy_data:
+  caddy_config:
+  backup_data:

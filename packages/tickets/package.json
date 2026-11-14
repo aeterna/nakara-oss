@@ -1,0 +1,10 @@
+{
+  "name": "@aeterna_game/nakara-tickets",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "FiveM bridge resource for Nakara Tickets",
+  "scripts": {
+    "test": "node --test \"spec/**/*.test.js\""
+  }
+}

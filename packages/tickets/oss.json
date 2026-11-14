@@ -1,0 +1,32 @@
+{
+  "$schema": "../../oss.schema.json",
+  "name": "tickets",
+  "resource": "nakara_tickets",
+  "capabilities": {
+    "http": [],
+    "commands": [],
+    "registeredCommands": [
+      "nakara_tickets"
+    ],
+    "convars": {
+      "read": [
+        "nakara_tickets_api",
+        "gamename",
+        "sv_projectName"
+      ],
+      "write": []
+    },
+    "netEvents": {
+      "server": [],
+      "client": []
+    },
+    "nui": false,
+    "db": {
+      "tables": [],
+      "ddl": false
+    },
+    "files": {
+      "write": []
+    }
+  }
+}

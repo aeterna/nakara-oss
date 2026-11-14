@@ -1,0 +1,11 @@
+# TypeScript output emitted next to sources (tsc -b only emits to dist/; these mean a misconfigured project)
+apps/*/src/**/*.js
+apps/*/src/**/*.js.map
+apps/server/src/**/*.d.ts
+packages/*/src/**/*.js
+packages/*/src/**/*.map
+packages/*/src/**/*.d.ts
+packages/*/test-support/**/*.js
+packages/*/test-support/**/*.map
+packages/*/test-support/**/*.d.ts
+*.tsbuildinfo

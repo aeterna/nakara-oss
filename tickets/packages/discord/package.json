@@ -1,0 +1,25 @@
+{
+  "name": "@nakara-tickets/discord",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@nakara-tickets/core": "*",
+    "@nakara-tickets/db": "*",
+    "discord.js": "14.28.1",
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2",
+    "@electric-sql/pglite": "0.5.16",
+    "vitest": "5.1.0",
+    "@types/pg": "8.23.1"
+  },
+  "scripts": {
+    "test": "vitest run"
+  }
+}
