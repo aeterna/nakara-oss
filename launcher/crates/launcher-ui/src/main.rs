@@ -33,8 +33,8 @@ pub struct App {
 
 impl Default for App {
     fn default() -> Self {
-        let state_dir = dirs::config_dir()
-            .map(|d| d.join(format!("{}-launcher", profile::get().server.id)));
+        let state_dir =
+            dirs::config_dir().map(|d| d.join(format!("{}-launcher", profile::get().server.id)));
         let show_privacy = match &state_dir {
             Some(d) => !launcher_core::first_run::seen(d),
             None => true,

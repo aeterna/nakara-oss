@@ -137,8 +137,7 @@ pub fn instances() -> &'static [Instance] {
         let mut first = SAMPLES[0];
 
         first.name = &p.server.name;
-        first.initials =
-            Box::leak(crate::profile::initials(&p.server.name).into_boxed_str());
+        first.initials = Box::leak(crate::profile::initials(&p.server.name).into_boxed_str());
         first.chips[0] = crate::profile::game_label(&p.server.game);
         first.operator = &p.server.operator;
         first.contact = &p.server.contact_email;
