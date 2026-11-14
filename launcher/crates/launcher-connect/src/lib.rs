@@ -45,6 +45,10 @@ pub mod pipe;
 /// Maximum size of a pairing code, in bytes.
 pub const MAX_CODE_BYTES: usize = 4096;
 
+/// Maximum time allowed for the pipe handoff: connecting, writing the pairing
+/// code, and waiting for Connect to close its end of the named pipe.
+pub const HANDOFF_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// The prefix every pairing code starts with.
 const CODE_PREFIX: &str = "rr1.";
 
@@ -240,22 +244,10 @@ pub fn is_launch_pipe_name(name: &str) -> bool {
     })
 }
 
-/// Start Connect and hand it one pairing code through a named pipe.
-///
-/// The code is validated first, and `exe` must be an absolute path. The pipe
-/// is created before Connect starts, so a name clash fails before anything
-/// runs. Connect gets exactly one argument, `--from-launcher=<pipe name>`,
-/// and null stdin, stdout and stderr.
-///
-/// `timeout` covers the whole handoff: waiting for the client, writing the
-/// code, and waiting for Connect to exit. A child still running at the
-/// deadline is killed and [`ConnectError::Timeout`] is returned.
-///
-/// Only Windows has the handoff. Elsewhere this returns
-/// [`ConnectError::Unsupported`] after the same checks, without spawning.
-#[cfg(windows)]
-pub fn start_connect(exe: &Path, code: &str, timeout: Duration) -> Result<Outcome, ConnectError> {
-    start_connect_with_env(exe, code, timeout, &[])
+/// The handoff timeout for a given total run timeout: the shorter of
+/// [`HANDOFF_TIMEOUT`] and `run_timeout`.
+pub fn handoff_timeout(run_timeout: Duration) -> Duration {
+    HANDOFF_TIMEOUT.min(run_timeout)
 }
 
 /// Start Connect and hand it one pairing code through a named pipe.
@@ -265,9 +257,33 @@ pub fn start_connect(exe: &Path, code: &str, timeout: Duration) -> Result<Outcom
 /// runs. Connect gets exactly one argument, `--from-launcher=<pipe name>`,
 /// and null stdin, stdout and stderr.
 ///
-/// `timeout` covers the whole handoff: waiting for the client, writing the
-/// code, and waiting for Connect to exit. A child still running at the
-/// deadline is killed and [`ConnectError::Timeout`] is returned.
+/// Environment variables `ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS`, and
+/// `ELECTRON_ENABLE_LOGGING` are removed from the child command so the
+/// launcher's environment cannot change how Connect runs.
+///
+/// The handoff itself (connecting, writing the code, and waiting for Connect
+/// to close the pipe) must complete within [`HANDOFF_TIMEOUT`] (30 s, or
+/// `timeout` if shorter). Past it or past `timeout` for Connect to exit, the
+/// child is killed and [`ConnectError::Timeout`] is returned.
+///
+/// Only Windows has the handoff. Elsewhere this returns
+/// [`ConnectError::Unsupported`] after the same checks, without spawning.
+#[cfg(windows)]
+pub fn start_connect(exe: &Path, code: &str, timeout: Duration) -> Result<Outcome, ConnectError> {
+    start_connect_inner(exe, code, timeout, &[])
+}
+
+/// Start Connect and hand it one pairing code through a named pipe.
+///
+/// The code is validated first, and `exe` must be an absolute path. The pipe
+/// is created before Connect starts, so a name clash fails before anything
+/// runs. Connect gets exactly one argument, `--from-launcher=<pipe name>`,
+/// and null stdin, stdout and stderr.
+///
+/// The handoff itself (connecting, writing the code, and waiting for Connect
+/// to close the pipe) must complete within [`HANDOFF_TIMEOUT`] (30 s, or
+/// `timeout` if shorter). Past it or past `timeout` for Connect to exit, the
+/// child is killed and [`ConnectError::Timeout`] is returned.
 ///
 /// Only Windows has the handoff. Elsewhere this returns
 /// [`ConnectError::Unsupported`] after the same checks, without spawning.
@@ -281,10 +297,19 @@ pub fn start_connect(exe: &Path, code: &str, _timeout: Duration) -> Result<Outco
 }
 
 /// [`start_connect`] with extra environment variables for the child. Only
-/// the tests use it; it is not part of the handoff.
-#[cfg(windows)]
-#[doc(hidden)]
+/// the tests use it; it is not part of the release API.
+#[cfg(all(windows, feature = "mock"))]
 pub fn start_connect_with_env(
+    exe: &Path,
+    code: &str,
+    timeout: Duration,
+    env: &[(&str, &str)],
+) -> Result<Outcome, ConnectError> {
+    start_connect_inner(exe, code, timeout, env)
+}
+
+#[cfg(windows)]
+fn start_connect_inner(
     exe: &Path,
     code: &str,
     timeout: Duration,
@@ -294,8 +319,14 @@ pub fn start_connect_with_env(
     if !exe.is_absolute() {
         return Err(ConnectError::NotAbsolute);
     }
-    let deadline = Instant::now()
+    let start = Instant::now();
+    let run_deadline = start
         .checked_add(timeout)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "timeout is too long"))
+        .map_err(ConnectError::Io)?;
+
+    let handoff_deadline = start
+        .checked_add(handoff_timeout(timeout))
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "timeout is too long"))
         .map_err(ConnectError::Io)?;
 
@@ -303,6 +334,9 @@ pub fn start_connect_with_env(
     let mut server = pipe::ServerPipe::create(&name).map_err(ConnectError::Io)?;
     let mut child = Command::new(exe)
         .arg(launch_argument(&name))
+        .env_remove("ELECTRON_RUN_AS_NODE")
+        .env_remove("NODE_OPTIONS")
+        .env_remove("ELECTRON_ENABLE_LOGGING")
         .envs(env.iter().copied())
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -313,11 +347,11 @@ pub fn start_connect_with_env(
     let expected = child.id();
     let mut line = code.as_bytes().to_vec();
     line.push(b'\n');
-    let handoff = server.hand_off(&line, expected, deadline, &mut || child.try_wait());
+    let handoff = server.hand_off(&line, expected, handoff_deadline, &mut || child.try_wait());
     drop(server);
 
     match handoff {
-        Ok(pipe::Handoff::Written) => wait_for_exit(&mut child, deadline),
+        Ok(pipe::Handoff::Written) => wait_for_exit(&mut child, run_deadline),
         Ok(pipe::Handoff::ChildExited(status)) => Ok(Outcome::from_exit(status)),
         Ok(pipe::Handoff::Mismatch { got }) => {
             kill_and_reap(&mut child);
@@ -444,6 +478,26 @@ mod tests {
     }
 
     // -- start_connect checks that run everywhere
+
+    #[test]
+    fn handoff_timeout_picks_the_shorter_of_thirty_seconds_and_the_run_timeout() {
+        assert_eq!(
+            handoff_timeout(Duration::from_secs(5)),
+            Duration::from_secs(5)
+        );
+        assert_eq!(
+            handoff_timeout(Duration::from_secs(30)),
+            Duration::from_secs(30)
+        );
+        assert_eq!(
+            handoff_timeout(Duration::from_secs(60)),
+            Duration::from_secs(30)
+        );
+        assert_eq!(
+            HANDOFF_TIMEOUT,
+            Duration::from_secs(30)
+        );
+    }
 
     #[test]
     fn start_connect_refuses_a_relative_path() {

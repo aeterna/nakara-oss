@@ -89,7 +89,7 @@ impl ServerPipe {
         deadline: Instant,
         child_exit: &mut dyn FnMut() -> io::Result<Option<ExitStatus>>,
     ) -> io::Result<Handoff> {
-        let mut connect = Overlapped::new();
+        let mut connect = Overlapped::new(self.handle.raw());
         if !self.start_connect(&mut connect)? {
             match self.wait_op(&mut connect, deadline, &mut *child_exit)? {
                 Wait::Done(_) => {}
@@ -103,8 +103,8 @@ impl ServerPipe {
             return Ok(Handoff::Mismatch { got });
         }
 
-        let mut write = Overlapped::new();
-        self.start_write(&mut write, bytes)?;
+        let mut write = Overlapped::with_buffer(self.handle.raw(), bytes.to_vec());
+        self.start_write(&mut write)?;
         let count = match self.wait_op(&mut write, deadline, &mut *child_exit)? {
             Wait::Done(count) => count,
             Wait::ChildExited(status) => return Ok(Handoff::ChildExited(status)),
@@ -128,11 +128,12 @@ impl ServerPipe {
     /// connected, so no operation is pending.
     fn start_connect(&self, op: &mut Overlapped) -> io::Result<bool> {
         // SAFETY: the handle is a server pipe, and `op` lives until the
-        // operation completes or is cancelled by the caller.
+        // operation completes or is cancelled and drained.
         let ok = unsafe { ConnectNamedPipe(self.handle.raw(), op.as_mut_ptr()) };
         if ok != FALSE || last_error_is(ERROR_PIPE_CONNECTED) {
             Ok(true)
         } else if last_error_is(ERROR_IO_PENDING) {
+            op.pending = true;
             Ok(false)
         } else {
             Err(last_os_error())
@@ -140,20 +141,28 @@ impl ServerPipe {
     }
 
     /// Start an overlapped write. The result is read with `wait_op`.
-    fn start_write(&self, op: &mut Overlapped, bytes: &[u8]) -> io::Result<()> {
-        let len = u32::try_from(bytes.len()).map_err(io::Error::other)?;
-        // SAFETY: `bytes` and `op` stay alive until the write completes or is
-        // cancelled. An overlapped write may pass a null byte count.
+    fn start_write(&self, op: &mut Overlapped) -> io::Result<()> {
+        let (buf_ptr, len) = {
+            let buf = op.buffer().ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidInput, "write operation has no buffer")
+            })?;
+            let len = u32::try_from(buf.len()).map_err(io::Error::other)?;
+            (buf.as_ptr(), len)
+        };
+        // SAFETY: `op` owns the buffer and `op.raw`, which stay alive until the
+        // write completes or is cancelled and drained. An overlapped write may
+        // pass a null byte count.
         let ok = unsafe {
             WriteFile(
                 self.handle.raw(),
-                bytes.as_ptr().cast(),
+                buf_ptr.cast(),
                 len,
                 null_mut(),
                 op.as_mut_ptr(),
             )
         };
         if ok != FALSE || last_error_is(ERROR_IO_PENDING) {
+            op.pending = true;
             Ok(())
         } else {
             Err(last_os_error())
@@ -171,7 +180,10 @@ impl ServerPipe {
     ) -> io::Result<Wait> {
         loop {
             match self.poll_op(op) {
-                Ok(Some(count)) => return Ok(Wait::Done(count)),
+                Ok(Some(count)) => {
+                    op.pending = false;
+                    return Ok(Wait::Done(count));
+                }
                 Ok(None) => {}
                 Err(err) => {
                     self.cancel_and_drain(op);
@@ -217,12 +229,7 @@ impl ServerPipe {
     /// Cancel the pending operation in `op`, then wait until the kernel has
     /// finished with it.
     fn cancel_and_drain(&self, op: &mut Overlapped) {
-        // SAFETY: cancels only the operation that `op` describes, on this handle.
-        unsafe { CancelIoEx(self.handle.raw(), op.as_ptr()) };
-        let mut count = 0u32;
-        // SAFETY: TRUE for bWait makes the call wait until the cancelled
-        // operation is over, so `op` is no longer used once it returns.
-        unsafe { GetOverlappedResult(self.handle.raw(), op.as_ptr(), &mut count, TRUE) };
+        op.cancel_and_drain();
     }
 
     /// The process id of the connected client.
@@ -246,15 +253,24 @@ impl ServerPipe {
         deadline: Instant,
         child_exit: &mut dyn FnMut() -> io::Result<Option<ExitStatus>>,
     ) -> io::Result<Option<Handoff>> {
-        let mut sink = [0u8; 1];
         loop {
-            let mut op = Overlapped::new();
-            // SAFETY: `sink` and `op` stay alive until the read completes or is
-            // cancelled by `cancel_and_drain`.
+            match child_exit()? {
+                Some(status) => return Ok(Some(Handoff::ChildExited(status))),
+                None => {}
+            }
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return Ok(Some(Handoff::Deadline));
+            }
+
+            let mut op = Overlapped::with_buffer(self.handle.raw(), vec![0u8; 1]);
+            let buf_ptr: *mut u8 = op.buffer_mut().unwrap().as_mut_ptr();
+            // SAFETY: `op` owns the buffer and `op.raw`, which stay alive until the
+            // read completes or is cancelled and drained (or dropped on unwind).
             let ok = unsafe {
                 ReadFile(
                     self.handle.raw(),
-                    sink.as_mut_ptr().cast(),
+                    buf_ptr.cast(),
                     1,
                     null_mut(),
                     op.as_mut_ptr(),
@@ -271,6 +287,7 @@ impl ServerPipe {
                 return Err(last_os_error());
             }
 
+            op.pending = true;
             match self.wait_read(&mut op, deadline, child_exit)? {
                 ReadWait::Closed => return Ok(None),
                 ReadWait::Data => continue,
@@ -291,12 +308,16 @@ impl ServerPipe {
     ) -> io::Result<ReadWait> {
         loop {
             match self.poll_op(op) {
-                Ok(Some(_count)) => return Ok(ReadWait::Data),
+                Ok(Some(_count)) => {
+                    op.pending = false;
+                    return Ok(ReadWait::Data);
+                }
                 Ok(None) => {}
                 Err(err)
                     if err.raw_os_error() == Some(ERROR_BROKEN_PIPE as i32)
                         || err.raw_os_error() == Some(ERROR_PIPE_NOT_CONNECTED as i32) =>
                 {
+                    op.pending = false;
                     return Ok(ReadWait::Closed);
                 }
                 Err(err) => {
@@ -356,7 +377,7 @@ enum Wait {
 
 /// Serve `bytes` to the first client, as if `expected_pid` were the child.
 /// No child runs, so the handoff ends on a client, a mismatch or the deadline.
-#[doc(hidden)]
+#[cfg(feature = "mock")]
 pub fn serve_for_test(
     name: &str,
     bytes: &[u8],
@@ -364,7 +385,9 @@ pub fn serve_for_test(
     timeout: Duration,
 ) -> io::Result<Handoff> {
     let mut server = ServerPipe::create(name)?;
-    let deadline = Instant::now() + timeout;
+    let deadline = Instant::now()
+        .checked_add(timeout)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "timeout is too long"))?;
     let mut no_child = || -> io::Result<Option<ExitStatus>> { Ok(None) };
     server.hand_off(bytes, expected_pid, deadline, &mut no_child)
 }
@@ -506,22 +529,74 @@ impl Drop for OwnedHandle {
     }
 }
 
-/// An OVERLAPPED block for one operation. It has no event: the pipe handle
-/// is signaled instead, and one operation runs at a time.
-struct Overlapped(OVERLAPPED);
+/// An OVERLAPPED block for one operation, owning its kernel-side state and
+/// optional I/O buffer. It has no event: the pipe handle is signaled instead,
+/// and one operation runs at a time.
+///
+/// An active operation is cancelled and drained on drop, so unwinding during
+/// a panic in `child_exit` will not free the OVERLAPPED or the I/O buffer while
+/// the kernel is still accessing them.
+struct Overlapped {
+    handle: HANDLE,
+    raw: Box<OVERLAPPED>,
+    pending: bool,
+    buffer: Option<Vec<u8>>,
+}
 
 impl Overlapped {
-    fn new() -> Overlapped {
-        // SAFETY: OVERLAPPED is plain data, and all-zero bytes are a valid value.
-        Overlapped(unsafe { std::mem::zeroed() })
+    fn new(handle: HANDLE) -> Overlapped {
+        Overlapped {
+            handle,
+            // SAFETY: OVERLAPPED is plain data, and all-zero bytes are a valid value.
+            raw: Box::new(unsafe { std::mem::zeroed() }),
+            pending: false,
+            buffer: None,
+        }
+    }
+
+    fn with_buffer(handle: HANDLE, buffer: Vec<u8>) -> Overlapped {
+        Overlapped {
+            handle,
+            // SAFETY: OVERLAPPED is plain data, and all-zero bytes are a valid value.
+            raw: Box::new(unsafe { std::mem::zeroed() }),
+            pending: false,
+            buffer: Some(buffer),
+        }
     }
 
     fn as_ptr(&self) -> *const OVERLAPPED {
-        &self.0
+        &*self.raw
     }
 
     fn as_mut_ptr(&mut self) -> *mut OVERLAPPED {
-        &mut self.0
+        &mut *self.raw
+    }
+
+    fn buffer(&self) -> Option<&[u8]> {
+        self.buffer.as_deref()
+    }
+
+    fn buffer_mut(&mut self) -> Option<&mut [u8]> {
+        self.buffer.as_deref_mut()
+    }
+
+    fn cancel_and_drain(&mut self) {
+        if self.pending {
+            // SAFETY: cancels only the operation that this struct describes,
+            // on this handle.
+            unsafe { CancelIoEx(self.handle, self.as_ptr()) };
+            let mut count = 0u32;
+            // SAFETY: TRUE for bWait makes the call wait until the cancelled
+            // operation is over, so `raw` and `buffer` are no longer in use.
+            unsafe { GetOverlappedResult(self.handle, self.as_ptr(), &mut count, TRUE) };
+            self.pending = false;
+        }
+    }
+}
+
+impl Drop for Overlapped {
+    fn drop(&mut self) {
+        self.cancel_and_drain();
     }
 }
 
