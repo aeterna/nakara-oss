@@ -56,14 +56,22 @@ describe('OpenAPI route stubs', () => {
     expect(res.json()).toEqual({ ok: true, db: 'down', gateway: 'standby', version: pkg.version });
   });
 
-  test('r4: count of registered routes equals count of operations in spec', async () => {
-    const registered: string[] = [];
+  test("r4: registered METHOD path set equals the spec's set (path params converted)", async () => {
+    const registered = new Set<string>();
     const app = buildApp();
     app.addHook('onRoute', (r) => {
-      if (r.method !== 'HEAD') registered.push(`${r.method} ${r.url}`);
+      if (r.method !== 'HEAD') {
+        const methods = Array.isArray(r.method) ? r.method : [r.method];
+        for (const m of methods) {
+          if (m !== 'HEAD') registered.add(`${m} ${r.url}`);
+        }
+      }
     });
     await app.ready();
-    expect(registered.length).toBe(operations.length);
+    const specRoutes = new Set(
+      operations.map((op) => `${op.method} ${op.path.replace(/\{([^}]+)\}/g, ':$1')}`)
+    );
+    expect(registered).toEqual(specRoutes);
   });
 
   test('c1: control - injecting GET /api/v1/nope answers 404', async () => {
