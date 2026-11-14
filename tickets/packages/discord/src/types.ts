@@ -56,3 +56,18 @@ export interface GatewayHandle {
   status(): GatewayStatus;
   stop(): Promise<void>;
 }
+
+export interface CloseHookContext {
+  port: DiscordPort;
+  db: TicketsDb;
+  dataKey: Buffer;
+  ticket: any;
+  category: any;
+  guildSettings: any;
+  actorId: string;
+  log: {
+    info: (msg: string, ...args: any[]) => void;
+    warn: (msg: string, ...args: any[]) => void;
+    error: (msg: string, ...args: any[]) => void;
+  };
+}

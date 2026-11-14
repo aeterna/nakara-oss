@@ -321,6 +321,12 @@ export default async function (app: FastifyInstance) {
 
       const server = req.gameServer!;
       const actionId = (req.params as any).actionId;
+
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (typeof actionId !== 'string' || !UUID_REGEX.test(actionId)) {
+        return reply.code(400).send({ code: 'invalid', message: 'invalid actionId' });
+      }
+
       const body = req.body as any;
 
       if (!body || typeof body !== 'object' || Array.isArray(body)) {

@@ -192,23 +192,26 @@ describe('auth acceptance tests', () => {
   it('POST /auth/logout deletes the session and clears cookie', async () => {
     // 1. Create a session directly in DB
     const sessionToken = 'logout-test-token-base64url';
+    const csrfToken = 'logout-csrf';
     const tokenHash = createHash('sha256').update(sessionToken).digest('hex');
+    const csrfHash = createHash('sha256').update(csrfToken).digest('hex');
     await testDb.insert(sessions).values({
       user_id: '999999999999999999',
       token_hash: tokenHash,
-      csrf_hash: 'logout-csrf',
+      csrf_hash: csrfHash,
       expires_at: new Date(Date.now() + 86400000),
     });
 
     const preRows = await testDb.select().from(sessions);
     expect(preRows.length).toBe(1);
 
-    // 2. Call logout
+    // 2. Call logout with CSRF
     const logoutRes = await app.inject({
       method: 'POST',
       url: '/auth/logout',
       headers: {
         cookie: `nt_session=${sessionToken}`,
+        'x-csrf-token': csrfToken,
       },
     });
 
@@ -222,5 +225,129 @@ describe('auth acceptance tests', () => {
     const setCookie = logoutRes.headers['set-cookie'];
     const cookieStr = Array.isArray(setCookie) ? setCookie.join('; ') : String(setCookie);
     expect(cookieStr).toContain('nt_session=;');
+  });
+
+  it('(w6) logout without CSRF → 403', async () => {
+    const sessionToken = 'logout-w6-test-token';
+    const tokenHash = createHash('sha256').update(sessionToken).digest('hex');
+    const csrfToken = 'w6-csrf-token';
+    const csrfHash = createHash('sha256').update(csrfToken).digest('hex');
+    await testDb.insert(sessions).values({
+      user_id: '999999999999999999',
+      token_hash: tokenHash,
+      csrf_hash: csrfHash,
+      expires_at: new Date(Date.now() + 86400000),
+    });
+
+    // 1. Without CSRF header -> 403
+    const resNoCsrf = await app.inject({
+      method: 'POST',
+      url: '/auth/logout',
+      headers: {
+        cookie: `nt_session=${sessionToken}`,
+      },
+    });
+    expect(resNoCsrf.statusCode).toBe(403);
+    expect(resNoCsrf.json().code).toBe('csrf');
+
+    // 2. With wrong CSRF header -> 403
+    const resWrongCsrf = await app.inject({
+      method: 'POST',
+      url: '/auth/logout',
+      headers: {
+        cookie: `nt_session=${sessionToken}`,
+        'x-csrf-token': 'wrong-token',
+      },
+    });
+    expect(resWrongCsrf.statusCode).toBe(403);
+    expect(resWrongCsrf.json().code).toBe('csrf');
+
+    // Session still exists in DB
+    const remaining = await testDb.select().from(sessions);
+    expect(remaining.length).toBe(1);
+  });
+
+  it('(w7) no session row contains the CSRF token or a value equal to it', async () => {
+    // 1. Call login to obtain the state and verifier in nt_oauth
+    const loginRes = await app.inject({
+      method: 'GET',
+      url: '/auth/login',
+    });
+    const location = new URL(loginRes.headers.location!, 'http://localhost');
+    const state = location.searchParams.get('state')!;
+    const setCookie = loginRes.headers['set-cookie'];
+    const cookieHeader = Array.isArray(setCookie) ? setCookie[0] : String(setCookie);
+    const oauthCookie = cookieHeader.split(';')[0];
+
+    // 2. Stub fetch for Discord
+    const userId = '777777777777777777';
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => {
+      const urlStr = String(url);
+      if (urlStr.includes('/oauth2/token')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            access_token: 'mock-discord-access-token-w7',
+            token_type: 'Bearer',
+            expires_in: 604800,
+            scope: 'identify guilds',
+          }),
+        };
+      }
+      if (urlStr.includes('/users/@me')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: userId,
+            username: 'discorduser_w7',
+            avatar: null,
+          }),
+        };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    }));
+
+    // 3. Complete callback
+    const callbackRes = await app.inject({
+      method: 'GET',
+      url: `/auth/callback?code=valid-code-w7&state=${state}`,
+      headers: {
+        cookie: oauthCookie,
+      },
+    });
+    expect(callbackRes.statusCode).toBe(302);
+
+    const cookies = callbackRes.headers['set-cookie'];
+    const cookieStr = Array.isArray(cookies) ? cookies.join('; ') : String(cookies);
+    const match = cookieStr.match(/nt_session=([^;]+)/);
+    expect(match).toBeTruthy();
+    const sessionCookie = match![1];
+
+    // 4. Call /api/v1/me to get the plain CSRF token for this session
+    const meRes = await app.inject({
+      method: 'GET',
+      url: '/api/v1/me',
+      headers: {
+        cookie: `nt_session=${sessionCookie}`,
+      },
+    });
+    expect(meRes.statusCode).toBe(200);
+    const { csrfToken } = meRes.json();
+    expect(csrfToken).toBeTruthy();
+
+    // 5. Inspect database session row
+    const [row] = await testDb.select().from(sessions);
+    expect(row).toBeDefined();
+
+    // The row must NOT contain the plain csrf token
+    expect(row.csrf_hash).not.toBe(csrfToken);
+    const rowJson = JSON.stringify(row);
+    expect(rowJson).not.toContain(csrfToken);
+
+    // The row's csrf_hash must be the sha256 of the plain csrf token
+    const expectedHash = createHash('sha256').update(csrfToken).digest('hex');
+    expect(row.csrf_hash).toBe(expectedHash);
   });
 });

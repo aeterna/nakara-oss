@@ -1,20 +1,25 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { randomBytes, createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID, createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { sessions } from '@nakara-tickets/db';
 import { getSessionCookieOptions, userCache } from '../session.js';
 import type { TicketsConfig } from '../config.js';
 
+function getOAuthKey(key: Buffer): Buffer {
+  return createHmac('sha256', key).update('oauth-cookie').digest();
+}
+
 function signOAuthPayload(payload: object, key: Buffer): string {
+  const derivedKey = getOAuthKey(key);
   const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const sig = createHmac('sha256', key).update(payloadB64).digest('base64url');
+  const sig = createHmac('sha256', derivedKey).update(payloadB64).digest('base64url');
   return `${payloadB64}.${sig}`;
 }
 
 function verifyOAuthCookie(
   rawCookie: string,
   key: Buffer
-): { state: string; codeVerifier: string } | null {
+): { state: string; codeVerifier: string; exp?: number } | null {
   const dotIndex = rawCookie.lastIndexOf('.');
   if (dotIndex === -1) {
     return null;
@@ -22,7 +27,8 @@ function verifyOAuthCookie(
   const payloadB64 = rawCookie.slice(0, dotIndex);
   const sig = rawCookie.slice(dotIndex + 1);
 
-  const expectedSig = createHmac('sha256', key).update(payloadB64).digest('base64url');
+  const derivedKey = getOAuthKey(key);
+  const expectedSig = createHmac('sha256', derivedKey).update(payloadB64).digest('base64url');
   const sigBuf = Buffer.from(sig);
   const expectedBuf = Buffer.from(expectedSig);
 
@@ -31,7 +37,14 @@ function verifyOAuthCookie(
   }
 
   try {
-    return JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    const data = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    if (data.exp && typeof data.exp === 'number') {
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (data.exp < nowSec) {
+        return null;
+      }
+    }
+    return data;
   } catch {
     return null;
   }
@@ -47,8 +60,9 @@ export default async function (app: FastifyInstance) {
     const state = randomBytes(32).toString('base64url');
     const codeVerifier = randomBytes(32).toString('base64url');
     const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url');
+    const exp = Math.floor(Date.now() / 1000) + 600; // 10 minutes
 
-    const signedCookie = signOAuthPayload({ state, codeVerifier }, config.TICKETS_DATA_KEY);
+    const signedCookie = signOAuthPayload({ state, codeVerifier, exp }, config.TICKETS_DATA_KEY);
     const isLocalhost = config.PUBLIC_ORIGIN.startsWith('http://localhost');
 
     reply.setCookie('nt_oauth', signedCookie, {
@@ -56,7 +70,7 @@ export default async function (app: FastifyInstance) {
       httpOnly: true,
       secure: !isLocalhost,
       sameSite: 'lax',
-      maxAge: 300, // 5 minutes
+      maxAge: 600, // 10 minutes
     });
 
     const params = new URLSearchParams({
@@ -119,6 +133,7 @@ export default async function (app: FastifyInstance) {
           Authorization: `Basic ${basicAuth}`,
         },
         body: tokenParams.toString(),
+        signal: AbortSignal.timeout(10_000),
       });
 
       if (!tokenRes.ok) {
@@ -136,6 +151,7 @@ export default async function (app: FastifyInstance) {
         headers: {
           Authorization: `Bearer ${tokenData.access_token}`,
         },
+        signal: AbortSignal.timeout(10_000),
       });
 
       if (!userRes.ok) {
@@ -147,16 +163,21 @@ export default async function (app: FastifyInstance) {
     }
 
     // Discard Discord access token (never stored)
-    // Create new session row with SHA-256 token hash
+    // Create new session row with SHA-256 token hash and SHA-256 CSRF hash
+    const sessionId = randomUUID();
     const sessionToken = randomBytes(32).toString('base64url');
     const tokenHash = createHash('sha256').update(sessionToken).digest('hex');
-    const csrfToken = randomBytes(32).toString('hex');
+    const plainCsrf = createHmac('sha256', config.TICKETS_DATA_KEY)
+      .update(`csrf:${sessionId}`)
+      .digest('hex');
+    const csrfHash = createHash('sha256').update(plainCsrf).digest('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     await db.insert(sessions).values({
+      id: sessionId,
       user_id: userData.id,
       token_hash: tokenHash,
-      csrf_hash: csrfToken,
+      csrf_hash: csrfHash,
       expires_at: expiresAt,
     });
 
@@ -172,20 +193,31 @@ export default async function (app: FastifyInstance) {
     return reply.redirect('/');
   });
 
-  app.post('/auth/logout', async (req: FastifyRequest, reply: FastifyReply) => {
-    const sessionToken = req.cookies?.nt_session;
-    const db = req.server.db;
-
-    if (sessionToken && db) {
-      const tokenHash = createHash('sha256').update(sessionToken).digest('hex');
-      try {
-        await db.delete(sessions).where(eq(sessions.token_hash, tokenHash));
-      } catch {
-        // proceed to clear cookie
+  app.post(
+    '/auth/logout',
+    {
+      preHandler: [
+        async (req: FastifyRequest, reply: FastifyReply) => {
+          if (typeof req.server.requireUser === 'function') {
+            await req.server.requireUser(req, reply);
+          } else {
+            reply.code(401).send({ code: 'unauthorized', message: 'Authentication required' });
+          }
+        },
+      ],
+    },
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      const db = req.server.db;
+      if (req.session?.id && db) {
+        try {
+          await db.delete(sessions).where(eq(sessions.id, req.session.id));
+        } catch {
+          // proceed to clear cookie
+        }
       }
-    }
 
-    reply.clearCookie('nt_session', { path: '/' });
-    return reply.code(204).send();
-  });
+      reply.clearCookie('nt_session', { path: '/' });
+      return reply.code(204).send();
+    }
+  );
 }

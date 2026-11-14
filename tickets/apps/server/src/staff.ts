@@ -11,10 +11,23 @@ interface CacheEntry {
 }
 
 const CACHE_TTL_MS = 60_000;
+const MAX_CACHE_ENTRIES = 5000;
 const staffCache = new Map<string, CacheEntry>();
 
 export function clearStaffCache(): void {
   staffCache.clear();
+}
+
+function setStaffCache(key: string, entry: CacheEntry): void {
+  if (staffCache.has(key)) {
+    staffCache.delete(key);
+  } else if (staffCache.size >= MAX_CACHE_ENTRIES) {
+    const oldestKey = staffCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      staffCache.delete(oldestKey);
+    }
+  }
+  staffCache.set(key, entry);
 }
 
 export async function checkStaff(
@@ -31,8 +44,11 @@ export async function checkStaff(
   const cacheKey = `${guildId}:${userId}`;
   const now = Date.now();
   const cached = staffCache.get(cacheKey);
-  if (cached && now < cached.expiresAt) {
-    return cached.result;
+  if (cached) {
+    if (now < cached.expiresAt) {
+      return cached.result;
+    }
+    staffCache.delete(cacheKey);
   }
 
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -41,14 +57,16 @@ export async function checkStaff(
     const [memberRes, rolesRes] = await Promise.all([
       fetchImpl(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, {
         headers: { Authorization: `Bot ${token}` },
+        signal: AbortSignal.timeout(10_000),
       }),
       fetchImpl(`https://discord.com/api/v10/guilds/${guildId}/roles`, {
         headers: { Authorization: `Bot ${token}` },
+        signal: AbortSignal.timeout(10_000),
       }),
     ]);
 
     if (!memberRes.ok || !rolesRes.ok) {
-      staffCache.set(cacheKey, { result: false, expiresAt: now + CACHE_TTL_MS });
+      setStaffCache(cacheKey, { result: false, expiresAt: now + CACHE_TTL_MS });
       return false;
     }
 
@@ -77,10 +95,10 @@ export async function checkStaff(
       staffRoleIds: Array.from(staffRoleIds),
     });
 
-    staffCache.set(cacheKey, { result, expiresAt: now + CACHE_TTL_MS });
+    setStaffCache(cacheKey, { result, expiresAt: now + CACHE_TTL_MS });
     return result;
   } catch {
-    staffCache.set(cacheKey, { result: false, expiresAt: now + CACHE_TTL_MS });
+    setStaffCache(cacheKey, { result: false, expiresAt: now + CACHE_TTL_MS });
     return false;
   }
 }

@@ -41,6 +41,8 @@ export const guildSettings = pgTable('guild_settings', {
   guild_id: text('guild_id').primaryKey().references(() => guilds.guild_id, { onDelete: 'cascade' }),
   locale: text('locale').notNull().default('th'),
   retention_days: integer('retention_days').notNull().default(90),
+  attachment_quota_mb: integer('attachment_quota_mb').notNull().default(500),
+  auto_close_warn_hours: integer('auto_close_warn_hours').notNull().default(12),
   log_channel_id: text('log_channel_id'),
   rating_dm: boolean('rating_dm').notNull().default(false),
   privacy_policy_url: text('privacy_policy_url'),
@@ -105,6 +107,8 @@ export const tickets = pgTable('tickets', {
   closed_at: timestamp('closed_at', { withTimezone: true }),
   close_reason: text('close_reason'),
   reopened_count: integer('reopened_count').notNull().default(0),
+  archived_at: timestamp('archived_at', { withTimezone: true }),
+  auto_close_warned_at: timestamp('auto_close_warned_at', { withTimezone: true }),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   uniqueIndex('tickets_guild_id_number_idx').on(t.guild_id, t.number),

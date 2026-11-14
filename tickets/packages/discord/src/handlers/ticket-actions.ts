@@ -1,8 +1,9 @@
-import type { DiscordPort } from '../types.js';
+import type { DiscordPort, CloseHookContext } from '../types.js';
 import type { TicketsDb } from '@nakara-tickets/db';
 import { getCategory, getSettings, getTicket, getTicketByChannel, transitionTicket, TicketError } from '@nakara-tickets/db';
 import { isStaff } from '@nakara-tickets/core';
 import { t, type TranslationKey, type SupportedLocale, translations } from '../i18n.js';
+import { runCloseHooks } from './close-hooks.js';
 
 function formatErrorMessage(locale: string, err: any): string {
   const normLocale = (locale === 'th' ? 'th' : 'en') as SupportedLocale;
@@ -134,14 +135,16 @@ export async function handleClose(
   db: TicketsDb,
   interaction: any,
   ticketId?: string,
-  reason?: string
+  reason?: string,
+  deps?: { dataKey?: Buffer; log?: any } | any
 ): Promise<void> {
   await port.deferReply(interaction, { ephemeral: true });
 
   const guildId = interaction.guildId;
   let locale = 'th';
+  let settings: any = null;
   try {
-    const settings = await getSettings(db, guildId);
+    settings = await getSettings(db, guildId);
     if (settings?.locale) locale = settings.locale;
   } catch {}
 
@@ -176,6 +179,22 @@ export async function handleClose(
     await port.sendMessage(ticket.channel_id, { content: sysMsg });
     await port.lockAndArchiveThread(ticket.channel_id);
     await port.editReply(interaction, { content: sysMsg });
+
+    // Call close hooks without blocking reply
+    const hookCtx: CloseHookContext = {
+      port,
+      db,
+      dataKey: deps?.dataKey ?? Buffer.alloc(32),
+      ticket,
+      category,
+      guildSettings: settings,
+      actorId,
+      log: deps?.log ?? console,
+    };
+
+    runCloseHooks(hookCtx).catch((err) => {
+      (deps?.log ?? console).error?.('Unhandled error in close hooks:', err);
+    });
   } catch (err: any) {
     if (err instanceof TicketError || err?.name === 'TicketError' || err?.code) {
       await port.editReply(interaction, { content: formatErrorMessage(locale, err) });

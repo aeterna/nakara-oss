@@ -4,15 +4,34 @@ import { api } from './api.js';
 import { t, type Locale } from './i18n.js';
 import { Login } from './pages/Login.js';
 import { GuildPicker } from './pages/GuildPicker.js';
+import { Tickets } from './pages/Tickets.js';
 import { Categories } from './pages/Categories.js';
+import { Panels } from './pages/Panels.js';
+import { Tags } from './pages/Tags.js';
+import { Blocks } from './pages/Blocks.js';
+import { Analytics } from './pages/Analytics.js';
+import { GameServers } from './pages/GameServers.js';
 import { Settings } from './pages/Settings.js';
+import { Privacy } from './pages/Privacy.js';
+
+export type Page =
+  | 'guilds'
+  | 'tickets'
+  | 'categories'
+  | 'panels'
+  | 'tags'
+  | 'blocks'
+  | 'analytics'
+  | 'servers'
+  | 'settings'
+  | 'privacy';
 
 export const App: React.FC = () => {
   const [locale, setLocale] = useState<Locale>('th');
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedGuildId, setSelectedGuildId] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState<'guilds' | 'categories' | 'settings'>('guilds');
+  const [currentPage, setCurrentPage] = useState<Page>('guilds');
 
   useEffect(() => {
     let mounted = true;
@@ -25,7 +44,7 @@ export const App: React.FC = () => {
           const firstManageable = data.guilds?.find((g) => g.canManage);
           if (firstManageable) {
             setSelectedGuildId(firstManageable.id);
-            setCurrentPage('categories');
+            setCurrentPage('tickets');
           }
         }
       } catch {
@@ -73,6 +92,13 @@ export const App: React.FC = () => {
             <>
               <button
                 type="button"
+                className={`nav-link ${currentPage === 'tickets' ? 'active' : ''}`}
+                onClick={() => setCurrentPage('tickets')}
+              >
+                {t('tickets', locale)}
+              </button>
+              <button
+                type="button"
                 className={`nav-link ${currentPage === 'categories' ? 'active' : ''}`}
                 onClick={() => setCurrentPage('categories')}
               >
@@ -80,10 +106,52 @@ export const App: React.FC = () => {
               </button>
               <button
                 type="button"
+                className={`nav-link ${currentPage === 'panels' ? 'active' : ''}`}
+                onClick={() => setCurrentPage('panels')}
+              >
+                {t('panels', locale)}
+              </button>
+              <button
+                type="button"
+                className={`nav-link ${currentPage === 'tags' ? 'active' : ''}`}
+                onClick={() => setCurrentPage('tags')}
+              >
+                {t('tags', locale)}
+              </button>
+              <button
+                type="button"
+                className={`nav-link ${currentPage === 'blocks' ? 'active' : ''}`}
+                onClick={() => setCurrentPage('blocks')}
+              >
+                {t('blocks', locale)}
+              </button>
+              <button
+                type="button"
+                className={`nav-link ${currentPage === 'analytics' ? 'active' : ''}`}
+                onClick={() => setCurrentPage('analytics')}
+              >
+                {t('analytics', locale)}
+              </button>
+              <button
+                type="button"
+                className={`nav-link ${currentPage === 'servers' ? 'active' : ''}`}
+                onClick={() => setCurrentPage('servers')}
+              >
+                {t('gameServers', locale)}
+              </button>
+              <button
+                type="button"
                 className={`nav-link ${currentPage === 'settings' ? 'active' : ''}`}
                 onClick={() => setCurrentPage('settings')}
               >
                 {t('settings', locale)}
+              </button>
+              <button
+                type="button"
+                className={`nav-link ${currentPage === 'privacy' ? 'active' : ''}`}
+                onClick={() => setCurrentPage('privacy')}
+              >
+                {t('privacy', locale)}
               </button>
               <button
                 type="button"
@@ -141,12 +209,26 @@ export const App: React.FC = () => {
             guilds={me.guilds || []}
             onSelectGuild={(id) => {
               setSelectedGuildId(id);
-              setCurrentPage('categories');
+              setCurrentPage('tickets');
             }}
             locale={locale}
           />
+        ) : currentPage === 'tickets' ? (
+          <Tickets guildId={selectedGuildId} locale={locale} />
         ) : currentPage === 'categories' ? (
           <Categories guildId={selectedGuildId} locale={locale} />
+        ) : currentPage === 'panels' ? (
+          <Panels guildId={selectedGuildId} locale={locale} />
+        ) : currentPage === 'tags' ? (
+          <Tags guildId={selectedGuildId} locale={locale} />
+        ) : currentPage === 'blocks' ? (
+          <Blocks guildId={selectedGuildId} locale={locale} />
+        ) : currentPage === 'analytics' ? (
+          <Analytics guildId={selectedGuildId} locale={locale} />
+        ) : currentPage === 'servers' ? (
+          <GameServers guildId={selectedGuildId} locale={locale} />
+        ) : currentPage === 'privacy' ? (
+          <Privacy guildId={selectedGuildId} locale={locale} />
         ) : (
           <Settings guildId={selectedGuildId} locale={locale} />
         )}

@@ -505,6 +505,51 @@ describe('bridge API acceptance tests', () => {
     expect(res4.statusCode).toBe(400);
   });
 
+  it('(w5) bridge result with actionId=nope → 400', async () => {
+    const app = createTestApp();
+    const rawSecret = Buffer.alloc(32, 14);
+    const secretEnc = sealBytes(dataKey, rawSecret);
+
+    const [server] = await db
+      .insert(schema.gameServers)
+      .values({
+        guild_id: guildId,
+        name: 'Confirmed Server',
+        secret_enc: secretEnc,
+        confirmed: true,
+      })
+      .returning();
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const nonce = 'nonce-' + Math.random().toString(36).slice(2).padEnd(16, '0');
+    const pathWithQuery = '/bridge/v1/actions/nope/result';
+    const payload = JSON.stringify({ ok: true, code: 'done' });
+    const sig = signBridge(rawSecret, {
+      timestamp: nowSec,
+      nonce,
+      method: 'POST',
+      pathWithQuery,
+      body: payload,
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: pathWithQuery,
+      headers: {
+        'content-type': 'application/json',
+        'x-tickets-server': server.id,
+        'x-tickets-timestamp': String(nowSec),
+        'x-tickets-nonce': nonce,
+        'x-tickets-signature': sig,
+        'x-tickets-protocol': '1',
+      },
+      payload,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('invalid');
+  });
+
   it('(b7) pair → sign exactly as the resource does → API accepts', async () => {
     const app = createTestApp();
     const rawPairCode = 'CROCKFORD01';

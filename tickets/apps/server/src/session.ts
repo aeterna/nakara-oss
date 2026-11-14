@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import fastifyCookie from '@fastify/cookie';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { sessions, categories, type TicketsDb } from '@nakara-tickets/db';
 import type { TicketsConfig } from './config.js';
@@ -30,7 +30,49 @@ declare module 'fastify' {
   }
 }
 
-export const userCache = new Map<string, UserProfile>();
+const MAX_USER_CACHE = 5000;
+const USER_CACHE_TTL_MS = 5 * 60_000; // 5 min TTL
+
+export class UserCache extends Map<string, UserProfile> {
+  private expires = new Map<string, number>();
+
+  override get(key: string): UserProfile | undefined {
+    const exp = this.expires.get(key);
+    if (exp !== undefined && Date.now() > exp) {
+      this.delete(key);
+      return undefined;
+    }
+    return super.get(key);
+  }
+
+  override set(key: string, value: UserProfile, ttlMs = USER_CACHE_TTL_MS): this {
+    if (this.has(key)) {
+      super.delete(key);
+      this.expires.delete(key);
+    } else if (this.size >= MAX_USER_CACHE) {
+      const oldest = this.keys().next().value;
+      if (oldest !== undefined) {
+        super.delete(oldest);
+        this.expires.delete(oldest);
+      }
+    }
+    this.expires.set(key, Date.now() + ttlMs);
+    super.set(key, value);
+    return this;
+  }
+
+  override delete(key: string): boolean {
+    this.expires.delete(key);
+    return super.delete(key);
+  }
+
+  override clear(): void {
+    this.expires.clear();
+    super.clear();
+  }
+}
+
+export const userCache = new UserCache();
 
 export function constantTimeCompare(a: string | undefined, b: string): boolean {
   if (typeof a !== 'string' || typeof b !== 'string') {
@@ -67,6 +109,7 @@ async function resolveUser(userId: string, config?: TicketsConfig | null): Promi
     try {
       const res = await fetch(`https://discord.com/api/v10/users/${userId}`, {
         headers: { Authorization: `Bot ${config.DISCORD_TOKEN}` },
+        signal: AbortSignal.timeout(10_000),
       });
       if (res.ok) {
         const data = (await res.json()) as { id: string; username: string; avatar?: string | null };
@@ -133,22 +176,38 @@ export async function installSession(app: FastifyInstance, opts?: InstallSession
     const config = (req.server.config ?? opts?.config) as TicketsConfig | null;
     const user = await resolveUser(session.user_id, config);
 
+    let plainCsrf = '';
+    if (config?.TICKETS_DATA_KEY) {
+      plainCsrf = createHmac('sha256', config.TICKETS_DATA_KEY)
+        .update(`csrf:${session.id}`)
+        .digest('hex');
+    }
+
     req.user = user;
     req.session = {
       id: session.id,
       userId: session.user_id,
-      csrf: session.csrf_hash,
+      csrf: plainCsrf,
     };
 
-    // CSRF check: every non-GET under /api/v1 needs header X-CSRF-Token equal to the session's csrf value
-    if (
-      req.url.startsWith('/api/v1') &&
+    // CSRF check: every non-GET under /api/v1 (or /auth/logout) needs valid CSRF token
+    const isCsrfProtected =
+      (req.url.startsWith('/api/v1') || req.url.startsWith('/auth/logout')) &&
       req.method !== 'GET' &&
       req.method !== 'HEAD' &&
-      req.method !== 'OPTIONS'
-    ) {
+      req.method !== 'OPTIONS';
+
+    if (isCsrfProtected) {
       const csrfHeader = req.headers['x-csrf-token'];
-      if (typeof csrfHeader !== 'string' || !constantTimeCompare(csrfHeader, session.csrf_hash)) {
+      if (typeof csrfHeader !== 'string') {
+        return reply.code(403).send({ code: 'csrf', message: 'csrf' });
+      }
+
+      const clientHash = createHash('sha256').update(csrfHeader).digest('hex');
+      const matchesHash = constantTimeCompare(clientHash, session.csrf_hash);
+      const matchesPlain = constantTimeCompare(csrfHeader, session.csrf_hash);
+
+      if (!matchesHash && !matchesPlain) {
         return reply.code(403).send({ code: 'csrf', message: 'csrf' });
       }
     }

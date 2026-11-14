@@ -2,3 +2,8 @@ export * from './open.js';
 export * from './ticket-actions.js';
 export * from './panel.js';
 export * from './message.js';
+export * from './archive.js';
+export * from './data.js';
+export * from './rating.js';
+export * from './tag.js';
+export * from './close-hooks.js';

@@ -13,8 +13,86 @@ import {
   handleReopen,
   handlePanelSend,
   handleMessageCreate,
+  handleRatingButton,
+  handleRatingModal,
+  handleTagCommand,
+  handleTagAutocomplete,
+  handleDeleteMyData,
 } from './handlers/index.js';
 import type { StartGatewayDeps, GatewayHandle, GatewayStatus, DiscordPort } from './types.js';
+
+export async function handleInteraction(
+  port: DiscordPort,
+  deps: StartGatewayDeps,
+  interaction: any
+): Promise<void> {
+  if (!interaction.guildId || !deps.allowedGuildIds.includes(interaction.guildId)) {
+    return;
+  }
+
+  try {
+    if (interaction.isButton && interaction.isButton()) {
+      const customId: string = interaction.customId ?? '';
+      if (customId.startsWith('nt:open:')) {
+        const categoryId = customId.slice('nt:open:'.length);
+        await handleOpenButton(port, deps.db, interaction, categoryId);
+      } else if (customId.startsWith('nt:claim:')) {
+        const ticketId = customId.slice('nt:claim:'.length);
+        await handleClaim(port, deps.db, interaction, ticketId);
+      } else if (customId.startsWith('nt:close:')) {
+        const ticketId = customId.slice('nt:close:'.length);
+        await handleClose(port, deps.db, interaction, ticketId, undefined, deps);
+      } else if (customId.startsWith('nt:rate:')) {
+        await handleRatingButton(port, deps.db, interaction, deps);
+      }
+    } else if (interaction.isModalSubmit && interaction.isModalSubmit()) {
+      const customId: string = interaction.customId ?? '';
+      if (customId.startsWith('nt:form:')) {
+        const categoryId = customId.slice('nt:form:'.length);
+        await handleFormSubmit(port, deps.db, interaction, categoryId);
+      } else if (customId.startsWith('nt:ratefb:')) {
+        await handleRatingModal(port, deps.db, interaction, deps);
+      }
+    } else if (interaction.isAutocomplete && interaction.isAutocomplete()) {
+      const commandName = interaction.commandName;
+      if (commandName === 'tag') {
+        await handleTagAutocomplete(deps.db, interaction);
+      }
+    } else if (interaction.isChatInputCommand && interaction.isChatInputCommand()) {
+      const commandName = interaction.commandName;
+      const sub = interaction.options?.getSubcommand?.(false);
+
+      if (commandName === 'tag') {
+        await handleTagCommand(port, deps.db, interaction, deps);
+      } else if (commandName === 'tickets') {
+        if (sub === 'delete-my-data') {
+          await handleDeleteMyData(port, deps.db, interaction, deps);
+        }
+      } else if (commandName === 'ticket') {
+        if (sub === 'claim') {
+          await handleClaim(port, deps.db, interaction);
+        } else if (sub === 'close') {
+          const reason = interaction.options?.getString?.('reason') ?? undefined;
+          await handleClose(port, deps.db, interaction, undefined, reason, deps);
+        } else if (sub === 'reopen') {
+          await handleReopen(port, deps.db, interaction);
+        } else if (sub === 'delete-my-data') {
+          await handleDeleteMyData(port, deps.db, interaction, deps);
+        }
+      } else if (commandName === 'panel') {
+        if (sub === 'send') {
+          const categoryId = interaction.options?.getString?.('category');
+          const targetChannel = interaction.options?.getChannel?.('channel');
+          if (categoryId && targetChannel?.id) {
+            await handlePanelSend(port, deps.db, interaction, [categoryId], targetChannel.id);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    deps.log.error('Error handling interaction', err);
+  }
+}
 
 export async function startGateway(deps: StartGatewayDeps): Promise<GatewayHandle> {
   let currentStatus: GatewayStatus = 'standby';
@@ -90,6 +168,30 @@ export async function startGateway(deps: StartGatewayDeps): Promise<GatewayHandl
         },
       ],
     },
+    {
+      name: 'tag',
+      description: 'Send a predefined snippet or tag',
+      options: [
+        {
+          name: 'name',
+          description: 'Tag name',
+          type: 3, // String
+          required: true,
+          autocomplete: true,
+        },
+      ],
+    },
+    {
+      name: 'tickets',
+      description: 'Ticket management commands',
+      options: [
+        {
+          name: 'delete-my-data',
+          description: 'Request deletion of your ticket data',
+          type: 1, // Subcommand
+        },
+      ],
+    },
   ];
 
   // Guild unauthorized check helper
@@ -131,55 +233,7 @@ export async function startGateway(deps: StartGatewayDeps): Promise<GatewayHandl
   });
 
   client.on('interactionCreate', async (interaction: any) => {
-    if (!interaction.guildId || !deps.allowedGuildIds.includes(interaction.guildId)) {
-      return;
-    }
-
-    try {
-      if (interaction.isButton && interaction.isButton()) {
-        const customId: string = interaction.customId ?? '';
-        if (customId.startsWith('nt:open:')) {
-          const categoryId = customId.slice('nt:open:'.length);
-          await handleOpenButton(port, deps.db, interaction, categoryId);
-        } else if (customId.startsWith('nt:claim:')) {
-          const ticketId = customId.slice('nt:claim:'.length);
-          await handleClaim(port, deps.db, interaction, ticketId);
-        } else if (customId.startsWith('nt:close:')) {
-          const ticketId = customId.slice('nt:close:'.length);
-          await handleClose(port, deps.db, interaction, ticketId);
-        }
-      } else if (interaction.isModalSubmit && interaction.isModalSubmit()) {
-        const customId: string = interaction.customId ?? '';
-        if (customId.startsWith('nt:form:')) {
-          const categoryId = customId.slice('nt:form:'.length);
-          await handleFormSubmit(port, deps.db, interaction, categoryId);
-        }
-      } else if (interaction.isChatInputCommand && interaction.isChatInputCommand()) {
-        const commandName = interaction.commandName;
-        const sub = interaction.options?.getSubcommand(false);
-
-        if (commandName === 'ticket') {
-          if (sub === 'claim') {
-            await handleClaim(port, deps.db, interaction);
-          } else if (sub === 'close') {
-            const reason = interaction.options?.getString('reason') ?? undefined;
-            await handleClose(port, deps.db, interaction, undefined, reason);
-          } else if (sub === 'reopen') {
-            await handleReopen(port, deps.db, interaction);
-          }
-        } else if (commandName === 'panel') {
-          if (sub === 'send') {
-            const categoryId = interaction.options?.getString('category');
-            const targetChannel = interaction.options?.getChannel('channel');
-            if (categoryId && targetChannel?.id) {
-              await handlePanelSend(port, deps.db, interaction, [categoryId], targetChannel.id);
-            }
-          }
-        }
-      }
-    } catch (err) {
-      deps.log.error('Error handling interaction', err);
-    }
+    await handleInteraction(port, deps, interaction);
   });
 
   client.on('messageCreate', async (message: any) => {
