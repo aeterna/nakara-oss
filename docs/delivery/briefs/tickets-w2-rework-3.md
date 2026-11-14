@@ -31,3 +31,8 @@ queued `controller.close()`. `reader.cancel()` on a closing stream does not call
 `streamCancelled` stays false. **Product code is correct; the test is wrong.**
 6. `packages/discord/test/archive.test.ts` (lying-size case): make the source keep producing past the cap
    (`chunkCount = 40`), so the cap is crossed while the stream is still open; keep every assertion.
+
+## Round 3 (reviewer: `vite build` of apps/web fails: "Missing export")
+7. `apps/web/src/pages/Tickets.tsx:10-13` imports a **default** export from `../components/TicketActions.js`, which only has
+   the named export `TicketActions`; an `// @ts-ignore` hid it from tsc. Import `{ TicketActions }` only, remove the
+   `@ts-ignore` and the fallback cast. No `@ts-ignore` / `@ts-expect-error` anywhere in `apps/web/src`.

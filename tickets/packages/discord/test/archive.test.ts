@@ -365,9 +365,9 @@ describe('Archive on close (acceptance test t2)', () => {
       },
     ];
 
-    // Stream generates 26 MB (exceeds 25 MB cap)
+    // Stream generates 40 MB (exceeds 25 MB cap while the stream is still open)
     const chunkSize = 1024 * 1024; // 1 MB
-    const chunkCount = 26;
+    const chunkCount = 40;
     let chunksSent = 0;
     let streamCancelled = false;
 
