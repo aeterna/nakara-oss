@@ -12,7 +12,11 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use launcher_connect::{start_connect, CodeError, ConnectError, Outcome};
+use launcher_connect::{start_connect, CodeError, ConnectError, MAX_CODE_BYTES, Outcome};
+
+/// A handoff test should finish well before this; the timeout is only here to
+/// keep a stuck mock from hanging the suite.
+const TEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 fn mock_path() -> &'static Path {
     Path::new(env!("CARGO_BIN_EXE_mock-connect"))
@@ -21,7 +25,7 @@ fn mock_path() -> &'static Path {
 /// Run Connect through the real handoff: start it, write the code, map the
 /// exit code.
 fn run_connect(code: &str) -> Result<Outcome, ConnectError> {
-    start_connect(mock_path(), code, None)
+    start_connect(mock_path(), code, TEST_TIMEOUT)
 }
 
 /// Run the mock binary directly: feed `stdin_text` (read by the mock before
@@ -181,7 +185,7 @@ fn the_mock_writes_nothing_back() {
 fn an_over_long_code_is_refused_before_the_child_starts() {
     let code = format!("rr1.{}", "x".repeat(4093));
     assert_eq!(code.len(), 4097);
-    let outcome = start_connect(mock_path(), &code, None);
+    let outcome = start_connect(mock_path(), &code, TEST_TIMEOUT);
     assert!(
         matches!(outcome, Err(ConnectError::Code(CodeError::TooLong))),
         "{outcome:?}"
@@ -191,11 +195,7 @@ fn an_over_long_code_is_refused_before_the_child_starts() {
 #[test]
 fn a_timeout_kills_the_child_and_reports_timeout() {
     let start = Instant::now();
-    let outcome = start_connect(
-        mock_path(),
-        "rr1.sleep5000",
-        Some(Duration::from_millis(200)),
-    );
+    let outcome = start_connect(mock_path(), "rr1.sleep5000", Duration::from_millis(200));
     assert!(matches!(outcome, Err(ConnectError::Timeout)), "{outcome:?}");
     let elapsed = start.elapsed();
     assert!(
@@ -205,11 +205,31 @@ fn a_timeout_kills_the_child_and_reports_timeout() {
 }
 
 #[test]
+fn a_child_that_exits_before_reading_stdin_reports_its_exit_code() {
+    // The mock refuses `rr1.early12` as soon as it reads those bytes and
+    // exits without draining the rest of the long line. The handoff must
+    // report the exit code, not an I/O error from the broken write.
+    let mut code = String::from("rr1.early12");
+    let padding = MAX_CODE_BYTES - code.len();
+    code.push_str(&"x".repeat(padding));
+    assert_eq!(code.len(), MAX_CODE_BYTES);
+
+    let outcome = start_connect(mock_path(), &code, TEST_TIMEOUT);
+    assert!(matches!(outcome, Ok(Outcome::Refused)), "{outcome:?}");
+}
+
+#[test]
 fn a_missing_executable_is_an_io_error() {
-    let outcome = start_connect(
-        Path::new("definitely-not-a-connect-binary"),
-        "rr1.exit0",
-        None,
-    );
+    let missing = mock_path().with_file_name("definitely-not-a-connect-binary");
+    let outcome = start_connect(&missing, "rr1.exit0", TEST_TIMEOUT);
     assert!(matches!(outcome, Err(ConnectError::Io(_))), "{outcome:?}");
+}
+
+#[test]
+fn a_relative_executable_is_refused_without_spawning() {
+    let outcome = start_connect(Path::new("mock-connect"), "rr1.exit0", TEST_TIMEOUT);
+    assert!(
+        matches!(outcome, Err(ConnectError::NotAbsolute)),
+        "{outcome:?}"
+    );
 }

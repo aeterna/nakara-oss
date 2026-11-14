@@ -12,14 +12,21 @@
 //! no directive exits 0) and may delay the exit with `rr1.sleep<N>` (N
 //! milliseconds, for the launcher's timeout test). Any other line exits 12
 //! (refused).
+//!
+//! A line that contains `rr1.early12` is refused with exit 12 as soon as those
+//! bytes are read, before the rest of the line, so the caller's stdin write can
+//! hit a closed pipe.
 
-use std::io::{BufRead, Read};
+use std::io::Read;
 use std::process::exit;
 use std::thread::sleep;
 use std::time::Duration;
 
 /// Stdin read cap: one line of at most 4096 code bytes plus one `\n`.
 const LINE_LIMIT: u64 = 4097;
+
+/// A line containing this text is refused before the rest of stdin is read.
+const EARLY_REFUSAL: &str = "rr1.early12";
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -34,14 +41,25 @@ fn main() {
 
 /// Read one line from stdin, at most `LINE_LIMIT` bytes, ended by `\n` or
 /// EOF. Extra input after the first line is ignored. Returns Err for invalid
-/// UTF-8 or a read error; an over-long line is left for the code check.
+/// UTF-8, a read error, or the early refusal; an over-long line is left for
+/// the code check.
 fn read_line() -> Result<String, ()> {
     let mut buf = Vec::new();
     let stdin = std::io::stdin().lock();
-    stdin
-        .take(LINE_LIMIT)
-        .read_until(b'\n', &mut buf)
-        .map_err(|_| ())?;
+    let mut reader = stdin.take(LINE_LIMIT);
+    let mut byte = [0u8; 1];
+    loop {
+        if reader.read(&mut byte).map_err(|_| ())? == 0 {
+            break;
+        }
+        buf.push(byte[0]);
+        if buf.ends_with(EARLY_REFUSAL.as_bytes()) {
+            return Err(());
+        }
+        if byte[0] == b'\n' {
+            break;
+        }
+    }
     let line = std::str::from_utf8(&buf).map_err(|_| ())?;
     let line = line.strip_suffix('\n').unwrap_or(line);
     Ok(line.to_owned())

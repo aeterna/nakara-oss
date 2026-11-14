@@ -22,7 +22,9 @@
 use std::fmt;
 use std::io::{self, Write};
 use std::path::Path;
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
+use std::sync::mpsc::{self, TryRecvError};
+use std::thread;
 use std::time::{Duration, Instant};
 
 /// Maximum size of a pairing code, in bytes.
@@ -130,6 +132,8 @@ pub enum ConnectError {
     Code(CodeError),
     /// Spawning Connect, writing to its stdin, or waiting for it failed.
     Io(io::Error),
+    /// The Connect executable path is not absolute.
+    NotAbsolute,
     /// The child outlived the timeout and was killed.
     Timeout,
 }
@@ -139,6 +143,7 @@ impl fmt::Display for ConnectError {
         match self {
             ConnectError::Code(err) => write!(f, "pairing code refused: {err}"),
             ConnectError::Io(err) => write!(f, "connect process failed: {err}"),
+            ConnectError::NotAbsolute => write!(f, "connect executable path is not absolute"),
             ConnectError::Timeout => write!(f, "connect did not finish in time"),
         }
     }
@@ -149,6 +154,7 @@ impl std::error::Error for ConnectError {
         match self {
             ConnectError::Code(err) => Some(err),
             ConnectError::Io(err) => Some(err),
+            ConnectError::NotAbsolute => None,
             ConnectError::Timeout => None,
         }
     }
@@ -173,23 +179,28 @@ pub fn validate_code(code: &str) -> Result<&str, CodeError> {
 
 /// Start Connect and hand it one pairing code.
 ///
-/// The code is validated first. Connect then runs with exactly one argument,
-/// `--from-launcher`, piped stdin and null stdout and stderr; nothing else
-/// about the child is changed, in particular no extra environment. The code
-/// and one `\n` go to stdin, which is closed afterwards. With `timeout`, a
-/// child still running when it elapses is killed and [`ConnectError::Timeout`]
-/// is returned.
+/// The code is validated first, and `exe` must be an absolute path. Connect
+/// then runs with exactly one argument, `--from-launcher`, piped stdin and
+/// null stdout and stderr; nothing else about the child is changed, in
+/// particular no extra environment. The code and one `\n` go to stdin from a
+/// helper thread, which closes the pipe afterwards. `timeout` covers writing
+/// the code and waiting for the child: a child still running when it elapses
+/// is killed and [`ConnectError::Timeout`] is returned.
+///
+/// If Connect exits before the code is written, the pipe breaks. The wait
+/// then continues within the same timeout: when the child has already exited
+/// its outcome is returned, and only a still-running child is killed and
+/// reported as [`ConnectError::Io`].
 ///
 /// On Windows Connect is a GUI app, so the child is spawned normally:
 /// `CREATE_NO_WINDOW` is deliberately not set.
-pub fn start_connect(
-    exe: &Path,
-    code: &str,
-    timeout: Option<Duration>,
-) -> Result<Outcome, ConnectError> {
+pub fn start_connect(exe: &Path, code: &str, timeout: Duration) -> Result<Outcome, ConnectError> {
     validate_code(code).map_err(ConnectError::Code)?;
+    if !exe.is_absolute() {
+        return Err(ConnectError::NotAbsolute);
+    }
 
-    let mut child = Command::new(exe)
+    let child = Command::new(exe)
         .arg("--from-launcher")
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
@@ -197,25 +208,29 @@ pub fn start_connect(
         .spawn()
         .map_err(ConnectError::Io)?;
 
-    if let Err(err) = write_code(&mut child, code) {
-        let _ = child.kill();
-        let _ = child.wait();
+    run_child(child, code, timeout)
+}
+
+/// Write the code from a helper thread and wait for the child against one
+/// deadline.
+fn run_child(mut child: Child, code: &str, timeout: Duration) -> Result<Outcome, ConnectError> {
+    let start = Instant::now();
+    let stdin = child.stdin.take();
+    let code = code.to_owned();
+    let (sender, receiver) = mpsc::channel();
+    if let Err(err) = thread::Builder::new().spawn(move || {
+        let _ = sender.send(write_code(stdin, &code));
+    }) {
+        kill_and_reap(&mut child);
         return Err(ConnectError::Io(err));
     }
-
-    match timeout {
-        Some(limit) => wait_with_timeout(child, limit),
-        None => child
-            .wait()
-            .map(Outcome::from_exit)
-            .map_err(ConnectError::Io),
-    }
+    wait_with_timeout(child, &receiver, start, timeout)
 }
 
 /// Write `code` and one newline to the child's stdin; the handle then drops
 /// and closes the pipe.
-fn write_code(child: &mut Child, code: &str) -> io::Result<()> {
-    let mut stdin = match child.stdin.take() {
+fn write_code(stdin: Option<ChildStdin>, code: &str) -> io::Result<()> {
+    let mut stdin = match stdin {
         Some(stdin) => stdin,
         None => return Err(io::Error::other("stdin was not captured")),
     };
@@ -224,23 +239,103 @@ fn write_code(child: &mut Child, code: &str) -> io::Result<()> {
     stdin.flush()
 }
 
-/// Wait for the child, but kill it and report [`ConnectError::Timeout`] once
-/// `limit` has elapsed.
-fn wait_with_timeout(mut child: Child, limit: Duration) -> Result<Outcome, ConnectError> {
-    let start = Instant::now();
+/// Wait for the child while the code is being written, but kill it and report
+/// [`ConnectError::Timeout`] once `limit` has elapsed since `start`.
+fn wait_with_timeout(
+    mut child: Child,
+    write_result: &mpsc::Receiver<io::Result<()>>,
+    start: Instant,
+    limit: Duration,
+) -> Result<Outcome, ConnectError> {
     loop {
+        match write_result.try_recv() {
+            Ok(Ok(())) => return finish_after_write(&mut child, start, limit),
+            Ok(Err(err)) => return finish_after_write_error(&mut child, start, limit, err),
+            Err(TryRecvError::Disconnected) => {
+                let err = io::Error::other("stdin writer thread stopped without a result");
+                return finish_after_write_error(&mut child, start, limit, err);
+            }
+            Err(TryRecvError::Empty) => {}
+        }
+
         match child.try_wait() {
             Ok(Some(status)) => return Ok(Outcome::from_exit(status)),
             Ok(None) => {}
-            Err(err) => return Err(ConnectError::Io(err)),
+            Err(err) => {
+                kill_and_reap(&mut child);
+                return Err(ConnectError::Io(err));
+            }
         }
+
         if start.elapsed() >= limit {
-            let _ = child.kill();
-            let _ = child.wait();
+            kill_and_reap(&mut child);
             return Err(ConnectError::Timeout);
         }
-        std::thread::sleep(POLL_INTERVAL);
+        thread::sleep(POLL_INTERVAL);
     }
+}
+
+/// Wait for a child whose code was written, killing it at the deadline.
+fn finish_after_write(
+    child: &mut Child,
+    start: Instant,
+    limit: Duration,
+) -> Result<Outcome, ConnectError> {
+    match wait_until(child, start, limit) {
+        Ok(Some(status)) => Ok(Outcome::from_exit(status)),
+        Ok(None) => {
+            kill_and_reap(child);
+            Err(ConnectError::Timeout)
+        }
+        Err(err) => Err(ConnectError::Io(err)),
+    }
+}
+
+/// Wait for a child whose code write failed: if it is still running at the
+/// deadline, kill it and report the write error.
+fn finish_after_write_error(
+    child: &mut Child,
+    start: Instant,
+    limit: Duration,
+    err: io::Error,
+) -> Result<Outcome, ConnectError> {
+    match wait_until(child, start, limit) {
+        Ok(Some(status)) => Ok(Outcome::from_exit(status)),
+        Ok(None) => {
+            kill_and_reap(child);
+            Err(ConnectError::Io(err))
+        }
+        Err(wait_err) => Err(ConnectError::Io(wait_err)),
+    }
+}
+
+/// Poll the child until it exits or the deadline passes. A failed poll kills
+/// and reaps the child before the error is returned.
+fn wait_until(
+    child: &mut Child,
+    start: Instant,
+    limit: Duration,
+) -> io::Result<Option<ExitStatus>> {
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Ok(Some(status)),
+            Ok(None) => {}
+            Err(err) => {
+                kill_and_reap(child);
+                return Err(err);
+            }
+        }
+        if start.elapsed() >= limit {
+            return Ok(None);
+        }
+        thread::sleep(POLL_INTERVAL);
+    }
+}
+
+/// Kill the child and reap it, ignoring errors from either step.
+fn kill_and_reap(child: &mut Child) {
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 #[cfg(test)]
@@ -381,5 +476,37 @@ mod tests {
         assert_eq!(Outcome::UploadFailed.exit_code(), Some(15));
         assert_eq!(Outcome::Unknown(7).exit_code(), Some(7));
         assert_eq!(Outcome::Signal.exit_code(), None);
+    }
+
+    // -- write errors
+
+    #[cfg(unix)]
+    fn exit_command(code: i32) -> Command {
+        let mut command = Command::new("sh");
+        command.arg("-c").arg(format!("exit {code}"));
+        command
+    }
+
+    #[cfg(windows)]
+    fn exit_command(code: i32) -> Command {
+        let mut command = Command::new("cmd");
+        command.arg("/C").arg("exit").arg(code.to_string());
+        command
+    }
+
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn a_write_error_returns_the_child_exit_code() {
+        let mut command = exit_command(12);
+        command
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        let mut child = command.spawn().expect("the exit helper should spawn");
+        // The missing stdin handle makes the writer report an error at once.
+        drop(child.stdin.take());
+
+        let outcome = run_child(child, "rr1.exit0", Duration::from_secs(5));
+        assert_eq!(outcome.expect("the child should exit"), Outcome::Refused);
     }
 }

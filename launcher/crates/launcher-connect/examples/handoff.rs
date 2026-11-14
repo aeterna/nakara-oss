@@ -11,10 +11,13 @@
 //! ```
 //!
 //! The file holds the `rr1.` code; a trailing `\n` or `\r` is ignored. The
-//! launcher never retries a code by itself: run it again by hand if needed.
+//! Connect path must be absolute, and the driver waits up to 30 minutes for
+//! Connect to exit. The launcher never retries a code by itself: run it again
+//! by hand if needed.
 
 use std::path::Path;
 use std::process::exit;
+use std::time::Duration;
 
 use launcher_connect::start_connect;
 
@@ -33,7 +36,7 @@ fn main() {
     };
     let code = code.trim_end_matches(['\r', '\n']);
 
-    match start_connect(Path::new(&args[1]), code, None) {
+    match start_connect(Path::new(&args[1]), code, Duration::from_secs(30 * 60)) {
         Ok(outcome) => {
             println!("{outcome:?}");
             match outcome.exit_code() {
