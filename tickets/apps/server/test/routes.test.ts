@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import YAML from 'yaml';
+import { openTestDb } from '@nakara-tickets/db/test-support';
 import { buildApp } from '../src/app.js';
 import pkg from '../package.json' with { type: 'json' };
 
@@ -82,11 +83,23 @@ describe('OpenAPI route stubs', () => {
     }
   });
 
-  test('r3: GET /healthz answers 200 with ok: true and version', async () => {
+  test('r3: GET /healthz without db answers 503 with ok: false, db: down', async () => {
     const app = buildApp();
     const res = await app.inject({ method: 'GET', url: '/healthz' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ ok: true, db: 'down', gateway: 'standby', version: pkg.version });
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual({ ok: false, db: 'down', gateway: 'connecting', version: pkg.version });
+  });
+
+  test('r3-pglite: GET /healthz with working db answers 200 with ok: true, db: up', async () => {
+    const testDb = await openTestDb();
+    try {
+      const app = buildApp({ db: testDb.db as any });
+      const res = await app.inject({ method: 'GET', url: '/healthz' });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ ok: true, db: 'up', gateway: 'connecting', version: pkg.version });
+    } finally {
+      await testDb.close();
+    }
   });
 
   test("r4: registered METHOD path set equals the spec's set (path params converted)", async () => {

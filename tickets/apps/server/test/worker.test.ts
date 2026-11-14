@@ -116,7 +116,14 @@ describe('worker (w1)', () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(maxConcurrent).toBe(1);
 
-    await worker.stop();
+    // Stop worker while job 2 is running and advance time for it to complete
+    const stopPromise = worker.stop();
+    await vi.advanceTimersByTimeAsync(3000);
+    await stopPromise;
+
+    expect(maxConcurrent).toBe(1);
+    expect(totalRuns).toBe(2);
+    expect(concurrent).toBe(0);
   });
 
   it('(w1-4) stop() waits for running jobs', async () => {

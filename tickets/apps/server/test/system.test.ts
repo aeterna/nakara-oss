@@ -76,9 +76,9 @@ describe('system routes (w3)', () => {
     }).returning();
 
     await db.insert(tickets).values([
-      { guild_id: guildId, category_id: cat.id, number: 1, opener_id: '111111111111111111', status: 'open' },
-      { guild_id: guildId, category_id: cat.id, number: 2, opener_id: '222222222222222222', status: 'claimed' },
-      { guild_id: guildId, category_id: cat.id, number: 3, opener_id: '333333333333333333', status: 'closed' },
+      { guild_id: guildId, category_id: cat.id, number: 1, opener_id: '111111111111111111', channel_id: '100000000000000001', status: 'open' },
+      { guild_id: guildId, category_id: cat.id, number: 2, opener_id: '222222222222222222', channel_id: '100000000000000002', status: 'claimed' },
+      { guild_id: guildId, category_id: cat.id, number: 3, opener_id: '333333333333333333', channel_id: '100000000000000003', status: 'closed' },
     ]);
 
     // Insert game server seen recently

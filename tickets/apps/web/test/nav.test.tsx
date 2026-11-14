@@ -9,7 +9,7 @@ describe('web navigation (x3)', () => {
     vi.restoreAllMocks();
     vi.spyOn(api, 'getMe').mockResolvedValue({
       user: { id: 'u1', username: 'TestUser', avatar: null },
-      guilds: [{ id: 'g1', name: 'Test Guild', canManage: true }],
+      guilds: [{ id: 'g1', name: 'Test Guild', icon: null, canManage: true }],
       csrfToken: 'test-csrf-token',
     });
     vi.spyOn(api, 'getCategories').mockResolvedValue([]);
@@ -25,9 +25,13 @@ describe('web navigation (x3)', () => {
   it('renders all nine nav items and switching shows each page heading', async () => {
     render(<App />);
 
+    // Click language toggle to switch from default 'th' to 'en'
+    const langBtn = await screen.findByRole('button', { name: /switch to english|en/i });
+    fireEvent.click(langBtn);
+
     // Wait for user and guild to load and nav to appear
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /tickets/i })).toBeTruthy();
+      expect(screen.getByRole('button', { name: /^tickets$/i })).toBeTruthy();
     });
 
     // Check all nine nav items are present
