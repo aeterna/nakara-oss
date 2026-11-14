@@ -1,0 +1,68 @@
+# Nakara Tickets (ADR 0003): tests and type checks for tickets/, its own npm project outside the root workspaces.
+# Runs on every PR and exits early when neither tickets/ nor packages/tickets/ changed (org standard §11.1: no
+# root-level `paths:` filter, so the check can become required without waiting forever). Same security posture as
+# ci.yml: `pull_request` only, read-only token, no secrets, actions pinned to full SHAs, install scripts never run.
+name: tickets
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tickets-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tickets:
+    name: tickets (tests · types)
+    runs-on: ubuntu-24.04   # pinned: ubuntu-latest moves to 26.04 from 2026-10-19
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: scope
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "pull_request" ]; then base="$BASE_SHA"; else base="$BEFORE_SHA"; fi
+          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "no usable base; running"; exit 0
+          fi
+          if git diff --name-only "$base" HEAD | grep -qE '^(tickets/|packages/tickets/|\.github/workflows/tickets\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "no tickets changes; nothing to check"
+          fi
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: steps.scope.outputs.run == 'true'
+        with:
+          node-version: 22
+      - name: install
+        if: steps.scope.outputs.run == 'true'
+        working-directory: tickets
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: tests (vitest)
+        if: steps.scope.outputs.run == 'true'
+        working-directory: tickets
+        run: npx vitest run
+      - name: types (db, build mode)
+        if: steps.scope.outputs.run == 'true'
+        working-directory: tickets
+        run: npx tsc -b
+      - name: types (server)
+        if: steps.scope.outputs.run == 'true'
+        working-directory: tickets
+        run: npx tsc -p apps/server --noEmit
+      - name: audit (high and critical)
+        if: steps.scope.outputs.run == 'true'
+        working-directory: tickets
+        run: npm audit --omit=dev --audit-level=high
