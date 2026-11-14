@@ -94,7 +94,7 @@ describe('TicketActions component acceptance tests (g4)', () => {
     // Verify 409 triggers repeat-confirm dialog
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeDefined();
-      expect(screen.getByText(/duplicate item warning|repeat/i)).toBeDefined();
+      expect(screen.getByRole('heading', { name: /duplicate item warning/i })).toBeDefined();
     });
 
     // Click the confirm button in the dialog

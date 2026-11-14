@@ -125,6 +125,10 @@ describe('a5 web tags and blocks acceptance tests', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
+    // The page asks window.confirm before deleting; jsdom's confirm is not
+    // interactive, so accept the prompt explicitly.
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
     render(<Blocks guildId={GUILD_ID} locale="en" />);
 
     // Wait for initial load
@@ -145,5 +149,8 @@ describe('a5 web tags and blocks acceptance tests', () => {
       );
       expect(deleteCall).toBeDefined();
     });
+
+    expect(confirmSpy).toHaveBeenCalled();
+    confirmSpy.mockRestore();
   });
 });

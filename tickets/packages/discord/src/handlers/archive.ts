@@ -129,6 +129,10 @@ async function downloadAttachment(
             totalBytes += chunk.length;
             if (totalBytes > effectiveCap) {
               capExceeded = true;
+              try {
+                await (res.body as any).cancel?.('Size cap exceeded');
+              } catch {}
+              controller.abort();
               break;
             }
             chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));

@@ -67,6 +67,15 @@ function formatTicket(t: any) {
   };
 }
 
+// Explicit past-tense forms for the system line (no naive "-ed" suffixing).
+const TRANSITION_PAST_TENSE: Record<string, string> = {
+  claim: 'claimed',
+  unclaim: 'unclaimed',
+  transfer: 'transferred',
+  close: 'closed',
+  reopen: 'reopened',
+};
+
 const transitionBodySchema = z.object({
   toUserId: z.string().regex(/^[0-9]{17,20}$/).optional(),
   reason: z.string().max(512).optional(),
@@ -372,7 +381,7 @@ export default async function (app: FastifyInstance) {
 
         // If app.discord is available, post system message
         if (app.discord && updated.channel_id) {
-          const actionText = `Ticket #${updated.number} ${transition}ed by <@${req.user.id}>`;
+          const actionText = `Ticket #${updated.number} ${TRANSITION_PAST_TENSE[transition] ?? transition} by <@${req.user.id}>`;
           app.discord
             .sendMessage(updated.channel_id, {
               content: actionText,

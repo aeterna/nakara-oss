@@ -23,3 +23,11 @@ Do not run shell commands; file tools only. Never print connection strings, pass
 
 ## Acceptance
 vitest 0 failed three runs in a row · tsc -b 0 · web tsc 0.
+
+## Round 2 (reviewer diagnosis after runs 1223f7 e671d4: 220/221, same archive check failed twice)
+Instrumented run: the download takes the `getReader()` path and reads chunks 1 MiB … 26 MiB against a cap of
+26,214,400 bytes (25 MiB); the cap is crossed only on the **last** chunk (26 × 1 MiB), when the source has already
+queued `controller.close()`. `reader.cancel()` on a closing stream does not call the source's `cancel()`, so
+`streamCancelled` stays false. **Product code is correct; the test is wrong.**
+6. `packages/discord/test/archive.test.ts` (lying-size case): make the source keep producing past the cap
+   (`chunkCount = 40`), so the cap is crossed while the stream is still open; keep every assertion.

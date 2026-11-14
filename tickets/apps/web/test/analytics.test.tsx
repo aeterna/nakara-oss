@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { Analytics } from '../src/pages/Analytics.js';
 import * as analyticsApi from '../src/api/analytics.js';
 
@@ -105,9 +105,16 @@ describe('Analytics Page (acceptance test s6)', () => {
       expect(analyticsApi.getStats).toHaveBeenCalledTimes(2);
     });
 
-    // 6. Verify Audit Log Table
-    expect(screen.getByText('ticket.close')).toBeTruthy();
-    expect(screen.getByText('admin-1')).toBeTruthy();
+    // 6. Verify Audit Log Table (the action filter <option> also reads 'ticket.close',
+    // so scope the row check to the table that holds the audit actor)
+    const auditTable = screen
+      .getAllByRole('table')
+      .find((tbl) => within(tbl).queryByText('admin-1') !== null);
+    if (!auditTable) {
+      throw new Error('Expected audit table to be rendered');
+    }
+    expect(within(auditTable).getByText('ticket.close')).toBeTruthy();
+    expect(within(auditTable).getByText('admin-1')).toBeTruthy();
 
     // Negative case
     expect(screen.queryByText('non-existent-metric')).toBeNull();
