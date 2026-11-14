@@ -23,7 +23,7 @@ use windows_sys::Win32::Security::{
 };
 use windows_sys::Win32::Storage::FileSystem::{
     FlushFileBuffers, WriteFile, FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_FLAG_OVERLAPPED,
-    PIPE_ACCESS_OUTBOUND,
+    PIPE_ACCESS_DUPLEX,
 };
 use windows_sys::Win32::System::Pipes::{
     ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, GetNamedPipeClientProcessId,
@@ -486,7 +486,8 @@ fn create_pipe(name: &str, attributes: &SECURITY_ATTRIBUTES) -> io::Result<HANDL
     let handle = unsafe {
         CreateNamedPipeW(
             wide_name.as_ptr(),
-            PIPE_ACCESS_OUTBOUND | FILE_FLAG_FIRST_PIPE_INSTANCE | FILE_FLAG_OVERLAPPED,
+            // Duplex is needed so the server handle may query the client process id; the launcher never reads.
+            PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE | FILE_FLAG_OVERLAPPED,
             PIPE_TYPE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
             1,
             OUT_BUFFER_BYTES,
