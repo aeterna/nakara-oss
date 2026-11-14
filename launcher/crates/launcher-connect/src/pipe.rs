@@ -254,9 +254,8 @@ impl ServerPipe {
         child_exit: &mut dyn FnMut() -> io::Result<Option<ExitStatus>>,
     ) -> io::Result<Option<Handoff>> {
         loop {
-            match child_exit()? {
-                Some(status) => return Ok(Some(Handoff::ChildExited(status))),
-                None => {}
+            if let Some(status) = child_exit()? {
+                return Ok(Some(Handoff::ChildExited(status)));
             }
             let left = deadline.saturating_duration_since(Instant::now());
             if left.is_zero() {
@@ -264,7 +263,10 @@ impl ServerPipe {
             }
 
             let mut op = Overlapped::with_buffer(self.handle.raw(), vec![0u8; 1]);
-            let buf_ptr: *mut u8 = op.buffer_mut().unwrap().as_mut_ptr();
+            let buf_ptr: *mut u8 = op
+                .buffer_mut()
+                .ok_or_else(|| io::Error::other("read operation has no buffer"))?
+                .as_mut_ptr();
             // SAFETY: `op` owns the buffer and `op.raw`, which stay alive until the
             // read completes or is cancelled and drained (or dropped on unwind).
             let ok = unsafe {
