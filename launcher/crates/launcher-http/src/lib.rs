@@ -6,6 +6,9 @@
 //! before touching the network, disables redirects, enforces HTTPS, resolves
 //! addresses through [`launcher_net::NetPolicy::check_ip`], caps the response
 //! body size while streaming, and sends no cookies or telemetry.
+//! The DNS lookup itself is not bounded by the connect or request timeouts
+//! (`std` `getaddrinfo`), and [`FetchError`] text may name hosts and refused
+//! addresses, so it is for logs, not for players.
 
 #![deny(missing_docs)]
 
@@ -74,6 +77,9 @@ impl Client {
     }
 
     /// GET a URL that passes `policy.check_url`, with no redirects, body capped at `cap` bytes.
+    ///
+    /// Accepts any role the policy allows (feed or release hosts); callers that
+    /// need one role check [`CheckedUrl::role`] themselves, as [`Self::fetch_feed`] does.
     pub fn get(&self, url: &str, cap: u64) -> Result<Vec<u8>, FetchError> {
         let checked = self.policy.check_url(url)?;
         self.get_checked(&checked, cap, None)
@@ -98,7 +104,9 @@ impl Client {
         cap: u64,
         accept: Option<&str>,
     ) -> Result<Vec<u8>, FetchError> {
+        // Proxies from the environment are refused so ADR 0002 decision 5 does not depend on Cargo features.
         let agent = ureq::AgentBuilder::new()
+            .try_proxy_from_env(false)
             .redirects(0)
             .https_only(true)
             .timeout_connect(CONNECT_TIMEOUT)
@@ -147,11 +155,7 @@ struct PolicyResolver {
 
 impl ureq::Resolver for PolicyResolver {
     fn resolve(&self, netloc: &str) -> io::Result<Vec<SocketAddr>> {
-        let resolved: Vec<SocketAddr> = if netloc.contains(':') {
-            netloc.to_socket_addrs()?.collect()
-        } else {
-            (netloc, 443u16).to_socket_addrs()?.collect()
-        };
+        let resolved: Vec<SocketAddr> = netloc.to_socket_addrs()?.collect();
         checked_addrs(&self.policy, self.role, resolved)
     }
 }
