@@ -2,9 +2,11 @@
 
 //! Start Rongroi Connect with the handoff contract v1 (ADR 0002 decision 8).
 //!
-//! Connect accepts exactly one argument `--from-launcher`, then reads one
-//! line from stdin: an `rr1.` pairing code, at most 4096 bytes, ended by `\n`
-//! or EOF. It writes nothing back; the caller learns only the exit code:
+//! The launcher creates a named pipe that only the current user can open,
+//! starts Connect with the one argument `--from-launcher=<pipe name>`, and
+//! writes one line to the pipe: an `rr1.` pairing code, at most 4096 bytes,
+//! ended by `\n`. Connect reads that line and writes nothing back. The
+//! caller learns only the exit code:
 //!
 //! | exit | meaning |
 //! |------|---------|
@@ -17,15 +19,28 @@
 //! | 14   | record refused before upload |
 //! | 15   | upload failed |
 //!
+//! The handoff runs on Windows only. Elsewhere [`start_connect`] returns
+//! [`ConnectError::Unsupported`] without starting anything.
+//!
 //! The launcher never retries a code by itself.
 
 use std::fmt;
-use std::io::{self, Write};
+use std::io;
 use std::path::Path;
-use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
-use std::sync::mpsc::{self, TryRecvError};
+use std::process::ExitStatus;
+use std::time::Duration;
+
+#[cfg(windows)]
+use std::process::{Child, Command, Stdio};
+#[cfg(windows)]
 use std::thread;
-use std::time::{Duration, Instant};
+#[cfg(windows)]
+use std::time::Instant;
+
+/// The Windows named pipe code: CreateNamedPipeW, overlapped I/O, SDDL.
+#[cfg(windows)]
+#[doc(hidden)]
+pub mod pipe;
 
 /// Maximum size of a pairing code, in bytes.
 pub const MAX_CODE_BYTES: usize = 4096;
@@ -33,7 +48,17 @@ pub const MAX_CODE_BYTES: usize = 4096;
 /// The prefix every pairing code starts with.
 const CODE_PREFIX: &str = "rr1.";
 
-/// How often the timed wait polls the child before the timeout fires.
+/// The prefix of every launch pipe name.
+const PIPE_PREFIX: &str = r"\\.\pipe\rongroi-launch-";
+
+/// The flag that carries the pipe name to Connect.
+const LAUNCH_FLAG: &str = "--from-launcher=";
+
+/// Lowercase hex digits after the prefix: 16 random bytes.
+const PIPE_HEX_DIGITS: usize = 32;
+
+/// How often a timed wait polls the child and the pipe.
+#[cfg(windows)]
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 /// Why a pairing code was rejected.
@@ -130,21 +155,35 @@ impl Outcome {
 pub enum ConnectError {
     /// The pairing code was rejected by [`validate_code`].
     Code(CodeError),
-    /// Spawning Connect, writing to its stdin, or waiting for it failed.
+    /// Creating the pipe, starting Connect, or waiting for it failed.
     Io(io::Error),
     /// The Connect executable path is not absolute.
     NotAbsolute,
-    /// The child outlived the timeout and was killed.
+    /// The deadline passed; the child was killed.
     Timeout,
+    /// The client on the pipe is not the Connect process the launcher started.
+    PipeClientMismatch {
+        /// The process id of the child the launcher started.
+        expected: u32,
+        /// The process id of the client that connected.
+        got: u32,
+    },
+    /// The handoff needs Windows named pipes; this target has none.
+    Unsupported,
 }
 
 impl fmt::Display for ConnectError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ConnectError::Code(err) => write!(f, "pairing code refused: {err}"),
-            ConnectError::Io(err) => write!(f, "connect process failed: {err}"),
+            ConnectError::Io(err) => write!(f, "connect handoff failed: {err}"),
             ConnectError::NotAbsolute => write!(f, "connect executable path is not absolute"),
             ConnectError::Timeout => write!(f, "connect did not finish in time"),
+            ConnectError::PipeClientMismatch { expected, got } => write!(
+                f,
+                "pipe client {got} is not the started connect process {expected}"
+            ),
+            ConnectError::Unsupported => write!(f, "connect handoff needs Windows"),
         }
     }
 }
@@ -156,6 +195,8 @@ impl std::error::Error for ConnectError {
             ConnectError::Io(err) => Some(err),
             ConnectError::NotAbsolute => None,
             ConnectError::Timeout => None,
+            ConnectError::PipeClientMismatch { .. } => None,
+            ConnectError::Unsupported => None,
         }
     }
 }
@@ -177,162 +218,149 @@ pub fn validate_code(code: &str) -> Result<&str, CodeError> {
     Ok(code)
 }
 
-/// Start Connect and hand it one pairing code.
+/// The pipe name for 16 random bytes: the prefix and 32 lowercase hex digits.
+pub fn pipe_name_from(bytes: [u8; 16]) -> String {
+    let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+    format!("{PIPE_PREFIX}{hex}")
+}
+
+/// The one argument Connect is started with, for a pipe name.
+pub fn launch_argument(pipe_name: &str) -> String {
+    format!("{LAUNCH_FLAG}{pipe_name}")
+}
+
+/// True only for a name in the exact launch pipe pattern: the prefix and
+/// 32 lowercase hex digits, nothing more.
+pub fn is_launch_pipe_name(name: &str) -> bool {
+    name.strip_prefix(PIPE_PREFIX).is_some_and(|hex| {
+        hex.len() == PIPE_HEX_DIGITS
+            && hex
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    })
+}
+
+/// Start Connect and hand it one pairing code through a named pipe.
 ///
-/// The code is validated first, and `exe` must be an absolute path. Connect
-/// then runs with exactly one argument, `--from-launcher`, piped stdin and
-/// null stdout and stderr; nothing else about the child is changed, in
-/// particular no extra environment. The code and one `\n` go to stdin from a
-/// helper thread, which closes the pipe afterwards. `timeout` covers writing
-/// the code and waiting for the child: a child still running when it elapses
-/// is killed and [`ConnectError::Timeout`] is returned.
+/// The code is validated first, and `exe` must be an absolute path. The pipe
+/// is created before Connect starts, so a name clash fails before anything
+/// runs. Connect gets exactly one argument, `--from-launcher=<pipe name>`,
+/// and null stdin, stdout and stderr.
 ///
-/// If Connect exits before the code is written, the pipe breaks. The wait
-/// then continues within the same timeout: when the child has already exited
-/// its outcome is returned, and only a still-running child is killed and
-/// reported as [`ConnectError::Io`].
+/// `timeout` covers the whole handoff: waiting for the client, writing the
+/// code, and waiting for Connect to exit. A child still running at the
+/// deadline is killed and [`ConnectError::Timeout`] is returned.
 ///
-/// On Windows Connect is a GUI app, so the child is spawned normally:
-/// `CREATE_NO_WINDOW` is deliberately not set.
+/// Only Windows has the handoff. Elsewhere this returns
+/// [`ConnectError::Unsupported`] after the same checks, without spawning.
+#[cfg(windows)]
 pub fn start_connect(exe: &Path, code: &str, timeout: Duration) -> Result<Outcome, ConnectError> {
+    start_connect_with_env(exe, code, timeout, &[])
+}
+
+/// Start Connect and hand it one pairing code through a named pipe.
+///
+/// The code is validated first, and `exe` must be an absolute path. The pipe
+/// is created before Connect starts, so a name clash fails before anything
+/// runs. Connect gets exactly one argument, `--from-launcher=<pipe name>`,
+/// and null stdin, stdout and stderr.
+///
+/// `timeout` covers the whole handoff: waiting for the client, writing the
+/// code, and waiting for Connect to exit. A child still running at the
+/// deadline is killed and [`ConnectError::Timeout`] is returned.
+///
+/// Only Windows has the handoff. Elsewhere this returns
+/// [`ConnectError::Unsupported`] after the same checks, without spawning.
+#[cfg(not(windows))]
+pub fn start_connect(exe: &Path, code: &str, _timeout: Duration) -> Result<Outcome, ConnectError> {
     validate_code(code).map_err(ConnectError::Code)?;
     if !exe.is_absolute() {
         return Err(ConnectError::NotAbsolute);
     }
+    Err(ConnectError::Unsupported)
+}
 
-    let child = Command::new(exe)
-        .arg("--from-launcher")
-        .stdin(Stdio::piped())
+/// [`start_connect`] with extra environment variables for the child. Only
+/// the tests use it; it is not part of the handoff.
+#[cfg(windows)]
+#[doc(hidden)]
+pub fn start_connect_with_env(
+    exe: &Path,
+    code: &str,
+    timeout: Duration,
+    env: &[(&str, &str)],
+) -> Result<Outcome, ConnectError> {
+    validate_code(code).map_err(ConnectError::Code)?;
+    if !exe.is_absolute() {
+        return Err(ConnectError::NotAbsolute);
+    }
+    let deadline = Instant::now()
+        .checked_add(timeout)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "timeout is too long"))
+        .map_err(ConnectError::Io)?;
+
+    let name = pipe::random_pipe_name().map_err(ConnectError::Io)?;
+    let mut server = pipe::ServerPipe::create(&name).map_err(ConnectError::Io)?;
+    let mut child = Command::new(exe)
+        .arg(launch_argument(&name))
+        .envs(env.iter().copied())
+        .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .map_err(ConnectError::Io)?;
 
-    run_child(child, code, timeout)
-}
+    let expected = child.id();
+    let mut line = code.as_bytes().to_vec();
+    line.push(b'\n');
+    let handoff = server.hand_off(&line, expected, deadline, &mut || child.try_wait());
+    drop(server);
 
-/// Write the code from a helper thread and wait for the child against one
-/// deadline.
-fn run_child(mut child: Child, code: &str, timeout: Duration) -> Result<Outcome, ConnectError> {
-    let start = Instant::now();
-    let stdin = child.stdin.take();
-    let code = code.to_owned();
-    let (sender, receiver) = mpsc::channel();
-    if let Err(err) = thread::Builder::new().spawn(move || {
-        let _ = sender.send(write_code(stdin, &code));
-    }) {
-        kill_and_reap(&mut child);
-        return Err(ConnectError::Io(err));
-    }
-    wait_with_timeout(child, &receiver, start, timeout)
-}
-
-/// Write `code` and one newline to the child's stdin; the handle then drops
-/// and closes the pipe.
-fn write_code(stdin: Option<ChildStdin>, code: &str) -> io::Result<()> {
-    let mut stdin = match stdin {
-        Some(stdin) => stdin,
-        None => return Err(io::Error::other("stdin was not captured")),
-    };
-    stdin.write_all(code.as_bytes())?;
-    stdin.write_all(b"\n")?;
-    stdin.flush()
-}
-
-/// Wait for the child while the code is being written, but kill it and report
-/// [`ConnectError::Timeout`] once `limit` has elapsed since `start`.
-fn wait_with_timeout(
-    mut child: Child,
-    write_result: &mpsc::Receiver<io::Result<()>>,
-    start: Instant,
-    limit: Duration,
-) -> Result<Outcome, ConnectError> {
-    loop {
-        match write_result.try_recv() {
-            Ok(Ok(())) => return finish_after_write(&mut child, start, limit),
-            Ok(Err(err)) => return finish_after_write_error(&mut child, start, limit, err),
-            Err(TryRecvError::Disconnected) => {
-                let err = io::Error::other("stdin writer thread stopped without a result");
-                return finish_after_write_error(&mut child, start, limit, err);
-            }
-            Err(TryRecvError::Empty) => {}
+    match handoff {
+        Ok(pipe::Handoff::Written) => wait_for_exit(&mut child, deadline),
+        Ok(pipe::Handoff::ChildExited(status)) => Ok(Outcome::from_exit(status)),
+        Ok(pipe::Handoff::Mismatch { got }) => {
+            kill_and_reap(&mut child);
+            Err(ConnectError::PipeClientMismatch { expected, got })
         }
+        Ok(pipe::Handoff::Deadline) => {
+            kill_and_reap(&mut child);
+            Err(ConnectError::Timeout)
+        }
+        Err(err) => match child.try_wait() {
+            Ok(Some(status)) => Ok(Outcome::from_exit(status)),
+            _ => {
+                kill_and_reap(&mut child);
+                Err(ConnectError::Io(err))
+            }
+        },
+    }
+}
 
+/// Wait for the child to exit before `deadline`. At the deadline the child
+/// is killed and [`ConnectError::Timeout`] is returned.
+#[cfg(windows)]
+fn wait_for_exit(child: &mut Child, deadline: Instant) -> Result<Outcome, ConnectError> {
+    loop {
         match child.try_wait() {
             Ok(Some(status)) => return Ok(Outcome::from_exit(status)),
             Ok(None) => {}
             Err(err) => {
-                kill_and_reap(&mut child);
+                kill_and_reap(child);
                 return Err(ConnectError::Io(err));
             }
         }
-
-        if start.elapsed() >= limit {
-            kill_and_reap(&mut child);
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            kill_and_reap(child);
             return Err(ConnectError::Timeout);
         }
-        thread::sleep(POLL_INTERVAL);
-    }
-}
-
-/// Wait for a child whose code was written, killing it at the deadline.
-fn finish_after_write(
-    child: &mut Child,
-    start: Instant,
-    limit: Duration,
-) -> Result<Outcome, ConnectError> {
-    match wait_until(child, start, limit) {
-        Ok(Some(status)) => Ok(Outcome::from_exit(status)),
-        Ok(None) => {
-            kill_and_reap(child);
-            Err(ConnectError::Timeout)
-        }
-        Err(err) => Err(ConnectError::Io(err)),
-    }
-}
-
-/// Wait for a child whose code write failed: if it is still running at the
-/// deadline, kill it and report the write error.
-fn finish_after_write_error(
-    child: &mut Child,
-    start: Instant,
-    limit: Duration,
-    err: io::Error,
-) -> Result<Outcome, ConnectError> {
-    match wait_until(child, start, limit) {
-        Ok(Some(status)) => Ok(Outcome::from_exit(status)),
-        Ok(None) => {
-            kill_and_reap(child);
-            Err(ConnectError::Io(err))
-        }
-        Err(wait_err) => Err(ConnectError::Io(wait_err)),
-    }
-}
-
-/// Poll the child until it exits or the deadline passes. A failed poll kills
-/// and reaps the child before the error is returned.
-fn wait_until(
-    child: &mut Child,
-    start: Instant,
-    limit: Duration,
-) -> io::Result<Option<ExitStatus>> {
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => return Ok(Some(status)),
-            Ok(None) => {}
-            Err(err) => {
-                kill_and_reap(child);
-                return Err(err);
-            }
-        }
-        if start.elapsed() >= limit {
-            return Ok(None);
-        }
-        thread::sleep(POLL_INTERVAL);
+        thread::sleep(POLL_INTERVAL.min(left));
     }
 }
 
 /// Kill the child and reap it, ignoring errors from either step.
+#[cfg(windows)]
 fn kill_and_reap(child: &mut Child) {
     let _ = child.kill();
     let _ = child.wait();
@@ -341,6 +369,104 @@ fn kill_and_reap(child: &mut Child) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // -- pipe name and argument
+
+    #[test]
+    fn pipe_name_from_writes_lowercase_hex_after_the_prefix() {
+        let bytes = [
+            0xAB, 0xCD, 0xEF, 0x01, 0x23, 0x45, 0x67, 0x89, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54,
+            0x32, 0x10,
+        ];
+        assert_eq!(
+            pipe_name_from(bytes),
+            r"\\.\pipe\rongroi-launch-abcdef0123456789fedcba9876543210"
+        );
+    }
+
+    #[test]
+    fn pipe_name_from_pads_each_byte_to_two_digits() {
+        let mut bytes = [0u8; 16];
+        bytes[15] = 0x0F;
+        let expected = format!(r"\\.\pipe\rongroi-launch-{}0f", "0".repeat(30));
+        assert_eq!(pipe_name_from(bytes), expected);
+    }
+
+    #[test]
+    fn a_pipe_name_built_from_bytes_passes_the_pattern() {
+        let name = pipe_name_from([0x5A; 16]);
+        assert!(is_launch_pipe_name(&name), "{name}");
+    }
+
+    #[test]
+    fn launch_argument_is_the_flag_and_the_pipe_name() {
+        let name = pipe_name_from([0x01; 16]);
+        assert_eq!(launch_argument(&name), format!("--from-launcher={name}"));
+    }
+
+    #[test]
+    fn launch_argument_keeps_the_backslashes_of_the_pipe_name() {
+        assert_eq!(
+            launch_argument(r"\\.\pipe\rongroi-launch-00000000000000000000000000000000"),
+            r"--from-launcher=\\.\pipe\rongroi-launch-00000000000000000000000000000000"
+        );
+    }
+
+    #[test]
+    fn accepts_exactly_the_launch_pattern() {
+        let name = r"\\.\pipe\rongroi-launch-0123456789abcdef0123456789abcdef";
+        assert!(is_launch_pipe_name(name));
+    }
+
+    #[test]
+    fn rejects_other_pipe_names() {
+        let good = r"\\.\pipe\rongroi-launch-0123456789abcdef0123456789abcdef";
+        assert!(is_launch_pipe_name(good));
+        assert!(!is_launch_pipe_name(&format!("{good}\n")));
+        assert!(!is_launch_pipe_name(""));
+        let cases = [
+            // upper-case hex
+            r"\\.\pipe\rongroi-launch-0123456789ABCDEF0123456789abcdef",
+            // 31 and 33 digits
+            r"\\.\pipe\rongroi-launch-0123456789abcdef0123456789abcde",
+            r"\\.\pipe\rongroi-launch-0123456789abcdef0123456789abcdef0",
+            // not hex
+            r"\\.\pipe\rongroi-launch-0123456789abcdef0123456789abcdeg",
+            r"\\.\pipe\other-0123456789abcdef0123456789abcdef",
+            r"\\?\pipe\rongroi-launch-0123456789abcdef0123456789abcdef",
+            r"//./pipe/rongroi-launch-0123456789abcdef0123456789abcdef",
+            r"\\.\pipe\rongroi-launch-0123456789abcdef0123456789abcdef\extra",
+            r"C:\rongroi-launch-0123456789abcdef0123456789abcdef",
+        ];
+        for name in cases {
+            assert!(!is_launch_pipe_name(name), "{name:?}");
+        }
+    }
+
+    // -- start_connect checks that run everywhere
+
+    #[test]
+    fn start_connect_refuses_a_relative_path() {
+        let outcome = start_connect(Path::new("connect"), "rr1.exit0", Duration::from_secs(1));
+        assert!(
+            matches!(outcome, Err(ConnectError::NotAbsolute)),
+            "{outcome:?}"
+        );
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn start_connect_is_unsupported_off_windows() {
+        let outcome = start_connect(
+            Path::new("/nonexistent/connect"),
+            "rr1.exit0",
+            Duration::from_secs(1),
+        );
+        assert!(
+            matches!(outcome, Err(ConnectError::Unsupported)),
+            "{outcome:?}"
+        );
+    }
 
     // -- validate_code
 
@@ -476,37 +602,5 @@ mod tests {
         assert_eq!(Outcome::UploadFailed.exit_code(), Some(15));
         assert_eq!(Outcome::Unknown(7).exit_code(), Some(7));
         assert_eq!(Outcome::Signal.exit_code(), None);
-    }
-
-    // -- write errors
-
-    #[cfg(unix)]
-    fn exit_command(code: i32) -> Command {
-        let mut command = Command::new("sh");
-        command.arg("-c").arg(format!("exit {code}"));
-        command
-    }
-
-    #[cfg(windows)]
-    fn exit_command(code: i32) -> Command {
-        let mut command = Command::new("cmd");
-        command.arg("/C").arg("exit").arg(code.to_string());
-        command
-    }
-
-    #[cfg(any(unix, windows))]
-    #[test]
-    fn a_write_error_returns_the_child_exit_code() {
-        let mut command = exit_command(12);
-        command
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-        let mut child = command.spawn().expect("the exit helper should spawn");
-        // The missing stdin handle makes the writer report an error at once.
-        drop(child.stdin.take());
-
-        let outcome = run_child(child, "rr1.exit0", Duration::from_secs(5));
-        assert_eq!(outcome.expect("the child should exit"), Outcome::Refused);
     }
 }

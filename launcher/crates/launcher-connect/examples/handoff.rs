@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 
 //! Handoff driver for the K4 spike (ADR 0002 decision 8): start Rongroi
-//! Connect with a pairing code read from a file, then print the outcome and
-//! the raw exit code.
+//! Connect with a pairing code read from a file, hand the code over a named
+//! pipe, then print the outcome and the raw exit code. Windows only: other
+//! targets print the refusal and exit 1.
 //!
 //! Usage:
 //!

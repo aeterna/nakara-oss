@@ -1,25 +1,44 @@
 // SPDX-License-Identifier: MIT
 
-#![cfg(feature = "mock")]
+#![cfg(all(feature = "mock", windows))]
 
-//! Integration tests for the handoff contract v1 (ADR 0002 decision 8),
-//! driving `src/bin/mock-connect.rs` through `start_connect`.
+//! Integration tests for the handoff contract v1 (ADR 0002 decision 8) over
+//! the named pipe, driving `src/bin/mock-connect.rs` through `start_connect`.
 //!
-//! Run with: `cargo test -p launcher-connect --features mock`
+//! Run with: `cargo test -p launcher-connect --features mock` on Windows.
 
-use std::io::Write;
+use std::fs::OpenOptions;
+use std::io::{ErrorKind, Read};
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::thread;
 use std::time::{Duration, Instant};
 
-use launcher_connect::{start_connect, CodeError, ConnectError, Outcome, MAX_CODE_BYTES};
+use launcher_connect::pipe::{serve_for_test, Handoff, ServerPipe};
+use launcher_connect::{
+    launch_argument, pipe_name_from, start_connect, start_connect_with_env, CodeError,
+    ConnectError, Outcome,
+};
 
 /// A handoff test should finish well before this; the timeout is only here to
 /// keep a stuck mock from hanging the suite.
 const TEST_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Win32 error for a pipe with no free instance yet.
+const ERROR_PIPE_BUSY: i32 = 231;
+
 fn mock_path() -> &'static Path {
     Path::new(env!("CARGO_BIN_EXE_mock-connect"))
+}
+
+/// A pipe name no other test in this run uses.
+fn unique_pipe_name() -> String {
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    let mut bytes = [0u8; 16];
+    bytes[..4].copy_from_slice(&std::process::id().to_be_bytes());
+    bytes[8..].copy_from_slice(&NEXT.fetch_add(1, Ordering::Relaxed).to_be_bytes());
+    pipe_name_from(bytes)
 }
 
 /// Run Connect through the real handoff: start it, write the code, map the
@@ -28,44 +47,75 @@ fn run_connect(code: &str) -> Result<Outcome, ConnectError> {
     start_connect(mock_path(), code, TEST_TIMEOUT)
 }
 
-/// Run the mock binary directly: feed `stdin_text` (read by the mock before
-/// it answers), then collect its exit code and everything it wrote to stdout
-/// and stderr.
-fn run_mock_raw(args: &[&str], stdin_text: &[u8]) -> (Option<i32>, Vec<u8>, Vec<u8>) {
-    let mut child = Command::new(mock_path())
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("mock-connect should spawn");
-    child
-        .stdin
-        .take()
-        .expect("piped stdin should be captured")
-        .write_all(stdin_text)
-        .expect("mock-connect should accept the line while it reads");
-    let output = child
-        .wait_with_output()
-        .expect("mock-connect should finish");
-    (output.status.code(), output.stdout, output.stderr)
+/// What the mock wrote and how it exited.
+struct MockRun {
+    code: Option<i32>,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
 }
 
-/// Run the mock binary directly without writing to stdin: for the argv
-/// refusals, where the mock exits before it reads.
-fn run_mock_raw_no_input(args: &[&str]) -> (Option<i32>, Vec<u8>, Vec<u8>) {
+/// Run the mock through a real pipe: create it, start the mock, serve
+/// `bytes` to it exactly as they are, then collect the mock's result.
+fn run_mock_with_bytes(bytes: &[u8]) -> MockRun {
+    let name = unique_pipe_name();
+    let mut server = ServerPipe::create(&name).expect("the pipe should be created");
     let mut child = Command::new(mock_path())
-        .args(args)
-        .stdin(Stdio::piped())
+        .arg(launch_argument(&name))
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("mock-connect should spawn");
-    drop(child.stdin.take());
-    let output = child
-        .wait_with_output()
-        .expect("mock-connect should finish");
-    (output.status.code(), output.stdout, output.stderr)
+        .expect("the mock should spawn");
+    let deadline = Instant::now() + TEST_TIMEOUT;
+    let handoff = server.hand_off(bytes, child.id(), deadline, &mut || child.try_wait());
+    drop(server);
+    let handoff = handoff.expect("the handoff should not fail");
+    if matches!(handoff, Handoff::Deadline) {
+        let _ = child.kill();
+    }
+    let output = child.wait_with_output().expect("the mock should finish");
+    MockRun {
+        code: output.status.code(),
+        stdout: output.stdout,
+        stderr: output.stderr,
+    }
+}
+
+/// Run the mock with `args` and `env` and no pipe. For refusals that happen
+/// before any pipe is opened.
+fn run_mock_direct(args: &[&str], env: &[(&str, &str)]) -> MockRun {
+    let output = Command::new(mock_path())
+        .args(args)
+        .envs(env.iter().copied())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .expect("the mock should run");
+    MockRun {
+        code: output.status.code(),
+        stdout: output.stdout,
+        stderr: output.stderr,
+    }
+}
+
+/// Open the server's pipe as a client, retrying while the server is not
+/// ready yet.
+fn connect_as_client(name: &str) -> std::fs::File {
+    let deadline = Instant::now() + TEST_TIMEOUT;
+    loop {
+        match OpenOptions::new().read(true).open(name) {
+            Ok(file) => return file,
+            Err(err)
+                if Instant::now() < deadline
+                    && (err.kind() == ErrorKind::NotFound
+                        || err.raw_os_error() == Some(ERROR_PIPE_BUSY)) =>
+            {
+                thread::sleep(Duration::from_millis(5));
+            }
+            Err(err) => panic!("the client should connect to {name}: {err}"),
+        }
+    }
 }
 
 #[test]
@@ -127,32 +177,60 @@ fn sent_something_follows_the_real_exit_codes() {
 }
 
 #[test]
-fn the_mock_refuses_any_other_argument() {
-    let (code, out, err) = run_mock_raw_no_input(&["--from-launcher", "extra"]);
-    assert_eq!(code, Some(12));
-    assert!(out.is_empty());
-    assert!(err.is_empty());
+fn the_mock_refuses_an_extra_argument() {
+    let name = unique_pipe_name();
+    let run = run_mock_direct(&[&launch_argument(&name), "extra"], &[]);
+    assert_eq!(run.code, Some(12));
+    assert!(run.stdout.is_empty());
+    assert!(run.stderr.is_empty());
 }
 
 #[test]
 fn the_mock_refuses_a_missing_argument() {
-    let (code, out, err) = run_mock_raw_no_input(&[]);
-    assert_eq!(code, Some(12));
-    assert!(out.is_empty());
-    assert!(err.is_empty());
+    let run = run_mock_direct(&[], &[]);
+    assert_eq!(run.code, Some(12));
+    assert!(run.stdout.is_empty());
+    assert!(run.stderr.is_empty());
+}
+
+#[test]
+fn the_mock_refuses_a_wrong_flag() {
+    let name = unique_pipe_name();
+    let run = run_mock_direct(&[&format!("--from-stdin={name}")], &[]);
+    assert_eq!(run.code, Some(12));
+}
+
+#[test]
+fn the_mock_refuses_a_pipe_name_outside_the_pattern() {
+    let run = run_mock_direct(&[r"--from-launcher=\\.\pipe\not-ours"], &[]);
+    assert_eq!(run.code, Some(12));
+}
+
+#[test]
+fn the_early_env_exits_before_the_pipe_is_opened() {
+    // No pipe exists under this name, so reaching the open would exit 12.
+    let name = unique_pipe_name();
+    let run = run_mock_direct(&[&launch_argument(&name)], &[("MOCK_CONNECT_EARLY", "16")]);
+    assert_eq!(run.code, Some(16));
+}
+
+#[test]
+fn the_early_env_does_not_skip_the_argv_check() {
+    let run = run_mock_direct(&["--from-launcher=bad"], &[("MOCK_CONNECT_EARLY", "16")]);
+    assert_eq!(run.code, Some(12));
 }
 
 #[test]
 fn the_mock_refuses_a_bad_line() {
-    let (code, out, err) = run_mock_raw(&["--from-launcher"], b"nope\n");
-    assert_eq!(code, Some(12));
-    assert!(out.is_empty());
-    assert!(err.is_empty());
+    let run = run_mock_with_bytes(b"nope\n");
+    assert_eq!(run.code, Some(12));
+    assert!(run.stdout.is_empty());
+    assert!(run.stderr.is_empty());
 
-    let (code, out, err) = run_mock_raw(&["--from-launcher"], b"rr1.a b\n");
-    assert_eq!(code, Some(12));
-    assert!(out.is_empty());
-    assert!(err.is_empty());
+    let run = run_mock_with_bytes(b"rr1.a b\n");
+    assert_eq!(run.code, Some(12));
+    assert!(run.stdout.is_empty());
+    assert!(run.stderr.is_empty());
 }
 
 #[test]
@@ -160,25 +238,26 @@ fn the_mock_refuses_an_over_long_line() {
     let mut line = b"rr1.".to_vec();
     line.resize(4097, b'x');
     assert_eq!(line.len(), 4097);
-    let (code, out, err) = run_mock_raw(&["--from-launcher"], &line);
-    assert_eq!(code, Some(12));
-    assert!(out.is_empty());
-    assert!(err.is_empty());
+    let run = run_mock_with_bytes(&line);
+    assert_eq!(run.code, Some(12));
+    assert!(run.stdout.is_empty());
+    assert!(run.stderr.is_empty());
 }
 
 #[test]
-fn the_mock_accepts_a_line_ended_by_eof() {
-    let (code, out, err) = run_mock_raw(&["--from-launcher"], b"rr1.exit16");
-    assert_eq!(code, Some(16));
-    assert!(out.is_empty());
-    assert!(err.is_empty());
+fn the_mock_accepts_a_line_ended_by_the_end_of_the_stream() {
+    let run = run_mock_with_bytes(b"rr1.exit16");
+    assert_eq!(run.code, Some(16));
+    assert!(run.stdout.is_empty());
+    assert!(run.stderr.is_empty());
 }
 
 #[test]
 fn the_mock_writes_nothing_back() {
-    let (_, out, err) = run_mock_raw(&["--from-launcher"], b"rr1.exit0\n");
-    assert!(out.is_empty());
-    assert!(err.is_empty());
+    let run = run_mock_with_bytes(b"rr1.exit0\n");
+    assert_eq!(run.code, Some(0));
+    assert!(run.stdout.is_empty());
+    assert!(run.stderr.is_empty());
 }
 
 #[test]
@@ -205,17 +284,84 @@ fn a_timeout_kills_the_child_and_reports_timeout() {
 }
 
 #[test]
-fn a_child_that_exits_before_reading_stdin_reports_its_exit_code() {
-    // The mock refuses `rr1.early12` as soon as it reads those bytes and
-    // exits without draining the rest of the long line. The handoff must
-    // report the exit code, not an I/O error from the broken write.
-    let mut code = String::from("rr1.early12");
-    let padding = MAX_CODE_BYTES - code.len();
-    code.push_str(&"x".repeat(padding));
-    assert_eq!(code.len(), MAX_CODE_BYTES);
-
-    let outcome = start_connect(mock_path(), &code, TEST_TIMEOUT);
+fn a_child_that_exits_before_it_connects_reports_its_exit_code() {
+    // MOCK_CONNECT_EARLY makes the mock exit 12 before it opens the pipe. The
+    // handoff must report that exit code, not wait for a client.
+    let outcome = start_connect_with_env(
+        mock_path(),
+        "rr1.exit0",
+        TEST_TIMEOUT,
+        &[("MOCK_CONNECT_EARLY", "12")],
+    );
     assert!(matches!(outcome, Ok(Outcome::Refused)), "{outcome:?}");
+
+    let outcome = start_connect_with_env(
+        mock_path(),
+        "rr1.exit0",
+        TEST_TIMEOUT,
+        &[("MOCK_CONNECT_EARLY", "16")],
+    );
+    assert!(
+        matches!(outcome, Ok(Outcome::DeclineAccepted)),
+        "{outcome:?}"
+    );
+}
+
+#[test]
+fn a_client_that_is_not_the_expected_process_is_refused_without_a_write() {
+    // The test process is the client, and the expected pid is another one,
+    // so the server must refuse before writing a byte.
+    let name = unique_pipe_name();
+    let own_pid = std::process::id();
+    let expected = own_pid.wrapping_add(1);
+    let server_name = name.clone();
+    let server =
+        thread::spawn(move || serve_for_test(&server_name, b"rr1.exit0\n", expected, TEST_TIMEOUT));
+
+    let mut client = connect_as_client(&name);
+    let mut received = Vec::new();
+    let _ = client.read_to_end(&mut received);
+    assert!(received.is_empty(), "{received:?}");
+
+    let handoff = server
+        .join()
+        .expect("the server thread should not panic")
+        .expect("the handoff should not fail");
+    assert!(
+        matches!(handoff, Handoff::Mismatch { got } if got == own_pid),
+        "{handoff:?}"
+    );
+}
+
+#[test]
+fn the_expected_client_reads_the_whole_line_and_the_handoff_completes() {
+    let name = unique_pipe_name();
+    let own_pid = std::process::id();
+    let server_name = name.clone();
+    let server =
+        thread::spawn(move || serve_for_test(&server_name, b"rr1.exit0\n", own_pid, TEST_TIMEOUT));
+
+    let mut client = connect_as_client(&name);
+    let mut line = [0u8; 10];
+    client
+        .read_exact(&mut line)
+        .expect("the whole line should arrive");
+    assert_eq!(&line, b"rr1.exit0\n");
+
+    let handoff = server
+        .join()
+        .expect("the server thread should not panic")
+        .expect("the handoff should not fail");
+    assert!(matches!(handoff, Handoff::Written), "{handoff:?}");
+}
+
+#[test]
+fn a_second_create_with_the_same_name_fails() {
+    let name = unique_pipe_name();
+    let first = ServerPipe::create(&name).expect("the first create should succeed");
+    let second = ServerPipe::create(&name);
+    assert!(second.is_err(), "a second instance must not be created");
+    drop(first);
 }
 
 #[test]
