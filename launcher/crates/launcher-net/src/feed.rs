@@ -28,7 +28,6 @@ const DATE_PATTERN: &str = "YYYY-MM-DD";
 const DATE_TIME_PATTERN: &str = "RFC 3339 date-time";
 const OPEN_PATTERN: &str = "^([01][0-9]|2[0-3]):[0-5][0-9]$";
 const CLOSE_PATTERN: &str = "^([01][0-9]|2[0-4]):[0-5][0-9]$";
-const IMAGE_PATTERN: &str = "^/[A-Za-z0-9._/-]+\\.(png|webp|jpg)$";
 
 /// A parsed launcher feed.
 #[derive(Debug, Clone, PartialEq, Deserialize)]

@@ -43,7 +43,7 @@ fn group_with_items(count: usize, item_len: usize) -> String {
 }
 
 fn hours(open: Option<&str>, close: Option<&str>) -> String {
-    let open = open.map(|v| format!(r#""open":"{v}""#)).unwrap_or_default();
+    let open = open.map(|v| format!(r#","open":"{v}""#)).unwrap_or_default();
     let close = close.map(|v| format!(r#","close":"{v}""#)).unwrap_or_default();
     format!(r#""hours":{{"plan":"window","tz":"Asia/Bangkok"{open}{close}}}"#)
 }
@@ -418,7 +418,7 @@ fn control_char_in_tz_refused() {
     let mut body = minimal();
     body.truncate(body.len() - 1);
     body.extend_from_slice(
-        format!(r#","hours":{{"plan":"none","tz":"Asia/Bangkok\\n"}}}}"#).as_bytes(),
+        format!(r#","hours":{{"plan":"none","tz":"Asia/Bangkok\n"}}}}"#).as_bytes(),
     );
     assert_eq!(
         parse_feed(&body),
@@ -434,7 +434,7 @@ fn bidi_char_in_group_item_refused() {
     let mut body = minimal();
     body.truncate(body.len() - 1);
     body.extend_from_slice(
-        format!(r#","patch_notes":[{{"title":"Note","date":"2026-11-13","groups":[{{"label":"Fixed","items":["fixed\\u2066thing"]}}]}}]}}"#).as_bytes(),
+        format!(r#","patch_notes":[{{"title":"Note","date":"2026-11-13","groups":[{{"label":"Fixed","items":["fixed\u2066thing"]}}]}}]}}"#).as_bytes(),
     );
     assert_eq!(
         parse_feed(&body),
