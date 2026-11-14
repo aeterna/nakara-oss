@@ -1,36 +1,36 @@
 // SPDX-License-Identifier: MIT
 
-use crate::sample::Instance;
+use crate::model::Instance;
 use crate::text::{label, t};
 use crate::theme;
 use crate::Message;
 use iced::widget::{button, column, container, row, text_input, Space};
 use iced::{Background, Border, Color, Element, Length};
 
-pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
+pub fn view<'a>(inst: &'a Instance, notice: Option<&str>) -> Element<'a, Message> {
     let skin = theme::rgb(inst.skin);
 
-    let mut chips = row![chip(inst.chips[0], theme::T1)]
+    let mut chips = row![chip(&inst.chips[0], theme::T1)]
         .spacing(8)
         .align_y(iced::Center);
 
     if !inst.chips[1].is_empty() {
-        chips = chips.push(chip(inst.chips[1], theme::T2));
+        chips = chips.push(chip(&inst.chips[1], theme::T2));
     }
 
     let title = row![
-        container(label(inst.initials, 20.0, skin))
+        container(label(&inst.initials, 20.0, skin))
             .width(56)
             .height(56)
             .align_x(iced::Center)
             .align_y(iced::Center)
             .style(theme::panel(theme::HI, 14.0)),
-        label(inst.name, 52.0, skin),
+        label(&inst.name, 52.0, skin),
     ]
     .spacing(16)
     .align_y(iced::Center);
 
-    let sub = container(label(inst.sub, 15.0, theme::T2))
+    let sub = container(label(notice.unwrap_or(&inst.sub), 15.0, theme::T2))
         .width(Length::Fill)
         .max_width(560.0)
         .padding(iced::Padding {
@@ -60,7 +60,7 @@ pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
     });
 
     if inst.show_hours {
-        page = page.push(hours());
+        page = page.push(hours(inst));
     }
 
     page = page.push(actions(inst));
@@ -75,7 +75,7 @@ fn chip<'a>(text: &str, color: Color) -> Element<'a, Message> {
         .into()
 }
 
-fn hours<'a>() -> Element<'a, Message> {
+fn hours<'a>(inst: &'a Instance) -> Element<'a, Message> {
     let mut left = Border::default();
     left.radius.top_left = 4.0;
     left.radius.bottom_left = 4.0;
@@ -112,10 +112,12 @@ fn hours<'a>() -> Element<'a, Message> {
     .width(Length::Fixed(520.0))
     .align_y(iced::Center);
 
+    let window = inst.hours.as_deref().unwrap_or("");
+
     let block = column![
         row![
-            label("ปิดอยู่", 13.0, theme::T1),
-            label("· เปิด 17:00–00:00 · อีก 3 ชม. 12 นาที", 13.0, theme::T2),
+            label(&inst.status, 13.0, theme::T1),
+            label(&format!("· เปิด {window}"), 13.0, theme::T2),
         ]
         .spacing(8)
         .align_y(iced::Center),
@@ -197,7 +199,7 @@ fn play_button<'a>(inst: &Instance) -> Element<'a, Message> {
     let text_color = if enabled { Color::WHITE } else { theme::T3 };
     let accent = crate::profile::accent();
 
-    let content = container(label(inst.play_label, 18.0, text_color))
+    let content = container(label(&inst.play_label, 18.0, text_color))
         .width(Length::Fill)
         .height(Length::Fill)
         .align_x(iced::Center)
@@ -234,7 +236,7 @@ fn play_button<'a>(inst: &Instance) -> Element<'a, Message> {
         });
 
     if enabled {
-        play = play.on_press(Message::Noop);
+        play = play.on_press(Message::Play);
     }
 
     play.into()
@@ -242,8 +244,8 @@ fn play_button<'a>(inst: &Instance) -> Element<'a, Message> {
 
 fn picker<'a>(inst: &Instance) -> Element<'a, Message> {
     let labels = column![
-        label(inst.pick_label, 11.0, theme::T3),
-        label(inst.pick_value, 14.0, theme::T1),
+        label(&inst.pick_label, 11.0, theme::T3),
+        label(&inst.pick_value, 14.0, theme::T1),
     ]
     .spacing(0);
 
@@ -292,7 +294,7 @@ fn invite<'a>() -> Element<'a, Message> {
     let use_code = button(label("ใช้รหัส", 14.0, theme::T2))
         .height(44)
         .padding([0, 14])
-        .on_press(Message::Noop)
+        .on_press(Message::OpenInvite)
         .style(|_theme, _status| button::Style {
             background: Some(Background::Color(theme::RAISE)),
             text_color: theme::T2,

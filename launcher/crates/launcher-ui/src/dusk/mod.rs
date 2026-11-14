@@ -7,13 +7,17 @@ pub mod icons;
 pub mod sidebar;
 pub mod topbar;
 
+use crate::model::Instance;
 use crate::theme;
 use crate::Message;
 use iced::widget::{column, container, row, stack, svg, Space};
 use iced::{ContentFit, Element, Length};
 
-pub fn view<'a>(selected: usize) -> Element<'a, Message> {
-    let instances = crate::sample::instances();
+pub fn view<'a>(
+    instances: &'a [Instance],
+    selected: usize,
+    notice: Option<&str>,
+) -> Element<'a, Message> {
     let inst = &instances[selected.min(instances.len() - 1)];
 
     let scene = svg(svg::Handle::from_memory(
@@ -25,7 +29,7 @@ pub fn view<'a>(selected: usize) -> Element<'a, Message> {
 
     let main = column![
         topbar::view(),
-        hero::view(inst),
+        hero::view(inst, notice),
         Space::new().height(Length::Fill),
         board::view(inst),
     ]
@@ -34,7 +38,7 @@ pub fn view<'a>(selected: usize) -> Element<'a, Message> {
     .height(Length::Fill);
 
     let content = container(
-        row![sidebar::view(selected), main]
+        row![sidebar::view(instances, selected), main]
             .spacing(32)
             .width(Length::Fill)
             .height(Length::Fill),

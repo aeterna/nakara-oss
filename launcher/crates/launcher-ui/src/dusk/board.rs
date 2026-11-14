@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::dusk::glass::{self, FAINT, INK, INK2, MUTED};
-use crate::sample::Instance;
+use crate::model::Instance;
 use crate::text::label;
 use crate::theme;
 use crate::Message;
@@ -132,14 +132,14 @@ fn patch<'a>(inst: &'a Instance) -> Element<'a, Message> {
     .width(Length::Fill)
     .align_y(iced::Center);
 
-    let mut list = column![header, label(inst.patch_title, 12.0, MUTED)]
+    let mut list = column![header, label(&inst.patch_title, 12.0, MUTED)]
         .spacing(4)
         .width(Length::Fill);
 
     if inst.patch.is_empty() {
         list = list.push(label("แพตช์แรกจะขึ้นที่นี่", 13.0, MUTED));
     } else {
-        for &(group, items) in inst.patch {
+        for (group, items) in &inst.patch {
             list = list.push(container(label(group, 12.0, MUTED)).padding(Padding {
                 top: 6.0,
                 right: 0.0,
@@ -147,7 +147,7 @@ fn patch<'a>(inst: &'a Instance) -> Element<'a, Message> {
                 left: 0.0,
             }));
 
-            for &item in items {
+            for item in items {
                 list = list.push(label(&format!("• {item}"), 13.0, theme::rgb(0xd7e3df)));
             }
         }

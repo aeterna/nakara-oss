@@ -2,25 +2,25 @@
 
 use crate::dusk::glass::{self, INK, INK2, MUTED};
 use crate::dusk::icons::{icon, Icon};
-use crate::sample::Instance;
+use crate::model::Instance;
 use crate::text::{label, t};
 use crate::theme;
 use crate::Message;
 use iced::widget::{button, column, container, row, text_input, Space};
 use iced::{Background, Border, Color, Element, Length, Padding};
 
-pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
-    let mut chips = row![container(label(inst.chips[0], 12.0, INK))
+pub fn view<'a>(inst: &'a Instance, notice: Option<&str>) -> Element<'a, Message> {
+    let mut chips = row![container(label(&inst.chips[0], 12.0, INK))
         .padding([4, 10])
         .style(glass::glass(8.0))]
     .spacing(8)
     .align_y(iced::Center);
 
     if !inst.chips[1].is_empty() {
-        chips = chips.push(container(label(inst.chips[1], 12.0, INK2)).padding([4, 10]));
+        chips = chips.push(container(label(&inst.chips[1], 12.0, INK2)).padding([4, 10]));
     }
 
-    let title = row![title_tile(inst), label(inst.name, 68.0, Color::WHITE)]
+    let title = row![title_tile(inst), label(&inst.name, 68.0, Color::WHITE)]
         .spacing(18)
         .align_y(iced::Center);
 
@@ -35,7 +35,7 @@ pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
             .width(8)
             .height(8)
             .style(theme::panel(dot, 4.0)),
-        label(inst.sub, 16.0, theme::rgb(0xd7e3df)),
+        label(notice.unwrap_or(&inst.sub), 16.0, theme::rgb(0xd7e3df)),
     ]
     .spacing(10)
     .align_y(iced::Center);
@@ -78,7 +78,7 @@ pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
 fn title_tile<'a>(inst: &Instance) -> Element<'a, Message> {
     let skin = theme::rgb(inst.skin);
 
-    container(label(inst.initials, 22.0, skin))
+    container(label(&inst.initials, 22.0, skin))
         .width(64)
         .height(64)
         .align_x(iced::Center)
@@ -108,7 +108,7 @@ fn play_group<'a>(inst: &Instance) -> Element<'a, Message> {
     let content = container(
         row![
             icon(Icon::Play, 18.0, Color::WHITE),
-            label(inst.play_label, 19.0, Color::WHITE),
+            label(&inst.play_label, 19.0, Color::WHITE),
         ]
         .spacing(10)
         .align_y(iced::Center),
@@ -122,7 +122,7 @@ fn play_group<'a>(inst: &Instance) -> Element<'a, Message> {
         .style(bare_button);
 
     if inst.play_enabled {
-        play = play.on_press(Message::Noop);
+        play = play.on_press(Message::Play);
     }
 
     let divider = container(Space::new())
@@ -181,8 +181,8 @@ fn play_group<'a>(inst: &Instance) -> Element<'a, Message> {
 
 fn picker<'a>(inst: &'a Instance) -> Element<'a, Message> {
     let labels = column![
-        label(inst.pick_label, 11.0, MUTED),
-        label(inst.pick_value, 15.0, INK),
+        label(&inst.pick_label, 11.0, MUTED),
+        label(&inst.pick_value, 15.0, INK),
     ]
     .spacing(0)
     .width(Length::Fill);
@@ -241,7 +241,7 @@ fn invite<'a>() -> Element<'a, Message> {
     )
     .height(42)
     .padding([0, 16])
-    .on_press(Message::Noop)
+    .on_press(Message::OpenInvite)
     .style(glass::solid(
         Color {
             a: 0.10,
