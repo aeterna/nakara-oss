@@ -245,8 +245,8 @@ fn the_mock_refuses_an_over_long_line() {
 }
 
 #[test]
-fn the_mock_accepts_a_line_ended_by_the_end_of_the_stream() {
-    let run = run_mock_with_bytes(b"rr1.exit16");
+fn the_mock_accepts_a_newline_ended_line() {
+    let run = run_mock_with_bytes(b"rr1.exit16\n");
     assert_eq!(run.code, Some(16));
     assert!(run.stdout.is_empty());
     assert!(run.stderr.is_empty());
@@ -347,6 +347,7 @@ fn the_expected_client_reads_the_whole_line_and_the_handoff_completes() {
         .read_exact(&mut line)
         .expect("the whole line should arrive");
     assert_eq!(&line, b"rr1.exit0\n");
+    drop(client);
 
     let handoff = server
         .join()

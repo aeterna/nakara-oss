@@ -239,7 +239,8 @@ impl ServerPipe {
     }
 
     /// Wait until the client closes its end of the pipe. If the client sends
-    /// bytes instead, they are discarded and the wait continues.
+    /// bytes instead, they are discarded and the wait continues. A client that
+    /// never closes its end is ended at the deadline (Handoff::Deadline).
     fn wait_client_close(
         &self,
         deadline: Instant,
