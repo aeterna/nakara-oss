@@ -26,13 +26,13 @@ jobs:
           persist-credentials: false
       - name: Test
         run: |
-          cargo test --locked --workspace
+          cargo test --locked --workspace --all-features
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Format and clippy
         run: |
           cargo fmt --all --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo clippy --locked --workspace --all-targets -- -D warnings
+          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build (release)
         run: |
