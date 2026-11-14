@@ -161,10 +161,11 @@ impl NetPolicy {
 
     /// Checks one resolved address before connecting.
     ///
-    /// Refuses loopback, unspecified, private, link-local, CGNAT, ULA,
-    /// multicast, broadcast and documentation addresses, including their
-    /// IPv4-mapped and IPv4-compatible IPv6 forms. `allow_local_feed` lifts
-    /// the check for [`Role::Feed`] only, never for [`Role::Release`].
+    /// Refuses loopback, unspecified, private, link-local, CGNAT, reserved,
+    /// multicast, broadcast, documentation, ULA, site-local, discard and
+    /// IPv4-embedding addresses, including IPv4-mapped and IPv4-compatible
+    /// IPv6 forms. `allow_local_feed` lifts the check for [`Role::Feed`] only,
+    /// never for [`Role::Release`].
     pub fn check_ip(&self, role: Role, address: IpAddr) -> Result<(), NetError> {
         if role == Role::Feed && self.allow_local_feed {
             return Ok(());
@@ -186,8 +187,8 @@ fn forbidden(address: IpAddr) -> bool {
     }
 }
 
-/// Loopback, unspecified, private, link-local, CGNAT, multicast, broadcast
-/// and documentation IPv4 ranges.
+/// Loopback, unspecified, private, link-local, CGNAT, multicast, broadcast,
+/// documentation, reserved and future-use IPv4 ranges.
 fn forbidden_v4(ip: std::net::Ipv4Addr) -> bool {
     let octets = ip.octets();
     ip.is_loopback()
@@ -195,19 +196,34 @@ fn forbidden_v4(ip: std::net::Ipv4Addr) -> bool {
         || ip.is_private()
         || ip.is_link_local()
         || ip.is_multicast()
-        || octets == [255, 255, 255, 255]
-        || matches!(octets, [192, 0, 2, _] | [198, 51, 100, _] | [203, 0, 113, _])
+        || octets[0] == 0
+        || (octets[0] & 0xf0) == 0xf0
+        || (octets[0] == 198 && (octets[1] & 0xfe) == 18)
+        || matches!(
+            octets,
+            [192, 0, 0, _]
+                | [192, 88, 99, _]
+                | [192, 0, 2, _]
+                | [198, 51, 100, _]
+                | [203, 0, 113, _]
+        )
         || (octets[0] == 100 && (octets[1] & 0xc0) == 64)
 }
 
-/// Loopback, unspecified, link-local, ULA, multicast and documentation IPv6
-/// ranges. Mapped and compatible IPv4 forms are checked by the caller.
+/// Loopback, unspecified, link-local, site-local, ULA, multicast, discard,
+/// documentation, IPv4-embedding and future-use IPv6 ranges.
 fn forbidden_v6(ip: std::net::Ipv6Addr) -> bool {
     let segments = ip.segments();
     ip.is_loopback()
         || ip.is_unspecified()
         || ip.is_multicast()
+        || segments[0] <= 0x00ff
         || (segments[0] & 0xffc0) == 0xfe80
+        || (segments[0] & 0xffc0) == 0xfec0
         || (segments[0] & 0xfe00) == 0xfc00
+        || (segments[0] == 0x2001 && segments[1] == 0)
         || (segments[0] == 0x2001 && segments[1] == 0x0db8)
+        || segments[0] == 0x2002
+        || (segments[0] == 0x0064 && segments[1] == 0xff9b && segments[2..6] == [0u16, 0, 0, 0])
+        || (segments[0] == 0x0100 && segments[1..4] == [0u16, 0, 0])
 }

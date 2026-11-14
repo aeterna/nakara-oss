@@ -5,9 +5,11 @@
 //! The shape and limits follow `launcher/schema/feed.schema.json` (schema 1).
 //! The feed is data only: no HTML, scripts or markup. [`parse_feed`] refuses
 //! a body larger than [`MAX_FEED_BYTES`], unknown fields, a schema other than
-//! 1, counts or string lengths over the schema's limits, malformed dates and
-//! times, a news link that is not `https://`, an image path outside the
-//! schema's pattern, and control or bidi characters in any text.
+//! 1, an explicit `null` where the schema only allows an absent field, counts
+//! or string lengths over the schema's limits, dates that are not real calendar
+//! dates, malformed times, a news link that is not `https://`, an image path
+//! with a `//`, `..` or `.` segment, and control, bidi, separator, byte-order-mark
+//! or tag characters in any text.
 
 use serde::Deserialize;
 use thiserror::Error;
@@ -57,8 +59,10 @@ pub struct Status {
     /// The state the server reports.
     pub state: FeedState,
     /// Players online now.
+    #[serde(default, deserialize_with = "non_null")]
     pub players: Option<u64>,
     /// The server's player limit.
+    #[serde(default, deserialize_with = "non_null")]
     pub max_players: Option<u64>,
 }
 
@@ -85,8 +89,10 @@ pub struct Hours {
     /// IANA time-zone name the times are in.
     pub tz: String,
     /// Opening time, `HH:MM`, when `plan` is `window`.
+    #[serde(default, deserialize_with = "non_null")]
     pub open: Option<String>,
     /// Closing time, `HH:MM` or `24:00`, when `plan` is `window`.
+    #[serde(default, deserialize_with = "non_null")]
     pub close: Option<String>,
 }
 
@@ -109,8 +115,10 @@ pub struct News {
     /// Publication date, `YYYY-MM-DD`.
     pub date: String,
     /// HTTPS link, opened in the browser.
+    #[serde(default, deserialize_with = "non_null")]
     pub url: Option<String>,
     /// Image path on the feed host.
+    #[serde(default, deserialize_with = "non_null")]
     pub image: Option<String>,
 }
 
@@ -179,11 +187,11 @@ pub enum FeedError {
     #[error("news url {0:?} is not https")]
     NewsUrl(String),
 
-    /// An image path is outside the schema's pattern.
+    /// An image path is outside the schema's pattern or has a traversal segment.
     #[error("image path {0:?} is not allowed")]
     Image(String),
 
-    /// Text contains a control or bidi character.
+    /// Text contains a control, bidi, separator, BOM or tag character.
     #[error("{field} contains forbidden character U+{character:04X}")]
     Text {
         field: &'static str,
@@ -191,13 +199,26 @@ pub enum FeedError {
     },
 }
 
+/// Deserializes a present field but refuses an explicit JSON `null`.
+fn non_null<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    match Option::<T>::deserialize(deserializer)? {
+        Some(value) => Ok(Some(value)),
+        None => Err(serde::de::Error::custom("null is not allowed")),
+    }
+}
+
 /// Parses and validates feed bytes.
 ///
 /// Refuses a body larger than [`MAX_FEED_BYTES`], invalid JSON, an unknown or
-/// missing field, a schema other than 1, counts or string lengths over the
-/// schema's limits, malformed dates and times, a news `url` that is not
-/// `https://`, an `image` outside the schema's path pattern, and control or
-/// bidi characters in text.
+/// missing field, an explicit `null` where the field may only be absent, a
+/// schema other than 1, counts or string lengths over the schema's limits,
+/// dates that are not real calendar dates, malformed times, a news `url` that
+/// is not `https://`, an `image` with a `//`, `..` or `.` segment, and control,
+/// bidi, separator, byte-order-mark or tag characters in text.
 pub fn parse_feed(bytes: &[u8]) -> Result<Feed, FeedError> {
     if bytes.len() > MAX_FEED_BYTES {
         return Err(FeedError::TooLarge {
@@ -347,8 +368,12 @@ fn forbidden(character: char) -> bool {
             '\u{061C}'
                 | '\u{200E}'
                 | '\u{200F}'
+                | '\u{2028}'
+                | '\u{2029}'
                 | '\u{202A}'..='\u{202E}'
                 | '\u{2066}'..='\u{2069}'
+                | '\u{FEFF}'
+                | '\u{E0000}'..='\u{E007F}'
         )
 }
 
@@ -363,7 +388,10 @@ fn valid_image(value: &str) -> bool {
     else {
         return false;
     };
-    !stem.is_empty() && stem.bytes().all(image_char)
+    !stem.is_empty()
+        && stem.bytes().all(image_char)
+        && !value.contains("//")
+        && !value.split('/').any(|segment| segment == ".." || segment == ".")
 }
 
 fn image_char(byte: u8) -> bool {
@@ -375,12 +403,38 @@ fn is_date(value: &str) -> bool {
 }
 
 fn is_date_bytes(bytes: &[u8]) -> bool {
-    bytes.len() == 10
-        && bytes[4] == b'-'
-        && bytes[7] == b'-'
-        && bytes[..4].iter().all(|byte| byte.is_ascii_digit())
-        && matches!(two_digits(bytes, 5), Some(1..=12))
-        && matches!(two_digits(bytes, 8), Some(1..=31))
+    if bytes.len() != 10
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || !bytes[..4].iter().all(|byte| byte.is_ascii_digit())
+    {
+        return false;
+    }
+    let (Some(month), Some(day)) = (two_digits(bytes, 5), two_digits(bytes, 8)) else {
+        return false;
+    };
+    if !(1..=12).contains(&month) || day == 0 {
+        return false;
+    }
+    let year = u32::from(bytes[0] - b'0') * 1000
+        + u32::from(bytes[1] - b'0') * 100
+        + u32::from(bytes[2] - b'0') * 10
+        + u32::from(bytes[3] - b'0');
+    day <= days_in_month(year, month)
+}
+
+fn days_in_month(year: u32, month: u8) -> u8 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if is_leap_year(year) => 29,
+        2 => 28,
+        _ => 0,
+    }
+}
+
+fn is_leap_year(year: u32) -> bool {
+    year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400))
 }
 
 fn is_time(value: &str, allow_24: bool) -> bool {

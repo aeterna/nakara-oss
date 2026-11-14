@@ -15,8 +15,8 @@ const JPEG_MAGIC: &[u8] = &[0xff, 0xd8, 0xff];
 
 /// Checks an image header and returns its width and height.
 ///
-/// Only PNG, WebP and JPEG are accepted, by magic bytes. An image over
-/// `max_bytes` or over `max_pixels` is refused.
+/// Only PNG, WebP and JPEG are accepted, by magic bytes. An image with a zero
+/// width or height, over `max_bytes` or over `max_pixels` is refused.
 pub fn check_image_header(
     bytes: &[u8],
     max_bytes: usize,
@@ -35,6 +35,9 @@ pub fn check_image_header(
     let size = imagesize::blob_size(bytes).map_err(|_| NetError::ImageFormat)?;
     let width = u32::try_from(size.width).map_err(|_| NetError::ImageFormat)?;
     let height = u32::try_from(size.height).map_err(|_| NetError::ImageFormat)?;
+    if width == 0 || height == 0 {
+        return Err(NetError::ImageFormat);
+    }
     let pixels = u64::from(width) * u64::from(height);
     if pixels > max_pixels {
         return Err(NetError::ImagePixels {

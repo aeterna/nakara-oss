@@ -19,6 +19,13 @@ fn feed_with_title(raw: &str) -> String {
     )
 }
 
+/// A feed body whose first news item has the given date.
+fn feed_with_date(date: &str) -> String {
+    format!(
+        r#"{{"schema":1,"generated_at":"2026-11-14T08:00:00Z","status":{{"state":"open"}},"news":[{{"title":"Title","date":"{date}"}}]}}"#,
+    )
+}
+
 fn news_array(count: usize, title_len: usize) -> String {
     let items: Vec<String> = (0..count)
         .map(|_| format!(r#"{{"title":"{}","date":"2026-11-13"}}"#, "x".repeat(title_len)))
@@ -356,6 +363,80 @@ fn short_hour_refused() {
     assert!(matches!(parse_feed(&body), Err(FeedError::Pattern { field: "hours.open", .. })));
 }
 
+// --- calendar dates ---
+
+#[test]
+fn impossible_calendar_dates_refused() {
+    for date in ["2026-02-31", "2026-13-01", "2026-04-31", "2026-00-10"] {
+        assert_eq!(
+            parse_feed(feed_with_date(date).as_bytes()),
+            Err(FeedError::Pattern {
+                field: "news.date",
+                value: date.to_owned(),
+                pattern: "YYYY-MM-DD".to_owned(),
+            }),
+            "date {date} should be refused",
+        );
+    }
+}
+
+#[test]
+fn leap_years_are_checked() {
+    for date in ["2024-02-29", "2000-02-29", "2026-01-31", "2026-12-31"] {
+        assert!(
+            parse_feed(feed_with_date(date).as_bytes()).is_ok(),
+            "date {date} should be allowed",
+        );
+    }
+    for date in ["2026-02-29", "1900-02-29", "2100-02-29"] {
+        assert!(
+            matches!(
+                parse_feed(feed_with_date(date).as_bytes()),
+                Err(FeedError::Pattern { field: "news.date", .. }),
+            ),
+            "date {date} should be refused",
+        );
+    }
+}
+
+#[test]
+fn impossible_patch_note_date_refused() {
+    let mut body = minimal();
+    body.truncate(body.len() - 1);
+    body.extend_from_slice(
+        br#","patch_notes":[{"title":"Note","date":"2026-02-31","groups":[]}]}"#,
+    );
+    assert_eq!(
+        parse_feed(&body),
+        Err(FeedError::Pattern {
+            field: "patch_notes.date",
+            value: "2026-02-31".to_owned(),
+            pattern: "YYYY-MM-DD".to_owned(),
+        }),
+    );
+}
+
+// --- explicit null ---
+
+#[test]
+fn explicit_null_refused_for_optional_fields() {
+    let bodies: [&[u8]; 6] = [
+        br#"{"schema":1,"generated_at":"2026-11-14T08:00:00Z","status":{"state":"open","players":null}}"#.as_slice(),
+        br#"{"schema":1,"generated_at":"2026-11-14T08:00:00Z","status":{"state":"open","max_players":null}}"#.as_slice(),
+        br#"{"schema":1,"generated_at":"2026-11-14T08:00:00Z","status":{"state":"open"},"hours":{"plan":"window","tz":"Asia/Bangkok","open":null,"close":"10:00"}}"#.as_slice(),
+        br#"{"schema":1,"generated_at":"2026-11-14T08:00:00Z","status":{"state":"open"},"hours":{"plan":"window","tz":"Asia/Bangkok","open":"09:00","close":null}}"#.as_slice(),
+        br#"{"schema":1,"generated_at":"2026-11-14T08:00:00Z","status":{"state":"open"},"news":[{"title":"Title","date":"2026-11-13","url":null}]}"#.as_slice(),
+        br#"{"schema":1,"generated_at":"2026-11-14T08:00:00Z","status":{"state":"open"},"news":[{"title":"Title","date":"2026-11-13","image":null}]}"#.as_slice(),
+    ];
+    for body in bodies {
+        assert!(
+            matches!(parse_feed(body), Err(FeedError::Json(_))),
+            "null must be refused: {}",
+            String::from_utf8_lossy(body),
+        );
+    }
+}
+
 // --- news url and image ---
 
 #[test]
@@ -396,6 +477,18 @@ fn image_paths_allowed() {
     }
 }
 
+#[test]
+fn image_path_segments_refused() {
+    for image in ["//evil.com/x.png", "/../x.png", "/a/./b.png"] {
+        let body = feed_with_title(format!(r#""Title","image":"{image}""#).as_str());
+        assert_eq!(
+            parse_feed(body.as_bytes()),
+            Err(FeedError::Image(image.to_owned())),
+            "image {image} should be refused",
+        );
+    }
+}
+
 // --- control and bidi characters ---
 
 #[test]
@@ -414,12 +507,27 @@ fn bidi_and_control_characters_refused() {
 }
 
 #[test]
+fn separators_bom_and_tag_characters_refused() {
+    let codepoints = [0x2028, 0x2029, 0xFEFF, 0xE0000, 0xE0001, 0xE007F];
+    for cp in codepoints {
+        let character = char::from_u32(cp).expect("test code point should be valid");
+        let body = feed_with_title(&format!(r#""bad{character}text""#));
+        assert_eq!(
+            parse_feed(body.as_bytes()),
+            Err(FeedError::Text {
+                field: "news.title",
+                character: cp,
+            }),
+            "U+{cp:04X} should be refused",
+        );
+    }
+}
+
+#[test]
 fn control_char_in_tz_refused() {
     let mut body = minimal();
     body.truncate(body.len() - 1);
-    body.extend_from_slice(
-        format!(r#","hours":{{"plan":"none","tz":"Asia/Bangkok\n"}}}}"#).as_bytes(),
-    );
+    body.extend_from_slice(r#","hours":{"plan":"none","tz":"Asia/Bangkok\n"}}"#.as_bytes());
     assert_eq!(
         parse_feed(&body),
         Err(FeedError::Text {
@@ -434,7 +542,7 @@ fn bidi_char_in_group_item_refused() {
     let mut body = minimal();
     body.truncate(body.len() - 1);
     body.extend_from_slice(
-        format!(r#","patch_notes":[{{"title":"Note","date":"2026-11-13","groups":[{{"label":"Fixed","items":["fixed\u2066thing"]}}]}}]}}"#).as_bytes(),
+        br#","patch_notes":[{"title":"Note","date":"2026-11-13","groups":[{"label":"Fixed","items":["fixed\u2066thing"]}]}]}"#,
     );
     assert_eq!(
         parse_feed(&body),

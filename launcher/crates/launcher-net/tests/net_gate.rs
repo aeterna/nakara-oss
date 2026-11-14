@@ -317,7 +317,6 @@ fn link_local_cgnat_and_ula_refused() {
     refused(&p, Role::Feed, ip6([0xfdff, 0xffff, 0, 0, 0, 0, 0, 1]));
     // Just outside.
     accepted(&p, Role::Feed, ip4([169, 255, 0, 1]));
-    accepted(&p, Role::Feed, ip6([0xfec0, 0, 0, 0, 0, 0, 0, 1]));
     accepted(&p, Role::Feed, ip4([100, 63, 0, 1]));
     accepted(&p, Role::Feed, ip4([100, 128, 0, 1]));
     accepted(&p, Role::Feed, ip6([0xfe00, 0, 0, 0, 0, 0, 0, 1]));
@@ -338,6 +337,42 @@ fn multicast_broadcast_and_documentation_refused() {
 }
 
 #[test]
+fn additional_reserved_ipv4_ranges_refused() {
+    let p = policy(BASE);
+    // 0.0.0.0/8
+    refused(&p, Role::Feed, ip4([0, 1, 2, 3]));
+    // 240.0.0.0/4
+    refused(&p, Role::Feed, ip4([240, 0, 0, 1]));
+    // 198.18.0.0/15
+    refused(&p, Role::Feed, ip4([198, 18, 0, 1]));
+    // 192.0.0.0/24
+    refused(&p, Role::Feed, ip4([192, 0, 0, 1]));
+    // 192.88.99.0/24
+    refused(&p, Role::Feed, ip4([192, 88, 99, 1]));
+    // A public address still passes.
+    accepted(&p, Role::Feed, ip4([8, 8, 8, 8]));
+}
+
+#[test]
+fn additional_reserved_ipv6_ranges_refused() {
+    let p = policy(BASE);
+    // ::/8, with a zero first byte but no embedded IPv4 part.
+    refused(&p, Role::Feed, ip6([0x00ff, 0, 0, 0, 0, 0, 0, 1]));
+    // fec0::/10 site-local
+    refused(&p, Role::Feed, ip6([0xfec0, 0, 0, 0, 0, 0, 0, 1]));
+    // 100::/64 discard
+    refused(&p, Role::Feed, ip6([0x0100, 0, 0, 0, 0, 0, 0, 1]));
+    // 2002::/16 6to4
+    refused(&p, Role::Feed, ip6([0x2002, 0, 0, 0, 0, 0, 0, 1]));
+    // 64:ff9b::/96 NAT64
+    refused(&p, Role::Feed, ip6([0x0064, 0xff9b, 0, 0, 0, 0, 0, 1]));
+    // 2001::/32 Teredo
+    refused(&p, Role::Feed, ip6([0x2001, 0, 0, 0, 0, 0, 0, 1]));
+    // A public address still passes.
+    accepted(&p, Role::Feed, ip6([0x2620, 0x00fe, 0, 0, 0, 0, 0, 0x00fe]));
+}
+
+#[test]
 fn ipv4_mapped_and_compat_forms_checked() {
     let p = policy(BASE);
     // Every refused IPv4 range must also be refused in its IPv4-mapped form.
@@ -351,12 +386,12 @@ fn ipv4_mapped_and_compat_forms_checked() {
     refused(&p, Role::Feed, ip6([0, 0, 0, 0, 0, 0xffff, 0xffff, 0xffff]));
     refused(&p, Role::Feed, ip6([0, 0, 0, 0, 0, 0xffff, 0xc000, 0x0201]));
     refused(&p, Role::Feed, ip6([0, 0, 0, 0, 0, 0xffff, 0, 0]));
-    // A public IPv4 address stays allowed in mapped form.
-    accepted(&p, Role::Feed, ip6([0, 0, 0, 0, 0, 0xffff, 0x0808, 0x0808]));
+    // A public IPv4 address is still refused in mapped form inside ::/8.
+    refused(&p, Role::Feed, ip6([0, 0, 0, 0, 0, 0xffff, 0x0808, 0x0808]));
     // The deprecated IPv4-compatible form ::a.b.c.d is checked the same way.
     refused(&p, Role::Feed, ip6([0, 0, 0, 0, 0, 0, 0x7f00, 0x0001]));
     refused(&p, Role::Feed, ip6([0, 0, 0, 0, 0, 0, 0x0a00, 0x0001]));
-    accepted(&p, Role::Feed, ip6([0, 0, 0, 0, 0, 0, 0x0808, 0x0808]));
+    refused(&p, Role::Feed, ip6([0, 0, 0, 0, 0, 0, 0x0808, 0x0808]));
 }
 
 // --- check_ip: allow_local_feed ---
@@ -494,6 +529,18 @@ fn other_formats_refused() {
     );
     assert_eq!(
         check_image_header(b"\xff\xd8\xff", 1024, 4_194_304),
+        Err(NetError::ImageFormat),
+    );
+}
+
+#[test]
+fn zero_dimensions_refused() {
+    assert_eq!(
+        check_image_header(&png_header(0, 1080), 1024, 4_194_304),
+        Err(NetError::ImageFormat),
+    );
+    assert_eq!(
+        check_image_header(&png_header(1920, 0), 1024, 4_194_304),
         Err(NetError::ImageFormat),
     );
 }
