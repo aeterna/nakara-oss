@@ -310,11 +310,7 @@ fn name_with_newline_is_rejected() {
 
 #[test]
 fn brand_with_bidi_override_is_rejected() {
-    let text = replace_line(
-        VALID,
-        "[theme]",
-        "[theme]\nbrand = \"Aeterna\\u202E\"",
-    );
+    let text = replace_line(VALID, "[theme]", "[theme]\nbrand = \"Aeterna\\u202E\"");
     assert!(matches!(
         rejected(&text),
         ProfileError::Name {
