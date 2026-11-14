@@ -9,3 +9,12 @@ description = "Start Rongroi Connect with the handoff contract v1 (ADR 0002 deci
 publish = false
 
 [dependencies]
+
+[features]
+# Builds the mock Connect binary the handoff integration tests drive.
+mock = []
+
+[[bin]]
+name = "mock-connect"
+path = "src/bin/mock-connect.rs"
+required-features = ["mock"]
