@@ -6,6 +6,7 @@ members = [
     "crates/launcher-thai",
     "crates/launcher-ui",
     "crates/launcher-net",
+    "crates/launcher-http",
     "crates/launcher-update",
     "crates/launcher-games",
     "crates/launcher-connect",
