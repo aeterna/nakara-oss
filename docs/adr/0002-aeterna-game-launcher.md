@@ -55,8 +55,10 @@ cosmic-text (iced) only `unicode-linebreak`.
    build embeds a list of public keys so a key can rotate. The new exe replaces the old by rename, and the previous
    exe is kept to roll back. Each fork signs with its own key; AETERNA's private key is created by the owner and held
    in a GitHub Environment that needs the owner's approval for every release.
-8. **Rongroi Connect stays a separate app.** The launcher starts it with `--from-launcher` and writes the pairing code
-   to its stdin (Connect ADR 0002), then shows its exit code. Connect's consent and destination screens are unchanged.
+8. **Rongroi Connect stays a separate app.** The launcher creates a one-instance named pipe for the current user
+   only, starts Connect with `--from-launcher=\\.\pipe\rongroi-launch-<32 hex>`, checks that the client is the Connect
+   process it started, writes the pairing code once, then shows Connect's exit code (Connect ADR 0002, amended
+   2026-11-14: the packaged Electron build cannot read stdin). Connect's consent and destination screens are unchanged.
 9. **What the Creator PLA requires of every build.** The profile must name an `operator` and a `contact_email`; the
    launcher shows both and the line "<server name> IS NOT APPROVED, SPONSORED, OR ENDORSED BY ROCKSTAR GAMES." in its
    footer (§2.3). No Rockstar, GTA or FiveM marks in the launcher's own name or branding. No ads or sponsor slots
