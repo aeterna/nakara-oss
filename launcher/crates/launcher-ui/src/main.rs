@@ -5,6 +5,7 @@
 mod board;
 mod dusk;
 mod hero;
+mod model;
 mod privacy;
 mod profile;
 mod sample;
@@ -26,6 +27,7 @@ fn main() -> iced::Result {
 }
 
 pub struct App {
+    instances: Vec<model::Instance>,
     selected: usize,
     state_dir: Option<std::path::PathBuf>,
     show_privacy: bool,
@@ -41,6 +43,7 @@ impl Default for App {
         };
 
         Self {
+            instances: model::instances(profile::get(), None),
             selected: 0,
             state_dir,
             show_privacy,
@@ -72,7 +75,7 @@ impl App {
 
     fn view(&self) -> Element<'_, Message> {
         let home: Element<'_, Message> = match profile::template() {
-            launcher_core::Template::Dusk => dusk::view(self.selected),
+            launcher_core::Template::Dusk => dusk::view(&self.instances, self.selected),
             launcher_core::Template::Classic => self.classic(),
         };
 
@@ -87,8 +90,7 @@ impl App {
     }
 
     fn classic(&self) -> Element<'_, Message> {
-        let instances = sample::instances();
-        let inst = &instances[self.selected.min(instances.len() - 1)];
+        let inst = &self.instances[self.selected.min(self.instances.len() - 1)];
 
         let main = column![topbar::view(), hero::view(inst), board::view(inst),]
             .spacing(16)
@@ -96,7 +98,7 @@ impl App {
             .height(Length::Fill);
 
         container(
-            row![sidebar::view(self.selected), main]
+            row![sidebar::view(&self.instances, self.selected), main]
                 .spacing(16)
                 .width(Length::Fill)
                 .height(Length::Fill),

@@ -2,6 +2,7 @@
 
 use crate::dusk::glass;
 use crate::dusk::icons::{self, Icon};
+use crate::model::Instance;
 use crate::sample;
 use crate::text::label;
 use crate::theme;
@@ -9,14 +10,14 @@ use crate::Message;
 use iced::widget::{button, column, container, row, Space};
 use iced::{Background, Border, Color, Element, Length, Padding};
 
-pub fn view<'a>(selected: usize) -> Element<'a, Message> {
+pub fn view<'a>(instances: &'a [Instance], selected: usize) -> Element<'a, Message> {
     let mut list = column![brand(), section("เกม", 8.0)]
         .spacing(4)
         .width(Length::Fill)
         .height(Length::Fill);
 
-    for index in 0..crate::sample::instances().len() {
-        list = list.push(instance_button(index, selected));
+    for (index, inst) in instances.iter().enumerate() {
+        list = list.push(instance_button(inst, index, selected));
     }
 
     if let Some((title, when)) = sample::event() {
@@ -85,10 +86,8 @@ fn section<'a>(title: &'static str, top: f32) -> Element<'a, Message> {
         .into()
 }
 
-fn instance_button<'a>(index: usize, selected: usize) -> Element<'a, Message> {
-    let inst = &crate::sample::instances()[index];
-
-    let tile = container(label(inst.initials, 13.0, theme::rgb(inst.skin)))
+fn instance_button<'a>(inst: &'a Instance, index: usize, selected: usize) -> Element<'a, Message> {
+    let tile = container(label(&inst.initials, 13.0, theme::rgb(inst.skin)))
         .width(38)
         .height(38)
         .align_x(iced::Center)
@@ -112,8 +111,8 @@ fn instance_button<'a>(index: usize, selected: usize) -> Element<'a, Message> {
     ));
 
     let lines = column![
-        label(inst.name, 14.0, glass::INK),
-        row![dot, label(inst.status, 12.0, glass::MUTED)]
+        label(&inst.name, 14.0, glass::INK),
+        row![dot, label(&inst.status, 12.0, glass::MUTED)]
             .spacing(6)
             .align_y(iced::Center),
     ]

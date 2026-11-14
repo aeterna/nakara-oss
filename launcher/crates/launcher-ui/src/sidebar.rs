@@ -1,26 +1,25 @@
 // SPDX-License-Identifier: MIT
 
+use crate::model::Instance;
 use crate::text::label;
 use crate::theme;
 use crate::Message;
 use iced::widget::{button, column, container, row, Space};
 use iced::{Background, Border, Color, Element, Length};
 
-pub fn view<'a>(selected: usize) -> Element<'a, Message> {
+pub fn view<'a>(instances: &'a [Instance], selected: usize) -> Element<'a, Message> {
     let mut list = column![brand(), section("เกม")]
         .spacing(4)
         .width(Length::Fill)
         .height(Length::Fill);
 
-    let instances = crate::sample::instances().len();
-
-    for index in 0..instances.min(3) {
-        list = list.push(instance_button(index, selected));
+    for index in 0..instances.len().min(3) {
+        list = list.push(instance_button(&instances[index], index, selected));
     }
 
-    if instances > 3 {
+    if instances.len() > 3 {
         list = list.push(section("เครื่องมือ"));
-        list = list.push(instance_button(3, selected));
+        list = list.push(instance_button(&instances[3], 3, selected));
     }
 
     list = list.push(Space::new().height(Length::Fill));
@@ -76,11 +75,10 @@ fn section<'a>(title: &str) -> Element<'a, Message> {
         .into()
 }
 
-fn instance_button<'a>(index: usize, selected: usize) -> Element<'a, Message> {
-    let inst = &crate::sample::instances()[index];
+fn instance_button<'a>(inst: &'a Instance, index: usize, selected: usize) -> Element<'a, Message> {
     let skin = theme::rgb(inst.skin);
 
-    let tile = container(label(inst.initials, 13.0, skin))
+    let tile = container(label(&inst.initials, 13.0, skin))
         .width(36)
         .height(36)
         .align_x(iced::Center)
@@ -97,8 +95,8 @@ fn instance_button<'a>(index: usize, selected: usize) -> Element<'a, Message> {
     ));
 
     let lines = column![
-        label(inst.name, 14.0, theme::T1),
-        row![dot, label(inst.status, 12.0, theme::T3)]
+        label(&inst.name, 14.0, theme::T1),
+        row![dot, label(&inst.status, 12.0, theme::T3)]
             .spacing(6)
             .align_y(iced::Center),
     ]
