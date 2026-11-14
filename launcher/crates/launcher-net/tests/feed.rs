@@ -191,7 +191,7 @@ fn too_many_groups_refused() {
     let groups = (0..7).map(|_| r#"{"label":"Fixed","items":[]}"#).collect::<Vec<_>>().join(",");
     let mut body = minimal();
     body.truncate(body.len() - 1);
-    body.extend_from_slice(format!(r#","patch_notes":[{{"title":"Note","date":"2026-11-13","groups":[{groups]}]}}}}"#).as_bytes());
+    body.extend_from_slice(format!(r#","patch_notes":[{{"title":"Note","date":"2026-11-13","groups":[{groups}]}}]}}"#).as_bytes());
     assert_eq!(
         parse_feed(&body),
         Err(FeedError::TooManyItems {

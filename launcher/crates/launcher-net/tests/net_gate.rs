@@ -400,8 +400,8 @@ fn webp_lossy(width: u16, height: u16) -> Vec<u8> {
     bytes.extend_from_slice(&10u32.to_le_bytes());
     bytes.extend_from_slice(&[0x00, 0x00, 0x00]);
     bytes.extend_from_slice(&[0x9d, 0x01, 0x2a]);
-    bytes.extend_from_slice(&(width - 1).to_le_bytes());
-    bytes.extend_from_slice(&(height - 1).to_le_bytes());
+    bytes.extend_from_slice(&(width & 0x3fff).to_le_bytes());
+    bytes.extend_from_slice(&(height & 0x3fff).to_le_bytes());
     bytes
 }
 
@@ -514,7 +514,7 @@ fn over_byte_cap_refused() {
 fn over_pixel_cap_refused() {
     let png = png_header(1920, 1080);
     assert_eq!(
-        check_image_header(&png, 1024, 2_073_600),
+        check_image_header(&png, 1024, 2_073_599),
         Err(NetError::ImagePixels {
             pixels: 2_073_600,
             limit: 2_073_599,
