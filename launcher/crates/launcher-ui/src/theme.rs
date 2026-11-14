@@ -10,8 +10,6 @@ pub const HI: Color = rgb(0x222d2a);
 pub const T1: Color = rgb(0xe7ede9);
 pub const T2: Color = rgb(0xa8b4af);
 pub const T3: Color = rgb(0x717e79);
-pub const JADE_BTN: Color = rgb(0x0c7a60);
-pub const JADE_INK: Color = rgb(0x45c6a5);
 pub const GOLD: Color = rgb(0xe8b84a);
 pub const DOT_ON: Color = rgb(0x6fcf8b);
 
@@ -40,8 +38,4 @@ pub fn panel(bg: Color, radius: f32) -> impl Fn(&iced::Theme) -> container::Styl
         },
         ..container::Style::default()
     }
-}
-
-pub fn raised(radius: f32) -> impl Fn(&iced::Theme) -> container::Style {
-    panel(RAISE, radius)
 }

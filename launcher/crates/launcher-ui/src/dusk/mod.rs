@@ -7,7 +7,6 @@ pub mod icons;
 pub mod sidebar;
 pub mod topbar;
 
-use crate::sample;
 use crate::theme;
 use crate::Message;
 use iced::widget::{column, container, row, stack, svg, Space};

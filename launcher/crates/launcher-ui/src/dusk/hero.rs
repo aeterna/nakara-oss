@@ -135,9 +135,11 @@ fn play_group<'a>(inst: &Instance) -> Element<'a, Message> {
             ..container::Style::default()
         });
 
-    let mut radius = iced::border::Radius::default();
-    radius.top_right = 14.0;
-    radius.bottom_right = 14.0;
+    let radius = iced::border::Radius {
+        top_right: 14.0,
+        bottom_right: 14.0,
+        ..Default::default()
+    };
 
     let more = button(
         container(icon(Icon::More, 18.0, Color::WHITE))

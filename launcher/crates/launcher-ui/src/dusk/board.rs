@@ -113,7 +113,7 @@ fn tile<'a>(stops: &[Color], width: Length) -> Element<'a, Message> {
         .width(width)
         .height(Length::Fill)
         .style(move |_theme| container::Style {
-            background: Some(background.clone()),
+            background: Some(background),
             border: Border {
                 radius: 12.0.into(),
                 ..Border::default()

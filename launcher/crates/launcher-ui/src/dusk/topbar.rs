@@ -17,7 +17,7 @@ pub fn view<'a>() -> Element<'a, Message> {
         }
 
         let active = buttons.is_empty();
-        buttons.push(nav_button(*title, active));
+        buttons.push(nav_button(title, active));
     }
 
     let nav = container(row(buttons).spacing(2))

@@ -62,7 +62,6 @@ pub fn view<'a>() -> Element<'a, Message> {
                 ..container::Style::default()
             }),
     )
-    .into()
 }
 
 fn header<'a>() -> Element<'a, Message> {
