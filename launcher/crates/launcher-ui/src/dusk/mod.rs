@@ -13,7 +13,11 @@ use crate::Message;
 use iced::widget::{column, container, row, stack, svg, Space};
 use iced::{ContentFit, Element, Length};
 
-pub fn view<'a>(instances: &'a [Instance], selected: usize) -> Element<'a, Message> {
+pub fn view<'a>(
+    instances: &'a [Instance],
+    selected: usize,
+    notice: Option<&str>,
+) -> Element<'a, Message> {
     let inst = &instances[selected.min(instances.len() - 1)];
 
     let scene = svg(svg::Handle::from_memory(
@@ -25,7 +29,7 @@ pub fn view<'a>(instances: &'a [Instance], selected: usize) -> Element<'a, Messa
 
     let main = column![
         topbar::view(),
-        hero::view(inst),
+        hero::view(inst, notice),
         Space::new().height(Length::Fill),
         board::view(inst),
     ]

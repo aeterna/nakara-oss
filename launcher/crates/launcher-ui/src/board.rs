@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-use crate::model::Instance;
+use crate::model::{Instance, NewsItem};
 use crate::text::label;
 use crate::theme;
 use crate::Message;
@@ -90,8 +90,8 @@ fn body<'a>(inst: &'a Instance) -> Element<'a, Message> {
     } else {
         let mut cards = row![].spacing(12).width(Length::Fill);
 
-        for item in &inst.news {
-            cards = cards.push(news_card(&item.title, &item.date));
+        for (index, item) in inst.news.iter().enumerate() {
+            cards = cards.push(news_card(index, item));
         }
 
         cards.into()
@@ -108,20 +108,40 @@ fn body<'a>(inst: &'a Instance) -> Element<'a, Message> {
         .into()
 }
 
-fn news_card<'a>(title: &str, date: &str) -> Element<'a, Message> {
+fn news_card<'a>(index: usize, item: &'a NewsItem) -> Element<'a, Message> {
     let image = container(Space::new())
         .width(Length::Fill)
         .height(120)
         .style(theme::panel(theme::HI, 12.0));
 
-    let info =
-        container(column![label(title, 14.0, theme::T1), label(date, 11.0, theme::T3),].spacing(4))
-            .padding([10, 12]);
+    let info = container(
+        column![
+            label(&item.title, 14.0, theme::T1),
+            label(&item.date, 11.0, theme::T3),
+        ]
+        .spacing(4),
+    )
+    .padding([10, 12]);
 
-    container(column![image, info].width(Length::Fill))
+    let card = container(column![image, info].width(Length::Fill))
         .width(Length::Fill)
-        .style(theme::panel(theme::RAISE, 12.0))
-        .into()
+        .style(theme::panel(theme::RAISE, 12.0));
+
+    if item.url.is_some() {
+        button(card)
+            .width(Length::Fill)
+            .padding(0)
+            .on_press(Message::OpenNews(index))
+            .style(|_theme, _status| button::Style {
+                background: None,
+                text_color: theme::T1,
+                border: Border::default(),
+                ..Default::default()
+            })
+            .into()
+    } else {
+        card.into()
+    }
 }
 
 fn patch<'a>(inst: &'a Instance) -> Element<'a, Message> {

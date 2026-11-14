@@ -233,7 +233,7 @@ mod tests {
 
     fn test_profile(studio_games: bool) -> Profile {
         let toml = format!(
-            r#"
+            r##"
 schema = 1
 
 [server]
@@ -251,7 +251,7 @@ accent = "#3f6fd1"
 
 [features]
 studio_games = {studio_games}
-"#
+"##
         );
         launcher_core::parse(&toml).expect("valid test profile")
     }

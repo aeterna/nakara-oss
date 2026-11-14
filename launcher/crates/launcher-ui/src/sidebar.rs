@@ -13,8 +13,8 @@ pub fn view<'a>(instances: &'a [Instance], selected: usize) -> Element<'a, Messa
         .width(Length::Fill)
         .height(Length::Fill);
 
-    for index in 0..instances.len().min(3) {
-        list = list.push(instance_button(&instances[index], index, selected));
+    for (index, inst) in instances.iter().enumerate().take(3) {
+        list = list.push(instance_button(inst, index, selected));
     }
 
     if instances.len() > 3 {

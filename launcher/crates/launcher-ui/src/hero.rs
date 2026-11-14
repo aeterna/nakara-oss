@@ -7,7 +7,7 @@ use crate::Message;
 use iced::widget::{button, column, container, row, text_input, Space};
 use iced::{Background, Border, Color, Element, Length};
 
-pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
+pub fn view<'a>(inst: &'a Instance, notice: Option<&str>) -> Element<'a, Message> {
     let skin = theme::rgb(inst.skin);
 
     let mut chips = row![chip(&inst.chips[0], theme::T1)]
@@ -30,7 +30,7 @@ pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
     .spacing(16)
     .align_y(iced::Center);
 
-    let sub = container(label(&inst.sub, 15.0, theme::T2))
+    let sub = container(label(notice.unwrap_or(&inst.sub), 15.0, theme::T2))
         .width(Length::Fill)
         .max_width(560.0)
         .padding(iced::Padding {
@@ -236,7 +236,7 @@ fn play_button<'a>(inst: &Instance) -> Element<'a, Message> {
         });
 
     if enabled {
-        play = play.on_press(Message::Noop);
+        play = play.on_press(Message::Play);
     }
 
     play.into()
@@ -294,7 +294,7 @@ fn invite<'a>() -> Element<'a, Message> {
     let use_code = button(label("ใช้รหัส", 14.0, theme::T2))
         .height(44)
         .padding([0, 14])
-        .on_press(Message::Noop)
+        .on_press(Message::OpenInvite)
         .style(|_theme, _status| button::Style {
             background: Some(Background::Color(theme::RAISE)),
             text_color: theme::T2,

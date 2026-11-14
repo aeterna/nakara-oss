@@ -9,7 +9,7 @@ use crate::Message;
 use iced::widget::{button, column, container, row, text_input, Space};
 use iced::{Background, Border, Color, Element, Length, Padding};
 
-pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
+pub fn view<'a>(inst: &'a Instance, notice: Option<&str>) -> Element<'a, Message> {
     let mut chips = row![container(label(&inst.chips[0], 12.0, INK))
         .padding([4, 10])
         .style(glass::glass(8.0))]
@@ -35,7 +35,7 @@ pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
             .width(8)
             .height(8)
             .style(theme::panel(dot, 4.0)),
-        label(&inst.sub, 16.0, theme::rgb(0xd7e3df)),
+        label(notice.unwrap_or(&inst.sub), 16.0, theme::rgb(0xd7e3df)),
     ]
     .spacing(10)
     .align_y(iced::Center);
@@ -122,7 +122,7 @@ fn play_group<'a>(inst: &Instance) -> Element<'a, Message> {
         .style(bare_button);
 
     if inst.play_enabled {
-        play = play.on_press(Message::Noop);
+        play = play.on_press(Message::Play);
     }
 
     let divider = container(Space::new())
@@ -241,7 +241,7 @@ fn invite<'a>() -> Element<'a, Message> {
     )
     .height(42)
     .padding([0, 16])
-    .on_press(Message::Noop)
+    .on_press(Message::OpenInvite)
     .style(glass::solid(
         Color {
             a: 0.10,
