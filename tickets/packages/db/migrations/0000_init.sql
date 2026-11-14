@@ -10,6 +10,7 @@ CREATE TABLE "attachments" (
 	"size" integer NOT NULL,
 	"sha256" text NOT NULL,
 	"stored" boolean DEFAULT false NOT NULL,
+	"storage_key" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -90,6 +91,7 @@ CREATE TABLE "game_servers" (
 	"confirmed" boolean DEFAULT false NOT NULL,
 	"edition" text,
 	"resource_version" text,
+	"protocol" integer DEFAULT 1 NOT NULL,
 	"players_online" integer DEFAULT 0,
 	"last_seen_at" timestamp with time zone,
 	"revoked" boolean DEFAULT false NOT NULL,
@@ -132,6 +134,7 @@ CREATE TABLE "pair_codes" (
 	"code_hash" text NOT NULL,
 	"server_name" text,
 	"expires_at" timestamp with time zone NOT NULL,
+	"used_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -158,10 +161,10 @@ CREATE TABLE "ratings" (
 );
 --> statement-breakpoint
 CREATE TABLE "sessions" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" text NOT NULL,
-	"token_hash" text,
-	"csrf_hash" text,
+	"token_hash" text NOT NULL,
+	"csrf_hash" text NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -201,4 +204,24 @@ CREATE TABLE "tickets" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX "tickets_guild_id_number_idx" ON "tickets" USING btree ("guild_id","number");
+ALTER TABLE "attachments" ADD CONSTRAINT "attachments_ticket_id_tickets_id_fk" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bridge_nonces" ADD CONSTRAINT "bridge_nonces_server_id_game_servers_id_fk" FOREIGN KEY ("server_id") REFERENCES "public"."game_servers"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "categories" ADD CONSTRAINT "categories_game_server_id_game_servers_id_fk" FOREIGN KEY ("game_server_id") REFERENCES "public"."game_servers"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "game_actions" ADD CONSTRAINT "game_actions_ticket_id_tickets_id_fk" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "game_actions" ADD CONSTRAINT "game_actions_server_id_game_servers_id_fk" FOREIGN KEY ("server_id") REFERENCES "public"."game_servers"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "guild_settings" ADD CONSTRAINT "guild_settings_guild_id_guilds_guild_id_fk" FOREIGN KEY ("guild_id") REFERENCES "public"."guilds"("guild_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messages" ADD CONSTRAINT "messages_ticket_id_tickets_id_fk" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ratings" ADD CONSTRAINT "ratings_ticket_id_tickets_id_fk" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ticket_members" ADD CONSTRAINT "ticket_members_ticket_id_tickets_id_fk" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "tickets" ADD CONSTRAINT "tickets_category_id_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."categories"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "blocks_guild_id_user_id_idx" ON "blocks" USING btree ("guild_id","user_id");--> statement-breakpoint
+CREATE INDEX "bridge_nonces_expires_at_idx" ON "bridge_nonces" USING btree ("expires_at");--> statement-breakpoint
+CREATE INDEX "game_actions_server_id_status_idx" ON "game_actions" USING btree ("server_id","status");--> statement-breakpoint
+CREATE INDEX "messages_ticket_id_idx" ON "messages" USING btree ("ticket_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "pair_codes_code_hash_idx" ON "pair_codes" USING btree ("code_hash");--> statement-breakpoint
+CREATE UNIQUE INDEX "ratings_ticket_id_user_id_idx" ON "ratings" USING btree ("ticket_id","user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "sessions_token_hash_idx" ON "sessions" USING btree ("token_hash");--> statement-breakpoint
+CREATE UNIQUE INDEX "tags_guild_id_name_idx" ON "tags" USING btree ("guild_id","name");--> statement-breakpoint
+CREATE UNIQUE INDEX "ticket_members_ticket_id_user_id_idx" ON "ticket_members" USING btree ("ticket_id","user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "tickets_guild_id_number_idx" ON "tickets" USING btree ("guild_id","number");--> statement-breakpoint
+CREATE INDEX "tickets_guild_id_status_idx" ON "tickets" USING btree ("guild_id","status");

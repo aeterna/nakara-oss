@@ -1,5 +1,5 @@
 {
-  "id": "4757da04-0d7a-41b7-8d8b-34f779a7c462",
+  "id": "8f016a4f-24ac-43cc-8f7c-f5dbe85e561b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -64,6 +64,12 @@
           "notNull": true,
           "default": false
         },
+        "storage_key": {
+          "name": "storage_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -73,7 +79,21 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "attachments_ticket_id_tickets_id_fk": {
+          "name": "attachments_ticket_id_tickets_id_fk",
+          "tableFrom": "attachments",
+          "tableTo": "tickets",
+          "columnsFrom": [
+            "ticket_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -186,7 +206,29 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "blocks_guild_id_user_id_idx": {
+          "name": "blocks_guild_id_user_id_idx",
+          "columns": [
+            {
+              "expression": "guild_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -224,8 +266,38 @@
           "default": "now()"
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
+      "indexes": {
+        "bridge_nonces_expires_at_idx": {
+          "name": "bridge_nonces_expires_at_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "bridge_nonces_server_id_game_servers_id_fk": {
+          "name": "bridge_nonces_server_id_game_servers_id_fk",
+          "tableFrom": "bridge_nonces",
+          "tableTo": "game_servers",
+          "columnsFrom": [
+            "server_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {
         "bridge_nonces_server_id_nonce_pk": {
           "name": "bridge_nonces_server_id_nonce_pk",
@@ -336,7 +408,21 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "categories_game_server_id_game_servers_id_fk": {
+          "name": "categories_game_server_id_game_servers_id_fk",
+          "tableFrom": "categories",
+          "tableTo": "game_servers",
+          "columnsFrom": [
+            "game_server_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -476,8 +562,57 @@
           "default": "now()"
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
+      "indexes": {
+        "game_actions_server_id_status_idx": {
+          "name": "game_actions_server_id_status_idx",
+          "columns": [
+            {
+              "expression": "server_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "game_actions_ticket_id_tickets_id_fk": {
+          "name": "game_actions_ticket_id_tickets_id_fk",
+          "tableFrom": "game_actions",
+          "tableTo": "tickets",
+          "columnsFrom": [
+            "ticket_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "game_actions_server_id_game_servers_id_fk": {
+          "name": "game_actions_server_id_game_servers_id_fk",
+          "tableFrom": "game_actions",
+          "tableTo": "game_servers",
+          "columnsFrom": [
+            "server_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -531,6 +666,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "protocol": {
+          "name": "protocol",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
         },
         "players_online": {
           "name": "players_online",
@@ -620,7 +762,21 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "guild_settings_guild_id_guilds_guild_id_fk": {
+          "name": "guild_settings_guild_id_guilds_guild_id_fk",
+          "tableFrom": "guild_settings",
+          "tableTo": "guilds",
+          "columnsFrom": [
+            "guild_id"
+          ],
+          "columnsTo": [
+            "guild_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -733,8 +889,38 @@
           "default": "now()"
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
+      "indexes": {
+        "messages_ticket_id_idx": {
+          "name": "messages_ticket_id_idx",
+          "columns": [
+            {
+              "expression": "ticket_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "messages_ticket_id_tickets_id_fk": {
+          "name": "messages_ticket_id_tickets_id_fk",
+          "tableFrom": "messages",
+          "tableTo": "tickets",
+          "columnsFrom": [
+            "ticket_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -776,6 +962,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "used_at": {
+          "name": "used_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -784,7 +976,23 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "pair_codes_code_hash_idx": {
+          "name": "pair_codes_code_hash_idx",
+          "columns": [
+            {
+              "expression": "code_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -910,8 +1118,44 @@
           "default": "now()"
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
+      "indexes": {
+        "ratings_ticket_id_user_id_idx": {
+          "name": "ratings_ticket_id_user_id_idx",
+          "columns": [
+            {
+              "expression": "ticket_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ratings_ticket_id_tickets_id_fk": {
+          "name": "ratings_ticket_id_tickets_id_fk",
+          "tableFrom": "ratings",
+          "tableTo": "tickets",
+          "columnsFrom": [
+            "ticket_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -924,9 +1168,10 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
         "user_id": {
           "name": "user_id",
@@ -938,13 +1183,13 @@
           "name": "token_hash",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "csrf_hash": {
           "name": "csrf_hash",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "expires_at": {
           "name": "expires_at",
@@ -960,7 +1205,23 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "sessions_token_hash_idx": {
+          "name": "sessions_token_hash_idx",
+          "columns": [
+            {
+              "expression": "token_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -1005,7 +1266,29 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "tags_guild_id_name_idx": {
+          "name": "tags_guild_id_name_idx",
+          "columns": [
+            {
+              "expression": "guild_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -1057,8 +1340,44 @@
           "default": "now()"
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
+      "indexes": {
+        "ticket_members_ticket_id_user_id_idx": {
+          "name": "ticket_members_ticket_id_user_id_idx",
+          "columns": [
+            {
+              "expression": "ticket_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ticket_members_ticket_id_tickets_id_fk": {
+          "name": "ticket_members_ticket_id_tickets_id_fk",
+          "tableFrom": "ticket_members",
+          "tableTo": "tickets",
+          "columnsFrom": [
+            "ticket_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1186,9 +1505,44 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "tickets_guild_id_status_idx": {
+          "name": "tickets_guild_id_status_idx",
+          "columns": [
+            {
+              "expression": "guild_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "tickets_category_id_categories_id_fk": {
+          "name": "tickets_category_id_categories_id_fk",
+          "tableFrom": "tickets",
+          "tableTo": "categories",
+          "columnsFrom": [
+            "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
