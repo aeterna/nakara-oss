@@ -7,14 +7,7 @@ import {
   type MessageItem,
 } from '../api/tickets.js';
 
-// @ts-ignore - TicketActions component is written by Lane L5
-import TicketActionsComponent, { TicketActions as NamedTicketActions } from '../components/TicketActions.js';
-
-const TicketActions = (NamedTicketActions || TicketActionsComponent) as React.ComponentType<{
-  guildId: string;
-  ticketId: string;
-  locale: Locale;
-}> | undefined;
+import { TicketActions } from '../components/TicketActions.js';
 
 export interface TicketsProps {
   guildId: string;
@@ -245,11 +238,9 @@ export const Tickets: React.FC<TicketsProps> = ({ guildId, locale }) => {
             </div>
 
             {/* Render Game Actions Component from Lane L5 */}
-            {TicketActions && (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <TicketActions guildId={guildId} ticketId={selectedTicket.id} locale={locale} />
-              </div>
-            )}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <TicketActions guildId={guildId} ticketId={selectedTicket.id} locale={locale} />
+            </div>
 
             {/* Messages Section */}
             <div>
