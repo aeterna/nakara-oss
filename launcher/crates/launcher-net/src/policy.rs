@@ -128,7 +128,9 @@ impl NetPolicy {
             return Err(NetError::NotHttps(url.scheme().to_owned()));
         }
         if !url.username().is_empty() || url.password().is_some() {
-            return Err(NetError::Userinfo(url.host_str().unwrap_or_default().to_owned()));
+            return Err(NetError::Userinfo(
+                url.host_str().unwrap_or_default().to_owned(),
+            ));
         }
         if let Some(port) = url.port() {
             return Err(NetError::Port(port));

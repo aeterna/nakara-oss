@@ -28,30 +28,37 @@ fn feed_with_date(date: &str) -> String {
 
 fn news_array(count: usize, title_len: usize) -> String {
     let items: Vec<String> = (0..count)
-        .map(|_| format!(r#"{{"title":"{}","date":"2026-11-13"}}"#, "x".repeat(title_len)))
-        .collect();
-    format!("[{}]", items.join(","))
-}
-
-fn patch_notes_array(count: usize, groups: &str) -> String {
-    let items: Vec<String> = (0..count)
         .map(|_| {
             format!(
-                r#"{{"title":"Note","date":"2026-11-13","groups":[{groups}]}}"#,
+                r#"{{"title":"{}","date":"2026-11-13"}}"#,
+                "x".repeat(title_len)
             )
         })
         .collect();
     format!("[{}]", items.join(","))
 }
 
+fn patch_notes_array(count: usize, groups: &str) -> String {
+    let items: Vec<String> = (0..count)
+        .map(|_| format!(r#"{{"title":"Note","date":"2026-11-13","groups":[{groups}]}}"#,))
+        .collect();
+    format!("[{}]", items.join(","))
+}
+
 fn group_with_items(count: usize, item_len: usize) -> String {
-    let items: Vec<String> = (0..count).map(|_| format!(r#""{}""#, "x".repeat(item_len))).collect();
+    let items: Vec<String> = (0..count)
+        .map(|_| format!(r#""{}""#, "x".repeat(item_len)))
+        .collect();
     format!(r#"{{"label":"Fixed","items":[{}]}}"#, items.join(","))
 }
 
 fn hours(open: Option<&str>, close: Option<&str>) -> String {
-    let open = open.map(|v| format!(r#","open":"{v}""#)).unwrap_or_default();
-    let close = close.map(|v| format!(r#","close":"{v}""#)).unwrap_or_default();
+    let open = open
+        .map(|v| format!(r#","open":"{v}""#))
+        .unwrap_or_default();
+    let close = close
+        .map(|v| format!(r#","close":"{v}""#))
+        .unwrap_or_default();
     format!(r#""hours":{{"plan":"window","tz":"Asia/Bangkok"{open}{close}}}"#)
 }
 
@@ -81,11 +88,20 @@ fn full_feed_parses() {
     assert_eq!(hours.close.as_deref(), Some("24:00"));
     assert_eq!(feed.news.len(), 1);
     assert_eq!(feed.news[0].title, "Double XP weekend");
-    assert_eq!(feed.news[0].url.as_deref(), Some("https://example-rp.com/news/double-xp"));
-    assert_eq!(feed.news[0].image.as_deref(), Some("/img/news/double-xp.webp"));
+    assert_eq!(
+        feed.news[0].url.as_deref(),
+        Some("https://example-rp.com/news/double-xp")
+    );
+    assert_eq!(
+        feed.news[0].image.as_deref(),
+        Some("/img/news/double-xp.webp")
+    );
     assert_eq!(feed.patch_notes.len(), 1);
     assert_eq!(feed.patch_notes[0].groups.len(), 2);
-    assert_eq!(feed.patch_notes[0].groups[0].items[0], "Elevator in the docks");
+    assert_eq!(
+        feed.patch_notes[0].groups[0].items[0],
+        "Elevator in the docks"
+    );
 }
 
 // --- size and encoding ---
@@ -195,10 +211,16 @@ fn too_many_patch_notes_refused() {
 
 #[test]
 fn too_many_groups_refused() {
-    let groups = (0..7).map(|_| r#"{"label":"Fixed","items":[]}"#).collect::<Vec<_>>().join(",");
+    let groups = (0..7)
+        .map(|_| r#"{"label":"Fixed","items":[]}"#)
+        .collect::<Vec<_>>()
+        .join(",");
     let mut body = minimal();
     body.truncate(body.len() - 1);
-    body.extend_from_slice(format!(r#","patch_notes":[{{"title":"Note","date":"2026-11-13","groups":[{groups}]}}]}}"#).as_bytes());
+    body.extend_from_slice(
+        format!(r#","patch_notes":[{{"title":"Note","date":"2026-11-13","groups":[{groups}]}}]}}"#)
+            .as_bytes(),
+    );
     assert_eq!(
         parse_feed(&body),
         Err(FeedError::TooManyItems {
@@ -214,7 +236,11 @@ fn too_many_group_items_refused() {
     let mut body = minimal();
     body.truncate(body.len() - 1);
     body.extend_from_slice(
-        format!(r#","patch_notes":{}}}"#, patch_notes_array(1, &group_with_items(31, 4))).as_bytes(),
+        format!(
+            r#","patch_notes":{}}}"#,
+            patch_notes_array(1, &group_with_items(31, 4))
+        )
+        .as_bytes(),
     );
     assert_eq!(
         parse_feed(&body),
@@ -247,7 +273,10 @@ fn title_limit_counts_characters_not_bytes() {
     let ok = feed_with_title(format!(r#""{}""#, "\u{0e01}".repeat(120)).as_str());
     assert!(parse_feed(ok.as_bytes()).is_ok());
     let too_long = feed_with_title(format!(r#""{}""#, "\u{0e01}".repeat(121)).as_str());
-    assert!(matches!(parse_feed(too_long.as_bytes()), Err(FeedError::TooLong { .. })));
+    assert!(matches!(
+        parse_feed(too_long.as_bytes()),
+        Err(FeedError::TooLong { .. })
+    ));
 }
 
 #[test]
@@ -255,9 +284,7 @@ fn too_long_tz_refused() {
     let mut body = minimal();
     body.truncate(body.len() - 1);
     let tz = "z".repeat(65);
-    body.extend_from_slice(
-        format!(r#","hours":{{"plan":"none","tz":"{tz}"}}}}"#).as_bytes(),
-    );
+    body.extend_from_slice(format!(r#","hours":{{"plan":"none","tz":"{tz}"}}}}"#).as_bytes());
     assert_eq!(
         parse_feed(&body),
         Err(FeedError::TooLong {
@@ -291,8 +318,11 @@ fn too_long_group_item_refused() {
     let mut body = minimal();
     body.truncate(body.len() - 1);
     body.extend_from_slice(
-        format!(r#","patch_notes":{}}}"#, patch_notes_array(1, &group_with_items(1, 301)))
-            .as_bytes(),
+        format!(
+            r#","patch_notes":{}}}"#,
+            patch_notes_array(1, &group_with_items(1, 301))
+        )
+        .as_bytes(),
     );
     assert_eq!(
         parse_feed(&body),
@@ -344,7 +374,13 @@ fn close_refuses_2500() {
     let mut body = minimal();
     body.truncate(body.len() - 1);
     body.extend_from_slice(format!(",{}}}", hours(None, Some("25:00"))).as_bytes());
-    assert!(matches!(parse_feed(&body), Err(FeedError::Pattern { field: "hours.close", .. })));
+    assert!(matches!(
+        parse_feed(&body),
+        Err(FeedError::Pattern {
+            field: "hours.close",
+            ..
+        })
+    ));
 }
 
 #[test]
@@ -352,7 +388,13 @@ fn bad_minute_refused() {
     let mut body = minimal();
     body.truncate(body.len() - 1);
     body.extend_from_slice(format!(",{}}}", hours(Some("09:60"), None)).as_bytes());
-    assert!(matches!(parse_feed(&body), Err(FeedError::Pattern { field: "hours.open", .. })));
+    assert!(matches!(
+        parse_feed(&body),
+        Err(FeedError::Pattern {
+            field: "hours.open",
+            ..
+        })
+    ));
 }
 
 #[test]
@@ -360,7 +402,13 @@ fn short_hour_refused() {
     let mut body = minimal();
     body.truncate(body.len() - 1);
     body.extend_from_slice(format!(",{}}}", hours(Some("9:00"), None)).as_bytes());
-    assert!(matches!(parse_feed(&body), Err(FeedError::Pattern { field: "hours.open", .. })));
+    assert!(matches!(
+        parse_feed(&body),
+        Err(FeedError::Pattern {
+            field: "hours.open",
+            ..
+        })
+    ));
 }
 
 // --- calendar dates ---
@@ -392,7 +440,10 @@ fn leap_years_are_checked() {
         assert!(
             matches!(
                 parse_feed(feed_with_date(date).as_bytes()),
-                Err(FeedError::Pattern { field: "news.date", .. }),
+                Err(FeedError::Pattern {
+                    field: "news.date",
+                    ..
+                }),
             ),
             "date {date} should be refused",
         );
@@ -444,14 +495,19 @@ fn http_news_url_refused() {
     let body = feed_with_title(r#""Title","url":"http://example-rp.com/news/a""#);
     assert_eq!(
         parse_feed(body.as_bytes()),
-        Err(FeedError::NewsUrl("http://example-rp.com/news/a".to_owned())),
+        Err(FeedError::NewsUrl(
+            "http://example-rp.com/news/a".to_owned()
+        )),
     );
 }
 
 #[test]
 fn uppercase_scheme_news_url_refused() {
     let body = feed_with_title(r#""Title","url":"HTTPS://example-rp.com/news/a""#);
-    assert!(matches!(parse_feed(body.as_bytes()), Err(FeedError::NewsUrl(_))));
+    assert!(matches!(
+        parse_feed(body.as_bytes()),
+        Err(FeedError::NewsUrl(_))
+    ));
 }
 
 #[test]
@@ -466,14 +522,20 @@ fn image_needs_leading_slash() {
 #[test]
 fn image_extension_restricted() {
     let body = feed_with_title(r#""Title","image":"/img/news/a.gif""#);
-    assert!(matches!(parse_feed(body.as_bytes()), Err(FeedError::Image(_))));
+    assert!(matches!(
+        parse_feed(body.as_bytes()),
+        Err(FeedError::Image(_))
+    ));
 }
 
 #[test]
 fn image_paths_allowed() {
     for image in ["/a.png", "/img/news/patch_1-2.webp", "/a/b.jpg"] {
         let body = feed_with_title(format!(r#""Title","image":"{image}""#).as_str());
-        assert!(parse_feed(body.as_bytes()).is_ok(), "image {image} should be allowed");
+        assert!(
+            parse_feed(body.as_bytes()).is_ok(),
+            "image {image} should be allowed"
+        );
     }
 }
 
@@ -493,7 +555,9 @@ fn image_path_segments_refused() {
 
 #[test]
 fn bidi_and_control_characters_refused() {
-    let codepoints = [0x061C, 0x200E, 0x200F, 0x202A, 0x202E, 0x2066, 0x2069, 0x0007, 0x001B];
+    let codepoints = [
+        0x061C, 0x200E, 0x200F, 0x202A, 0x202E, 0x2066, 0x2069, 0x0007, 0x001B,
+    ];
     for cp in codepoints {
         let body = feed_with_title(&format!(r#""bad\u{:04X}text""#, cp));
         assert_eq!(

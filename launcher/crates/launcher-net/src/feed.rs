@@ -193,10 +193,7 @@ pub enum FeedError {
 
     /// Text contains a control, bidi, separator, BOM or tag character.
     #[error("{field} contains forbidden character U+{character:04X}")]
-    Text {
-        field: &'static str,
-        character: u32,
-    },
+    Text { field: &'static str, character: u32 },
 }
 
 /// Deserializes a present field but refuses an explicit JSON `null`.
@@ -391,7 +388,9 @@ fn valid_image(value: &str) -> bool {
     !stem.is_empty()
         && stem.bytes().all(image_char)
         && !value.contains("//")
-        && !value.split('/').any(|segment| segment == ".." || segment == ".")
+        && !value
+            .split('/')
+            .any(|segment| segment == ".." || segment == ".")
 }
 
 fn image_char(byte: u8) -> bool {

@@ -205,10 +205,7 @@ fn fragment_refused() {
 #[test]
 fn unparseable_url_refused() {
     let p = policy(BASE);
-    assert!(matches!(
-        p.check_url("not a url"),
-        Err(NetError::Parse(_)),
-    ));
+    assert!(matches!(p.check_url("not a url"), Err(NetError::Parse(_)),));
 }
 
 // --- check_url: the GitHub release hosts ---
@@ -521,8 +518,14 @@ fn other_formats_refused() {
     let mut gif = Vec::new();
     gif.extend_from_slice(b"GIF89a");
     gif.extend_from_slice(&[1, 0, 1, 0]);
-    assert_eq!(check_image_header(&gif, 1024, 4_194_304), Err(NetError::ImageFormat));
-    assert_eq!(check_image_header(&[], 1024, 4_194_304), Err(NetError::ImageFormat));
+    assert_eq!(
+        check_image_header(&gif, 1024, 4_194_304),
+        Err(NetError::ImageFormat)
+    );
+    assert_eq!(
+        check_image_header(&[], 1024, 4_194_304),
+        Err(NetError::ImageFormat)
+    );
     assert_eq!(
         check_image_header(b"\x89PNG\r\n\x1a\n", 1024, 4_194_304),
         Err(NetError::ImageFormat),

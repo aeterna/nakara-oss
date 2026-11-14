@@ -12,7 +12,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use launcher_connect::{start_connect, CodeError, ConnectError, MAX_CODE_BYTES, Outcome};
+use launcher_connect::{start_connect, CodeError, ConnectError, Outcome, MAX_CODE_BYTES};
 
 /// A handoff test should finish well before this; the timeout is only here to
 /// keep a stuck mock from hanging the suite.
