@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::dusk::glass::{self, FAINT, INK, INK2, MUTED};
-use crate::model::Instance;
+use crate::model::{Instance, NewsItem};
 use crate::text::label;
 use crate::theme;
 use crate::Message;
@@ -10,7 +10,7 @@ use iced::{gradient, Background, Border, Color, Element, Gradient, Length, Paddi
 
 pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
     let board = container(
-        column![tabs(), body(inst)]
+        column![tabs(inst), body(inst)]
             .spacing(8)
             .width(Length::Fill)
             .height(Length::Fill),
@@ -26,16 +26,16 @@ pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
         .into()
 }
 
-fn tabs<'a>() -> Element<'a, Message> {
-    row![
-        tab("ภาพรวม", true),
-        tab("ข่าว 3", false),
-        tab("กิจกรรม", false),
-        tab("ภาพ 12", false),
-        tab("กติกา", false),
-    ]
-    .spacing(2)
-    .into()
+fn tabs<'a>(inst: &'a Instance) -> Element<'a, Message> {
+    let news_title = if inst.news.is_empty() {
+        "ข่าว".to_string()
+    } else {
+        format!("ข่าว {}", inst.news.len())
+    };
+
+    row![tab("ภาพรวม", true), tab(&news_title, false)]
+        .spacing(2)
+        .into()
 }
 
 fn tab<'a>(title: &str, active: bool) -> Element<'a, Message> {
@@ -49,7 +49,13 @@ fn tab<'a>(title: &str, active: bool) -> Element<'a, Message> {
 }
 
 fn body<'a>(inst: &'a Instance) -> Element<'a, Message> {
-    row![gallery(), patch(inst)]
+    let left = if inst.news.is_empty() {
+        gallery()
+    } else {
+        news(inst)
+    };
+
+    row![left, patch(inst)]
         .spacing(12)
         .padding([0, 8])
         .width(Length::Fill)
@@ -57,14 +63,59 @@ fn body<'a>(inst: &'a Instance) -> Element<'a, Message> {
         .into()
 }
 
-fn gallery<'a>() -> Element<'a, Message> {
-    let header = row![
-        label("ภาพจากเมือง", 15.0, INK),
-        Space::new().width(Length::Fill),
-        label("ดูทั้งหมด", 12.0, MUTED),
-    ]
+fn news<'a>(inst: &'a Instance) -> Element<'a, Message> {
+    let header = row![label("ข่าว", 15.0, INK)]
+        .width(Length::Fill)
+        .align_y(iced::Center);
+
+    let mut cards = column![].spacing(6).width(Length::Fill);
+
+    for (index, item) in inst.news.iter().take(4).enumerate() {
+        cards = cards.push(news_card(index, item));
+    }
+
+    column![header, cards]
+        .spacing(10)
+        .width(Length::FillPortion(3))
+        .height(Length::Fill)
+        .into()
+}
+
+fn news_card<'a>(index: usize, item: &'a NewsItem) -> Element<'a, Message> {
+    let card = container(
+        row![
+            label(&item.title, 13.0, INK),
+            Space::new().width(Length::Fill),
+            label(&item.date, 12.0, MUTED),
+        ]
+        .spacing(8)
+        .align_y(iced::Center),
+    )
     .width(Length::Fill)
-    .align_y(iced::Center);
+    .padding([8, 12])
+    .style(glass::well(14.0));
+
+    if item.url.is_some() {
+        button(card)
+            .width(Length::Fill)
+            .padding(0)
+            .on_press(Message::OpenNews(index))
+            .style(|_theme, _status| button::Style {
+                background: None,
+                text_color: INK,
+                border: Border::default(),
+                ..Default::default()
+            })
+            .into()
+    } else {
+        card.into()
+    }
+}
+
+fn gallery<'a>() -> Element<'a, Message> {
+    let header = row![label("ภาพจากเมือง", 15.0, INK)]
+        .width(Length::Fill)
+        .align_y(iced::Center);
 
     let images = row![
         tile(
@@ -124,13 +175,9 @@ fn tile<'a>(stops: &[Color], width: Length) -> Element<'a, Message> {
 }
 
 fn patch<'a>(inst: &'a Instance) -> Element<'a, Message> {
-    let header = row![
-        label("บันทึกแพตช์", 15.0, INK),
-        Space::new().width(Length::Fill),
-        label("ทั้งหมด", 12.0, MUTED),
-    ]
-    .width(Length::Fill)
-    .align_y(iced::Center);
+    let header = row![label("บันทึกแพตช์", 15.0, INK)]
+        .width(Length::Fill)
+        .align_y(iced::Center);
 
     let mut list = column![header, label(&inst.patch_title, 12.0, MUTED)]
         .spacing(4)
