@@ -1,10 +1,11 @@
 import pg from 'pg';
-import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from '@nakara-tickets/db';
+import type { TicketsDb } from '@nakara-tickets/db';
 
 const { Pool } = pg;
 
-export type TicketsDb = NodePgDatabase<typeof schema>;
+export type { TicketsDb };
 
 export interface DatabaseHandle {
   db: TicketsDb;
@@ -14,7 +15,7 @@ export interface DatabaseHandle {
 
 export function createDb(url: string): DatabaseHandle {
   const pool = new Pool({ connectionString: url });
-  const db = drizzle(pool, { schema });
+  const db = drizzle(pool, { schema }) as unknown as TicketsDb;
   return {
     db,
     pool,

@@ -4,7 +4,8 @@
     "composite": true,
     "rootDir": ".",
     "outDir": "./dist",
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "types": ["node"]
   },
   "include": ["src/**/*", "test/**/*", "package.json"]
 }

@@ -1,8 +1,8 @@
 import type { FastifyServerOptions } from 'fastify';
+import type { TicketsDb } from '@nakara-tickets/db';
 import type { TicketsConfig } from './config.js';
-import type { DatabaseHandle } from './db.js';
 
-export type TicketsDb = DatabaseHandle['db'];
+export type { TicketsDb };
 
 declare module 'fastify' {
   interface FastifyInstance {

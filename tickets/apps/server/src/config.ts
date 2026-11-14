@@ -61,7 +61,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 
   const schema = z.object({
     ROLE: z.enum(['all', 'migrate'], {
-      errorMap: () => ({ message: 'ROLE must be "all" or "migrate"' }),
+      error: 'ROLE must be "all" or "migrate"',
     }),
     PORT: z.string().optional().refine((val) => {
       if (val === undefined || val === '') return true;
@@ -74,18 +74,16 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       return Number(val);
     }),
     DATABASE_URL: z.string({
-      required_error: 'DATABASE_URL is required',
-      invalid_type_error: 'DATABASE_URL is required',
+      error: 'DATABASE_URL is required',
     }).min(1, 'DATABASE_URL is required'),
     TICKETS_DATA_KEY: z.string({
-      required_error: 'TICKETS_DATA_KEY is required',
-      invalid_type_error: 'TICKETS_DATA_KEY is required',
+      error: 'TICKETS_DATA_KEY is required',
     }).transform((val, ctx) => {
       try {
         return parseDataKey(val);
       } catch {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           message: 'TICKETS_DATA_KEY must be 32 bytes base64/base64url',
         });
         return z.NEVER;
@@ -95,8 +93,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     DISCORD_APP_ID: z.string().optional(),
     DISCORD_CLIENT_SECRET: z.string().optional(),
     PUBLIC_ORIGIN: z.string({
-      required_error: 'PUBLIC_ORIGIN is required',
-      invalid_type_error: 'PUBLIC_ORIGIN is required',
+      error: 'PUBLIC_ORIGIN is required',
     }).refine((val) => {
       try {
         const url = new URL(val);
@@ -112,15 +109,14 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       message: 'PUBLIC_ORIGIN must be a https URL, or http for localhost',
     }),
     ALLOWED_GUILD_IDS: z.string({
-      required_error: 'ALLOWED_GUILD_IDS is required',
-      invalid_type_error: 'ALLOWED_GUILD_IDS is required',
+      error: 'ALLOWED_GUILD_IDS is required',
     }).refine((val) => val.trim().length > 0, {
       message: 'ALLOWED_GUILD_IDS is required',
     }).transform((val, ctx) => {
       const items = val.split(',').map((s) => s.trim()).filter(Boolean);
       if (items.length === 0) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           message: 'ALLOWED_GUILD_IDS must contain at least one snowflake',
         });
         return [];
@@ -128,7 +124,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       for (const item of items) {
         if (!snowflakeRegex.test(item)) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             message: 'ALLOWED_GUILD_IDS contains invalid snowflake',
           });
           return [];
@@ -144,21 +140,21 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     if (data.ROLE === 'all') {
       if (!data.DISCORD_TOKEN) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           path: ['DISCORD_TOKEN'],
           message: 'DISCORD_TOKEN is required when ROLE is all',
         });
       }
       if (!data.DISCORD_APP_ID) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           path: ['DISCORD_APP_ID'],
           message: 'DISCORD_APP_ID is required when ROLE is all',
         });
       }
       if (!data.DISCORD_CLIENT_SECRET) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           path: ['DISCORD_CLIENT_SECRET'],
           message: 'DISCORD_CLIENT_SECRET is required when ROLE is all',
         });
