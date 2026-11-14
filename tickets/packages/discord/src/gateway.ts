@@ -340,7 +340,8 @@ export async function startGateway(deps: StartGatewayDeps): Promise<GatewayHandl
         deps.log.warn(`Ticket ${ticketId} not found in closeHooks: ${err}`);
         return;
       }
-      if (!ticket) return;
+      // Hooks only run for a closed ticket; a reopened or still-open ticket is left alone.
+      if (!ticket || ticket.status !== 'closed') return;
 
       let category: any = null;
       try {

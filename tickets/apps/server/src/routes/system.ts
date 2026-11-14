@@ -1,8 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import { readFileSync } from 'node:fs';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import pkg from '../../package.json' with { type: 'json' };
 import type { GatewayStatus } from '../types.js';
+
+// Compares two secrets in constant time. Both are hashed first so the buffers always have equal length.
+function secretsMatch(provided: string, expected: string): boolean {
+  const providedDigest = createHash('sha256').update(provided, 'utf8').digest();
+  const expectedDigest = createHash('sha256').update(expected, 'utf8').digest();
+  return timingSafeEqual(providedDigest, expectedDigest);
+}
 
 function getMetricsToken(): string | undefined {
   const direct = process.env.METRICS_TOKEN;
@@ -66,7 +74,9 @@ export default async function (app: FastifyInstance) {
     }
 
     const auth = req.headers.authorization;
-    if (!auth || auth !== `Bearer ${expectedToken}`) {
+    const bearerPrefix = 'Bearer ';
+    const provided = typeof auth === 'string' && auth.startsWith(bearerPrefix) ? auth.slice(bearerPrefix.length) : null;
+    if (provided === null || !secretsMatch(provided, expectedToken)) {
       return reply.code(401).send({ code: 'unauthorized', message: 'Unauthorized' });
     }
 

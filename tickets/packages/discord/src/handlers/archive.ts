@@ -2,7 +2,6 @@ import { createHash, randomUUID } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import { tickets, attachments } from '@nakara-tickets/db';
 import type { CloseHookContext } from '../types.js';
-import { createStorageClient } from '../storage-client.js';
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 const ALLOWED_HOSTS = ['cdn.discordapp.com', 'media.discordapp.net'];
@@ -183,7 +182,18 @@ async function downloadAttachment(
 }
 
 export async function archiveOnClose(ctx: CloseHookContext): Promise<void> {
+  // Already archived (e.g. close, reopen, close again): skip so no duplicate attachment rows are written
+  if (ctx.ticket?.archived_at) return;
+
+  const storage = ctx.storage;
+
   try {
+    if (!storage) {
+      if (typeof ctx.log?.warn === 'function') {
+        ctx.log.warn(`No storage port for ticket ${ctx.ticket.id}; attachments will be recorded as not stored`);
+      }
+    }
+
     // Fetch messages from thread
     const allMessages: any[] = [];
     if (typeof ctx.port.fetchMessages === 'function') {
@@ -230,7 +240,7 @@ export async function archiveOnClose(ctx: CloseHookContext): Promise<void> {
         const effectiveCap = Math.min(MAX_FILE_SIZE, Math.max(0, remainingQuota));
 
         // Check if reportedSize already exceeds cap or guild quota
-        if (effectiveCap <= 0 || reportedSize > MAX_FILE_SIZE || currentTotalBytes + reportedSize > quotaBytes) {
+        if (!storage || effectiveCap <= 0 || reportedSize > MAX_FILE_SIZE || currentTotalBytes + reportedSize > quotaBytes) {
           await ctx.db.insert(attachments).values({
             id: attachmentId,
             guild_id: ctx.ticket.guild_id,
@@ -286,25 +296,32 @@ export async function archiveOnClose(ctx: CloseHookContext): Promise<void> {
           const sha256 = createHash('sha256').update(bytes).digest('hex');
           const storageKey = `${ctx.ticket.guild_id}/${ctx.ticket.id}/${attachmentId}`;
 
-          if (ctx.storage) {
-            await ctx.storage.put(storageKey, bytes, contentType || 'application/octet-stream');
-          } else {
-            const fallbackStorage = createStorageClient(ctx.dataKey);
-            await fallbackStorage.put(storageKey, bytes, contentType);
-          }
+          await storage.put(storageKey, bytes, contentType || 'application/octet-stream');
 
-          await ctx.db.insert(attachments).values({
-            id: attachmentId,
-            guild_id: ctx.ticket.guild_id,
-            ticket_id: ctx.ticket.id,
-            message_id: msg.id,
-            filename,
-            content_type: contentType,
-            size: actualSize,
-            sha256,
-            stored: true,
-            storage_key: storageKey,
-          });
+          try {
+            await ctx.db.insert(attachments).values({
+              id: attachmentId,
+              guild_id: ctx.ticket.guild_id,
+              ticket_id: ctx.ticket.id,
+              message_id: msg.id,
+              filename,
+              content_type: contentType,
+              size: actualSize,
+              sha256,
+              stored: true,
+              storage_key: storageKey,
+            });
+          } catch (insertErr) {
+            // The row was not recorded, so remove the object we just wrote instead of orphaning it
+            try {
+              await storage.delete(storageKey);
+            } catch (deleteErr) {
+              if (typeof ctx.log?.warn === 'function') {
+                ctx.log.warn(`Failed to delete orphaned attachment object ${storageKey}`, deleteErr);
+              }
+            }
+            throw insertErr;
+          }
 
           currentTotalBytes += actualSize;
         } catch (downloadErr) {

@@ -142,6 +142,34 @@ describe('audit route (acceptance test s5)', () => {
     expect(bodyEmpty.next).toBeNull();
   });
 
+  it('N4: a malformed cursor or date returns 400 invalid, not 500', async () => {
+    const guildId = 'guild-1';
+    await testDb.db.insert(guilds).values({ guild_id: guildId, name: 'Main Guild' });
+
+    const encode = (value: unknown) =>
+      encodeURIComponent(Buffer.from(JSON.stringify(value)).toString('base64url'));
+
+    const badCursors = [
+      // Not base64url JSON, not a date, not a uuid
+      'not-a-cursor',
+      // Encoded cursor whose createdAt is not a date
+      encode({ createdAt: 'not-a-date', id: '00000000-0000-4000-8000-000000000001' }),
+      // Encoded cursor whose id is not a uuid
+      encode({ createdAt: '2026-11-01T10:00:00.000Z', id: 'not-a-uuid' }),
+      // Encoded cursor that decodes to a non-object
+      encode(42),
+    ];
+
+    for (const cursor of badCursors) {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/guilds/${guildId}/audit?cursor=${cursor}`,
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().code).toBe('invalid');
+    }
+  });
+
   it('fails closed with 500 misconfigured when requireStaff is missing', async () => {
     const rawApp = buildApp({ db: testDb.db });
     await rawApp.ready();

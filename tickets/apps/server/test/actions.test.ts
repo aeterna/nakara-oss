@@ -142,6 +142,48 @@ describe('actions API acceptance tests (g2)', () => {
     expect(body4.params).toEqual({ item: 'water', count: 1 });
   });
 
+  it('item 17: player.give_item count must be an integer from 1 to 1000', async () => {
+    const app = createTestApp();
+
+    const postAction = async (payload: any) => {
+      return app.inject({
+        method: 'POST',
+        url: `/api/v1/guilds/${guildId}/tickets/${ticketId}/actions`,
+        headers: { 'content-type': 'application/json' },
+        payload,
+      });
+    };
+
+    // Above the cap -> 400
+    const over = await postAction({
+      action: 'player.give_item',
+      params: { item: 'cap-item-over', count: 1001 },
+    });
+    expect(over.statusCode).toBe(400);
+    expect(over.json().code).toBe('invalid');
+
+    // Zero and non-integer -> 400
+    const zero = await postAction({
+      action: 'player.give_item',
+      params: { item: 'cap-item-zero', count: 0 },
+    });
+    expect(zero.statusCode).toBe(400);
+
+    const fractional = await postAction({
+      action: 'player.give_item',
+      params: { item: 'cap-item-frac', count: 2.5 },
+    });
+    expect(fractional.statusCode).toBe(400);
+
+    // Exactly at the cap -> 202 queued
+    const atCap = await postAction({
+      action: 'player.give_item',
+      params: { item: 'cap-item-max', count: 1000 },
+    });
+    expect(atCap.statusCode).toBe(202);
+    expect(atCap.json().params).toEqual({ item: 'cap-item-max', count: 1000 });
+  });
+
   it('validates known actions and custom actions', async () => {
     const app = createTestApp();
 

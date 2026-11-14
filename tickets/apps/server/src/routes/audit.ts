@@ -2,6 +2,48 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { and, eq, or, lt, desc, type SQL } from 'drizzle-orm';
 import { auditLog, inGuild, type TicketsDb } from '@nakara-tickets/db';
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Returns null when the cursor is malformed (bad encoding, unparseable date, or a non-uuid id)
+function parseCursor(cursor: string): { createdAt: Date | null; id: string | null } | null {
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+  } catch {
+    // Not an encoded cursor: accept a bare timestamp or a bare audit id
+    const d = new Date(cursor);
+    if (!isNaN(d.getTime())) {
+      return { createdAt: d, id: null };
+    }
+    if (UUID_PATTERN.test(cursor)) {
+      return { createdAt: null, id: cursor };
+    }
+    return null;
+  }
+
+  if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) {
+    return null;
+  }
+
+  const { createdAt, id } = decoded as { createdAt?: unknown; id?: unknown };
+
+  let parsedCreatedAt: Date | null = null;
+  if (createdAt !== undefined) {
+    if (typeof createdAt !== 'string') return null;
+    parsedCreatedAt = new Date(createdAt);
+    if (isNaN(parsedCreatedAt.getTime())) return null;
+  }
+
+  let parsedId: string | null = null;
+  if (id !== undefined) {
+    if (typeof id !== 'string' || !UUID_PATTERN.test(id)) return null;
+    parsedId = id;
+  }
+
+  if (!parsedCreatedAt && !parsedId) return null;
+  return { createdAt: parsedCreatedAt, id: parsedId };
+}
+
 export default async function (app: FastifyInstance) {
   const requireStaff = async (req: FastifyRequest, reply: FastifyReply) => {
     if (typeof app.requireStaff !== 'function') {
@@ -39,22 +81,12 @@ export default async function (app: FastifyInstance) {
       let cursorId: string | null = null;
 
       if (cursor) {
-        try {
-          const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
-          if (decoded.createdAt) {
-            cursorCreatedAt = new Date(decoded.createdAt);
-          }
-          if (decoded.id) {
-            cursorId = decoded.id;
-          }
-        } catch {
-          const d = new Date(cursor);
-          if (!isNaN(d.getTime())) {
-            cursorCreatedAt = d;
-          } else {
-            cursorId = cursor;
-          }
+        const parsedCursor = parseCursor(cursor);
+        if (!parsedCursor) {
+          return reply.code(400).send({ code: 'invalid', message: 'cursor is invalid' });
         }
+        cursorCreatedAt = parsedCursor.createdAt;
+        cursorId = parsedCursor.id;
 
         if (cursorId && !cursorCreatedAt) {
           const [ref] = await db

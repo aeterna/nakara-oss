@@ -201,4 +201,48 @@ describe('system routes (w3)', () => {
       }
     }
   });
+
+  it('(w3-4) metrics bearer check accepts only the exact token after a single "Bearer " prefix', async () => {
+    const app = Fastify();
+    app.decorate('db', db);
+    app.decorate('gateway', { status: () => 'connected' });
+    await app.register(systemRoute);
+
+    const oldToken = process.env.METRICS_TOKEN;
+    const oldTokenFile = process.env.METRICS_TOKEN_FILE;
+    delete process.env.METRICS_TOKEN_FILE;
+    process.env.METRICS_TOKEN = 'metrics-token-abc';
+
+    const send = (authorization?: string) =>
+      app.inject({
+        method: 'GET',
+        url: '/metrics',
+        headers: authorization === undefined ? {} : { authorization },
+      });
+
+    try {
+      // Near misses that a naive or non-exact comparison could let through
+      expect((await send('Bearer metrics-token-ab')).statusCode).toBe(401); // strict prefix of the token
+      expect((await send('Bearer metrics-token-abcd')).statusCode).toBe(401); // token with a suffix
+      expect((await send('Bearer metrics-token-xyz')).statusCode).toBe(401); // same length, different value
+      expect((await send('metrics-token-abc')).statusCode).toBe(401); // token without the Bearer scheme
+      expect((await send('Bearer  metrics-token-abc')).statusCode).toBe(401); // extra space after scheme
+      expect((await send('Bearer ')).statusCode).toBe(401); // empty token
+      expect((await send()).statusCode).toBe(401); // no header
+
+      // Exact match still works
+      expect((await send('Bearer metrics-token-abc')).statusCode).toBe(200);
+    } finally {
+      if (oldToken !== undefined) {
+        process.env.METRICS_TOKEN = oldToken;
+      } else {
+        delete process.env.METRICS_TOKEN;
+      }
+      if (oldTokenFile !== undefined) {
+        process.env.METRICS_TOKEN_FILE = oldTokenFile;
+      } else {
+        delete process.env.METRICS_TOKEN_FILE;
+      }
+    }
+  });
 });

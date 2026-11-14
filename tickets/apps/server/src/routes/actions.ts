@@ -20,6 +20,9 @@ function formatAction(r: typeof gameActions.$inferSelect) {
 
 const ACTION_NAME_PATTERN = /^[a-z0-9_.]{1,64}$/;
 
+// API-side sanity cap for player.give_item; the game config cap stays final
+const GIVE_ITEM_MAX_COUNT = 1000;
+
 export default async function (app: FastifyInstance) {
   const requireStaffAuth = async (req: FastifyRequest, reply: FastifyReply) => {
     if (typeof app.requireStaff !== 'function') {
@@ -93,11 +96,12 @@ export default async function (app: FastifyInstance) {
           !params.item.trim() ||
           typeof params.count !== 'number' ||
           !Number.isInteger(params.count) ||
-          params.count < 1
+          params.count < 1 ||
+          params.count > GIVE_ITEM_MAX_COUNT
         ) {
           return reply.code(400).send({
             code: 'invalid',
-            message: 'player.give_item requires params.item string and params.count positive integer',
+            message: `player.give_item requires params.item string and params.count integer between 1 and ${GIVE_ITEM_MAX_COUNT}`,
           });
         }
       } else if (actionName === 'player.revive' || actionName === 'player.info') {

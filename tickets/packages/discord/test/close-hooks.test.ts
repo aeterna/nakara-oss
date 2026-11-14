@@ -1,4 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { openTestDb } from '@nakara-tickets/db/test-support';
+import { guilds, guildSettings, categories, tickets } from '@nakara-tickets/db';
 import { runCloseHooks, type CloseHook } from '../src/handlers/close-hooks.js';
 import type { CloseHookContext, DiscordPort } from '../src/types.js';
 import { handleClose } from '../src/handlers/ticket-actions.js';
@@ -133,5 +136,107 @@ describe('close hooks (x1)', () => {
     await expect(
       startGateway(depsWithoutKey)
     ).rejects.toThrow('dataKey is required');
+  });
+});
+
+describe('GatewayHandle.closeHooks status gate (N2)', () => {
+  const GUILD_ID = '123456789012345678';
+  let testEnv: Awaited<ReturnType<typeof openTestDb>>;
+  let testDb: any;
+
+  beforeAll(async () => {
+    testEnv = await openTestDb();
+    testDb = testEnv.db;
+  });
+
+  afterAll(async () => {
+    await testEnv.close();
+  });
+
+  beforeEach(async () => {
+    await testEnv.reset();
+  });
+
+  async function seedTicket(status: 'open' | 'claimed' | 'closed', number: number) {
+    await testDb.insert(guilds).values({ guild_id: GUILD_ID, name: 'Gate Guild' });
+    await testDb.insert(guildSettings).values({ guild_id: GUILD_ID, locale: 'en' });
+    const [cat] = await testDb.insert(categories).values({
+      guild_id: GUILD_ID,
+      name: 'Support',
+      mode: 'thread',
+      parent_channel_id: '999999999999999999',
+    }).returning();
+    const [ticket] = await testDb.insert(tickets).values({
+      guild_id: GUILD_ID,
+      category_id: cat.id,
+      number,
+      status,
+      opener_id: '111111111111111111',
+      channel_id: '555555555555555555',
+    }).returning();
+    return ticket;
+  }
+
+  // Minimal discord.js-like client: every channel fetch yields an empty thread
+  function makeClient() {
+    const channel = {
+      messages: { fetch: vi.fn().mockResolvedValue(new Map()) },
+      setLocked: vi.fn().mockResolvedValue(undefined),
+      setArchived: vi.fn().mockResolvedValue(undefined),
+    };
+    return {
+      client: {
+        on: vi.fn(),
+        login: vi.fn(),
+        channels: { fetch: vi.fn().mockResolvedValue(channel) },
+      },
+      channel,
+    };
+  }
+
+  function makeDeps(client: any) {
+    return {
+      token: 'test-token',
+      appId: 'test-app',
+      allowedGuildIds: [GUILD_ID],
+      db: testDb,
+      pool: { connect: vi.fn().mockRejectedValue(new Error('no lock in test')) },
+      dataKey: Buffer.alloc(32, 9),
+      client,
+      log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    } as any;
+  }
+
+  it('N2: closeHooks does nothing for a ticket that is not closed (no hooks, no lock/archive)', async () => {
+    const ticket = await seedTicket('open', 1);
+    const { client, channel } = makeClient();
+    const handle = await startGateway(makeDeps(client));
+
+    try {
+      await handle.closeHooks(GUILD_ID, ticket.id, 'system');
+    } finally {
+      await handle.stop();
+    }
+
+    const [row] = await testDb.select().from(tickets).where(eq(tickets.id, ticket.id));
+    expect(row.archived_at).toBeNull();
+    expect(client.channels.fetch).not.toHaveBeenCalled();
+    expect(channel.setArchived).not.toHaveBeenCalled();
+  });
+
+  it('N2 control: closeHooks runs the archive hook for a closed ticket', async () => {
+    const ticket = await seedTicket('closed', 2);
+    const { client, channel } = makeClient();
+    const handle = await startGateway(makeDeps(client));
+
+    try {
+      await handle.closeHooks(GUILD_ID, ticket.id, 'system');
+    } finally {
+      await handle.stop();
+    }
+
+    const [row] = await testDb.select().from(tickets).where(eq(tickets.id, ticket.id));
+    expect(row.archived_at).not.toBeNull();
+    expect(channel.setArchived).toHaveBeenCalledWith(true);
   });
 });

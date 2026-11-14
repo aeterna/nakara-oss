@@ -146,6 +146,7 @@ describe('Archive on close (acceptance test t2)', () => {
       } as any,
       db: testDb,
       dataKey: testKey,
+      storage: { put: vi.fn().mockResolvedValue(undefined), delete: vi.fn().mockResolvedValue(undefined) },
       ticket,
       category: cat,
       guildSettings: { attachment_quota_mb: 1 },
@@ -296,6 +297,7 @@ describe('Archive on close (acceptance test t2)', () => {
       },
       db: testDb,
       dataKey: testKey,
+      storage: { put: vi.fn().mockResolvedValue(undefined), delete: vi.fn().mockResolvedValue(undefined) },
       ticket,
       category: cat,
       guildSettings: { attachment_quota_mb: 50 },
@@ -412,6 +414,7 @@ describe('Archive on close (acceptance test t2)', () => {
       },
       db: testDb,
       dataKey: testKey,
+      storage: { put: vi.fn().mockResolvedValue(undefined), delete: vi.fn().mockResolvedValue(undefined) },
       ticket,
       category: cat,
       guildSettings: { attachment_quota_mb: 100 },
@@ -540,5 +543,326 @@ describe('Archive on close (acceptance test t2)', () => {
     const spRow = attRows.find((a: any) => a.filename === 'note.txt');
     expect(spRow).toBeDefined();
     expect(spRow.stored).toBe(true);
+  });
+
+  it('N2: an already-archived ticket (reopen + close) writes no attachment rows and fetches nothing', async () => {
+    await testDb.insert(guilds).values({
+      guild_id: GUILD_ID,
+      name: 'Reopen Test Guild',
+    });
+
+    await testDb.insert(guildSettings).values({
+      guild_id: GUILD_ID,
+      locale: 'en',
+      attachment_quota_mb: 50,
+    });
+
+    const [cat] = await testDb.insert(categories).values({
+      guild_id: GUILD_ID,
+      name: 'Support',
+      mode: 'thread',
+      parent_channel_id: '999999999999999999',
+    }).returning();
+
+    const [ticket] = await testDb.insert(tickets).values({
+      guild_id: GUILD_ID,
+      category_id: cat.id,
+      number: 5,
+      status: 'closed',
+      opener_id: '111111111111111111',
+      channel_id: '444444444444444444',
+      archived_at: new Date(),
+    }).returning();
+
+    const fetchMessages = vi.fn().mockResolvedValue([
+      {
+        id: 'msg_reopen',
+        attachments: [
+          {
+            id: 'att_reopen',
+            name: 'again.txt',
+            size: 10,
+            url: 'https://cdn.discordapp.com/attachments/888/att_reopen/again.txt',
+            contentType: 'text/plain',
+          },
+        ],
+      },
+    ]);
+    const fetchMock = vi.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      headers: new Headers({ 'content-type': 'text/plain' }),
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(Buffer.from('0123456789'));
+          controller.close();
+        },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const storage = { put: vi.fn().mockResolvedValue(undefined), delete: vi.fn().mockResolvedValue(undefined) };
+
+    const ctx: CloseHookContext = {
+      port: {
+        createPrivateThread: vi.fn(),
+        addMember: vi.fn(),
+        sendMessage: vi.fn(),
+        editMessage: vi.fn(),
+        showModal: vi.fn(),
+        replyEphemeral: vi.fn(),
+        deferReply: vi.fn(),
+        editReply: vi.fn(),
+        lockAndArchiveThread: vi.fn(),
+        fetchMessages,
+        createDM: vi.fn(),
+        sendDM: vi.fn(),
+      } as any,
+      db: testDb,
+      dataKey: testKey,
+      storage,
+      ticket,
+      category: cat,
+      guildSettings: { attachment_quota_mb: 50 },
+      actorId: '111111111111111111',
+      log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    };
+
+    await archiveOnClose(ctx);
+
+    expect(fetchMessages).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(storage.put).not.toHaveBeenCalled();
+
+    const attRows = await testDb
+      .select()
+      .from(attachments)
+      .where(eq(attachments.ticket_id, ticket.id));
+    expect(attRows).toHaveLength(0);
+  });
+
+  it('item 4: without ctx.storage, attachments are recorded stored=false, a warning is logged, and nothing is written to disk', async () => {
+    await testDb.insert(guilds).values({
+      guild_id: GUILD_ID,
+      name: 'No Storage Guild',
+    });
+
+    await testDb.insert(guildSettings).values({
+      guild_id: GUILD_ID,
+      locale: 'en',
+      attachment_quota_mb: 50,
+    });
+
+    const [cat] = await testDb.insert(categories).values({
+      guild_id: GUILD_ID,
+      name: 'Support',
+      mode: 'thread',
+      parent_channel_id: '999999999999999999',
+    }).returning();
+
+    const [ticket] = await testDb.insert(tickets).values({
+      guild_id: GUILD_ID,
+      category_id: cat.id,
+      number: 6,
+      status: 'closed',
+      opener_id: '111111111111111111',
+      channel_id: '333333333333333333',
+    }).returning();
+
+    const mockMessages = [
+      {
+        id: 'msg_nostore',
+        attachments: [
+          {
+            id: 'att_nostore',
+            name: 'kept.txt',
+            size: 100,
+            url: 'https://cdn.discordapp.com/attachments/888/att_nostore/kept.txt',
+            contentType: 'text/plain',
+          },
+        ],
+      },
+    ];
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      headers: new Headers({ 'content-type': 'text/plain' }),
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(Buffer.alloc(100, 'B'));
+          controller.close();
+        },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+
+    const ctx: CloseHookContext = {
+      port: {
+        createPrivateThread: vi.fn(),
+        addMember: vi.fn(),
+        sendMessage: vi.fn(),
+        editMessage: vi.fn(),
+        showModal: vi.fn(),
+        replyEphemeral: vi.fn(),
+        deferReply: vi.fn(),
+        editReply: vi.fn(),
+        lockAndArchiveThread: vi.fn(),
+        fetchMessages: vi.fn().mockResolvedValue(mockMessages),
+        createDM: vi.fn(),
+        sendDM: vi.fn(),
+      } as any,
+      db: testDb,
+      dataKey: testKey,
+      ticket,
+      category: cat,
+      guildSettings: { attachment_quota_mb: 50 },
+      actorId: '111111111111111111',
+      log,
+    };
+
+    await archiveOnClose(ctx);
+
+    expect(log.warn).toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    const attRows = await testDb
+      .select()
+      .from(attachments)
+      .where(eq(attachments.ticket_id, ticket.id));
+    const keptRow = attRows.find((a: any) => a.filename === 'kept.txt');
+    expect(keptRow).toBeDefined();
+    expect(keptRow.stored).toBe(false);
+    expect(keptRow.storage_key).toBeNull();
+
+    // The archive still completes: the ticket is marked archived
+    const [updatedTicket] = await testDb
+      .select()
+      .from(tickets)
+      .where(and(eq(tickets.id, ticket.id), eq(tickets.guild_id, GUILD_ID)));
+    expect(updatedTicket.archived_at).not.toBeNull();
+  });
+
+  it('N3: when the attachment row insert fails after storage.put, the stored object is deleted and no stored=true row remains', async () => {
+    await testDb.insert(guilds).values({
+      guild_id: GUILD_ID,
+      name: 'Orphan Test Guild',
+    });
+
+    await testDb.insert(guildSettings).values({
+      guild_id: GUILD_ID,
+      locale: 'en',
+      attachment_quota_mb: 50,
+    });
+
+    const [cat] = await testDb.insert(categories).values({
+      guild_id: GUILD_ID,
+      name: 'Support',
+      mode: 'thread',
+      parent_channel_id: '999999999999999999',
+    }).returning();
+
+    const [ticket] = await testDb.insert(tickets).values({
+      guild_id: GUILD_ID,
+      category_id: cat.id,
+      number: 7,
+      status: 'closed',
+      opener_id: '111111111111111111',
+      channel_id: '222222222222222222',
+    }).returning();
+
+    const mockMessages = [
+      {
+        id: 'msg_orphan',
+        attachments: [
+          {
+            id: 'att_orphan',
+            name: 'orphan.txt',
+            size: 12,
+            url: 'https://cdn.discordapp.com/attachments/888/att_orphan/orphan.txt',
+            contentType: 'text/plain',
+          },
+        ],
+      },
+    ];
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      headers: new Headers({ 'content-type': 'text/plain' }),
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(Buffer.from('orphan bytes'));
+          controller.close();
+        },
+      }),
+    }));
+
+    // Database wrapper: the stored=true attachment insert fails, everything else passes through
+    const failingDb = new Proxy(testDb, {
+      get(target, prop, receiver) {
+        if (prop === 'insert') {
+          return (table: unknown) => {
+            if (table !== attachments) return target.insert(table as any);
+            return {
+              values: (row: any) =>
+                row.stored
+                  ? Promise.reject(new Error('simulated insert failure'))
+                  : target.insert(table as any).values(row),
+            };
+          };
+        }
+        const value = Reflect.get(target, prop, receiver);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+
+    const storage = {
+      put: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const ctx: CloseHookContext = {
+      port: {
+        createPrivateThread: vi.fn(),
+        addMember: vi.fn(),
+        sendMessage: vi.fn(),
+        editMessage: vi.fn(),
+        showModal: vi.fn(),
+        replyEphemeral: vi.fn(),
+        deferReply: vi.fn(),
+        editReply: vi.fn(),
+        lockAndArchiveThread: vi.fn(),
+        fetchMessages: vi.fn().mockResolvedValue(mockMessages),
+        createDM: vi.fn(),
+        sendDM: vi.fn(),
+      } as any,
+      db: failingDb as any,
+      dataKey: testKey,
+      storage,
+      ticket,
+      category: cat,
+      guildSettings: { attachment_quota_mb: 50 },
+      actorId: '111111111111111111',
+      log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    };
+
+    await archiveOnClose(ctx);
+
+    expect(storage.put).toHaveBeenCalledTimes(1);
+    const putKey = storage.put.mock.calls[0][0];
+    expect(storage.delete).toHaveBeenCalledTimes(1);
+    expect(storage.delete).toHaveBeenCalledWith(putKey);
+
+    const attRows = await testDb
+      .select()
+      .from(attachments)
+      .where(eq(attachments.ticket_id, ticket.id));
+    expect(attRows.find((a: any) => a.stored === true)).toBeUndefined();
+    const orphanRow = attRows.find((a: any) => a.filename === 'orphan.txt');
+    expect(orphanRow).toBeDefined();
+    expect(orphanRow.stored).toBe(false);
   });
 });

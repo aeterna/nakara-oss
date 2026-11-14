@@ -234,10 +234,10 @@ describe('a1 auto-close job acceptance tests', () => {
     expect(updated.close_reason).toBe('auto-close');
     expect(updated.closed_at).not.toBeNull();
 
-    // Check closeHooks called fire-and-forget
+    // closeHooks is awaited and owns the lock + archive
     expect(mockCloseHooks).toHaveBeenCalledWith(GUILD_ID, t1.id, 'system');
 
-    // Check message sent and thread patched
+    // Check message sent; the job does not patch the thread itself when closeHooks is wired
     expect(mockDiscord.sendMessage).toHaveBeenCalledWith(
       '400000000000000003',
       expect.objectContaining({
@@ -245,8 +245,109 @@ describe('a1 auto-close job acceptance tests', () => {
         allowed_mentions: { parse: [] },
       })
     );
+    expect(mockDiscord.patchChannel).not.toHaveBeenCalled();
+  });
+
+  it('a1-6: awaits a slow closeHooks and does not patch the channel before it resolves', async () => {
+    const now = Date.now();
+    const twentyFiveHoursAgo = new Date(now - 25 * 3600 * 1000);
+
+    const [t1] = await testDb
+      .insert(tickets)
+      .values({
+        guild_id: GUILD_ID,
+        category_id: catWithAutoCloseId,
+        number: 6,
+        status: 'open',
+        opener_id: OPENER_ID,
+        channel_id: '400000000000000006',
+        created_at: twentyFiveHoursAgo,
+        last_activity_at: twentyFiveHoursAgo,
+        auto_close_warned_at: null,
+      })
+      .returning();
+
+    let hookResolved = false;
+    const slowCloseHooks = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      hookResolved = true;
+    });
+
+    let patchedBeforeHookResolved = false;
+    const mockDiscord = {
+      sendMessage: vi.fn().mockResolvedValue({ id: 'msg-1' }),
+      editMessage: vi.fn(),
+      deleteMessage: vi.fn(),
+      createDM: vi.fn(),
+      patchChannel: vi.fn(async () => {
+        if (!hookResolved) patchedBeforeHookResolved = true;
+        return {};
+      }),
+    };
+
+    const ctx: JobContext = {
+      db: testDb,
+      config: {} as any,
+      storage: null,
+      discord: mockDiscord as any,
+      gateway: { closeHooks: slowCloseHooks },
+      log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    };
+
+    await autoCloseJob.run(ctx);
+
+    // run() only returns after the hook has resolved
+    expect(slowCloseHooks).toHaveBeenCalledWith(GUILD_ID, t1.id, 'system');
+    expect(hookResolved).toBe(true);
+    expect(patchedBeforeHookResolved).toBe(false);
+    expect(mockDiscord.patchChannel).not.toHaveBeenCalled();
+  });
+
+  it('a1-7: without a closeHooks port, a thread ticket is locked and archived by the job', async () => {
+    const now = Date.now();
+    const twentyFiveHoursAgo = new Date(now - 25 * 3600 * 1000);
+
+    const [t1] = await testDb
+      .insert(tickets)
+      .values({
+        guild_id: GUILD_ID,
+        category_id: catWithAutoCloseId,
+        number: 7,
+        status: 'open',
+        opener_id: OPENER_ID,
+        channel_id: '400000000000000007',
+        created_at: twentyFiveHoursAgo,
+        last_activity_at: twentyFiveHoursAgo,
+        auto_close_warned_at: null,
+      })
+      .returning();
+
+    const mockDiscord = {
+      sendMessage: vi.fn().mockResolvedValue({ id: 'msg-1' }),
+      editMessage: vi.fn(),
+      deleteMessage: vi.fn(),
+      createDM: vi.fn(),
+      patchChannel: vi.fn().mockResolvedValue({}),
+    };
+
+    const ctx: JobContext = {
+      db: testDb,
+      config: {} as any,
+      storage: null,
+      discord: mockDiscord as any,
+      log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    };
+
+    await autoCloseJob.run(ctx);
+
+    const [updated] = await testDb
+      .select()
+      .from(tickets)
+      .where(eq(tickets.id, t1.id));
+    expect(updated.status).toBe('closed');
+    expect(mockDiscord.patchChannel).toHaveBeenCalledTimes(1);
     expect(mockDiscord.patchChannel).toHaveBeenCalledWith(
-      '400000000000000003',
+      '400000000000000007',
       { archived: true, locked: true }
     );
   });

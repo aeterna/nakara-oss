@@ -553,4 +553,75 @@ describe('panels acceptance tests', () => {
     expect(row.channel_id).toBe(NEW_CHANNEL_ID);
     expect(row.message_id).toBeNull();
   });
+
+  it('N5: create, update and send answer 503 discord_unavailable when app.discord is null (no channel check skipped)', async () => {
+    const [inserted] = await testDb.insert(panels).values({
+      guild_id: GUILD_A,
+      channel_id: CHANNEL_ID,
+      message_id: null,
+      embed: { title: 'Existing' },
+      kind: 'buttons',
+      buttons: [{ categoryId: catA1Id, label: 'Btn' }],
+    }).returning();
+
+    const noDiscordApp = Fastify();
+    noDiscordApp.decorate('config', mockConfig);
+    noDiscordApp.decorate('db', testDb);
+    noDiscordApp.decorate('discord', null);
+    await installSession(noDiscordApp, { config: mockConfig, db: testDb });
+    await noDiscordApp.register(routes);
+    await noDiscordApp.ready();
+
+    try {
+      const headers = {
+        cookie,
+        'x-csrf-token': csrf,
+        'content-type': 'application/json',
+      };
+      const payload = {
+        channelId: CHANNEL_ID,
+        embed: { title: 'No Discord' },
+        kind: 'buttons',
+        buttons: [{ categoryId: catA1Id, label: 'Btn' }],
+      };
+
+      const createRes = await noDiscordApp.inject({
+        method: 'POST',
+        url: `/api/v1/guilds/${GUILD_A}/panels`,
+        headers,
+        payload,
+      });
+      expect(createRes.statusCode).toBe(503);
+      expect(createRes.json().code).toBe('discord_unavailable');
+
+      const putRes = await noDiscordApp.inject({
+        method: 'PUT',
+        url: `/api/v1/guilds/${GUILD_A}/panels/${inserted.id}`,
+        headers,
+        payload,
+      });
+      expect(putRes.statusCode).toBe(503);
+      expect(putRes.json().code).toBe('discord_unavailable');
+
+      const sendRes = await noDiscordApp.inject({
+        method: 'POST',
+        url: `/api/v1/guilds/${GUILD_A}/panels/${inserted.id}/send`,
+        headers: { cookie, 'x-csrf-token': csrf },
+      });
+      expect(sendRes.statusCode).toBe(503);
+      expect(sendRes.json().code).toBe('discord_unavailable');
+    } finally {
+      await noDiscordApp.close();
+    }
+
+    // Nothing was created or changed, and no Discord call was made
+    expect(mockGetChannel).not.toHaveBeenCalled();
+    expect(mockSendMessage).not.toHaveBeenCalled();
+    expect(mockEditMessage).not.toHaveBeenCalled();
+
+    const rows = await testDb.select().from(panels).where(eq(panels.guild_id, GUILD_A));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe(inserted.id);
+    expect(rows[0].embed).toEqual({ title: 'Existing' });
+  });
 });

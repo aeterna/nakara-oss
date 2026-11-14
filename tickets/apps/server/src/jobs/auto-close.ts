@@ -83,10 +83,6 @@ export const autoCloseJob: Job = {
             'auto-close'
           );
 
-          void ctx.gateway?.closeHooks?.(ticket.guild_id, ticket.id, 'system')?.catch((err) => {
-            ctx.log.error(`Failed to run close hooks for ticket ${ticket.id}:`, err);
-          });
-
           if (ctx.discord) {
             const closeMsg = MESSAGES[locale].close;
             try {
@@ -97,16 +93,24 @@ export const autoCloseJob: Job = {
             } catch (err) {
               ctx.log.error(`Failed to post auto-close message for ticket ${ticket.id}:`, err);
             }
+          }
 
-            if (category.mode === 'thread') {
-              try {
-                await ctx.discord.patchChannel(ticket.channel_id, {
-                  archived: true,
-                  locked: true,
-                });
-              } catch (err) {
-                ctx.log.error(`Failed to patch channel for ticket ${ticket.id}:`, err);
-              }
+          // closeHooks runs the close hooks and locks + archives the thread last, so the job
+          // waits for it rather than racing the rating post and the archive's message fetch.
+          if (ctx.gateway?.closeHooks) {
+            try {
+              await ctx.gateway.closeHooks(ticket.guild_id, ticket.id, 'system');
+            } catch (err) {
+              ctx.log.error(`Failed to run close hooks for ticket ${ticket.id}:`, err);
+            }
+          } else if (ctx.discord && category.mode === 'thread') {
+            try {
+              await ctx.discord.patchChannel(ticket.channel_id, {
+                archived: true,
+                locked: true,
+              });
+            } catch (err) {
+              ctx.log.error(`Failed to patch channel for ticket ${ticket.id}:`, err);
             }
           }
         } else if (inactiveHours >= warnThresholdHours && !ticket.auto_close_warned_at) {

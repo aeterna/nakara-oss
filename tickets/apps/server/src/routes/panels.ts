@@ -120,6 +120,14 @@ export default async function (app: FastifyInstance) {
     '/api/v1/guilds/:guildId/panels',
     { preHandler: [requireStaff] },
     async (req: FastifyRequest, reply: FastifyReply) => {
+      // The channel-in-guild check needs Discord; without it, refuse rather than skip the check
+      if (!app.discord) {
+        return reply.code(503).send({
+          code: 'discord_unavailable',
+          message: 'Discord REST service unavailable',
+        });
+      }
+
       const db = req.server.db as TicketsDb;
       const parsed = panelInputSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -183,6 +191,14 @@ export default async function (app: FastifyInstance) {
     '/api/v1/guilds/:guildId/panels/:panelId',
     { preHandler: [requireStaff] },
     async (req: FastifyRequest, reply: FastifyReply) => {
+      // The channel-in-guild check needs Discord; without it, refuse rather than skip the check
+      if (!app.discord) {
+        return reply.code(503).send({
+          code: 'discord_unavailable',
+          message: 'Discord REST service unavailable',
+        });
+      }
+
       const db = req.server.db as TicketsDb;
       const { panelId } = req.params as { panelId: string };
 
