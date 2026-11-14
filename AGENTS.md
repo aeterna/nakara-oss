@@ -22,6 +22,7 @@ Read before changing code: [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`packages/de
    - Never use `load`, `loadstring`, `dofile`, `loadfile`, `package.loadlib`, `os.execute`, `io.popen`, `os.remove`, `os.rename`, `os.getenv`, `debug.*`, `getfenv`/`setfenv`, `string.dump`, computed `_G[x]`, server-side `Citizen.InvokeNative`/`_in`, `eval`, `new Function`, `child_process`, `fs`, or raw sockets.
    - `secret-convar` (reading `rcon_password`, `sv_licenseKey`, `steam_webApiKey`, `mysql_connection_string`, or any `*token*`/`*secret*`/`*password*`/`*apikey*`/`*webhook*` convar) and `ace-command` (`ExecuteCommand` with `add_ace`, `add_principal`, `exec`, `set*`, `rcon`, `ensure`, `restart`, `stop`, `start`, `quit`, …) are **never allowlistable**.
    - Never commit binaries, archives, Lua bytecode, minified/bundled JS (`*.min.js`), obfuscated strings, or streamed GTA assets.
+   - One exception: `launcher/assets/**` may hold fonts and images the launcher embeds (`.ttf`, `.otf`, `.png`, `.webp`, `.jpg`), at most 5 MB in total, each with its license file beside it (owner, 2026-11-13; `docs/adr/0002-aeterna-game-launcher.md` decision 11).
    - Server net-event handlers should call a recognized rate-limit helper (`NakaraCore.rateLimit`, `lib.callback`, `rateLimit`). NUI code must use `textContent`, never non-static `innerHTML`/`outerHTML`.
 5. **Package boundaries & naming.**
    - Resource names use the `nakara_` prefix (`nakara_cargen_fix`, `nakara_core`, …).
