@@ -40,7 +40,8 @@ function walk(d, base = d) {
 
 let kind, tag, version, notes;
 const pj = path.join(dir, 'package.json');
-if (existsSync(pj)) {
+// A resource may carry a package.json for its JS specs (packages/rongroi): fxmanifest.lua decides the kind.
+if (!existsSync(path.join(dir, 'fxmanifest.lua')) && existsSync(pj)) {
   kind = 'npm';
   const pkgJson = JSON.parse(readFileSync(pj, 'utf8'));
   version = pkgJson.version;
