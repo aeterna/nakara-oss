@@ -22,6 +22,12 @@ pub const MAX_MANIFEST_BYTES: usize = 64 * 1024;
 /// Most files a manifest may list.
 pub const MAX_FILES: usize = 16;
 
+/// Largest single file a manifest may list, in bytes (512 MiB).
+pub const MAX_FILE_BYTES: u64 = 512 * 1024 * 1024;
+
+/// Largest total size of all files a manifest lists, in bytes (1 GiB).
+pub const MAX_TOTAL_BYTES: u64 = 1024 * 1024 * 1024;
+
 /// Update channel a manifest is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -79,8 +85,9 @@ struct RawManifest {
 /// names unknown fields, names another schema than 1, another product or
 /// channel than expected, has already expired at `now`, offers a version
 /// that is not strictly newer than `current`, or lists more than
-/// [`MAX_FILES`] files, file names that are not plain names, or digests that
-/// are not 64 lowercase hex digits.
+/// [`MAX_FILES`] files, file names that are not plain names, digests that
+/// are not 64 lowercase hex digits, a file larger than [`MAX_FILE_BYTES`] or
+/// files totaling more than [`MAX_TOTAL_BYTES`].
 pub fn verify_manifest(
     manifest: &[u8],
     sig: &[u8],
@@ -131,7 +138,7 @@ pub fn verify_manifest(
     if expires <= now {
         return Err(UpdateError::Expired(expires));
     }
-    if raw.version <= *current {
+    if !strictly_newer(&raw.version, current) {
         return Err(UpdateError::NotNewer(raw.version));
     }
     check_files(&raw.files)?;
@@ -151,6 +158,7 @@ fn check_files(files: &[FileEntry]) -> Result<(), UpdateError> {
         return Err(UpdateError::TooManyFiles(files.len()));
     }
     let mut seen = HashSet::new();
+    let mut total = 0u64;
     for file in files {
         if !plain_name(&file.name) {
             return Err(UpdateError::FileName {
@@ -162,22 +170,69 @@ fn check_files(files: &[FileEntry]) -> Result<(), UpdateError> {
                 name: file.name.clone(),
             });
         }
+        if file.size > MAX_FILE_BYTES {
+            return Err(UpdateError::FileTooLarge {
+                name: file.name.clone(),
+                size: file.size,
+            });
+        }
+        total += file.size;
         if !seen.insert(file.name.as_str()) {
             return Err(UpdateError::DuplicateFile {
                 name: file.name.clone(),
             });
         }
     }
+    if total > MAX_TOTAL_BYTES {
+        return Err(UpdateError::FilesTooLarge { total });
+    }
     Ok(())
 }
 
-/// A plain file name: not empty, no path parts, no leading dot.
+/// A plain file name: 1 to 64 bytes of `[A-Za-z0-9._-]`, no leading or
+/// trailing dot, no `..`, and not a Windows reserved device name.
 fn plain_name(name: &str) -> bool {
-    !name.is_empty()
-        && !name.starts_with('.')
-        && !name.contains('/')
-        && !name.contains('\\')
-        && !name.contains("..")
+    if name.is_empty() || name.len() > 64 {
+        return false;
+    }
+    if name.starts_with('.') || name.ends_with('.') || name.contains("..") {
+        return false;
+    }
+    if !name
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+    {
+        return false;
+    }
+    let stem = match name.split_once('.') {
+        Some((stem, _)) => stem,
+        None => name,
+    };
+    !reserved_stem(stem)
+}
+
+/// Whether the part before the first dot is a Windows reserved device name.
+fn reserved_stem(stem: &str) -> bool {
+    let upper = stem.to_ascii_uppercase();
+    if matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL") {
+        return true;
+    }
+    let bytes = upper.as_bytes();
+    bytes.len() == 4
+        && (bytes.starts_with(b"COM") || bytes.starts_with(b"LPT"))
+        && matches!(bytes[3], b'1'..=b'9')
+}
+
+/// Whether `candidate` is strictly newer by major, minor, patch and
+/// pre-release, ignoring build metadata.
+fn strictly_newer(candidate: &semver::Version, current: &semver::Version) -> bool {
+    candidate
+        .major
+        .cmp(&current.major)
+        .then_with(|| candidate.minor.cmp(&current.minor))
+        .then_with(|| candidate.patch.cmp(&current.patch))
+        .then_with(|| candidate.pre.cmp(&current.pre))
+        .is_gt()
 }
 
 /// Decodes 64 lowercase hex digits into a SHA-256 digest.

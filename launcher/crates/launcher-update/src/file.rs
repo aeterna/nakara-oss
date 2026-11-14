@@ -17,6 +17,9 @@ const READ_BUFFER: usize = 8192;
 ///
 /// The size is checked before any hashing; the SHA-256 digest is then
 /// computed while streaming, so a large file never has to be held in memory.
+/// The caller must verify the file inside its own staging folder right
+/// before [`crate::swap_exe`], so the bytes that were hashed are the bytes
+/// that are moved.
 pub fn verify_file(path: &Path, entry: &FileEntry) -> Result<(), UpdateError> {
     let expected = decode_sha256(&entry.sha256).ok_or_else(|| UpdateError::Digest {
         name: entry.name.clone(),

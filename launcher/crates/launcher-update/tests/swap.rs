@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-use launcher_update::{old_path, rollback, swap_exe};
+use launcher_update::{old_path, rollback, swap_exe, UpdateError};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::tempdir;
@@ -48,6 +48,35 @@ fn restores_the_old_exe_when_the_new_one_cannot_be_moved() {
 
     assert_eq!(fs::read(&current).unwrap(), b"old exe");
     assert!(!old_path(&current).exists());
+}
+
+#[test]
+fn fails_before_moving_anything_when_the_new_exe_is_missing() {
+    let dir = tempdir().unwrap();
+    let current = write(dir.path(), "launcher.exe", b"old exe");
+    let new = dir.path().join("download.exe");
+
+    let err = swap_exe(&current, &new).unwrap_err();
+
+    assert!(matches!(err, UpdateError::NewNotFile { .. }));
+    assert_eq!(fs::read(&current).unwrap(), b"old exe");
+    assert!(!old_path(&current).exists());
+    assert!(!new.exists());
+}
+
+#[test]
+fn refuses_a_new_exe_in_another_directory() {
+    let current_dir = tempdir().unwrap();
+    let new_dir = tempdir().unwrap();
+    let current = write(current_dir.path(), "launcher.exe", b"old exe");
+    let new = write(new_dir.path(), "download.exe", b"new exe");
+
+    let err = swap_exe(&current, &new).unwrap_err();
+
+    assert!(matches!(err, UpdateError::DifferentParents { .. }));
+    assert_eq!(fs::read(&current).unwrap(), b"old exe");
+    assert!(!old_path(&current).exists());
+    assert_eq!(fs::read(&new).unwrap(), b"new exe");
 }
 
 #[test]

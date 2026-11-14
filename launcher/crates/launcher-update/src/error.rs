@@ -62,6 +62,14 @@ pub enum UpdateError {
     #[error("manifest lists {0} files, the limit is 16")]
     TooManyFiles(usize),
 
+    /// A file entry is larger than 512 MiB.
+    #[error("file {name:?} is {size} bytes, the limit is 512 MiB")]
+    FileTooLarge { name: String, size: u64 },
+
+    /// The manifest's files total more than 1 GiB.
+    #[error("manifest files total {total} bytes, the limit is 1 GiB")]
+    FilesTooLarge { total: u64 },
+
     /// A downloaded file has another size than the manifest says.
     #[error("file {name:?} is {got} bytes, the manifest says {expected}")]
     FileSize {
@@ -77,6 +85,21 @@ pub enum UpdateError {
     /// Reading a downloaded file failed.
     #[error("could not read the update file: {0}")]
     Io(String),
+
+    /// The downloaded exe is not a file.
+    #[error("the new exe {path:?} is not a file")]
+    NewNotFile { path: String },
+
+    /// The downloaded exe is not in the same directory as the current exe.
+    #[error("the new exe {new:?} is not in the same directory as {current:?}")]
+    DifferentParents { current: String, new: String },
+
+    /// Moving the new exe failed and restoring the previous one also failed.
+    #[error("could not move the new exe ({move_error}); restore failed ({restore_error})")]
+    SwapFailed {
+        move_error: String,
+        restore_error: String,
+    },
 }
 
 /// Turns an I/O error into [`UpdateError::Io`].

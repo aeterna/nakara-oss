@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
+use launcher_update::manifest::{MAX_FILE_BYTES, MAX_TOTAL_BYTES};
 use launcher_update::{verify_file, verify_manifest, Channel, FileEntry, UpdateError, Verified};
 use semver::Version;
 use sha2::{Digest, Sha256};
@@ -332,6 +333,26 @@ fn rejects_a_version_older_than_the_running_one() {
 }
 
 #[test]
+fn ignores_build_metadata_when_checking_that_a_version_is_newer() {
+    let bytes = good_manifest("1.0.0+b");
+    let running = Version::parse("1.0.0").unwrap();
+    let expected = Version::parse("1.0.0+b").unwrap();
+
+    let err = verify_manifest(
+        bytes.as_bytes(),
+        &signed(SEED_A, bytes.as_bytes()),
+        &keys(),
+        PRODUCT,
+        &running,
+        Channel::Stable,
+        now(),
+    )
+    .unwrap_err();
+
+    assert_eq!(err, UpdateError::NotNewer(expected));
+}
+
+#[test]
 fn rejects_forbidden_file_names() {
     // (name as it appears in the JSON, the name after JSON unescaping)
     let cases = [
@@ -357,6 +378,59 @@ fn rejects_forbidden_file_names() {
             other => panic!("{json_name:?}: expected FileName, got {other:?}"),
         }
     }
+}
+
+#[test]
+fn rejects_windows_reserved_and_malformed_file_names() {
+    let long = format!("{}.exe", "a".repeat(61));
+    assert_eq!(long.len(), 65);
+    let names = [
+        "C:evil.exe",
+        "a.exe:stream",
+        "nul.txt",
+        "Com1",
+        "x.",
+        "a b.exe",
+    ];
+    for name in names {
+        let bytes = manifest(
+            EXPIRES,
+            "1.2.3",
+            PRODUCT,
+            "stable",
+            &[entry(name, DIGEST, 5)],
+        );
+
+        match verify(bytes.as_bytes()) {
+            Err(UpdateError::FileName { name: got }) => assert_eq!(got, name),
+            other => panic!("{name:?}: expected FileName, got {other:?}"),
+        }
+    }
+    let bytes = manifest(
+        EXPIRES,
+        "1.2.3",
+        PRODUCT,
+        "stable",
+        &[entry(&long, DIGEST, 5)],
+    );
+
+    match verify(bytes.as_bytes()) {
+        Err(UpdateError::FileName { name }) => assert_eq!(name, long),
+        other => panic!("{long:?}: expected FileName, got {other:?}"),
+    }
+
+    let name = format!("{}.exe", "a".repeat(60));
+    assert_eq!(name.len(), 64);
+    let bytes = manifest(
+        EXPIRES,
+        "1.2.3",
+        PRODUCT,
+        "stable",
+        &[entry(&name, DIGEST, 5)],
+    );
+    let verified = verify(bytes.as_bytes()).unwrap();
+
+    assert_eq!(verified.files[0].name, name);
 }
 
 #[test]
@@ -412,6 +486,53 @@ fn rejects_more_than_16_files() {
     let err = verify(bytes.as_bytes()).unwrap_err();
 
     assert_eq!(err, UpdateError::TooManyFiles(17));
+}
+
+#[test]
+fn rejects_a_file_entry_larger_than_512_mib() {
+    let size = MAX_FILE_BYTES + 1;
+    let bytes = manifest(
+        EXPIRES,
+        "1.2.3",
+        PRODUCT,
+        "stable",
+        &[entry("launcher.exe", DIGEST, size)],
+    );
+
+    let err = verify(bytes.as_bytes()).unwrap_err();
+
+    assert_eq!(
+        err,
+        UpdateError::FileTooLarge {
+            name: "launcher.exe".to_owned(),
+            size,
+        }
+    );
+}
+
+#[test]
+fn rejects_files_totaling_more_than_1_gib() {
+    let total = MAX_FILE_BYTES * 2 + 1;
+    let files = [
+        entry("a.exe", DIGEST, MAX_FILE_BYTES),
+        entry("b.exe", DIGEST, MAX_FILE_BYTES),
+        entry("c.exe", DIGEST, 1),
+    ];
+    let bytes = manifest(EXPIRES, "1.2.3", PRODUCT, "stable", &files);
+
+    let err = verify(bytes.as_bytes()).unwrap_err();
+
+    assert_eq!(err, UpdateError::FilesTooLarge { total });
+
+    let at_limit = [
+        entry("a.exe", DIGEST, MAX_FILE_BYTES),
+        entry("b.exe", DIGEST, MAX_FILE_BYTES),
+    ];
+    let bytes = manifest(EXPIRES, "1.2.3", PRODUCT, "stable", &at_limit);
+    let verified = verify(bytes.as_bytes()).unwrap();
+    let accepted: u64 = verified.files.iter().map(|file| file.size).sum();
+
+    assert_eq!(accepted, MAX_TOTAL_BYTES);
 }
 
 #[test]
