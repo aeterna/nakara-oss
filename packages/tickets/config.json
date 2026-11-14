@@ -1,0 +1,19 @@
+{
+  "enabledActions": [
+    "player.info",
+    "player.teleport"
+  ],
+  "teleportSpots": {
+    "hospital": {
+      "x": 300.0,
+      "y": -600.0,
+      "z": 43.0
+    },
+    "police": {
+      "x": 425.0,
+      "y": -979.0,
+      "z": 30.0
+    }
+  },
+  "logPrefix": "[nakara_tickets]"
+}
