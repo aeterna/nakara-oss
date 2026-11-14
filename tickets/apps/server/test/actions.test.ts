@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
+import { randomBytes } from 'node:crypto';
 import * as schema from '@nakara-tickets/db';
+import { sealBytes } from '@nakara-tickets/core';
 import { openTestDb } from '@nakara-tickets/db/test-support';
 import { buildApp } from '../src/app.js';
 import type { TicketsConfig } from '../src/config.js';
@@ -43,7 +45,7 @@ describe('actions API acceptance tests (g2)', () => {
       .values({
         guild_id: guildId,
         name: 'Main Server',
-        secret_enc: 'enc-secret',
+        secret_enc: sealBytes(config.TICKETS_DATA_KEY, randomBytes(32)),
         confirmed: true,
         revoked: false,
       })

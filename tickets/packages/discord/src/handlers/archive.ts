@@ -5,22 +5,181 @@ import type { CloseHookContext } from '../types.js';
 import { createStorageClient } from '../storage-client.js';
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
+const ALLOWED_HOSTS = ['cdn.discordapp.com', 'media.discordapp.net'];
 
 function isValidAttachmentUrl(urlString: string): boolean {
   try {
     const parsed = new URL(urlString);
     if (parsed.protocol !== 'https:') return false;
-    const allowedHosts = ['cdn.discordapp.com', 'media.discordapp.net'];
-    return allowedHosts.includes(parsed.hostname);
+    return ALLOWED_HOSTS.includes(parsed.hostname);
   } catch {
     return false;
   }
 }
 
+interface DownloadResult {
+  ok: boolean;
+  bytes?: Buffer;
+  contentType?: string | null;
+  aborted?: boolean;
+}
+
+async function downloadAttachment(
+  initialUrl: string,
+  effectiveCap: number,
+  timeoutMs = 30_000
+): Promise<DownloadResult> {
+  let currentUrl = initialUrl;
+  let hops = 0;
+
+  while (true) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new Error('Timeout')), timeoutMs);
+
+    let res: Response;
+    try {
+      res = await fetch(currentUrl, {
+        redirect: 'manual',
+        signal: controller.signal,
+      });
+    } catch {
+      clearTimeout(timer);
+      return { ok: false };
+    }
+    clearTimeout(timer);
+
+    // 3xx Redirect handling (SSRF prevention)
+    if (res.status >= 300 && res.status < 400) {
+      hops++;
+      if (hops > 3) {
+        // Exceeded max 3 hops -> skip as stored=false
+        return { ok: false, aborted: true };
+      }
+
+      const location = res.headers?.get?.('location') ?? (res.headers as any)?.location;
+      if (!location) {
+        return { ok: false, aborted: true };
+      }
+
+      let targetUrl: URL;
+      try {
+        targetUrl = new URL(location, currentUrl);
+      } catch {
+        return { ok: false, aborted: true };
+      }
+
+      if (targetUrl.protocol !== 'https:' || !ALLOWED_HOSTS.includes(targetUrl.hostname)) {
+        // Evil or unallowed host redirect -> skip as stored=false
+        return { ok: false, aborted: true };
+      }
+
+      currentUrl = targetUrl.href;
+      continue;
+    }
+
+    if (!res.ok) {
+      return { ok: false };
+    }
+
+    // Check Content-Length header if present
+    const clHeader = res.headers?.get?.('content-length') ?? (res.headers as any)?.['content-length'];
+    if (clHeader) {
+      const cl = parseInt(String(clHeader), 10);
+      if (!Number.isNaN(cl) && cl > effectiveCap) {
+        return { ok: false, aborted: true };
+      }
+    }
+
+    const contentType =
+      res.headers?.get?.('content-type') ?? (res.headers as any)?.['content-type'] ?? null;
+
+    // Stream body to count bytes and prevent unbounded buffering
+    if (res.body) {
+      const chunks: Buffer[] = [];
+      let totalBytes = 0;
+      let capExceeded = false;
+
+      if (typeof (res.body as any).getReader === 'function') {
+        const reader = (res.body as any).getReader();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value) {
+              totalBytes += value.length;
+              if (totalBytes > effectiveCap) {
+                capExceeded = true;
+                try {
+                  await reader.cancel('Size cap exceeded');
+                } catch {}
+                break;
+              }
+              chunks.push(Buffer.isBuffer(value) ? value : Buffer.from(value));
+            }
+          }
+        } catch {
+          if (capExceeded) {
+            return { ok: false, aborted: true };
+          }
+          return { ok: false };
+        }
+      } else if (Symbol.asyncIterator in (res.body as any)) {
+        try {
+          for await (const chunk of res.body as any) {
+            totalBytes += chunk.length;
+            if (totalBytes > effectiveCap) {
+              capExceeded = true;
+              break;
+            }
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          }
+        } catch {
+          if (capExceeded) {
+            return { ok: false, aborted: true };
+          }
+          return { ok: false };
+        }
+      }
+
+      if (capExceeded) {
+        return { ok: false, aborted: true };
+      }
+
+      return {
+        ok: true,
+        bytes: Buffer.concat(chunks),
+        contentType,
+      };
+    }
+
+    // Fallback for mock environments without res.body
+    if (typeof (res as any).arrayBuffer === 'function') {
+      try {
+        const ab = await (res as any).arrayBuffer();
+        const buf = Buffer.from(ab);
+        if (buf.length > effectiveCap) {
+          return { ok: false, aborted: true };
+        }
+        return {
+          ok: true,
+          bytes: buf,
+          contentType,
+        };
+      } catch {
+        return { ok: false };
+      }
+    }
+
+    return {
+      ok: true,
+      bytes: Buffer.alloc(0),
+      contentType,
+    };
+  }
+}
+
 export async function archiveOnClose(ctx: CloseHookContext): Promise<void> {
   try {
-    const storage = createStorageClient(ctx.dataKey);
-
     // Fetch messages from thread
     const allMessages: any[] = [];
     if (typeof ctx.port.fetchMessages === 'function') {
@@ -63,8 +222,11 @@ export async function archiveOnClose(ctx: CloseHookContext): Promise<void> {
         const contentType = att.contentType || null;
         const attachmentId = randomUUID();
 
-        // Check if over 25 MB cap or over guild quota
-        if (reportedSize > MAX_FILE_SIZE || currentTotalBytes + reportedSize > quotaBytes) {
+        const remainingQuota = quotaBytes - currentTotalBytes;
+        const effectiveCap = Math.min(MAX_FILE_SIZE, Math.max(0, remainingQuota));
+
+        // Check if reportedSize already exceeds cap or guild quota
+        if (effectiveCap <= 0 || reportedSize > MAX_FILE_SIZE || currentTotalBytes + reportedSize > quotaBytes) {
           await ctx.db.insert(attachments).values({
             id: attachmentId,
             guild_id: ctx.ticket.guild_id,
@@ -81,8 +243,8 @@ export async function archiveOnClose(ctx: CloseHookContext): Promise<void> {
         }
 
         try {
-          const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-          if (!res.ok) {
+          const download = await downloadAttachment(url, effectiveCap);
+          if (!download.ok || !download.bytes) {
             await ctx.db.insert(attachments).values({
               id: attachmentId,
               guild_id: ctx.ticket.guild_id,
@@ -98,7 +260,7 @@ export async function archiveOnClose(ctx: CloseHookContext): Promise<void> {
             continue;
           }
 
-          const bytes = Buffer.from(await res.arrayBuffer());
+          const bytes = download.bytes;
           const actualSize = bytes.length;
 
           if (actualSize > MAX_FILE_SIZE || currentTotalBytes + actualSize > quotaBytes) {
@@ -120,7 +282,12 @@ export async function archiveOnClose(ctx: CloseHookContext): Promise<void> {
           const sha256 = createHash('sha256').update(bytes).digest('hex');
           const storageKey = `${ctx.ticket.guild_id}/${ctx.ticket.id}/${attachmentId}`;
 
-          await storage.put(storageKey, bytes, contentType);
+          if (ctx.storage) {
+            await ctx.storage.put(storageKey, bytes, contentType || 'application/octet-stream');
+          } else {
+            const fallbackStorage = createStorageClient(ctx.dataKey);
+            await fallbackStorage.put(storageKey, bytes, contentType);
+          }
 
           await ctx.db.insert(attachments).values({
             id: attachmentId,

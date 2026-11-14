@@ -59,6 +59,7 @@ describe('panels acceptance tests', () => {
   const mockSendMessage = vi.fn();
   const mockEditMessage = vi.fn();
   const mockDeleteMessage = vi.fn();
+  const mockGetChannel = vi.fn();
 
   beforeAll(async () => {
     testEnv = await openTestDb();
@@ -74,6 +75,11 @@ describe('panels acceptance tests', () => {
     mockSendMessage.mockResolvedValue({ id: 'discord-msg-new-123' });
     mockEditMessage.mockResolvedValue({ id: 'discord-msg-edited-123' });
     mockDeleteMessage.mockResolvedValue(undefined);
+    mockGetChannel.mockImplementation(async (channelId: string) => ({
+      id: channelId,
+      guild_id: GUILD_A,
+      type: 0,
+    }));
 
     // Seed guilds
     await testDb.insert(guilds).values([
@@ -119,6 +125,7 @@ describe('panels acceptance tests', () => {
       sendMessage: mockSendMessage,
       editMessage: mockEditMessage,
       deleteMessage: mockDeleteMessage,
+      getChannel: mockGetChannel,
       createDM: vi.fn(),
     });
     await installSession(app, { config: mockConfig, db: testDb });
@@ -473,5 +480,80 @@ describe('panels acceptance tests', () => {
       },
     });
     expect(delRes.statusCode).toBe(404);
+  });
+
+  it('rejects channel not in guild with 422 channel_not_in_guild', async () => {
+    mockGetChannel.mockResolvedValueOnce({
+      id: CHANNEL_ID,
+      guild_id: 'other-guild-999',
+      type: 0,
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/guilds/${GUILD_A}/panels`,
+      headers: {
+        cookie: `nt_session=${SESSION_TOKEN}`,
+        'x-csrf-token': CSRF_TOKEN,
+        'content-type': 'application/json',
+      },
+      payload: {
+        channelId: CHANNEL_ID,
+        embed: { title: 'Wrong Guild Channel' },
+        kind: 'buttons',
+        buttons: [{ categoryId: catA1Id, label: 'Btn' }],
+      },
+    });
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe('channel_not_in_guild');
+  });
+
+  it('on channel change on PUT: deletes old message (ignoring 404) and clears message_id', async () => {
+    // 1. Create panel
+    const [inserted] = await testDb.insert(panels).values({
+      guild_id: GUILD_A,
+      channel_id: CHANNEL_ID,
+      message_id: 'old-msg-id-123',
+      embed: { title: 'Initial' },
+      kind: 'buttons',
+      buttons: [{ categoryId: catA1Id, label: 'Btn' }],
+    }).returning();
+
+    const NEW_CHANNEL_ID = '666666666666666666';
+    mockGetChannel.mockResolvedValue({
+      id: NEW_CHANNEL_ID,
+      guild_id: GUILD_A,
+      type: 0,
+    });
+
+    // 2. PUT with changed channelId
+    const putRes = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/guilds/${GUILD_A}/panels/${inserted.id}`,
+      headers: {
+        cookie: `nt_session=${SESSION_TOKEN}`,
+        'x-csrf-token': CSRF_TOKEN,
+        'content-type': 'application/json',
+      },
+      payload: {
+        channelId: NEW_CHANNEL_ID,
+        embed: { title: 'Updated Channel' },
+        kind: 'buttons',
+        buttons: [{ categoryId: catA1Id, label: 'Btn' }],
+      },
+    });
+
+    expect(putRes.statusCode).toBe(200);
+    expect(putRes.json().messageId).toBeNull();
+    expect(putRes.json().channelId).toBe(NEW_CHANNEL_ID);
+
+    // Verify deleteMessage was called on old channel and old message
+    expect(mockDeleteMessage).toHaveBeenCalledWith(CHANNEL_ID, 'old-msg-id-123');
+
+    // Verify DB row
+    const [row] = await testDb.select().from(panels).where(eq(panels.id, inserted.id));
+    expect(row.channel_id).toBe(NEW_CHANNEL_ID);
+    expect(row.message_id).toBeNull();
   });
 });

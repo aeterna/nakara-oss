@@ -1,46 +1,23 @@
-import pg from 'pg';
-import { readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { startGateway } from '@nakara-tickets/discord';
 import { buildApp, installAll } from './app.js';
 import { loadConfig } from './config.js';
 import { createDb } from './db.js';
 import { createDiscordRest } from './discord-rest.js';
+import { createStorage } from './storage.js';
 import { startWorker } from './worker.js';
 import { jobs } from './jobs/index.js';
+import { runMigrations } from './migrate.js';
 
-export async function runMigrations(databaseUrl: string, migrationsDir: string | URL): Promise<void> {
-  const client = new pg.Client({ connectionString: databaseUrl });
-  await client.connect();
-  try {
-    const rawDir = typeof migrationsDir === 'string' ? migrationsDir : migrationsDir.href;
-    const normalizedDir = rawDir.endsWith('/') ? rawDir : `${rawDir}/`;
-    const dirUrl = typeof migrationsDir === 'string' ? new URL(normalizedDir, import.meta.url) : new URL(normalizedDir);
-    const files = readdirSync(dirUrl)
-      .filter((f) => f.endsWith('.sql'))
-      .sort();
-
-    for (const file of files) {
-      const sqlContent = readFileSync(new URL(file, dirUrl), 'utf-8');
-      const statements = sqlContent
-        .split('--> statement-breakpoint')
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
-      for (const stmt of statements) {
-        await client.query(stmt);
-      }
-    }
-  } finally {
-    await client.end().catch(() => {});
-  }
-}
+export { runMigrations } from './migrate.js';
 
 const config = loadConfig();
 
 if (config.ROLE === 'migrate') {
-  const migrationsDir =
-    process.env.MIGRATIONS_DIR ?? new URL('../../../packages/db/migrations/', import.meta.url);
+  const migrationsFolder =
+    process.env.MIGRATIONS_DIR ?? fileURLToPath(new URL('../../../packages/db/migrations', import.meta.url));
   try {
-    await runMigrations(config.DATABASE_URL, migrationsDir);
+    await runMigrations(config.DATABASE_URL, migrationsFolder);
     process.exit(0);
   } catch (err: any) {
     const rawMsg = err?.message ? String(err.message) : 'Migration error';
@@ -52,6 +29,8 @@ if (config.ROLE === 'migrate') {
 
 const { db, pool, close: closeDb } = createDb(config.DATABASE_URL);
 
+const storage = createStorage(config);
+
 const discord = config.DISCORD_TOKEN ? createDiscordRest({ token: config.DISCORD_TOKEN }) : null;
 
 const gateway = await startGateway({
@@ -62,14 +41,31 @@ const gateway = await startGateway({
   pool,
   dataKey: config.TICKETS_DATA_KEY,
   log: console,
-});
+  storage,
+} as any);
 
-const app = buildApp({ config, db, gateway, discord, logger: true });
+const app = buildApp({ config, db, gateway, discord, storage, logger: true });
 
 const webDir = process.env.WEB_DIR ?? '/app/web';
 await installAll(app, { config, db, webDir });
 
-const worker = startWorker(jobs, { db, config, discord, log: console }, console);
+const worker = startWorker(
+  jobs,
+  {
+    db,
+    config,
+    discord,
+    storage,
+    gateway: gateway
+      ? {
+          closeHooks: (guildId: string, ticketId: string, actorId: string) =>
+            (gateway as any).closeHooks?.(guildId, ticketId, actorId),
+        }
+      : undefined,
+    log: console,
+  },
+  console
+);
 
 let stopping = false;
 const shutdown = async () => {

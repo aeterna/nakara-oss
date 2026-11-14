@@ -426,7 +426,14 @@ export default async function (app: FastifyInstance) {
             const icon = body.ok ? '✅' : '❌';
             const requestedBy = updatedAction.requested_by || 'staff';
             const message = `${icon} Action \`${updatedAction.action}\` (${body.code}) requested by ${requestedBy}`;
-            await app.discord.sendMessage(ticket.channel_id, { content: message });
+            void app.discord
+              .sendMessage(ticket.channel_id, {
+                content: message,
+                allowed_mentions: { parse: [] },
+              })
+              .catch((err: unknown) => {
+                app.log?.warn?.(err, 'Failed to post action result to Discord channel');
+              });
           }
         } catch (err: unknown) {
           app.log?.warn?.(err, 'Failed to post action result to Discord channel');

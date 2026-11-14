@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { randomBytes, randomUUID, createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { sessions } from '@nakara-tickets/db';
-import { getSessionCookieOptions, userCache } from '../session.js';
+import { getSessionCookieOptions, userCache, deriveCsrfToken } from '../session.js';
 import type { TicketsConfig } from '../config.js';
 
 function getOAuthKey(key: Buffer): Buffer {
@@ -38,11 +38,12 @@ function verifyOAuthCookie(
 
   try {
     const data = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
-    if (data.exp && typeof data.exp === 'number') {
-      const nowSec = Math.floor(Date.now() / 1000);
-      if (data.exp < nowSec) {
-        return null;
-      }
+    if (typeof data.exp !== 'number' || !Number.isFinite(data.exp)) {
+      return null;
+    }
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (data.exp < nowSec) {
+      return null;
     }
     return data;
   } catch {
@@ -167,9 +168,7 @@ export default async function (app: FastifyInstance) {
     const sessionId = randomUUID();
     const sessionToken = randomBytes(32).toString('base64url');
     const tokenHash = createHash('sha256').update(sessionToken).digest('hex');
-    const plainCsrf = createHmac('sha256', config.TICKETS_DATA_KEY)
-      .update(`csrf:${sessionId}`)
-      .digest('hex');
+    const plainCsrf = deriveCsrfToken(config.TICKETS_DATA_KEY, sessionId);
     const csrfHash = createHash('sha256').update(plainCsrf).digest('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 

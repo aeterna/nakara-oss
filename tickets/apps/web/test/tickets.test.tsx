@@ -105,9 +105,10 @@ describe('Tickets Web Page (acceptance test t6)', () => {
 
     // 3. Verify ticket rows are rendered from the stubbed api
     await waitFor(() => {
-      expect(screen.getByText(/#101/)).toBeInTheDocument();
-      expect(screen.getByText(/#102/)).toBeInTheDocument();
+      expect(screen.getByText(/#101/)).toBeTruthy();
+      expect(screen.getByText(/#102/)).toBeTruthy();
     });
+    expect(screen.queryByText(/#999/)).toBeNull();
 
     // 4. Click on ticket #101 to open detail view
     const ticketRow = screen.getByText(/#101/);
@@ -115,13 +116,13 @@ describe('Tickets Web Page (acceptance test t6)', () => {
 
     // 5. Verify detail view shows messages
     await waitFor(() => {
-      expect(screen.getByText('I need help with my inventory')).toBeInTheDocument();
-      expect(screen.getByText('Hello, looking into this now!')).toBeInTheDocument();
-      expect(screen.getByText('Player One')).toBeInTheDocument();
-      expect(screen.getByText('Staff Member')).toBeInTheDocument();
+      expect(screen.getByText('I need help with my inventory')).toBeTruthy();
+      expect(screen.getByText('Hello, looking into this now!')).toBeTruthy();
+      expect(screen.getByText('Player One')).toBeTruthy();
+      expect(screen.getByText('Staff Member')).toBeTruthy();
     });
 
     // 6. Verify attachments and actions are rendered
-    expect(screen.getByText('screenshot.png')).toBeInTheDocument();
+    expect(screen.getByText('screenshot.png')).toBeTruthy();
   });
 });

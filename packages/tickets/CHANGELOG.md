@@ -19,6 +19,7 @@ All notable changes to `nakara_tickets` are documented here. The format follows
 
 ### Fixed
 
+- Validate give_item allowlist using Object.hasOwn and enforce positive integer caps.
 - Base64url secret decoding in `signer.js` to match bridge API HMAC key representation.
 - Global export function resolution in CommonJS module `actions.js` using `globalThis.exports`.
 - Teleport error reporting when player ped cannot be located or is 0.

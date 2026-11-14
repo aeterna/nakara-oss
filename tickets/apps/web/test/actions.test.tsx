@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { TicketActions } from '../src/components/TicketActions.js';
 
 describe('TicketActions component acceptance tests (g4)', () => {
@@ -98,7 +98,7 @@ describe('TicketActions component acceptance tests (g4)', () => {
     });
 
     // Click the confirm button in the dialog
-    const confirmBtn = screen.getByRole('button', { name: /confirm repeat|confirm/i });
+    const confirmBtn = within(screen.getByRole('dialog')).getByRole('button', { name: /confirm repeat|confirm/i });
     fireEvent.click(confirmBtn);
 
     // Verify second request was made with confirmRepeat: true
@@ -108,6 +108,9 @@ describe('TicketActions component acceptance tests (g4)', () => {
 
     const secondPost = fetchCalls.filter((c) => c.options?.method === 'POST')[1];
     expect(secondPost).toBeDefined();
+    if (!secondPost) {
+      throw new Error('Expected secondPost to be defined');
+    }
     const secondBody = JSON.parse(secondPost.options.body);
     expect(secondBody.action).toBe('player.give_item');
     expect(secondBody.params).toEqual({ item: 'bandage', count: 3 });

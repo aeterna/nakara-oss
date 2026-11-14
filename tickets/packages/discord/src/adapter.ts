@@ -95,5 +95,17 @@ export function createDiscordPort(client: Client): DiscordPort {
       const fetched = await channel.messages.fetch(opts);
       return Array.from(fetched.values());
     },
+
+    async createDM(userId: string) {
+      const user = await client.users.fetch(userId);
+      const dm = await user.createDM();
+      return { id: dm.id };
+    },
+
+    async sendDM(userId: string, payload: any) {
+      const user = await client.users.fetch(userId);
+      const msg = await user.send(payload);
+      return { id: msg.id };
+    },
   };
 }

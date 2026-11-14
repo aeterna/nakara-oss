@@ -3,6 +3,8 @@ import {
   GatewayIntentBits,
   type Guild,
 } from 'discord.js';
+import { eq } from 'drizzle-orm';
+import { tickets, getTicket, getCategory, getSettings } from '@nakara-tickets/db';
 import { acquireGatewayLock, type GatewayLockHandle } from './lock.js';
 import { createDiscordPort } from './adapter.js';
 import {
@@ -18,21 +20,53 @@ import {
   handleTagCommand,
   handleTagAutocomplete,
   handleDeleteMyData,
+  runCloseHooks,
 } from './handlers/index.js';
-import type { StartGatewayDeps, GatewayHandle, GatewayStatus, DiscordPort } from './types.js';
+import type {
+  StartGatewayDeps,
+  GatewayHandle,
+  GatewayStatus,
+  DiscordPort,
+  CloseHookContext,
+} from './types.js';
 
 export async function handleInteraction(
   port: DiscordPort,
   deps: StartGatewayDeps,
   interaction: any
 ): Promise<void> {
-  if (!interaction.guildId || !deps.allowedGuildIds.includes(interaction.guildId)) {
+  const customId: string =
+    interaction.customId ?? interaction.custom_id ?? interaction.data?.custom_id ?? '';
+
+  if (!interaction.guildId) {
+    const isRating = customId.startsWith('nt:rate:') || customId.startsWith('nt:ratefb:');
+    if (!isRating) {
+      return;
+    }
+    const match = /^nt:rate(?:fb)?:([^:]+):([1-5])$/.exec(customId);
+    if (!match) return;
+    const ticketId = match[1];
+    let ticket: any = null;
+    try {
+      const [row] = await deps.db
+        .select({ guild_id: tickets.guild_id })
+        .from(tickets)
+        .where(eq(tickets.id, ticketId))
+        .limit(1);
+      ticket = row;
+    } catch {
+      return;
+    }
+    if (!ticket || !deps.allowedGuildIds.includes(ticket.guild_id)) {
+      return;
+    }
+    interaction.guildId = ticket.guild_id;
+  } else if (!deps.allowedGuildIds.includes(interaction.guildId)) {
     return;
   }
 
   try {
     if (interaction.isButton && interaction.isButton()) {
-      const customId: string = interaction.customId ?? '';
       if (customId.startsWith('nt:open:')) {
         const categoryId = customId.slice('nt:open:'.length);
         await handleOpenButton(port, deps.db, interaction, categoryId);
@@ -47,8 +81,19 @@ export async function handleInteraction(
       } else if (customId === 'nt:delme:confirm' || customId.startsWith('nt:delme:confirm')) {
         await handleDeleteMyData(port, deps.db, interaction, deps);
       }
+    } else if (
+      (interaction.isStringSelectMenu && interaction.isStringSelectMenu()) ||
+      (interaction.isSelectMenu && interaction.isSelectMenu()) ||
+      (interaction.isAnySelectMenu && interaction.isAnySelectMenu()) ||
+      (Array.isArray(interaction.values) && interaction.values.length > 0)
+    ) {
+      if (customId === 'nt:open-select' || customId.startsWith('nt:open-select')) {
+        const categoryId = interaction.values?.[0];
+        if (categoryId) {
+          await handleOpenButton(port, deps.db, interaction, categoryId);
+        }
+      }
     } else if (interaction.isModalSubmit && interaction.isModalSubmit()) {
-      const customId: string = interaction.customId ?? '';
       if (customId.startsWith('nt:form:')) {
         const categoryId = customId.slice('nt:form:'.length);
         await handleFormSubmit(port, deps.db, interaction, categoryId);
@@ -97,6 +142,10 @@ export async function handleInteraction(
 }
 
 export async function startGateway(deps: StartGatewayDeps): Promise<GatewayHandle> {
+  if (!deps.dataKey || !Buffer.isBuffer(deps.dataKey) || deps.dataKey.length !== 32) {
+    throw new Error('dataKey is required and must be a 32-byte Buffer');
+  }
+
   let currentStatus: GatewayStatus = 'standby';
   let lockHandle: GatewayLockHandle | null = null;
   const abortController = new AbortController();
@@ -282,6 +331,56 @@ export async function startGateway(deps: StartGatewayDeps): Promise<GatewayHandl
   return {
     status() {
       return currentStatus;
+    },
+    async closeHooks(guildId: string, ticketId: string, actorId: string): Promise<void> {
+      let ticket: any = null;
+      try {
+        ticket = await getTicket(deps.db, guildId, ticketId);
+      } catch (err) {
+        deps.log.warn(`Ticket ${ticketId} not found in closeHooks: ${err}`);
+        return;
+      }
+      if (!ticket) return;
+
+      let category: any = null;
+      try {
+        category = await getCategory(deps.db, guildId, ticket.category_id);
+      } catch (err) {
+        deps.log.warn(`Category ${ticket.category_id} not found in closeHooks: ${err}`);
+      }
+
+      let settings: any = null;
+      try {
+        settings = await getSettings(deps.db, guildId);
+      } catch (err) {
+        deps.log.warn(`Settings for guild ${guildId} not found in closeHooks: ${err}`);
+      }
+
+      const hookCtx: CloseHookContext = {
+        port,
+        db: deps.db,
+        dataKey: deps.dataKey,
+        storage: deps.storage,
+        ticket,
+        category,
+        guildSettings: settings,
+        actorId,
+        log: deps.log,
+      };
+
+      try {
+        await runCloseHooks(hookCtx);
+      } catch (err) {
+        deps.log.error('Error running close hooks in GatewayHandle.closeHooks', err);
+      }
+
+      if (ticket.channel_id) {
+        try {
+          await port.lockAndArchiveThread(ticket.channel_id);
+        } catch (err) {
+          deps.log.error(`Failed to lock/archive thread ${ticket.channel_id}`, err);
+        }
+      }
     },
     async stop() {
       stopped = true;

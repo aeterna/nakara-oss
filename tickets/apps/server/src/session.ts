@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import fastifyCookie from '@fastify/cookie';
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, hkdfSync, timingSafeEqual } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { sessions, categories, type TicketsDb } from '@nakara-tickets/db';
 import type { TicketsConfig } from './config.js';
@@ -73,6 +73,11 @@ export class UserCache extends Map<string, UserProfile> {
 }
 
 export const userCache = new UserCache();
+
+export function deriveCsrfToken(dataKey: Buffer, sessionId: string): string {
+  const csrfKey = Buffer.from(hkdfSync('sha256', dataKey, '', 'csrf', 32));
+  return createHmac('sha256', csrfKey).update(sessionId).digest('hex');
+}
 
 export function constantTimeCompare(a: string | undefined, b: string): boolean {
   if (typeof a !== 'string' || typeof b !== 'string') {
@@ -178,9 +183,7 @@ export async function installSession(app: FastifyInstance, opts?: InstallSession
 
     let plainCsrf = '';
     if (config?.TICKETS_DATA_KEY) {
-      plainCsrf = createHmac('sha256', config.TICKETS_DATA_KEY)
-        .update(`csrf:${session.id}`)
-        .digest('hex');
+      plainCsrf = deriveCsrfToken(config.TICKETS_DATA_KEY, session.id);
     }
 
     req.user = user;
@@ -205,9 +208,8 @@ export async function installSession(app: FastifyInstance, opts?: InstallSession
 
       const clientHash = createHash('sha256').update(csrfHeader).digest('hex');
       const matchesHash = constantTimeCompare(clientHash, session.csrf_hash);
-      const matchesPlain = constantTimeCompare(csrfHeader, session.csrf_hash);
 
-      if (!matchesHash && !matchesPlain) {
+      if (!matchesHash) {
         return reply.code(403).send({ code: 'csrf', message: 'csrf' });
       }
     }

@@ -56,6 +56,32 @@ describe('discord-rest (w2)', () => {
     expect(res).toEqual({ id: 'msg-ok' });
   });
 
+  it('429 waits at most 2 s once, then throws DiscordRestError{status:429}', async () => {
+    let callCount = 0;
+    const mockFetch = vi.fn().mockImplementation(async () => {
+      callCount++;
+      return {
+        ok: false,
+        status: 429,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ retry_after: 0.01, message: 'The rate limit was hit' }),
+      };
+    });
+
+    const rest = createDiscordRest({ token, fetchImpl: mockFetch as any });
+
+    let thrownError: any = null;
+    try {
+      await rest.sendMessage('123456789', { content: 'retry fail test' });
+    } catch (err) {
+      thrownError = err;
+    }
+
+    expect(callCount).toBe(2); // Retried exactly once
+    expect(thrownError).toBeInstanceOf(DiscordRestError);
+    expect(thrownError.status).toBe(429);
+  });
+
   it('(w2-3) error text never contains the token', async () => {
     const mockFetch = vi.fn().mockImplementation(async () => {
       return {
@@ -88,7 +114,7 @@ describe('discord-rest (w2)', () => {
     expect(JSON.stringify(thrownError)).not.toContain(token);
   });
 
-  it('(w2-4) supports editMessage, deleteMessage, createDM', async () => {
+  it('(w2-4) supports editMessage, deleteMessage, createDM, patchChannel, getChannel', async () => {
     const calls: Array<{ url: string; method: string }> = [];
     const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
       calls.push({ url, method: init?.method ?? 'GET' });
@@ -104,7 +130,7 @@ describe('discord-rest (w2)', () => {
         ok: true,
         status: 200,
         headers: new Headers({ 'content-type': 'application/json' }),
-        json: async () => ({ id: 'ch-or-msg-1' }),
+        json: async () => ({ id: 'ch-or-msg-1', guild_id: 'guild-1', type: 0 }),
       };
     });
 
@@ -127,6 +153,13 @@ describe('discord-rest (w2)', () => {
       url: 'https://discord.com/api/v10/users/@me/channels',
       method: 'POST',
     });
-    expect(dm).toEqual({ id: 'ch-or-msg-1' });
+    expect(dm).toEqual({ id: 'ch-or-msg-1', guild_id: 'guild-1', type: 0 });
+
+    const ch = await rest.getChannel('chan-2');
+    expect(calls[3]).toEqual({
+      url: 'https://discord.com/api/v10/channels/chan-2',
+      method: 'GET',
+    });
+    expect(ch).toEqual({ id: 'ch-or-msg-1', guild_id: 'guild-1', type: 0 });
   });
 });

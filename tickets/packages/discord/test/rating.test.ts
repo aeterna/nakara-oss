@@ -63,7 +63,9 @@ describe('rating handlers (acceptance tests s3, s4)', () => {
       deferReply: vi.fn(),
       editReply: vi.fn(),
       lockAndArchiveThread: vi.fn(),
-    };
+      createDM: vi.fn(),
+      sendDM: vi.fn(),
+    } as any;
 
     // 1. Non-opener clicks button -> refused with ephemeral message
     const nonOpenerInteraction = {
@@ -259,5 +261,93 @@ describe('rating handlers (acceptance tests s3, s4)', () => {
     await ratingOnClose(ctx);
     expect(sendMessage).not.toHaveBeenCalled();
     expect(sendDM).not.toHaveBeenCalled();
+  });
+
+  it('ratings by DM: allows interaction without guildId, resolves guild from ticket row, opener only', async () => {
+    const db = testDb.db;
+    const guildId = 'guild-dm-rating-resolve';
+    const openerId = 'opener-user-dm';
+    const nonOpenerId = 'other-user-dm';
+
+    await db.insert(guilds).values({ guild_id: guildId, name: 'DM Resolve Guild' });
+    const [cat] = await db
+      .insert(categories)
+      .values({
+        guild_id: guildId,
+        name: 'DM Category',
+        parent_channel_id: 'chan-cat-dm',
+        mode: 'thread',
+      })
+      .returning();
+
+    const [ticket] = await db
+      .insert(tickets)
+      .values({
+        guild_id: guildId,
+        number: 301,
+        category_id: cat.id,
+        opener_id: openerId,
+        channel_id: 'thread-301',
+        status: 'closed',
+      })
+      .returning();
+
+    const mockPort: any = {
+      showModal: vi.fn(),
+      replyEphemeral: vi.fn(),
+    };
+
+    // 1. Non-opener tries to rate in DM (no guildId on interaction)
+    const nonOpenerDmInteraction = {
+      guildId: undefined, // DM interaction has no guildId
+      customId: `nt:rate:${ticket.id}:4`,
+      user: { id: nonOpenerId },
+    };
+
+    await handleRatingButton(mockPort, db, nonOpenerDmInteraction);
+
+    expect(mockPort.showModal).not.toHaveBeenCalled();
+    expect(mockPort.replyEphemeral).toHaveBeenCalledTimes(1);
+
+    vi.clearAllMocks();
+
+    // 2. Opener clicks rate in DM (no guildId on interaction) -> resolves guild and shows modal
+    const openerDmInteraction = {
+      guildId: undefined,
+      customId: `nt:rate:${ticket.id}:4`,
+      user: { id: openerId },
+    };
+
+    await handleRatingButton(mockPort, db, openerDmInteraction);
+
+    expect(mockPort.showModal).toHaveBeenCalledTimes(1);
+    const modalPayload = mockPort.showModal.mock.calls[0][1];
+    expect(modalPayload.customId).toBe(`nt:ratefb:${ticket.id}:4`);
+
+    vi.clearAllMocks();
+
+    // 3. Opener submits modal in DM (no guildId on interaction) -> rating inserted with ticket's guild_id
+    const modalDmInteraction = {
+      guildId: undefined,
+      customId: `nt:ratefb:${ticket.id}:4`,
+      user: { id: openerId },
+      fields: {
+        getTextInputValue: (field: string) => (field === 'feedback' ? 'Great via DM!' : ''),
+      },
+    };
+
+    await handleRatingModal(mockPort, db, modalDmInteraction);
+
+    expect(mockPort.replyEphemeral).toHaveBeenCalledTimes(1);
+
+    const stored = await db
+      .select()
+      .from(ratings)
+      .where(eq(ratings.ticket_id, ticket.id));
+
+    expect(stored).toHaveLength(1);
+    expect(stored[0].guild_id).toBe(guildId);
+    expect(stored[0].score).toBe(4);
+    expect(stored[0].feedback).toBe('Great via DM!');
   });
 });

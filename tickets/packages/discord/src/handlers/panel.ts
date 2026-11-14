@@ -112,6 +112,7 @@ export async function handlePanelSend(
   const msg = await port.sendMessage(targetChannelId, {
     embeds: [embed],
     components: rows,
+    allowed_mentions: { parse: [] },
   });
 
   await db.insert(panels).values({

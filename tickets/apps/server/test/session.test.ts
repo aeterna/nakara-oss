@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import * as dbSchema from '@nakara-tickets/db';
 import { sessions, guilds, categories } from '@nakara-tickets/db';
 import { openTestDb } from '@nakara-tickets/db/test-support';
-import { installSession } from '../src/session.js';
+import { installSession, deriveCsrfToken } from '../src/session.js';
 import { checkStaff, clearStaffCache } from '../src/staff.js';
 import routes from '../src/routes/index.js';
 import type { TicketsConfig } from '../src/config.js';
@@ -67,7 +67,7 @@ vi.mock('@nakara-tickets/db', async (importOriginal) => {
         name_template: input.nameTemplate ?? 'ticket-{number}',
         welcome_message: input.welcomeMessage ?? null,
         form: input.form ?? null,
-        auto_close_hours: input.autoCloseHours ?? null,
+        autoCloseHours: input.autoCloseHours ?? null,
         max_open_per_user: input.maxOpenPerUser ?? 1,
         game_server_id: input.gameServerId ?? null,
       }).returning();
@@ -185,12 +185,14 @@ describe('session & staff acceptance tests', () => {
 
   async function createSession(userId: string, rawToken: string, csrf: string) {
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
-    await testDb.insert(sessions).values({
+    const csrfHash = createHash('sha256').update(csrf).digest('hex');
+    const [row] = await testDb.insert(sessions).values({
       user_id: userId,
       token_hash: tokenHash,
-      csrf_hash: csrf,
+      csrf_hash: csrfHash,
       expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    });
+    }).returning();
+    return row;
   }
 
   it('(a1) no cookie → 401', async () => {
@@ -240,10 +242,10 @@ describe('session & staff acceptance tests', () => {
     expect(res.json().code).toBe('forbidden');
   });
 
-  it('(a4) POST without CSRF → 403, with → 201', async () => {
+  it('(a4) POST without CSRF → 403, with → 201; header with csrf_hash directly is rejected', async () => {
     const rawToken = 'staff-user-csrf-test-token-base64url';
     const csrf = 'valid-csrf-token-12345';
-    await createSession(USER_STAFF, rawToken, csrf);
+    const sessionRow = await createSession(USER_STAFF, rawToken, csrf);
 
     const validBody = {
       name: 'Support',
@@ -279,7 +281,21 @@ describe('session & staff acceptance tests', () => {
     expect(resWrongCsrf.statusCode).toBe(403);
     expect(resWrongCsrf.json().code).toBe('csrf');
 
-    // 3. With matching CSRF header -> 201
+    // 3. Passing csrf_hash from the DB directly as header value is REJECTED -> 403
+    const resHashDirect = await app.inject({
+      method: 'POST',
+      url: `/api/v1/guilds/${GUILD_ALLOWED}/categories`,
+      headers: {
+        cookie: `nt_session=${rawToken}`,
+        'x-csrf-token': sessionRow.csrf_hash,
+        'content-type': 'application/json',
+      },
+      payload: validBody,
+    });
+    expect(resHashDirect.statusCode).toBe(403);
+    expect(resHashDirect.json().code).toBe('csrf');
+
+    // 4. With matching plain CSRF header -> 201
     const resWithCsrf = await app.inject({
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_ALLOWED}/categories`,
@@ -292,6 +308,18 @@ describe('session & staff acceptance tests', () => {
     });
     expect(resWithCsrf.statusCode).toBe(201);
     expect(resWithCsrf.json().name).toBe('Support');
+  });
+
+  it('CSRF derivation uses HMAC(HKDF(TICKETS_DATA_KEY, "csrf"), session id)', () => {
+    const key = Buffer.alloc(32, 9);
+    const sessionId = 'test-session-uuid-1234';
+    const csrf1 = deriveCsrfToken(key, sessionId);
+    const csrf2 = deriveCsrfToken(key, sessionId);
+    expect(csrf1).toBe(csrf2);
+    expect(csrf1).toMatch(/^[0-9a-f]{64}$/);
+
+    const diffSessionCsrf = deriveCsrfToken(key, 'other-session-id');
+    expect(diffSessionCsrf).not.toBe(csrf1);
   });
 
   it('(a8) checkStaff cached (second call does not fetch)', async () => {

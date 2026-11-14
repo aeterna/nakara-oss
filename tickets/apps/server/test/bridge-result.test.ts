@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import { randomBytes } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import * as schema from '@nakara-tickets/db';
 import { signBridge, sealBytes } from '@nakara-tickets/core';
 import { openTestDb } from '@nakara-tickets/db/test-support';
@@ -121,7 +122,7 @@ describe('bridge result acceptance tests (g3)', () => {
     const nonce = 'nonce-test-g3-ok';
     const pathWithQuery = `/bridge/v1/actions/${action.id}/result`;
     const payload = JSON.stringify({ ok: true, code: 'done' });
-    const sig = signBridge(rawSecret, {
+    const sig = signBridge(Buffer.from(rawSecret, 'base64url'), {
       timestamp: nowSec,
       nonce,
       method: 'POST',
@@ -154,6 +155,7 @@ describe('bridge result acceptance tests (g3)', () => {
     expect(sentMessage!.body.content).toContain('player.revive');
     expect(sentMessage!.body.content).toContain('done');
     expect(sentMessage!.body.content).toContain('staff-mod-1');
+    expect(sentMessage!.body.allowed_mentions).toEqual({ parse: [] });
   });
 
   it('(g3) discord throwing still returns 200', async () => {
@@ -184,7 +186,7 @@ describe('bridge result acceptance tests (g3)', () => {
     const nonce = 'nonce-test-g3-throw';
     const pathWithQuery = `/bridge/v1/actions/${action.id}/result`;
     const payload = JSON.stringify({ ok: false, code: 'error', message: 'Item transfer failed' });
-    const sig = signBridge(rawSecret, {
+    const sig = signBridge(Buffer.from(rawSecret, 'base64url'), {
       timestamp: nowSec,
       nonce,
       method: 'POST',
@@ -214,7 +216,7 @@ describe('bridge result acceptance tests (g3)', () => {
     const [saved] = await db
       .select()
       .from(schema.gameActions)
-      .where(schema.eq(schema.gameActions.id, action.id));
+      .where(eq(schema.gameActions.id, action.id));
     expect(saved.status).toBe('failed');
     expect(saved.result).toEqual({ ok: false, code: 'error', message: 'Item transfer failed' });
   });

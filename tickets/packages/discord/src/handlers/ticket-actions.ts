@@ -118,7 +118,10 @@ export async function handleClaim(
     await transitionTicket(db, guildId, ticket.id, 'claim', actorId);
 
     const sysMsg = t(locale, 'ticket_claimed', { user: `<@${actorId}>` });
-    await port.sendMessage(ticket.channel_id, { content: sysMsg });
+    await port.sendMessage(ticket.channel_id, {
+      content: sysMsg,
+      allowed_mentions: { parse: [], users: [actorId] },
+    });
     await port.editReply(interaction, { content: sysMsg });
   } catch (err: any) {
     if (err instanceof TicketError || err?.name === 'TicketError' || err?.code) {
@@ -176,15 +179,23 @@ export async function handleClose(
       sysMsg += ` (${reason})`;
     }
 
-    await port.sendMessage(ticket.channel_id, { content: sysMsg });
+    await port.sendMessage(ticket.channel_id, {
+      content: sysMsg,
+      allowed_mentions: { parse: [], users: [actorId] },
+    });
     await port.lockAndArchiveThread(ticket.channel_id);
     await port.editReply(interaction, { content: sysMsg });
+
+    if (!deps?.dataKey) {
+      throw new Error('dataKey is required');
+    }
 
     // Call close hooks without blocking reply
     const hookCtx: CloseHookContext = {
       port,
       db,
-      dataKey: deps?.dataKey ?? Buffer.alloc(32),
+      dataKey: deps.dataKey,
+      storage: deps?.storage,
       ticket,
       category,
       guildSettings: settings,
@@ -244,7 +255,10 @@ export async function handleReopen(
     await transitionTicket(db, guildId, ticket.id, 'reopen', actorId);
 
     const sysMsg = t(locale, 'ticket_reopened', { user: `<@${actorId}>` });
-    await port.sendMessage(ticket.channel_id, { content: sysMsg });
+    await port.sendMessage(ticket.channel_id, {
+      content: sysMsg,
+      allowed_mentions: { parse: [], users: [actorId] },
+    });
     await port.editReply(interaction, { content: sysMsg });
   } catch (err: any) {
     if (err instanceof TicketError || err?.name === 'TicketError' || err?.code) {

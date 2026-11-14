@@ -16,6 +16,7 @@ describe('worker (w1)', () => {
       db: {} as any,
       config: {} as any,
       discord: null,
+      storage: null,
       log: mockLog,
     };
   });
@@ -152,5 +153,48 @@ describe('worker (w1)', () => {
     await stopPromise;
 
     expect(finished).toBe(true);
+  });
+
+  it('(w1-5) job receives ctx with storage and gateway closeHooks', async () => {
+    let capturedStorage: any = undefined;
+    let capturedCloseHooksCalled = false;
+
+    const mockStorage = {
+      put: vi.fn(),
+      get: vi.fn(),
+      delete: vi.fn(),
+    };
+    const mockCloseHooks = vi.fn().mockImplementation(async () => {
+      capturedCloseHooksCalled = true;
+    });
+
+    const ctxWithStorageAndGateway: JobContext = {
+      db: {} as any,
+      config: {} as any,
+      discord: null,
+      storage: mockStorage as any,
+      gateway: {
+        closeHooks: mockCloseHooks,
+      },
+      log: mockLog,
+    };
+
+    const testJob: Job = {
+      name: 'storage-gateway-job',
+      intervalMs: 1000,
+      async run(ctx) {
+        capturedStorage = ctx.storage;
+        await ctx.gateway?.closeHooks?.('guild-1', 'ticket-1', 'actor-1');
+      },
+    };
+
+    const worker = startWorker([testJob], ctxWithStorageAndGateway, mockLog);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(capturedStorage).toBe(mockStorage);
+    expect(capturedCloseHooksCalled).toBe(true);
+    expect(mockCloseHooks).toHaveBeenCalledWith('guild-1', 'ticket-1', 'actor-1');
+
+    await worker.stop();
   });
 });

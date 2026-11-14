@@ -335,5 +335,27 @@ describe('stats route (acceptance tests s1, s2)', () => {
       url: '/api/v1/guilds/guild-1/stats?from=2026-02-01&to=2026-01-01',
     });
     expect(reverseRes.statusCode).toBe(400);
+
+    // Impossible date like 2026-02-31 returns 400 invalid_date
+    const impossibleRes = await app.inject({
+      method: 'GET',
+      url: '/api/v1/guilds/guild-1/stats?from=2026-02-31&to=2026-03-05',
+    });
+    expect(impossibleRes.statusCode).toBe(400);
+    expect(impossibleRes.json().code).toBe('invalid_date');
+  });
+
+  it('fails closed with 500 misconfigured when requireStaff is missing', async () => {
+    const rawApp = buildApp({ db: testDb.db });
+    await rawApp.ready();
+
+    const res = await rawApp.inject({
+      method: 'GET',
+      url: '/api/v1/guilds/guild-1/stats',
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(res.json().code).toBe('misconfigured');
+    await rawApp.close();
   });
 });

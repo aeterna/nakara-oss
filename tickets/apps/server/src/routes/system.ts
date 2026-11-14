@@ -1,7 +1,24 @@
 import type { FastifyInstance } from 'fastify';
+import { readFileSync } from 'node:fs';
 import { sql } from 'drizzle-orm';
 import pkg from '../../package.json' with { type: 'json' };
 import type { GatewayStatus } from '../types.js';
+
+function getMetricsToken(): string | undefined {
+  const direct = process.env.METRICS_TOKEN;
+  if (direct !== undefined && direct !== '') {
+    return direct;
+  }
+  const fileKey = process.env.METRICS_TOKEN_FILE;
+  if (fileKey !== undefined && fileKey !== '') {
+    try {
+      return readFileSync(fileKey, 'utf8').trim();
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
 
 export default async function (app: FastifyInstance) {
   app.get('/healthz', async (_req, reply) => {
@@ -42,7 +59,17 @@ export default async function (app: FastifyInstance) {
     });
   });
 
-  app.get('/metrics', async (_req, reply) => {
+  app.get('/metrics', async (req, reply) => {
+    const expectedToken = getMetricsToken();
+    if (!expectedToken) {
+      return reply.code(404).send({ code: 'not_found', message: 'Not found' });
+    }
+
+    const auth = req.headers.authorization;
+    if (!auth || auth !== `Bearer ${expectedToken}`) {
+      return reply.code(401).send({ code: 'unauthorized', message: 'Unauthorized' });
+    }
+
     const ticketCounts = { open: 0, claimed: 0, closed: 0 };
     let gameServersOnline = 0;
 

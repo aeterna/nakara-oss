@@ -9,12 +9,13 @@ import { installBridgeAuth } from './bridge/auth.js';
 import './types.js';
 
 export function buildApp(opts?: BuildAppOptions) {
-  const { config, db, gateway, discord, ...fastifyOpts } = opts ?? {};
+  const { config, db, gateway, discord, storage, ...fastifyOpts } = opts ?? {};
   const app = Fastify(fastifyOpts);
   app.decorate('config', config ?? null);
   app.decorate('db', db ?? null);
   app.decorate('gateway', gateway ?? null);
   app.decorate('discord', discord ?? null);
+  app.decorate('storage', storage ?? null);
   app.register(routes);
   return app;
 }

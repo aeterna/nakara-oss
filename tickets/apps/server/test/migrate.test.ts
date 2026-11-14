@@ -81,6 +81,41 @@ describe('migrate acceptance tests', () => {
     }
   });
 
+  it('migrating twice on pglite succeeds and leaves one journal row per migration', async () => {
+    const client = new PGlite();
+    const db = drizzle(client);
+    const mockPool = {
+      query: (text: string) => client.query(text),
+      end: async () => {},
+    };
+
+    const firstResult = await runMigrations('memory://test', migrationsFolder, {
+      pool: mockPool as any,
+      db,
+      migrator: migrate as any,
+    });
+    expect(firstResult.applied).toBeGreaterThan(0);
+
+    const firstJournal = await client.query<{ count: string }>(
+      'SELECT count(*)::int as count FROM "drizzle"."__drizzle_migrations";'
+    );
+    const count1 = parseInt(firstJournal.rows[0]?.count ?? '0', 10);
+    expect(count1).toBe(firstResult.applied);
+
+    const secondResult = await runMigrations('memory://test', migrationsFolder, {
+      pool: mockPool as any,
+      db,
+      migrator: migrate as any,
+    });
+    expect(secondResult.applied).toBe(0);
+
+    const secondJournal = await client.query<{ count: string }>(
+      'SELECT count(*)::int as count FROM "drizzle"."__drizzle_migrations";'
+    );
+    const count2 = parseInt(secondJournal.rows[0]?.count ?? '0', 10);
+    expect(count2).toBe(count1);
+  });
+
   it('runMigrations never logs database URL, passwords, or secrets', async () => {
     const sensitiveUrl = 'postgres://admin_user:super_secret_pw_98765@db.example.internal:5432/nakara_tickets'; // gitleaks:allow (fake test fixture)
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});

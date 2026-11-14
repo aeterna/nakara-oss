@@ -2,6 +2,14 @@ import { and, or, eq, isNotNull, gt, asc } from 'drizzle-orm';
 import { tickets, categories, guildSettings, transitionTicket } from '@nakara-tickets/db';
 import type { Job, JobContext } from '../worker.js';
 
+declare module '../worker.js' {
+  interface JobContext {
+    gateway?: {
+      closeHooks?(guildId: string, ticketId: string, actorId: string): Promise<void>;
+    };
+  }
+}
+
 const MESSAGES = {
   th: {
     warn: 'ตั๋วนี้ไม่มีการเคลื่อนไหวเป็นเวลานาน และจะถูกปิดโดยอัตโนมัติหากไม่มีการตอบกลับ',
@@ -75,10 +83,17 @@ export const autoCloseJob: Job = {
             'auto-close'
           );
 
+          void ctx.gateway?.closeHooks?.(ticket.guild_id, ticket.id, 'system')?.catch((err) => {
+            ctx.log.error(`Failed to run close hooks for ticket ${ticket.id}:`, err);
+          });
+
           if (ctx.discord) {
             const closeMsg = MESSAGES[locale].close;
             try {
-              await ctx.discord.sendMessage(ticket.channel_id, { content: closeMsg });
+              await ctx.discord.sendMessage(ticket.channel_id, {
+                content: closeMsg,
+                allowed_mentions: { parse: [] },
+              });
             } catch (err) {
               ctx.log.error(`Failed to post auto-close message for ticket ${ticket.id}:`, err);
             }
@@ -97,7 +112,10 @@ export const autoCloseJob: Job = {
         } else if (inactiveHours >= warnThresholdHours && !ticket.auto_close_warned_at) {
           if (ctx.discord) {
             const warnMsg = MESSAGES[locale].warn;
-            await ctx.discord.sendMessage(ticket.channel_id, { content: warnMsg });
+            await ctx.discord.sendMessage(ticket.channel_id, {
+              content: warnMsg,
+              allowed_mentions: { parse: [] },
+            });
             await ctx.db
               .update(tickets)
               .set({ auto_close_warned_at: new Date() })

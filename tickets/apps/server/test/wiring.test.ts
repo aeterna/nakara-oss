@@ -75,4 +75,13 @@ describe('wiring end to end (w4)', () => {
 
     await app.close();
   });
+
+  it('buildApp decorates storage', async () => {
+    const appWithoutStorage = buildApp({ config, db });
+    expect(appWithoutStorage.storage).toBeNull();
+
+    const mockStorage = { put: async () => {}, get: async () => null, delete: async () => {} };
+    const appWithStorage = buildApp({ config, db, storage: mockStorage as any });
+    expect(appWithStorage.storage).toBe(mockStorage);
+  });
 });

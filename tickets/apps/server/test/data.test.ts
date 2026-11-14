@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import Fastify from 'fastify';
 import { createHash } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import { openTestDb, type TestDbHandle } from '@nakara-tickets/db/test-support';
 import {
   guilds,
@@ -8,6 +9,7 @@ import {
   categories,
   tickets,
   messages,
+  attachments,
   sessions,
 } from '@nakara-tickets/db';
 import { installSession } from '../src/session.js';
@@ -59,6 +61,7 @@ describe('data routes (p4)', () => {
     app = Fastify();
     app.decorate('config', mockConfig);
     app.decorate('db', db);
+    app.decorate('storage', null);
     await installSession(app, { config: mockConfig, db });
     await app.register(dataRoutes);
     await app.ready();
@@ -155,6 +158,153 @@ describe('data routes (p4)', () => {
     expect(body.counts).toBeDefined();
     expect(body.counts.messages).toBe(0);
     expect(body.counts.attachments).toBe(0);
+  });
+
+  it('deleteMeData with stub storage deletes the objects', async () => {
+    const rawToken = 'user-token-with-storage';
+    const csrf = 'csrf-storage-valid';
+    await createSession(USER_REGULAR, rawToken, csrf);
+
+    const [cat] = await db
+      .insert(categories)
+      .values({
+        guild_id: GUILD_ALLOWED,
+        name: 'General',
+        parent_channel_id: '555555555555555555',
+      })
+      .returning();
+
+    const [tkt] = await db
+      .insert(tickets)
+      .values({
+        guild_id: GUILD_ALLOWED,
+        number: 55,
+        category_id: cat.id,
+        opener_id: USER_REGULAR,
+        channel_id: '666666666666666655',
+      })
+      .returning();
+
+    const [msg] = await db
+      .insert(messages)
+      .values({
+        id: 'msg-user-att',
+        guild_id: GUILD_ALLOWED,
+        ticket_id: tkt.id,
+        author_id: USER_REGULAR,
+        author_name: 'Regular',
+        content_enc: sealBytes(DATA_KEY, Buffer.from('Message with attachment')),
+      })
+      .returning();
+
+    const [att] = await db
+      .insert(attachments)
+      .values({
+        guild_id: GUILD_ALLOWED,
+        ticket_id: tkt.id,
+        message_id: msg.id,
+        filename: 'user-doc.pdf',
+        size: 1024,
+        sha256: 'c'.repeat(64),
+        stored: true,
+        storage_key: 'app/user-doc.pdf',
+      })
+      .returning();
+
+    const mockStorage = {
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+    (app as any).storage = mockStorage;
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/v1/me/data',
+      headers: {
+        cookie: `nt_session=${rawToken}`,
+        'x-csrf-token': csrf,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockStorage.delete).toHaveBeenCalledWith('app/user-doc.pdf');
+
+    // Attachment row deleted
+    const remainingAtt = await db.select().from(attachments).where(eq(attachments.id, att.id));
+    expect(remainingAtt.length).toBe(0);
+  });
+
+  it('deleteMeData with a failing storage delete leaves the row', async () => {
+    const rawToken = 'user-token-failing-storage';
+    const csrf = 'csrf-storage-fail';
+    await createSession(USER_REGULAR, rawToken, csrf);
+
+    const [cat] = await db
+      .insert(categories)
+      .values({
+        guild_id: GUILD_ALLOWED,
+        name: 'General',
+        parent_channel_id: '555555555555555555',
+      })
+      .returning();
+
+    const [tkt] = await db
+      .insert(tickets)
+      .values({
+        guild_id: GUILD_ALLOWED,
+        number: 56,
+        category_id: cat.id,
+        opener_id: USER_REGULAR,
+        channel_id: '666666666666666656',
+      })
+      .returning();
+
+    const [msg] = await db
+      .insert(messages)
+      .values({
+        id: 'msg-user-fail',
+        guild_id: GUILD_ALLOWED,
+        ticket_id: tkt.id,
+        author_id: USER_REGULAR,
+        author_name: 'Regular',
+        content_enc: sealBytes(DATA_KEY, Buffer.from('Message with failing attachment')),
+      })
+      .returning();
+
+    const [att] = await db
+      .insert(attachments)
+      .values({
+        guild_id: GUILD_ALLOWED,
+        ticket_id: tkt.id,
+        message_id: msg.id,
+        filename: 'failing-doc.pdf',
+        size: 2048,
+        sha256: 'd'.repeat(64),
+        stored: true,
+        storage_key: 'app/failing-doc.pdf',
+      })
+      .returning();
+
+    const failingStorage = {
+      delete: vi.fn().mockRejectedValue(new Error('S3 error 500')),
+    };
+    (app as any).storage = failingStorage;
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/v1/me/data',
+      headers: {
+        cookie: `nt_session=${rawToken}`,
+        'x-csrf-token': csrf,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(failingStorage.delete).toHaveBeenCalledWith('app/failing-doc.pdf');
+
+    // Attachment row must be left in database
+    const remainingAtt = await db.select().from(attachments).where(eq(attachments.id, att.id));
+    expect(remainingAtt.length).toBe(1);
+    expect(remainingAtt[0].storage_key).toBe('app/failing-doc.pdf');
   });
 
   it('getExport requires staff and sets Content-Disposition header', async () => {

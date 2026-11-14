@@ -64,6 +64,7 @@ export interface DiscordActionRow {
 export interface DiscordMessagePayload {
   embeds: DiscordEmbedOutput[];
   components: DiscordActionRow[];
+  allowed_mentions?: { parse: string[] };
 }
 
 function parseEmoji(raw?: string | null): { name: string; id?: string; animated?: boolean } | undefined {
@@ -155,6 +156,7 @@ export function buildPanelMessage(
           ],
         },
       ],
+      allowed_mentions: { parse: [] },
     };
   }
 
@@ -186,5 +188,6 @@ export function buildPanelMessage(
   return {
     embeds: [embedOut],
     components: rows,
+    allowed_mentions: { parse: [] },
   };
 }

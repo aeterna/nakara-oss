@@ -76,6 +76,9 @@ describe('a5 web tags and blocks acceptance tests', () => {
           call[1]?.method === 'POST'
       );
       expect(postCall).toBeDefined();
+      if (!postCall || !postCall[1]) {
+        throw new Error('Expected postCall to be defined');
+      }
 
       const sentBody = JSON.parse(postCall[1].body);
       expect(sentBody.name).toBe('custom-faq');

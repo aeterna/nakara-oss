@@ -21,6 +21,7 @@ export interface DiscordRest {
   deleteMessage(channelId: string, messageId: string): Promise<void>;
   createDM(userId: string): Promise<any>;
   patchChannel(channelId: string, body: any): Promise<any>;
+  getChannel(channelId: string): Promise<{ id: string; guild_id?: string; type: number }>;
 }
 
 export function createDiscordRest(opts: DiscordRestOptions): DiscordRest {
@@ -51,22 +52,39 @@ export function createDiscordRest(opts: DiscordRestOptions): DiscordRest {
       signal: AbortSignal.timeout(10_000),
     });
 
-    if (res.status === 429 && !init.retry) {
-      let retryAfterSec = 1;
+    if (res.status === 429) {
+      if (!init.retry) {
+        let retryAfterSec = 1;
+        try {
+          const data = (await res.json()) as { retry_after?: number };
+          if (typeof data?.retry_after === 'number') {
+            retryAfterSec = data.retry_after;
+          }
+        } catch {
+          const headerSec = res.headers.get('retry-after');
+          if (headerSec) {
+            retryAfterSec = Number(headerSec) || 1;
+          }
+        }
+        const waitMs = Math.min(Math.max(0, Math.ceil(retryAfterSec * 1000)), 2000);
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        return request(path, { ...init, retry: true });
+      }
+
+      let code: string | undefined;
+      let msg = 'Discord API rate limit exceeded';
       try {
-        const data = (await res.json()) as { retry_after?: number };
-        if (typeof data?.retry_after === 'number') {
-          retryAfterSec = data.retry_after;
+        const errorData = (await res.json()) as { code?: string | number; message?: string };
+        if (errorData?.code !== undefined) {
+          code = String(errorData.code);
+        }
+        if (errorData?.message) {
+          msg = errorData.message;
         }
       } catch {
-        const headerSec = res.headers.get('retry-after');
-        if (headerSec) {
-          retryAfterSec = Number(headerSec) || 1;
-        }
+        // ignore
       }
-      const waitMs = Math.ceil(retryAfterSec * 1000);
-      await new Promise((resolve) => setTimeout(resolve, waitMs));
-      return request(path, { ...init, retry: true });
+      throw new DiscordRestError(429, sanitize(msg), code);
     }
 
     if (!res.ok) {
@@ -129,6 +147,12 @@ export function createDiscordRest(opts: DiscordRestOptions): DiscordRest {
       return request(`/channels/${channelId}`, {
         method: 'PATCH',
         body,
+      });
+    },
+
+    async getChannel(channelId: string): Promise<{ id: string; guild_id?: string; type: number }> {
+      return request(`/channels/${channelId}`, {
+        method: 'GET',
       });
     },
   };

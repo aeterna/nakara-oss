@@ -4,9 +4,16 @@ import { createHash, createHmac } from 'node:crypto';
 import * as dbSchema from '@nakara-tickets/db';
 import { sessions } from '@nakara-tickets/db';
 import { openTestDb } from '@nakara-tickets/db/test-support';
-import { installSession } from '../src/session.js';
+import { installSession, deriveCsrfToken } from '../src/session.js';
 import routes from '../src/routes/index.js';
 import type { TicketsConfig } from '../src/config.js';
+
+function signTestOAuthCookie(payload: object, key: Buffer): string {
+  const derivedKey = createHmac('sha256', key).update('oauth-cookie').digest();
+  const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = createHmac('sha256', derivedKey).update(payloadB64).digest('base64url');
+  return `${payloadB64}.${sig}`;
+}
 
 describe('auth acceptance tests', () => {
   const mockConfig: TicketsConfig = {
@@ -71,7 +78,7 @@ describe('auth acceptance tests', () => {
     expect(cookieHeader).toContain('nt_oauth=');
   });
 
-  it('(a6) callback rejects a wrong state', async () => {
+  it('(a6) callback rejects a wrong state, missing code/state, or missing cookie', async () => {
     // 1. First get a valid login cookie
     const loginRes = await app.inject({
       method: 'GET',
@@ -108,6 +115,43 @@ describe('auth acceptance tests', () => {
       },
     });
     expect(resNoParams.statusCode).toBe(400);
+  });
+
+  it('OAuth cookie without exp is rejected', async () => {
+    const rawNoExp = signTestOAuthCookie(
+      { state: 'test-state', codeVerifier: 'test-verifier' },
+      mockConfig.TICKETS_DATA_KEY
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/auth/callback?code=testcode&state=test-state',
+      headers: {
+        cookie: `nt_oauth=${rawNoExp}`,
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('invalid');
+  });
+
+  it('OAuth cookie with expired exp is rejected', async () => {
+    const pastExp = Math.floor(Date.now() / 1000) - 30; // 30 seconds ago
+    const rawExpired = signTestOAuthCookie(
+      { state: 'test-state-exp', codeVerifier: 'test-verifier', exp: pastExp },
+      mockConfig.TICKETS_DATA_KEY
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/auth/callback?code=testcode&state=test-state-exp',
+      headers: {
+        cookie: `nt_oauth=${rawExpired}`,
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('invalid');
   });
 
   it('(a7) callback stores only the token hash (row does not contain the cookie value)', async () => {
@@ -346,7 +390,10 @@ describe('auth acceptance tests', () => {
     const rowJson = JSON.stringify(row);
     expect(rowJson).not.toContain(csrfToken);
 
-    // The row's csrf_hash must be the sha256 of the plain csrf token
+    // The row's csrf_hash must be the sha256 of the plain csrf token derived via deriveCsrfToken
+    const expectedPlainCsrf = deriveCsrfToken(mockConfig.TICKETS_DATA_KEY, row.id);
+    expect(csrfToken).toBe(expectedPlainCsrf);
+
     const expectedHash = createHash('sha256').update(csrfToken).digest('hex');
     expect(row.csrf_hash).toBe(expectedHash);
   });

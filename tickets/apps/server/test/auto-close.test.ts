@@ -211,10 +211,13 @@ describe('a1 auto-close job acceptance tests', () => {
       patchChannel: vi.fn().mockResolvedValue({}),
     };
 
+    const mockCloseHooks = vi.fn().mockResolvedValue(undefined);
+
     const ctx: JobContext = {
       db: testDb,
       config: {} as any,
       discord: mockDiscord as any,
+      gateway: { closeHooks: mockCloseHooks },
       log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     };
 
@@ -228,10 +231,16 @@ describe('a1 auto-close job acceptance tests', () => {
     expect(updated.close_reason).toBe('auto-close');
     expect(updated.closed_at).not.toBeNull();
 
+    // Check closeHooks called fire-and-forget
+    expect(mockCloseHooks).toHaveBeenCalledWith(GUILD_ID, t1.id, 'system');
+
     // Check message sent and thread patched
     expect(mockDiscord.sendMessage).toHaveBeenCalledWith(
       '400000000000000003',
-      expect.objectContaining({ content: expect.any(String) })
+      expect.objectContaining({
+        content: expect.any(String),
+        allowed_mentions: { parse: [] },
+      })
     );
     expect(mockDiscord.patchChannel).toHaveBeenCalledWith(
       '400000000000000003',

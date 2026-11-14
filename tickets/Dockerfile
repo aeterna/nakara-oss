@@ -32,6 +32,8 @@ COPY --from=build /app/apps/server/dist/server.mjs ./server.mjs
 COPY --from=build /app/packages/db/migrations ./migrations
 COPY --from=build /app/apps/web/dist ./web
 
+RUN mkdir -p /data/files && chown node:node /data/files
+
 USER node
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \

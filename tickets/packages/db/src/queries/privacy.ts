@@ -1,4 +1,5 @@
-import { and, eq, inArray, isNotNull, lt, asc } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
+import { and, eq, inArray, isNotNull, lt, asc, or, sql } from 'drizzle-orm';
 import type { TicketsDb } from '../index.js';
 import {
   guilds,
@@ -81,59 +82,35 @@ export async function deleteUserData(
     throw new Error('userId is required for deleteUserData');
   }
 
-  return await db.transaction(async (tx) => {
-    // 1. Find user messages
-    const messageConditions = [eq(messages.author_id, userId)];
+  // 1. Find user messages and attachments before transaction
+  const messageConditions = [eq(messages.author_id, userId)];
+  if (guildId) {
+    messageConditions.push(eq(messages.guild_id, guildId));
+  }
+
+  const userMessages = await db
+    .select({ id: messages.id, guild_id: messages.guild_id })
+    .from(messages)
+    .where(and(...messageConditions));
+
+  const messageIds = userMessages.map((m) => m.id);
+
+  let userAttachments: Array<{ id: string; storage_key: string | null }> = [];
+  if (messageIds.length > 0) {
+    const attachmentConditions = [inArray(attachments.message_id, messageIds)];
     if (guildId) {
-      messageConditions.push(eq(messages.guild_id, guildId));
+      attachmentConditions.push(eq(attachments.guild_id, guildId));
     }
 
-    const userMessages = await tx
-      .select({ id: messages.id, guild_id: messages.guild_id })
-      .from(messages)
-      .where(and(...messageConditions));
+    userAttachments = await db
+      .select({ id: attachments.id, storage_key: attachments.storage_key })
+      .from(attachments)
+      .where(and(...attachmentConditions));
+  }
 
-    const messageIds = userMessages.map((m) => m.id);
-
-    // 2. Find and delete attachments of user's messages
-    let userAttachments: Array<{ id: string; storage_key: string | null }> = [];
-    let deletedAttachmentsCount = 0;
-
-    if (messageIds.length > 0) {
-      const attachmentConditions = [inArray(attachments.message_id, messageIds)];
-      if (guildId) {
-        attachmentConditions.push(eq(attachments.guild_id, guildId));
-      }
-
-      userAttachments = await tx
-        .select({ id: attachments.id, storage_key: attachments.storage_key })
-        .from(attachments)
-        .where(and(...attachmentConditions));
-
-      if (userAttachments.length > 0) {
-        const attIds = userAttachments.map((a) => a.id);
-        const deletedAtt = await tx
-          .delete(attachments)
-          .where(inArray(attachments.id, attIds))
-          .returning();
-        deletedAttachmentsCount = deletedAtt.length;
-      }
-    }
-
-    // Call storage deletion if storage service provided
-    if (storage && typeof storage.delete === 'function') {
-      for (const att of userAttachments) {
-        if (att.storage_key) {
-          try {
-            await storage.delete(att.storage_key);
-          } catch {
-            // Storage delete failure should not block database deletion
-          }
-        }
-      }
-    }
-
-    // 3. Delete user's messages
+  // 2. Database deletions and updates inside transaction
+  const txResult = await db.transaction(async (tx) => {
+    // 2a. Delete user's messages
     let deletedMessagesCount = 0;
     if (userMessages.length > 0) {
       const deletedMsg = await tx
@@ -143,7 +120,7 @@ export async function deleteUserData(
       deletedMessagesCount = deletedMsg.length;
     }
 
-    // 4. Delete user's ratings
+    // 2b. Delete user's ratings
     const ratingConditions = [eq(ratings.user_id, userId)];
     if (guildId) {
       ratingConditions.push(eq(ratings.guild_id, guildId));
@@ -154,17 +131,21 @@ export async function deleteUserData(
       .returning();
     const deletedRatingsCount = deletedRatings.length;
 
-    // 5. Replace opener_id / claimer_id on tickets with 'deleted'
+    // 2c. Replace opener_id on tickets with 'deleted' AND null answers on that user's tickets
     const openerConditions = [eq(tickets.opener_id, userId)];
     if (guildId) {
       openerConditions.push(eq(tickets.guild_id, guildId));
     }
     const openerUpdated = await tx
       .update(tickets)
-      .set({ opener_id: 'deleted' })
+      .set({
+        opener_id: 'deleted',
+        answers: null,
+      })
       .where(and(...openerConditions))
       .returning();
 
+    // Replace claimer_id on tickets with 'deleted'
     const claimerConditions = [eq(tickets.claimer_id, userId)];
     if (guildId) {
       claimerConditions.push(eq(tickets.guild_id, guildId));
@@ -181,23 +162,93 @@ export async function deleteUserData(
     ]);
     const updatedTicketsCount = touchedTicketIds.size;
 
-    // 6. Delete ticket_members rows for user
+    // 2d. Delete ticket_members rows for user
     const memberConditions = [eq(ticketMembers.user_id, userId)];
     if (guildId) {
       memberConditions.push(eq(ticketMembers.guild_id, guildId));
     }
     await tx.delete(ticketMembers).where(and(...memberConditions));
 
-    // 7. Write data_requests row (kind='delete', status='done')
+    // 2e. Blocks: delete user's blocks rows (as target) and set created_by to 'deleted' where they blocked others
+    const blockTargetConditions = [eq(blocks.user_id, userId)];
+    if (guildId) {
+      blockTargetConditions.push(eq(blocks.guild_id, guildId));
+    }
+    await tx.delete(blocks).where(and(...blockTargetConditions));
+
+    const blockCreatorConditions = [eq(blocks.created_by, userId)];
+    if (guildId) {
+      blockCreatorConditions.push(eq(blocks.guild_id, guildId));
+    }
+    await tx
+      .update(blocks)
+      .set({ created_by: 'deleted' })
+      .where(and(...blockCreatorConditions));
+
+    // 2f. Anonymise audit_log rows naming them (actor/target -> 'deleted', detail scrubbed of the id)
+    const auditConditions = [
+      or(
+        eq(auditLog.actor_id, userId),
+        eq(auditLog.target, userId),
+        sql`${auditLog.target} LIKE ${'%' + userId + '%'}`,
+        sql`${auditLog.detail}::text LIKE ${'%' + userId + '%'}`
+      ),
+    ];
+    if (guildId) {
+      auditConditions.push(eq(auditLog.guild_id, guildId));
+    }
+    const namedAudits = await tx
+      .select({
+        id: auditLog.id,
+        actor_id: auditLog.actor_id,
+        target: auditLog.target,
+        detail: auditLog.detail,
+      })
+      .from(auditLog)
+      .where(and(...auditConditions));
+
+    for (const row of namedAudits) {
+      const newActor = row.actor_id === userId ? 'deleted' : row.actor_id;
+      let newTarget = row.target;
+      if (newTarget) {
+        if (newTarget === userId) {
+          newTarget = 'deleted';
+        } else if (newTarget.includes(userId)) {
+          newTarget = newTarget.replaceAll(userId, 'deleted');
+        }
+      }
+      let newDetail = row.detail;
+      if (newDetail) {
+        try {
+          const str = JSON.stringify(newDetail);
+          if (str.includes(userId)) {
+            newDetail = JSON.parse(str.replaceAll(userId, 'deleted'));
+          }
+        } catch {
+          // ignore parsing error
+        }
+      }
+      await tx
+        .update(auditLog)
+        .set({
+          actor_id: newActor,
+          target: newTarget,
+          detail: newDetail,
+        })
+        .where(eq(auditLog.id, row.id));
+    }
+
+    // 2g. Store data_requests.user_id as sha256(userId)
     const targetGuildId = guildId ?? '*';
+    const hashedUserId = createHash('sha256').update(userId).digest('hex');
     await tx.insert(dataRequests).values({
       guild_id: targetGuildId,
-      user_id: userId,
+      user_id: hashedUserId,
       kind: 'delete',
       status: 'done',
     });
 
-    // 8. Write audit_log row without user id in message / detail
+    // 2h. Write audit_log row without user id in message / detail
     await tx.insert(auditLog).values({
       guild_id: targetGuildId,
       actor_id: 'system',
@@ -207,7 +258,6 @@ export async function deleteUserData(
         action: 'user_data_deleted',
         counts: {
           messages: deletedMessagesCount,
-          attachments: deletedAttachmentsCount,
           ratings: deletedRatingsCount,
           tickets: updatedTicketsCount,
         },
@@ -216,11 +266,46 @@ export async function deleteUserData(
 
     return {
       messages: deletedMessagesCount,
-      attachments: deletedAttachmentsCount,
       ratings: deletedRatingsCount,
       tickets: updatedTicketsCount,
     };
   });
+
+  // 3. Storage deletes happen AFTER the transaction commits!
+  // If storage delete fails, keep the attachment row (never orphan files).
+  let deletedAttachmentsCount = 0;
+  if (storage && typeof storage.delete === 'function') {
+    for (const att of userAttachments) {
+      if (att.storage_key) {
+        try {
+          await storage.delete(att.storage_key);
+          await db.delete(attachments).where(eq(attachments.id, att.id));
+          deletedAttachmentsCount++;
+        } catch {
+          // Storage delete failed: leave the attachment row in DB, never orphan files!
+        }
+      } else {
+        await db.delete(attachments).where(eq(attachments.id, att.id));
+        deletedAttachmentsCount++;
+      }
+    }
+  } else {
+    // If no storage service is provided, delete the attachment rows
+    if (userAttachments.length > 0) {
+      const deletedAtt = await db
+        .delete(attachments)
+        .where(inArray(attachments.id, userAttachments.map((a) => a.id)))
+        .returning();
+      deletedAttachmentsCount = deletedAtt.length;
+    }
+  }
+
+  return {
+    messages: txResult.messages,
+    attachments: deletedAttachmentsCount,
+    ratings: txResult.ratings,
+    tickets: txResult.tickets,
+  };
 }
 
 export async function exportGuild(
@@ -382,7 +467,11 @@ export async function purgeExpired(
 
     // Find attachments for storage deletion
     const expiredAttachments = await db
-      .select({ id: attachments.id, storage_key: attachments.storage_key })
+      .select({
+        id: attachments.id,
+        ticket_id: attachments.ticket_id,
+        storage_key: attachments.storage_key,
+      })
       .from(attachments)
       .where(
         and(
@@ -391,53 +480,70 @@ export async function purgeExpired(
         ),
       );
 
+    const successfulAttachmentIds: string[] = [];
+    const failedTicketIds = new Set<string>();
+
     if (storage && typeof storage.delete === 'function') {
       for (const att of expiredAttachments) {
         if (att.storage_key) {
           try {
             await storage.delete(att.storage_key);
-          } catch {}
+            successfulAttachmentIds.push(att.id);
+          } catch {
+            // File delete failed: keep the attachment row (mark for retry), never orphan files!
+            failedTicketIds.add(att.ticket_id);
+          }
+        } else {
+          successfulAttachmentIds.push(att.id);
         }
+      }
+    } else {
+      for (const att of expiredAttachments) {
+        successfulAttachmentIds.push(att.id);
       }
     }
 
-    // Delete attachments
-    if (expiredAttachments.length > 0) {
+    // Only tickets whose attachments were all successfully deleted (or had no attachments) can be deleted
+    const ticketsToDelete = expiredTicketIds.filter((id) => !failedTicketIds.has(id));
+
+    // Delete successfully purged attachments
+    if (successfulAttachmentIds.length > 0) {
       const deletedAtt = await db
         .delete(attachments)
         .where(
           and(
             eq(attachments.guild_id, guildId),
-            inArray(attachments.ticket_id, expiredTicketIds),
+            inArray(attachments.id, successfulAttachmentIds),
           ),
         )
         .returning();
       totalAttachments += deletedAtt.length;
     }
 
-    // Delete messages
-    const deletedMsg = await db
-      .delete(messages)
-      .where(
-        and(
-          eq(messages.guild_id, guildId),
-          inArray(messages.ticket_id, expiredTicketIds),
-        ),
-      )
-      .returning();
-    totalMessages += deletedMsg.length;
+    // Delete messages and tickets for tickets that can be safely deleted
+    if (ticketsToDelete.length > 0) {
+      const deletedMsg = await db
+        .delete(messages)
+        .where(
+          and(
+            eq(messages.guild_id, guildId),
+            inArray(messages.ticket_id, ticketsToDelete),
+          ),
+        )
+        .returning();
+      totalMessages += deletedMsg.length;
 
-    // Delete expired tickets
-    const deletedTkt = await db
-      .delete(tickets)
-      .where(
-        and(
-          eq(tickets.guild_id, guildId),
-          inArray(tickets.id, expiredTicketIds),
-        ),
-      )
-      .returning();
-    totalTickets += deletedTkt.length;
+      const deletedTkt = await db
+        .delete(tickets)
+        .where(
+          and(
+            eq(tickets.guild_id, guildId),
+            inArray(tickets.id, ticketsToDelete),
+          ),
+        )
+        .returning();
+      totalTickets += deletedTkt.length;
+    }
   }
 
   return {

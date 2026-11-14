@@ -4,6 +4,12 @@ import { and, eq, asc, inArray } from 'drizzle-orm';
 import { panels, categories, inGuild, type TicketsDb } from '@nakara-tickets/db';
 import { buildPanelMessage } from '../panel-message.js';
 
+declare module '../discord-rest.js' {
+  interface DiscordRest {
+    getChannel?(channelId: string): Promise<{ id: string; guild_id?: string; type?: number }>;
+  }
+}
+
 const snowflakeRegex = /^[0-9]{17,20}$/;
 
 const buttonSchema = z.object({
@@ -131,6 +137,23 @@ export default async function (app: FastifyInstance) {
 
       const input = normalizePanelInput(parsed.data);
 
+      if (app.discord?.getChannel) {
+        try {
+          const ch = await app.discord.getChannel(input.channelId);
+          if (!ch || ch.guild_id !== req.guildId) {
+            return reply.code(422).send({
+              code: 'channel_not_in_guild',
+              message: 'Channel does not belong to this guild',
+            });
+          }
+        } catch {
+          return reply.code(422).send({
+            code: 'channel_not_in_guild',
+            message: 'Channel does not belong to this guild',
+          });
+        }
+      }
+
       // Verify every categoryId belongs to this guild
       const uniqueCatIds = Array.from(new Set(input.buttons.map((b) => b.categoryId)));
       const foundCats = await db
@@ -189,6 +212,23 @@ export default async function (app: FastifyInstance) {
 
       const input = normalizePanelInput(parsed.data);
 
+      if (app.discord?.getChannel) {
+        try {
+          const ch = await app.discord.getChannel(input.channelId);
+          if (!ch || ch.guild_id !== req.guildId) {
+            return reply.code(422).send({
+              code: 'channel_not_in_guild',
+              message: 'Channel does not belong to this guild',
+            });
+          }
+        } catch {
+          return reply.code(422).send({
+            code: 'channel_not_in_guild',
+            message: 'Channel does not belong to this guild',
+          });
+        }
+      }
+
       // Verify categories belong to this guild
       const uniqueCatIds = Array.from(new Set(input.buttons.map((b) => b.categoryId)));
       const foundCats = await db
@@ -203,10 +243,26 @@ export default async function (app: FastifyInstance) {
         });
       }
 
+      const panelRow = existing[0];
+      const channelChanged = input.channelId !== panelRow.channel_id;
+
+      if (channelChanged && panelRow.message_id && app.discord?.deleteMessage) {
+        try {
+          await app.discord.deleteMessage(panelRow.channel_id, panelRow.message_id);
+        } catch (err: any) {
+          const status = err?.status ?? err?.statusCode;
+          const code = String(err?.code || '');
+          if (status !== 404 && code !== '10008' && code !== '404') {
+            // ignore 404 or non-404, proceed with update
+          }
+        }
+      }
+
       const [updated] = await db
         .update(panels)
         .set({
           channel_id: input.channelId,
+          message_id: channelChanged ? null : panelRow.message_id,
           embed: input.embed,
           kind: input.kind,
           buttons: input.buttons,

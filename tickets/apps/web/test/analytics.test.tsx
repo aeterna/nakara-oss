@@ -57,22 +57,22 @@ describe('Analytics Page (acceptance test s6)', () => {
 
     // Wait for data to load
     await waitFor(() => {
-      expect(screen.getByText('42')).toBeInTheDocument();
+      expect(screen.getByText('42')).toBeTruthy();
     });
 
     // 1. Verify stat tiles show stub numbers
     // Opened
-    expect(screen.getByText('42')).toBeInTheDocument();
+    expect(screen.getByText('42')).toBeTruthy();
     // Closed
-    expect(screen.getByText('35')).toBeInTheDocument();
+    expect(screen.getByText('35')).toBeTruthy();
     // Open Now
-    expect(screen.getByText('7')).toBeInTheDocument();
+    expect(screen.getByText('7')).toBeTruthy();
     // Rating average & count
-    expect(screen.getByText(/4\.8/)).toBeInTheDocument();
+    expect(screen.getByText(/4\.8/)).toBeTruthy();
 
     // 2. Verify inline SVG chart
     const svgEl = container.querySelector('svg');
-    expect(svgEl).toBeInTheDocument();
+    expect(svgEl).toBeTruthy();
 
     // SVG has one point per day (or points per day for lines)
     // 7 days in daily array -> circles with daily titles or data points
@@ -88,16 +88,16 @@ describe('Analytics Page (acceptance test s6)', () => {
     expect(titleTexts.some((txt) => txt?.includes('2026-11-07'))).toBe(true);
 
     // 3. Verify Categories are displayed
-    expect(screen.getByText('Technical Support')).toBeInTheDocument();
-    expect(screen.getByText('Billing Issues')).toBeInTheDocument();
+    expect(screen.getByText('Technical Support')).toBeTruthy();
+    expect(screen.getByText('Billing Issues')).toBeTruthy();
 
     // 4. Verify Staff Table
-    expect(screen.getByText('staff-user-1')).toBeInTheDocument();
-    expect(screen.getByText('staff-user-2')).toBeInTheDocument();
+    expect(screen.getByText('staff-user-1')).toBeTruthy();
+    expect(screen.getByText('staff-user-2')).toBeTruthy();
 
     // 5. Verify Range Picker (7, 30, 90 days)
     const range7Btn = screen.getByRole('button', { name: /7/i });
-    expect(range7Btn).toBeInTheDocument();
+    expect(range7Btn).toBeTruthy();
 
     fireEvent.click(range7Btn);
 
@@ -106,7 +106,10 @@ describe('Analytics Page (acceptance test s6)', () => {
     });
 
     // 6. Verify Audit Log Table
-    expect(screen.getByText('ticket.close')).toBeInTheDocument();
-    expect(screen.getByText('admin-1')).toBeInTheDocument();
+    expect(screen.getByText('ticket.close')).toBeTruthy();
+    expect(screen.getByText('admin-1')).toBeTruthy();
+
+    // Negative case
+    expect(screen.queryByText('non-existent-metric')).toBeNull();
   });
 });

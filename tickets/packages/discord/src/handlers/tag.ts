@@ -159,8 +159,8 @@ export async function handleTagCommand(
 
   const payload = {
     content: renderedBody,
-    allowed_mentions: { users: [ticket.opener_id] },
-    allowedMentions: { users: [ticket.opener_id] },
+    allowed_mentions: { parse: [], users: [ticket.opener_id] },
+    allowedMentions: { parse: [], users: [ticket.opener_id] },
   };
 
   if (typeof port?.sendMessage === 'function') {

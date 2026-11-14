@@ -210,20 +210,27 @@ async function executeAction(action) {
       const item = action.params?.item;
       const count = action.params?.count;
       const allowedCaps = config.giveItem?.allow;
+      const hasItem = Boolean(
+        allowedCaps &&
+        typeof allowedCaps === 'object' &&
+        typeof item === 'string' &&
+        Object.hasOwn(allowedCaps, item)
+      );
+      const max = hasItem ? allowedCaps[item] : null;
+      const validMax = Number.isInteger(max) && max > 0;
 
-      if (!allowedCaps || typeof allowedCaps !== 'object' || typeof item !== 'string' || !(item in allowedCaps)) {
+      if (!hasItem || !validMax) {
         result = {
           ok: false,
           code: 'not_allowed',
           message: `Item ${item} is not allowed`,
         };
       } else {
-        const maxCount = allowedCaps[item];
-        if (typeof count !== 'number' || !Number.isInteger(count) || count < 1 || count > maxCount) {
+        if (typeof count !== 'number' || !Number.isInteger(count) || count < 1 || count > max) {
           result = {
             ok: false,
             code: 'over_cap',
-            message: `Count ${count} is invalid or exceeds cap of ${maxCount}`,
+            message: `Count ${count} is invalid or exceeds cap of ${max}`,
           };
         } else {
           const playerId = findPlayerByDiscordId(action.discordId);

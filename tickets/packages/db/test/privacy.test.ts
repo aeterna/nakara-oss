@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
-import { eq, and } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import { openTestDb, type TestDbHandle } from '../test-support/pglite.js';
 import {
   guilds,
@@ -60,7 +61,8 @@ describe('privacy db queries (p1, p2, p3)', () => {
 
   // Acceptance test p1:
   // p1 delete removes only that user's rows, in all guilds (web) or one guild (Discord),
-  // keeps other users; tickets keep existing with 'deleted'.
+  // keeps other users; tickets keep existing with 'deleted'; answers nulled; blocks cleaned;
+  // audit logs anonymised; data_requests stored with sha256(userId).
   it('p1: delete removes only that user rows, in one guild or all guilds, keeps other users; tickets keep existing with deleted', async () => {
     // Setup category
     const [cat1] = await db
@@ -92,6 +94,7 @@ describe('privacy db queries (p1, p2, p3)', () => {
         claimer_id: USER_B,
         channel_id: '400000000000000001',
         status: 'open',
+        answers: { question1: 'My car is missing' },
       })
       .returning();
 
@@ -105,6 +108,7 @@ describe('privacy db queries (p1, p2, p3)', () => {
         claimer_id: USER_A,
         channel_id: '400000000000000002',
         status: 'claimed',
+        answers: { question1: 'Need item refund' },
       })
       .returning();
 
@@ -119,6 +123,7 @@ describe('privacy db queries (p1, p2, p3)', () => {
         claimer_id: null,
         channel_id: '400000000000000003',
         status: 'open',
+        answers: { question1: 'G2 help' },
       })
       .returning();
 
@@ -218,6 +223,45 @@ describe('privacy db queries (p1, p2, p3)', () => {
       },
     ]);
 
+    // Blocks: USER_A as target in G1, and USER_A as creator blocking USER_B in G1
+    await db.insert(blocks).values([
+      {
+        guild_id: GUILD_1,
+        user_id: USER_A,
+        reason: 'target block',
+        created_by: USER_B,
+      },
+      {
+        guild_id: GUILD_1,
+        user_id: USER_B,
+        reason: 'user A blocked user B',
+        created_by: USER_A,
+      },
+    ]);
+
+    // Audit logs naming USER_A
+    const [auditActorA] = await db
+      .insert(auditLog)
+      .values({
+        guild_id: GUILD_1,
+        actor_id: USER_A,
+        kind: 'ticket.create',
+        target: ticketA1.id,
+        detail: { note: `Opened by ${USER_A}` },
+      })
+      .returning();
+
+    const [auditTargetA] = await db
+      .insert(auditLog)
+      .values({
+        guild_id: GUILD_1,
+        actor_id: USER_B,
+        kind: 'user.block',
+        target: USER_A,
+        detail: { blocked_user: USER_A },
+      })
+      .returning();
+
     // Mock storage to verify attachment object deletion
     const mockStorage = {
       delete: vi.fn(),
@@ -246,13 +290,36 @@ describe('privacy db queries (p1, p2, p3)', () => {
     expect(g1Ratings.map((r: any) => r.user_id)).toEqual([USER_B]);
 
     // Tickets in GUILD_1 keep existing, but USER_A's opener_id/claimer_id replaced by 'deleted'
+    // and tickets.answers nulled on that user's tickets
     const [updatedTicketA1] = await db.select().from(tickets).where(eq(tickets.id, ticketA1.id));
     expect(updatedTicketA1.opener_id).toBe('deleted');
     expect(updatedTicketA1.claimer_id).toBe(USER_B);
+    expect(updatedTicketA1.answers).toBeNull();
 
     const [updatedTicketB1] = await db.select().from(tickets).where(eq(tickets.id, ticketB1.id));
     expect(updatedTicketB1.opener_id).toBe(USER_B);
     expect(updatedTicketB1.claimer_id).toBe('deleted');
+    // USER_B's ticket answers remain intact
+    expect(updatedTicketB1.answers).toEqual({ question1: 'Need item refund' });
+
+    // Blocks: USER_A as target is deleted
+    const targetBlocks = await db.select().from(blocks).where(eq(blocks.user_id, USER_A));
+    expect(targetBlocks.length).toBe(0);
+
+    // Blocks: USER_A as creator has created_by set to 'deleted'
+    const [creatorBlock] = await db.select().from(blocks).where(eq(blocks.user_id, USER_B));
+    expect(creatorBlock).toBeDefined();
+    expect(creatorBlock.created_by).toBe('deleted');
+
+    // Audit logs naming USER_A are anonymised
+    const [anonAuditActor] = await db.select().from(auditLog).where(eq(auditLog.id, auditActorA.id));
+    expect(anonAuditActor.actor_id).toBe('deleted');
+    expect(JSON.stringify(anonAuditActor.detail)).not.toContain(USER_A);
+    expect(anonAuditActor.detail.note).toBe('Opened by deleted');
+
+    const [anonAuditTarget] = await db.select().from(auditLog).where(eq(auditLog.id, auditTargetA.id));
+    expect(anonAuditTarget.target).toBe('deleted');
+    expect(JSON.stringify(anonAuditTarget.detail)).not.toContain(USER_A);
 
     // USER_A's rows in GUILD_2 are still intact
     const g2MessagesBefore = await db.select().from(messages).where(eq(messages.guild_id, GUILD_2));
@@ -271,16 +338,18 @@ describe('privacy db queries (p1, p2, p3)', () => {
 
     const [updatedTicketA2] = await db.select().from(tickets).where(eq(tickets.id, ticketA2.id));
     expect(updatedTicketA2.opener_id).toBe('deleted');
+    expect(updatedTicketA2.answers).toBeNull();
 
     // USER_B's data is still completely intact in GUILD_1
     const finalG1Messages = await db.select().from(messages).where(eq(messages.guild_id, GUILD_1));
     expect(finalG1Messages.length).toBe(1);
     expect(finalG1Messages[0].author_id).toBe(USER_B);
 
-    // Verify data_requests row written
+    // Verify data_requests row written with sha256(userId)
+    const expectedHash = createHash('sha256').update(USER_A).digest('hex');
     const reqs = await db.select().from(dataRequests);
     expect(reqs.length).toBeGreaterThanOrEqual(1);
-    expect(reqs.some((r: any) => r.kind === 'delete' && r.status === 'done')).toBe(true);
+    expect(reqs.some((r: any) => r.kind === 'delete' && r.status === 'done' && r.user_id === expectedHash)).toBe(true);
 
     // Verify audit_log row written without user id in message/detail
     const audits = await db.select().from(auditLog);
@@ -292,6 +361,72 @@ describe('privacy db queries (p1, p2, p3)', () => {
         expect(audit.target).not.toContain(USER_A);
       }
     }
+  });
+
+  it('deleteUserData: a failing storage delete leaves the attachment row', async () => {
+    const [cat] = await db
+      .insert(categories)
+      .values({
+        guild_id: GUILD_1,
+        name: 'Tech',
+        parent_channel_id: '300000000000000001',
+      })
+      .returning();
+
+    const [tkt] = await db
+      .insert(tickets)
+      .values({
+        guild_id: GUILD_1,
+        number: 88,
+        category_id: cat.id,
+        opener_id: USER_A,
+        channel_id: '400000000000000088',
+      })
+      .returning();
+
+    const [msg] = await db
+      .insert(messages)
+      .values({
+        id: 'msg-fail-storage',
+        guild_id: GUILD_1,
+        ticket_id: tkt.id,
+        author_id: USER_A,
+        author_name: 'User A',
+        content_enc: sealBytes(dataKey, Buffer.from('hello test')),
+      })
+      .returning();
+
+    const [att] = await db
+      .insert(attachments)
+      .values({
+        guild_id: GUILD_1,
+        ticket_id: tkt.id,
+        message_id: msg.id,
+        filename: 'failing.png',
+        size: 999,
+        sha256: 'd'.repeat(64),
+        stored: true,
+        storage_key: 'g1/failing.png',
+      })
+      .returning();
+
+    const failingStorage = {
+      delete: vi.fn().mockRejectedValue(new Error('S3 connection error')),
+    };
+
+    const counts = await deleteUserData(db, GUILD_1, USER_A, failingStorage);
+    expect(failingStorage.delete).toHaveBeenCalledWith('g1/failing.png');
+    // Attachment storage delete failed, so attachment count deleted is 0
+    expect(counts.attachments).toBe(0);
+
+    // The attachment row MUST remain in the database (leaves the row)
+    const remainingAtt = await db.select().from(attachments).where(eq(attachments.id, att.id));
+    expect(remainingAtt.length).toBe(1);
+    expect(remainingAtt[0].storage_key).toBe('g1/failing.png');
+
+    // Other user data like message is deleted
+    const remainingMsg = await db.select().from(messages).where(eq(messages.id, msg.id));
+    expect(remainingMsg.length).toBe(0);
   });
 
   // Acceptance test p2:
@@ -529,5 +664,77 @@ describe('privacy db queries (p1, p2, p3)', () => {
     expect(msgIds).not.toContain('msg-91');
     expect(msgIds).toContain('msg-89');
     expect(msgIds).toContain('msg-open');
+  });
+
+  it('purgeExpired: keep attachment row (mark for retry) when file delete fails, never orphan files', async () => {
+    const [cat] = await db
+      .insert(categories)
+      .values({
+        guild_id: GUILD_1,
+        name: 'Support',
+        parent_channel_id: '300000000000000001',
+      })
+      .returning();
+
+    const now = new Date('2026-11-14T12:00:00Z');
+    const closed120DaysAgo = new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000);
+
+    const [tkt] = await db
+      .insert(tickets)
+      .values({
+        guild_id: GUILD_1,
+        number: 201,
+        category_id: cat.id,
+        opener_id: USER_A,
+        channel_id: '400000000000000201',
+        status: 'closed',
+        closed_at: closed120DaysAgo,
+      })
+      .returning();
+
+    const [att] = await db
+      .insert(attachments)
+      .values({
+        guild_id: GUILD_1,
+        ticket_id: tkt.id,
+        filename: 'retry-me.png',
+        size: 500,
+        sha256: '7'.repeat(64),
+        stored: true,
+        storage_key: 'g1/retry-me.png',
+      })
+      .returning();
+
+    const failingStorage = {
+      delete: vi.fn().mockRejectedValueOnce(new Error('Storage temporary 503 error')),
+    };
+
+    // First purge: storage delete fails
+    const countsFirst = await purgeExpired(db, now, failingStorage);
+    expect(countsFirst.attachments).toBe(0);
+    expect(countsFirst.tickets).toBe(0);
+
+    // Attachment row and ticket row are kept for retry!
+    const attCheck = await db.select().from(attachments).where(eq(attachments.id, att.id));
+    expect(attCheck.length).toBe(1);
+
+    const tktCheck = await db.select().from(tickets).where(eq(tickets.id, tkt.id));
+    expect(tktCheck.length).toBe(1);
+
+    // Second purge: storage delete succeeds (retry)
+    const successStorage = {
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+    const countsSecond = await purgeExpired(db, now, successStorage);
+    expect(countsSecond.attachments).toBe(1);
+    expect(countsSecond.tickets).toBe(1);
+    expect(successStorage.delete).toHaveBeenCalledWith('g1/retry-me.png');
+
+    // Both attachment and ticket are now purged
+    const attAfter = await db.select().from(attachments).where(eq(attachments.id, att.id));
+    expect(attAfter.length).toBe(0);
+
+    const tktAfter = await db.select().from(tickets).where(eq(tickets.id, tkt.id));
+    expect(tktAfter.length).toBe(0);
   });
 });

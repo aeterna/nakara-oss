@@ -141,4 +141,18 @@ describe('audit route (acceptance test s5)', () => {
     expect(bodyEmpty.items).toHaveLength(0);
     expect(bodyEmpty.next).toBeNull();
   });
+
+  it('fails closed with 500 misconfigured when requireStaff is missing', async () => {
+    const rawApp = buildApp({ db: testDb.db });
+    await rawApp.ready();
+
+    const res = await rawApp.inject({
+      method: 'GET',
+      url: '/api/v1/guilds/guild-1/audit',
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(res.json().code).toBe('misconfigured');
+    await rawApp.close();
+  });
 });

@@ -110,7 +110,7 @@ export function createStorage(config?: StorageConfig | null): Storage {
             'Content-Type': ct,
             'x-amz-meta-content-type': ct,
           },
-          body: sealed,
+          body: new Uint8Array(sealed.buffer, sealed.byteOffset, sealed.byteLength),
         });
 
         if (!res.ok) {

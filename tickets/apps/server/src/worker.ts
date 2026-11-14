@@ -1,6 +1,9 @@
 import type { TicketsDb } from '@nakara-tickets/db';
 import type { TicketsConfig } from './config.js';
 import type { DiscordRest } from './discord-rest.js';
+import type { Storage } from './storage.js';
+
+export type { Storage };
 
 export interface Logger {
   info: (msg: string, ...args: any[]) => void;
@@ -8,10 +11,16 @@ export interface Logger {
   error: (msg: string, ...args: any[]) => void;
 }
 
+export interface JobContextGateway {
+  closeHooks?(guildId: string, ticketId: string, actorId: string): Promise<void>;
+}
+
 export interface JobContext {
   db: TicketsDb;
   config: TicketsConfig;
   discord: DiscordRest | null;
+  storage: Storage | null;
+  gateway?: JobContextGateway;
   log: Logger;
 }
 

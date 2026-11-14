@@ -207,4 +207,78 @@ describe('packages/tickets actions execution (g1)', () => {
     assert.equal(addItemCalledCount, 1);
     assert.deepEqual(addItemArgs, { src: '1', item: 'bandage', count: 3 });
   });
+
+  it('give_item prototype property rejection (Object.hasOwn) → not_allowed', async () => {
+    actions.setConfig({
+      enabledActions: ['player.give_item'],
+      giveItem: {
+        allow: {},
+      },
+    });
+    mockResourceStates.ox_inventory = 'started';
+
+    const res = await actions.executeAction({
+      id: 'act-give-proto',
+      action: 'player.give_item',
+      discordId: '111122223333444455',
+      params: {
+        item: 'toString',
+        count: 1,
+      },
+    });
+
+    assert.equal(res.ok, false);
+    assert.equal(res.code, 'not_allowed');
+  });
+
+  it('give_item non-integer or non-positive max cap → not_allowed', async () => {
+    actions.setConfig({
+      enabledActions: ['player.give_item'],
+      giveItem: {
+        allow: {
+          zero_cap: 0,
+          negative_cap: -2,
+          float_cap: 3.5,
+          string_cap: '10',
+        },
+      },
+    });
+    mockResourceStates.ox_inventory = 'started';
+
+    const resZero = await actions.executeAction({
+      id: 'act-give-zero',
+      action: 'player.give_item',
+      discordId: '111122223333444455',
+      params: { item: 'zero_cap', count: 1 },
+    });
+    assert.equal(resZero.ok, false);
+    assert.equal(resZero.code, 'not_allowed');
+
+    const resNeg = await actions.executeAction({
+      id: 'act-give-neg',
+      action: 'player.give_item',
+      discordId: '111122223333444455',
+      params: { item: 'negative_cap', count: 1 },
+    });
+    assert.equal(resNeg.ok, false);
+    assert.equal(resNeg.code, 'not_allowed');
+
+    const resFloat = await actions.executeAction({
+      id: 'act-give-float',
+      action: 'player.give_item',
+      discordId: '111122223333444455',
+      params: { item: 'float_cap', count: 1 },
+    });
+    assert.equal(resFloat.ok, false);
+    assert.equal(resFloat.code, 'not_allowed');
+
+    const resStr = await actions.executeAction({
+      id: 'act-give-str',
+      action: 'player.give_item',
+      discordId: '111122223333444455',
+      params: { item: 'string_cap', count: 1 },
+    });
+    assert.equal(resStr.ok, false);
+    assert.equal(resStr.code, 'not_allowed');
+  });
 });

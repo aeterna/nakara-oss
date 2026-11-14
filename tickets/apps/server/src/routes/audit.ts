@@ -4,11 +4,11 @@ import { auditLog, inGuild, type TicketsDb } from '@nakara-tickets/db';
 
 export default async function (app: FastifyInstance) {
   const requireStaff = async (req: FastifyRequest, reply: FastifyReply) => {
-    if (typeof app.requireStaff === 'function') {
-      await app.requireStaff(req, reply);
-    } else {
-      req.guildId = (req.params as any)?.guildId;
+    if (typeof app.requireStaff !== 'function') {
+      reply.code(500).send({ code: 'misconfigured', message: 'Staff authentication not configured' });
+      return;
     }
+    await app.requireStaff(req, reply);
   };
 
   app.get(

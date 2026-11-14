@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Fastify from 'fastify';
+import { writeFileSync, unlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { openTestDb } from '@nakara-tickets/db/test-support';
 import { tickets, gameServers, categories, guilds } from '@nakara-tickets/db';
 import systemRoute from '../src/routes/system.js';
@@ -18,7 +21,7 @@ describe('system routes (w3)', () => {
     await testEnv.close();
   });
 
-  it('(w3-1) healthz 200/up with a working pglite db', async () => {
+  it('(w3-1) healthz 200/up with a working pglite db returns only { ok, db, gateway, version }', async () => {
     const app = Fastify();
     let currentGatewayStatus: GatewayStatus = 'connected';
     app.decorate('db', db);
@@ -32,10 +35,14 @@ describe('system routes (w3)', () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.ok).toBe(true);
-    expect(body.db).toBe('up');
-    expect(body.gateway).toBe('connected');
-    expect(body.version).toBeDefined();
+    expect(body).toEqual({
+      ok: true,
+      db: 'up',
+      gateway: 'connected',
+      version: expect.any(String),
+    });
+    // Strict verify: only these 4 keys, no counts
+    expect(Object.keys(body).sort()).toEqual(['db', 'gateway', 'ok', 'version'].sort());
   });
 
   it('(w3-2) healthz 503/down with a db whose query throws', async () => {
@@ -60,9 +67,11 @@ describe('system routes (w3)', () => {
     expect(body.ok).toBe(false);
     expect(body.db).toBe('down');
     expect(body.gateway).toBe('standby');
+    expect(body.version).toBeDefined();
+    expect(Object.keys(body).sort()).toEqual(['db', 'gateway', 'ok', 'version'].sort());
   });
 
-  it('(w3-3) metrics contains the four series and no snowflake', async () => {
+  it('(w3-3) metrics requires Authorization: Bearer <METRICS_TOKEN> when set, else 404', async () => {
     await testEnv.reset();
 
     const guildId = '123456789012345678';
@@ -102,27 +111,94 @@ describe('system routes (w3)', () => {
     app.decorate('gateway', { status: () => 'connected' });
     await app.register(systemRoute);
 
-    const res = await app.inject({
-      method: 'GET',
-      url: '/metrics',
-    });
+    const oldToken = process.env.METRICS_TOKEN;
+    const oldTokenFile = process.env.METRICS_TOKEN_FILE;
+    delete process.env.METRICS_TOKEN;
+    delete process.env.METRICS_TOKEN_FILE;
 
-    expect(res.statusCode).toBe(200);
-    expect(res.headers['content-type']).toContain('text/plain; version=0.0.4');
+    try {
+      // 1. Without env METRICS_TOKEN -> 404
+      const res404 = await app.inject({
+        method: 'GET',
+        url: '/metrics',
+      });
+      expect(res404.statusCode).toBe(404);
 
-    const text = res.payload;
+      // 2. With env METRICS_TOKEN set
+      process.env.METRICS_TOKEN = 'secret-metrics-token-123';
 
-    // Check all four series
-    expect(text).toContain('nakara_tickets_up 1');
-    expect(text).toMatch(/nakara_tickets_tickets\{status="open"\} 1/);
-    expect(text).toMatch(/nakara_tickets_tickets\{status="claimed"\} 1/);
-    expect(text).toMatch(/nakara_tickets_tickets\{status="closed"\} 1/);
-    expect(text).toMatch(/nakara_tickets_game_servers_online 1/);
-    expect(text).toMatch(/nakara_tickets_gateway_connected 1/);
+      // 2a. Request without token -> 401
+      const resNoAuth = await app.inject({
+        method: 'GET',
+        url: '/metrics',
+      });
+      expect(resNoAuth.statusCode).toBe(401);
 
-    // Verify NO snowflake or guild name appears in labels
-    expect(text).not.toContain(guildId);
-    expect(text).not.toContain('Metric Guild');
-    expect(text).not.toContain('111111111111111111');
+      // 2b. Request with wrong token -> 401
+      const resWrongAuth = await app.inject({
+        method: 'GET',
+        url: '/metrics',
+        headers: {
+          authorization: 'Bearer wrong-token',
+        },
+      });
+      expect(resWrongAuth.statusCode).toBe(401);
+
+      // 2c. Request with correct token -> 200 with all 4 series
+      const resOk = await app.inject({
+        method: 'GET',
+        url: '/metrics',
+        headers: {
+          authorization: 'Bearer secret-metrics-token-123',
+        },
+      });
+      expect(resOk.statusCode).toBe(200);
+      expect(resOk.headers['content-type']).toContain('text/plain; version=0.0.4');
+
+      const text = resOk.payload;
+      expect(text).toContain('nakara_tickets_up 1');
+      expect(text).toMatch(/nakara_tickets_tickets\{status="open"\} 1/);
+      expect(text).toMatch(/nakara_tickets_tickets\{status="claimed"\} 1/);
+      expect(text).toMatch(/nakara_tickets_tickets\{status="closed"\} 1/);
+      expect(text).toMatch(/nakara_tickets_game_servers_online 1/);
+      expect(text).toMatch(/nakara_tickets_gateway_connected 1/);
+
+      // Verify NO snowflake or guild name appears in labels
+      expect(text).not.toContain(guildId);
+      expect(text).not.toContain('Metric Guild');
+      expect(text).not.toContain('111111111111111111');
+
+      // 3. Test METRICS_TOKEN_FILE support
+      delete process.env.METRICS_TOKEN;
+      const tmpFilePath = join(tmpdir(), `metrics-token-${Date.now()}.txt`);
+      writeFileSync(tmpFilePath, 'file-metrics-token-456\n', 'utf8');
+      process.env.METRICS_TOKEN_FILE = tmpFilePath;
+
+      try {
+        const resFileOk = await app.inject({
+          method: 'GET',
+          url: '/metrics',
+          headers: {
+            authorization: 'Bearer file-metrics-token-456',
+          },
+        });
+        expect(resFileOk.statusCode).toBe(200);
+      } finally {
+        try {
+          unlinkSync(tmpFilePath);
+        } catch {}
+      }
+    } finally {
+      if (oldToken !== undefined) {
+        process.env.METRICS_TOKEN = oldToken;
+      } else {
+        delete process.env.METRICS_TOKEN;
+      }
+      if (oldTokenFile !== undefined) {
+        process.env.METRICS_TOKEN_FILE = oldTokenFile;
+      } else {
+        delete process.env.METRICS_TOKEN_FILE;
+      }
+    }
   });
 });

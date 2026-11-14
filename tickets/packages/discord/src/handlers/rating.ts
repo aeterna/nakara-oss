@@ -57,7 +57,7 @@ export async function ratingOnClose(ctx: CloseHookContext): Promise<void> {
   ];
 
   const content = t(locale, 'rating_prompt');
-  const payload = { content, components };
+  const payload = { content, components, allowed_mentions: { parse: [] } };
 
   // Post message in ticket channel
   if (ticket.channel_id) {
@@ -73,20 +73,11 @@ export async function ratingOnClose(ctx: CloseHookContext): Promise<void> {
   // If guildSettings.rating_dm is true, DM the opener once
   if (ctx.guildSettings?.rating_dm && ticket.opener_id) {
     try {
-      if (typeof (port as any).sendDM === 'function') {
-        await (port as any).sendDM(ticket.opener_id, payload);
-      } else if (typeof (port as any).sendDm === 'function') {
-        await (port as any).sendDm(ticket.opener_id, payload);
-      } else if (typeof (ctx as any).sendDM === 'function') {
-        await (ctx as any).sendDM(ticket.opener_id, payload);
-      } else if (typeof (ctx as any).discord?.createDM === 'function') {
-        const dm = await (ctx as any).discord.createDM(ticket.opener_id);
-        await (ctx as any).discord.sendMessage(dm.id, payload);
-      } else if (typeof (ctx as any).client?.users?.fetch === 'function') {
-        const user = await (ctx as any).client.users.fetch(ticket.opener_id);
-        await user.send(payload);
-      } else if (typeof (ctx as any).client?.users?.send === 'function') {
-        await (ctx as any).client.users.send(ticket.opener_id, payload);
+      if (typeof port.sendDM === 'function') {
+        await port.sendDM(ticket.opener_id, payload);
+      } else if (typeof port.createDM === 'function') {
+        const dm = await port.createDM(ticket.opener_id);
+        await port.sendMessage(dm.id, payload);
       }
     } catch (err: any) {
       const is50007 =
@@ -143,6 +134,10 @@ export async function handleRatingButton(
   if (!ticket) {
     await port.replyEphemeral(interaction, t(locale, 'ticket_not_found'));
     return;
+  }
+
+  if (!interaction.guildId) {
+    interaction.guildId = ticket.guild_id;
   }
 
   const userId =
@@ -235,6 +230,10 @@ export async function handleRatingModal(
   if (!ticket) {
     await port.replyEphemeral(interaction, t(locale, 'ticket_not_found'));
     return;
+  }
+
+  if (!interaction.guildId) {
+    interaction.guildId = ticket.guild_id;
   }
 
   const userId =

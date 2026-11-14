@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, afterAll } from 'vitest';
 import Fastify from 'fastify';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -87,9 +87,13 @@ describe('Tickets API routes (acceptance tests t4 & t5)', () => {
     });
 
     // 3. Setup app
+    const storage = createStorage(mockConfig);
     app = Fastify();
     app.decorate('config', mockConfig);
     app.decorate('db', testDb);
+    app.decorate('storage', storage);
+    app.decorate('gateway', null);
+    app.decorate('discord', null);
     await installSession(app, { config: mockConfig, db: testDb });
     await app.register(routes);
     await app.ready();
@@ -212,15 +216,10 @@ describe('Tickets API routes (acceptance tests t4 & t5)', () => {
       channel_id: '2001',
     }).returning();
 
-    // Put a test file in storage
+    // Put a test file in storage using app.storage
     const storageKey = `${GUILD_A}/${ticket.id}/attachment-uuid-1`;
-    const storage = createStorage({
-      STORAGE_DIR: tempDir,
-      TICKETS_DATA_KEY: testKey,
-    });
-
     const fileContent = Buffer.from('<html><body>Exploit?</body></html>', 'utf8');
-    await storage.put(storageKey, fileContent, 'text/html');
+    await app.storage!.put(storageKey, fileContent, 'text/html');
 
     // Insert attachment row with content_type 'text/html'
     const [att] = await testDb.insert(attachments).values({
@@ -251,10 +250,189 @@ describe('Tickets API routes (acceptance tests t4 & t5)', () => {
 
     // Assert headers
     expect(res.headers['content-disposition']).toContain('attachment');
+    expect(res.headers['content-security-policy']).toBe('sandbox');
     expect(res.headers['x-content-type-options']).toBe('nosniff');
 
     // Assert content is returned
     expect(res.rawPayload.equals(fileContent)).toBe(true);
+  });
+
+  it('t5: attachment with allowlisted mime types served with their content type and CSP sandbox', async () => {
+    const catAId = '11111111-1111-1111-1111-111111111111';
+    const [ticket] = await testDb.insert(tickets).values({
+      guild_id: GUILD_A,
+      category_id: catAId,
+      number: 11,
+      status: 'open',
+      opener_id: '1001',
+      channel_id: '2001',
+    }).returning();
+
+    const allowlistCases = [
+      { ext: 'png', ct: 'image/png' },
+      { ext: 'jpg', ct: 'image/jpeg' },
+      { ext: 'gif', ct: 'image/gif' },
+      { ext: 'webp', ct: 'image/webp' },
+      { ext: 'pdf', ct: 'application/pdf' },
+      { ext: 'txt', ct: 'text/plain' },
+      { ext: 'mp4', ct: 'video/mp4' },
+      { ext: 'mp3', ct: 'audio/mpeg' },
+    ];
+
+    for (let i = 0; i < allowlistCases.length; i++) {
+      const { ext, ct } = allowlistCases[i];
+      const storageKey = `${GUILD_A}/${ticket.id}/att-${ext}-${i}`;
+      const content = Buffer.from(`dummy content ${ext}`);
+      await app.storage!.put(storageKey, content, ct);
+
+      const [att] = await testDb.insert(attachments).values({
+        id: `44444444-4444-4444-4444-${String(i).padStart(12, '0')}`,
+        guild_id: GUILD_A,
+        ticket_id: ticket.id,
+        filename: `file.${ext}`,
+        content_type: ct,
+        size: content.length,
+        sha256: createHash('sha256').update(content).digest('hex'),
+        stored: true,
+        storage_key: storageKey,
+      }).returning();
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/guilds/${GUILD_A}/attachments/${att.id}`,
+        cookies: { nt_session: SESSION_TOKEN },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toBe(ct);
+      expect(res.headers['content-security-policy']).toBe('sandbox');
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+      expect(res.headers['content-disposition']).toContain(`attachment; filename="file.${ext}"`);
+      expect(res.rawPayload.equals(content)).toBe(true);
+    }
+  });
+
+  it('t5: attachment with non-allowlisted mime types fallback to application/octet-stream', async () => {
+    const catAId = '11111111-1111-1111-1111-111111111111';
+    const [ticket] = await testDb.insert(tickets).values({
+      guild_id: GUILD_A,
+      category_id: catAId,
+      number: 12,
+      status: 'open',
+      opener_id: '1001',
+      channel_id: '2001',
+    }).returning();
+
+    const blockedCases = [
+      'application/javascript',
+      'image/svg+xml',
+      'text/html',
+      'text/html; charset=utf-8',
+      'application/x-sh',
+      'application/zip',
+      'application/json',
+      'unknown/format',
+    ];
+
+    for (let i = 0; i < blockedCases.length; i++) {
+      const ct = blockedCases[i];
+      const storageKey = `${GUILD_A}/${ticket.id}/att-blocked-${i}`;
+      const content = Buffer.from(`blocked content ${i}`);
+      await app.storage!.put(storageKey, content, ct);
+
+      const [att] = await testDb.insert(attachments).values({
+        id: `55555555-5555-5555-5555-${String(i).padStart(12, '0')}`,
+        guild_id: GUILD_A,
+        ticket_id: ticket.id,
+        filename: `blocked-${i}.bin`,
+        content_type: ct,
+        size: content.length,
+        sha256: createHash('sha256').update(content).digest('hex'),
+        stored: true,
+        storage_key: storageKey,
+      }).returning();
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/guilds/${GUILD_A}/attachments/${att.id}`,
+        cookies: { nt_session: SESSION_TOKEN },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toBe('application/octet-stream');
+      expect(res.headers['content-security-policy']).toBe('sandbox');
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+    }
+  });
+
+  it('t5: attachment returns 500 misconfigured when app.storage is null', async () => {
+    const catAId = '11111111-1111-1111-1111-111111111111';
+    const [ticket] = await testDb.insert(tickets).values({
+      guild_id: GUILD_A,
+      category_id: catAId,
+      number: 13,
+      status: 'open',
+      opener_id: '1001',
+      channel_id: '2001',
+    }).returning();
+
+    const [att] = await testDb.insert(attachments).values({
+      id: '66666666-6666-6666-6666-666666666666',
+      guild_id: GUILD_A,
+      ticket_id: ticket.id,
+      filename: 'test.png',
+      content_type: 'image/png',
+      size: 10,
+      sha256: 'abc',
+      stored: true,
+      storage_key: `${GUILD_A}/${ticket.id}/file`,
+    }).returning();
+
+    const savedStorage = app.storage;
+    app.storage = null;
+    try {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/guilds/${GUILD_A}/attachments/${att.id}`,
+        cookies: { nt_session: SESSION_TOKEN },
+      });
+      expect(res.statusCode).toBe(500);
+      expect(res.json().code).toBe('misconfigured');
+    } finally {
+      app.storage = savedStorage;
+    }
+  });
+
+  it('t5: attachment returns 404 when attachment file is missing in storage', async () => {
+    const catAId = '11111111-1111-1111-1111-111111111111';
+    const [ticket] = await testDb.insert(tickets).values({
+      guild_id: GUILD_A,
+      category_id: catAId,
+      number: 14,
+      status: 'open',
+      opener_id: '1001',
+      channel_id: '2001',
+    }).returning();
+
+    const [att] = await testDb.insert(attachments).values({
+      id: '77777777-7777-7777-7777-777777777777',
+      guild_id: GUILD_A,
+      ticket_id: ticket.id,
+      filename: 'missing.png',
+      content_type: 'image/png',
+      size: 10,
+      sha256: 'abc',
+      stored: true,
+      storage_key: `${GUILD_A}/${ticket.id}/nonexistent-file`,
+    }).returning();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/guilds/${GUILD_A}/attachments/${att.id}`,
+      cookies: { nt_session: SESSION_TOKEN },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe('not_found');
   });
 
   it('transitions ticket: claim, close, reopen', async () => {
@@ -302,5 +480,64 @@ describe('Tickets API routes (acceptance tests t4 & t5)', () => {
     expect(resReopen.statusCode).toBe(200);
     expect(resReopen.json().status).toBe('open');
     expect(resReopen.json().reopenedCount).toBe(1);
+  });
+
+  it('transition close calls gateway.closeHooks and sends message with allowed_mentions parse empty', async () => {
+    const mockSendMessage = vi.fn().mockResolvedValue({});
+    const mockCloseHooks = vi.fn().mockResolvedValue(undefined);
+
+    (app as any).discord = {
+      sendMessage: mockSendMessage,
+      editMessage: vi.fn(),
+      deleteMessage: vi.fn(),
+      createDM: vi.fn(),
+      patchChannel: vi.fn(),
+    };
+
+    (app as any).gateway = {
+      status: () => 'connected',
+      closeHooks: mockCloseHooks,
+    };
+
+    const catAId = '11111111-1111-1111-1111-111111111111';
+    const [ticket] = await testDb.insert(tickets).values({
+      guild_id: GUILD_A,
+      category_id: catAId,
+      number: 30,
+      status: 'open',
+      opener_id: '1001',
+      channel_id: '2001',
+    }).returning();
+
+    // 1. Claim transition -> closeHooks NOT called, sendMessage called with allowed_mentions: { parse: [] }
+    const resClaim = await app.inject({
+      method: 'POST',
+      url: `/api/v1/guilds/${GUILD_A}/tickets/${ticket.id}/claim`,
+      cookies: { nt_session: SESSION_TOKEN },
+      headers: { 'X-CSRF-Token': CSRF_TOKEN },
+    });
+    expect(resClaim.statusCode).toBe(200);
+    expect(mockSendMessage).toHaveBeenCalledWith('2001', {
+      content: expect.stringContaining('claimed by'),
+      allowed_mentions: { parse: [] },
+    });
+    expect(mockCloseHooks).not.toHaveBeenCalled();
+
+    mockSendMessage.mockClear();
+
+    // 2. Close transition -> closeHooks IS called, sendMessage called with allowed_mentions: { parse: [] }
+    const resClose = await app.inject({
+      method: 'POST',
+      url: `/api/v1/guilds/${GUILD_A}/tickets/${ticket.id}/close`,
+      cookies: { nt_session: SESSION_TOKEN },
+      headers: { 'X-CSRF-Token': CSRF_TOKEN },
+      payload: { reason: 'Done' },
+    });
+    expect(resClose.statusCode).toBe(200);
+    expect(mockSendMessage).toHaveBeenCalledWith('2001', {
+      content: expect.stringContaining('closed by'),
+      allowed_mentions: { parse: [] },
+    });
+    expect(mockCloseHooks).toHaveBeenCalledWith(GUILD_A, ticket.id, USER_STAFF);
   });
 });

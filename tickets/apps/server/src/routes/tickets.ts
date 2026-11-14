@@ -11,7 +11,30 @@ import {
   type TicketsDb,
 } from '@nakara-tickets/db';
 import type { Transition } from '@nakara-tickets/core';
-import { createStorage } from '../storage.js';
+import type { Storage } from '../storage.js';
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    storage: Storage | null;
+  }
+}
+
+declare module '../types.js' {
+  interface GatewayHandleLike {
+    closeHooks?(guildId: string, ticketId: string, actorId: string): Promise<void>;
+  }
+}
+
+const ALLOWED_ATTACHMENT_CONTENT_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'application/pdf',
+  'text/plain',
+  'video/mp4',
+  'audio/mpeg',
+]);
 
 function escapeHtml(str: string | null | undefined): string {
   if (!str) return '';
@@ -350,7 +373,16 @@ export default async function (app: FastifyInstance) {
         // If app.discord is available, post system message
         if (app.discord && updated.channel_id) {
           const actionText = `Ticket #${updated.number} ${transition}ed by <@${req.user.id}>`;
-          await app.discord.sendMessage(updated.channel_id, { content: actionText }).catch(() => {});
+          app.discord
+            .sendMessage(updated.channel_id, {
+              content: actionText,
+              allowed_mentions: { parse: [] },
+            })
+            .catch(() => {});
+        }
+
+        if (transition === 'close') {
+          app.gateway?.closeHooks?.(req.guildId, ticketId, req.user.id)?.catch?.(() => {});
         }
 
         return reply.send(formatTicket(updated));
@@ -384,23 +416,26 @@ export default async function (app: FastifyInstance) {
         return reply.code(404).send({ code: 'not_found', message: 'Attachment not found' });
       }
 
-      const storage = createStorage(req.server.config);
+      const storage = app.storage;
+      if (!storage) {
+        return reply.code(500).send({ code: 'misconfigured', message: 'Storage not configured' });
+      }
+
       const file = await storage.get(row.storage_key);
 
       if (!file) {
         return reply.code(404).send({ code: 'not_found', message: 'Attachment file not found' });
       }
 
-      let contentType = row.content_type || file.contentType || 'application/octet-stream';
-      if (
-        contentType.toLowerCase().includes('text/html') ||
-        contentType.toLowerCase().includes('application/xhtml+xml')
-      ) {
-        contentType = 'application/octet-stream';
-      }
+      const rawType = (row.content_type || file.contentType || '').toLowerCase().trim();
+      const baseType = rawType.split(';')[0].trim();
+      const contentType = ALLOWED_ATTACHMENT_CONTENT_TYPES.has(baseType)
+        ? baseType
+        : 'application/octet-stream';
 
       reply.header('Content-Type', contentType);
       reply.header('Content-Disposition', `attachment; filename="${encodeURIComponent(row.filename)}"`);
+      reply.header('Content-Security-Policy', 'sandbox');
       reply.header('X-Content-Type-Options', 'nosniff');
 
       return reply.send(file.bytes);
