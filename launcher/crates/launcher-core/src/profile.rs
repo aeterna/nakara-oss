@@ -66,6 +66,8 @@ pub struct Theme {
     /// Home layout; defaults to Dusk when omitted.
     #[serde(default)]
     pub template: Template,
+    /// Name in the launcher's corner and window title; defaults to the server name. 1..=64 characters.
+    pub brand: Option<String>,
     /// `#` followed by six hex digits.
     pub accent: String,
     pub wordmark: Option<String>,
@@ -82,6 +84,9 @@ pub struct Features {
     pub allow_user_servers: bool,
     #[serde(default)]
     pub allow_local_feed: bool,
+    /// Also list the AETERNA studio's other games in the sidebar (sample data until the feed lists them). Off for forks.
+    #[serde(default)]
+    pub studio_games: bool,
 }
 
 /// Why a profile could not be parsed or validated.
@@ -207,6 +212,13 @@ pub fn validate(p: &Profile) -> Result<(), ProfileError> {
             field: "theme.accent",
             value: p.theme.accent.clone(),
         });
+    }
+    if let Some(brand) = &p.theme.brand {
+        if !(1..=64).contains(&brand.chars().count()) {
+            return Err(ProfileError::Name {
+                field: "theme.brand",
+            });
+        }
     }
     if let Some(wordmark) = &p.theme.wordmark {
         if !valid_asset(wordmark, false) {

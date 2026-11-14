@@ -247,3 +247,52 @@ fn unknown_template_is_rejected() {
     let text = replace_line(VALID, "[theme]", "[theme]\ntemplate = \"neon\"");
     assert!(parse(&text).is_err());
 }
+
+#[test]
+fn valid_profile_has_no_brand() {
+    let profile = parse(VALID).expect("valid profile should parse");
+    assert_eq!(profile.theme.brand, None);
+}
+
+#[test]
+fn brand_parses() {
+    let text = replace_line(VALID, "[theme]", "[theme]\nbrand = \"AETERNA Game\"");
+    let profile = parse(&text).expect("brand should parse");
+    assert_eq!(profile.theme.brand.as_deref(), Some("AETERNA Game"));
+}
+
+#[test]
+fn empty_brand_is_rejected() {
+    let text = replace_line(VALID, "[theme]", "[theme]\nbrand = \"\"");
+    assert!(matches!(
+        rejected(&text),
+        ProfileError::Name {
+            field: "theme.brand"
+        }
+    ));
+}
+
+#[test]
+fn sixty_five_character_brand_is_rejected() {
+    let line = format!("brand = \"{}\"", "x".repeat(65));
+    let text = replace_line(VALID, "[theme]", &format!("[theme]\n{line}"));
+    assert!(matches!(
+        rejected(&text),
+        ProfileError::Name {
+            field: "theme.brand"
+        }
+    ));
+}
+
+#[test]
+fn studio_games_defaults_to_false() {
+    let profile = parse(VALID).expect("empty [features] table should parse");
+    assert!(!profile.features.studio_games);
+}
+
+#[test]
+fn studio_games_true_parses() {
+    let text = replace_line(VALID, "[features]", "[features]\nstudio_games = true");
+    let profile = parse(&text).expect("studio_games should parse");
+    assert!(profile.features.studio_games);
+}

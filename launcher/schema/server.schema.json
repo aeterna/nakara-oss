@@ -33,6 +33,7 @@
       "required": ["accent"],
       "properties": {
         "template": { "enum": ["dusk", "classic"], "default": "dusk" },
+        "brand": { "type": "string", "minLength": 1, "maxLength": 64 },
         "accent": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
         "wordmark": { "type": "string", "pattern": "^assets/[A-Za-z0-9._/-]+\\.(png|webp)$" },
         "background": { "type": "string", "pattern": "^assets/[A-Za-z0-9._/-]+\\.(png|webp|jpg)$" }
@@ -44,7 +45,8 @@
       "properties": {
         "rongroi_connect": { "type": "boolean", "default": false },
         "allow_user_servers": { "type": "boolean", "default": false },
-        "allow_local_feed": { "type": "boolean", "default": false }
+        "allow_local_feed": { "type": "boolean", "default": false },
+        "studio_games": { "type": "boolean", "default": false }
       }
     }
   }
