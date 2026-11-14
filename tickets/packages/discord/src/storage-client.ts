@@ -85,7 +85,7 @@ export function createStorageClient(dataKey: Buffer): StorageClient {
             'Content-Type': ct,
             'x-amz-meta-content-type': ct,
           },
-          body: sealed,
+          body: new Blob([new Uint8Array(sealed)]),
         });
 
         if (!res.ok) {

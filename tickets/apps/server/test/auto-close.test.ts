@@ -102,6 +102,7 @@ describe('a1 auto-close job acceptance tests', () => {
     const ctx: JobContext = {
       db: testDb,
       config: {} as any,
+      storage: null,
       discord: mockDiscord as any,
       log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     };
@@ -167,6 +168,7 @@ describe('a1 auto-close job acceptance tests', () => {
     const ctx: JobContext = {
       db: testDb,
       config: {} as any,
+      storage: null,
       discord: mockDiscord as any,
       log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     };
@@ -216,6 +218,7 @@ describe('a1 auto-close job acceptance tests', () => {
     const ctx: JobContext = {
       db: testDb,
       config: {} as any,
+      storage: null,
       discord: mockDiscord as any,
       gateway: { closeHooks: mockCloseHooks },
       log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -278,6 +281,7 @@ describe('a1 auto-close job acceptance tests', () => {
     const ctx: JobContext = {
       db: testDb,
       config: {} as any,
+      storage: null,
       discord: mockDiscord as any,
       log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     };
@@ -316,6 +320,7 @@ describe('a1 auto-close job acceptance tests', () => {
     const ctx: JobContext = {
       db: testDb,
       config: {} as any,
+      storage: null,
       discord: null,
       log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     };

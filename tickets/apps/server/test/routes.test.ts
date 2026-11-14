@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, test } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import YAML from 'yaml';
 import { openTestDb } from '@nakara-tickets/db/test-support';
 import { buildApp } from '../src/app.js';
@@ -32,18 +32,52 @@ function resolvePath(path: string): string {
 }
 
 describe('OpenAPI route stubs', () => {
+  const METRICS_TOKEN = 'routes-test-metrics-token';
+  let previousMetricsToken: string | undefined;
+
+  // /metrics answers 404 unless METRICS_TOKEN is set, so the route sweep sets it.
+  beforeEach(() => {
+    previousMetricsToken = process.env.METRICS_TOKEN;
+    process.env.METRICS_TOKEN = METRICS_TOKEN;
+  });
+
+  afterEach(() => {
+    if (previousMetricsToken === undefined) {
+      delete process.env.METRICS_TOKEN;
+    } else {
+      process.env.METRICS_TOKEN = previousMetricsToken;
+    }
+  });
+
   test('r1: every operation is registered and does not 404', async () => {
     const app = buildApp();
     for (const op of operations) {
-      const res = await app.inject({ method: op.method as any, url: resolvePath(op.path) });
+      const url = resolvePath(op.path);
+      const res = await app.inject({
+        method: op.method as any,
+        url,
+        headers: url === '/metrics' ? { authorization: `Bearer ${METRICS_TOKEN}` } : {},
+      });
       expect(res.statusCode, `${op.method} ${op.path}`).not.toBe(404);
     }
+  });
+
+  test('r1-metrics: GET /metrics without METRICS_TOKEN answers 404', async () => {
+    delete process.env.METRICS_TOKEN;
+    const app = buildApp();
+    const res = await app.inject({ method: 'GET', url: '/metrics' });
+    expect(res.statusCode).toBe(404);
   });
 
   test('r2: every operation has a registered route (status ≠ 404)', async () => {
     const app = buildApp();
     for (const op of operations) {
-      const res = await app.inject({ method: op.method as any, url: resolvePath(op.path) });
+      const url = resolvePath(op.path);
+      const res = await app.inject({
+        method: op.method as any,
+        url,
+        headers: url === '/metrics' ? { authorization: `Bearer ${METRICS_TOKEN}` } : {},
+      });
       expect(res.statusCode, `${op.method} ${op.path}`).not.toBe(404);
     }
   });

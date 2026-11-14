@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import Fastify from 'fastify';
-import { createHash } from 'node:crypto';
 import { openTestDb } from '@nakara-tickets/db/test-support';
-import { guilds, sessions, blocks } from '@nakara-tickets/db';
+import { guilds, blocks } from '@nakara-tickets/db';
 import { installSession } from '../src/session.js';
 import { clearStaffCache } from '../src/staff.js';
 import routes from '../src/routes/index.js';
 import type { TicketsConfig } from '../src/config.js';
+import { createTestSession } from './helpers/session.js';
 
 describe('a3 blocks route acceptance tests', () => {
   const GUILD_A = '111111111111111111';
@@ -14,8 +14,8 @@ describe('a3 blocks route acceptance tests', () => {
   const USER_STAFF = '333333333333333333';
   const ROLE_STAFF = '444444444444444444';
   const TARGET_USER_1 = '555555555555555555';
-  const SESSION_TOKEN = 'blocks-test-session-token';
-  const CSRF_TOKEN = 'blocks-test-csrf-token';
+  let cookie: string;
+  let csrf: string;
 
   const mockConfig: TicketsConfig = {
     ROLE: 'all',
@@ -54,13 +54,10 @@ describe('a3 blocks route acceptance tests', () => {
     ]);
 
     // Seed session for staff user
-    const tokenHash = createHash('sha256').update(SESSION_TOKEN).digest('hex');
-    await testDb.insert(sessions).values({
-      user_id: USER_STAFF,
-      token_hash: tokenHash,
-      csrf_hash: CSRF_TOKEN,
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    });
+    ({ cookie, csrf } = await createTestSession(testDb, mockConfig, {
+      userId: USER_STAFF,
+      username: 'staffuser',
+    }));
 
     // Mock fetch for staff check
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => {
@@ -108,8 +105,8 @@ describe('a3 blocks route acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/blocks`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
       payload: {
         userId: TARGET_USER_1,
@@ -127,8 +124,8 @@ describe('a3 blocks route acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/blocks`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
       payload: {
         userId: TARGET_USER_1,
@@ -147,8 +144,8 @@ describe('a3 blocks route acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/blocks`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
       payload: {
         userId: 'not-a-snowflake',
@@ -162,8 +159,8 @@ describe('a3 blocks route acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/blocks`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
       payload: {
         userId: TARGET_USER_1,
@@ -179,8 +176,8 @@ describe('a3 blocks route acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/blocks`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
       payload: {
         userId: TARGET_USER_1,
@@ -193,8 +190,8 @@ describe('a3 blocks route acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_B}/blocks`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
       payload: {
         userId: TARGET_USER_1,
@@ -208,7 +205,7 @@ describe('a3 blocks route acceptance tests', () => {
       method: 'GET',
       url: `/api/v1/guilds/${GUILD_A}/blocks`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
+        cookie,
       },
     });
     expect(resListA.statusCode).toBe(200);
@@ -221,8 +218,8 @@ describe('a3 blocks route acceptance tests', () => {
       method: 'DELETE',
       url: `/api/v1/guilds/${GUILD_A}/blocks/${TARGET_USER_1}`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
     });
     expect(resDel.statusCode).toBe(204);
@@ -232,7 +229,7 @@ describe('a3 blocks route acceptance tests', () => {
       method: 'GET',
       url: `/api/v1/guilds/${GUILD_A}/blocks`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
+        cookie,
       },
     });
     expect(JSON.parse(resListA2.body).length).toBe(0);
@@ -241,7 +238,7 @@ describe('a3 blocks route acceptance tests', () => {
       method: 'GET',
       url: `/api/v1/guilds/${GUILD_B}/blocks`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
+        cookie,
       },
     });
     expect(JSON.parse(resListB2.body).length).toBe(1);

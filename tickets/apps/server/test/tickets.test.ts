@@ -5,22 +5,23 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openTestDb } from '@nakara-tickets/db/test-support';
-import { guilds, categories, tickets, messages, attachments, sessions } from '@nakara-tickets/db';
+import { guilds, categories, tickets, messages, attachments } from '@nakara-tickets/db';
 import { sealBytes } from '@nakara-tickets/core';
 import { installSession } from '../src/session.js';
 import { createStorage } from '../src/storage.js';
 import routes from '../src/routes/index.js';
 import type { TicketsConfig } from '../src/config.js';
+import { createTestSession } from './helpers/session.js';
 
 describe('Tickets API routes (acceptance tests t4 & t5)', () => {
   const GUILD_A = '111111111111111111';
   const GUILD_B = '222222222222222222';
   const USER_STAFF = '333333333333333333';
   const ROLE_STAFF = '444444444444444444';
-  const SESSION_TOKEN = 'tickets-test-session-token';
-  const CSRF_TOKEN = 'tickets-test-csrf-token';
   const testKey = Buffer.alloc(32, 4);
 
+  let cookie: string;
+  let csrf: string;
   let tempDir: string;
   let testEnv: Awaited<ReturnType<typeof openTestDb>>;
   let testDb: any;
@@ -78,13 +79,10 @@ describe('Tickets API routes (acceptance tests t4 & t5)', () => {
     ]);
 
     // 2. Seed session
-    const tokenHash = createHash('sha256').update(SESSION_TOKEN).digest('hex');
-    await testDb.insert(sessions).values({
-      user_id: USER_STAFF,
-      token_hash: tokenHash,
-      csrf_hash: CSRF_TOKEN,
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    });
+    ({ cookie, csrf } = await createTestSession(testDb, mockConfig, {
+      userId: USER_STAFF,
+      username: 'staffuser',
+    }));
 
     // 3. Setup app
     const storage = createStorage(mockConfig);
@@ -177,7 +175,7 @@ describe('Tickets API routes (acceptance tests t4 & t5)', () => {
     const resPage1 = await app.inject({
       method: 'GET',
       url: `/api/v1/guilds/${GUILD_A}/tickets?limit=2`,
-      cookies: { nt_session: SESSION_TOKEN },
+      headers: { cookie },
     });
 
     expect(resPage1.statusCode).toBe(200);
@@ -195,7 +193,7 @@ describe('Tickets API routes (acceptance tests t4 & t5)', () => {
     const resPage2 = await app.inject({
       method: 'GET',
       url: `/api/v1/guilds/${GUILD_A}/tickets?limit=2&cursor=${encodeURIComponent(dataPage1.next)}`,
-      cookies: { nt_session: SESSION_TOKEN },
+      headers: { cookie },
     });
 
     expect(resPage2.statusCode).toBe(200);
@@ -238,7 +236,7 @@ describe('Tickets API routes (acceptance tests t4 & t5)', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/api/v1/guilds/${GUILD_A}/attachments/${att.id}`,
-      cookies: { nt_session: SESSION_TOKEN },
+      headers: { cookie },
     });
 
     expect(res.statusCode).toBe(200);
@@ -300,7 +298,7 @@ describe('Tickets API routes (acceptance tests t4 & t5)', () => {
       const res = await app.inject({
         method: 'GET',
         url: `/api/v1/guilds/${GUILD_A}/attachments/${att.id}`,
-        cookies: { nt_session: SESSION_TOKEN },
+        headers: { cookie },
       });
 
       expect(res.statusCode).toBe(200);
@@ -355,7 +353,7 @@ describe('Tickets API routes (acceptance tests t4 & t5)', () => {
       const res = await app.inject({
         method: 'GET',
         url: `/api/v1/guilds/${GUILD_A}/attachments/${att.id}`,
-        cookies: { nt_session: SESSION_TOKEN },
+        headers: { cookie },
       });
 
       expect(res.statusCode).toBe(200);
@@ -394,7 +392,7 @@ describe('Tickets API routes (acceptance tests t4 & t5)', () => {
       const res = await app.inject({
         method: 'GET',
         url: `/api/v1/guilds/${GUILD_A}/attachments/${att.id}`,
-        cookies: { nt_session: SESSION_TOKEN },
+        headers: { cookie },
       });
       expect(res.statusCode).toBe(500);
       expect(res.json().code).toBe('misconfigured');
@@ -429,7 +427,7 @@ describe('Tickets API routes (acceptance tests t4 & t5)', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/api/v1/guilds/${GUILD_A}/attachments/${att.id}`,
-      cookies: { nt_session: SESSION_TOKEN },
+      headers: { cookie },
     });
     expect(res.statusCode).toBe(404);
     expect(res.json().code).toBe('not_found');
@@ -451,8 +449,7 @@ describe('Tickets API routes (acceptance tests t4 & t5)', () => {
     const resClaim = await app.inject({
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/tickets/${ticket.id}/claim`,
-      cookies: { nt_session: SESSION_TOKEN },
-      headers: { 'X-CSRF-Token': CSRF_TOKEN },
+      headers: { cookie, 'X-CSRF-Token': csrf },
     });
     expect(resClaim.statusCode).toBe(200);
     expect(resClaim.json().status).toBe('claimed');
@@ -462,8 +459,7 @@ describe('Tickets API routes (acceptance tests t4 & t5)', () => {
     const resClose = await app.inject({
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/tickets/${ticket.id}/close`,
-      cookies: { nt_session: SESSION_TOKEN },
-      headers: { 'X-CSRF-Token': CSRF_TOKEN },
+      headers: { cookie, 'X-CSRF-Token': csrf },
       payload: { reason: 'Resolved' },
     });
     expect(resClose.statusCode).toBe(200);
@@ -474,8 +470,7 @@ describe('Tickets API routes (acceptance tests t4 & t5)', () => {
     const resReopen = await app.inject({
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/tickets/${ticket.id}/reopen`,
-      cookies: { nt_session: SESSION_TOKEN },
-      headers: { 'X-CSRF-Token': CSRF_TOKEN },
+      headers: { cookie, 'X-CSRF-Token': csrf },
     });
     expect(resReopen.statusCode).toBe(200);
     expect(resReopen.json().status).toBe('open');
@@ -513,8 +508,7 @@ describe('Tickets API routes (acceptance tests t4 & t5)', () => {
     const resClaim = await app.inject({
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/tickets/${ticket.id}/claim`,
-      cookies: { nt_session: SESSION_TOKEN },
-      headers: { 'X-CSRF-Token': CSRF_TOKEN },
+      headers: { cookie, 'X-CSRF-Token': csrf },
     });
     expect(resClaim.statusCode).toBe(200);
     expect(mockSendMessage).toHaveBeenCalledWith('2001', {
@@ -529,8 +523,7 @@ describe('Tickets API routes (acceptance tests t4 & t5)', () => {
     const resClose = await app.inject({
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/tickets/${ticket.id}/close`,
-      cookies: { nt_session: SESSION_TOKEN },
-      headers: { 'X-CSRF-Token': CSRF_TOKEN },
+      headers: { cookie, 'X-CSRF-Token': csrf },
       payload: { reason: 'Done' },
     });
     expect(resClose.statusCode).toBe(200);

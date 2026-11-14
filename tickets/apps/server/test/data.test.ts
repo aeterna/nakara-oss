@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import Fastify from 'fastify';
-import { createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { openTestDb, type TestDbHandle } from '@nakara-tickets/db/test-support';
 import {
@@ -10,12 +9,12 @@ import {
   tickets,
   messages,
   attachments,
-  sessions,
 } from '@nakara-tickets/db';
 import { installSession } from '../src/session.js';
 import dataRoutes from '../src/routes/data.js';
 import type { TicketsConfig } from '../src/config.js';
 import { sealBytes } from '@nakara-tickets/core';
+import { createTestSession } from './helpers/session.js';
 
 describe('data routes (p4)', () => {
   let testEnv: TestDbHandle;
@@ -97,22 +96,14 @@ describe('data routes (p4)', () => {
     await testEnv.close();
   });
 
-  async function createSession(userId: string, rawToken: string, csrf: string) {
-    const tokenHash = createHash('sha256').update(rawToken).digest('hex');
-    await db.insert(sessions).values({
-      user_id: userId,
-      token_hash: tokenHash,
-      csrf_hash: csrf,
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    });
+  async function createSession(userId: string, username: string) {
+    return createTestSession(db, mockConfig, { userId, username });
   }
 
   // Acceptance test p4:
   // p4 route deleteMeData without CSRF → 403.
   it('p4: route deleteMeData without CSRF → 403', async () => {
-    const rawToken = 'regular-session-token-32b';
-    const csrf = 'valid-csrf-token-123';
-    await createSession(USER_REGULAR, rawToken, csrf);
+    const { cookie, csrf } = await createSession(USER_REGULAR, 'regularuser');
 
     // 1. Without cookie -> 401
     const resNoCookie = await app.inject({
@@ -126,7 +117,7 @@ describe('data routes (p4)', () => {
       method: 'DELETE',
       url: '/api/v1/me/data',
       headers: {
-        cookie: `nt_session=${rawToken}`,
+        cookie,
       },
     });
     expect(resNoCsrf.statusCode).toBe(403);
@@ -137,7 +128,7 @@ describe('data routes (p4)', () => {
       method: 'DELETE',
       url: '/api/v1/me/data',
       headers: {
-        cookie: `nt_session=${rawToken}`,
+        cookie,
         'x-csrf-token': 'wrong-csrf',
       },
     });
@@ -149,7 +140,7 @@ describe('data routes (p4)', () => {
       method: 'DELETE',
       url: '/api/v1/me/data',
       headers: {
-        cookie: `nt_session=${rawToken}`,
+        cookie,
         'x-csrf-token': csrf,
       },
     });
@@ -161,9 +152,7 @@ describe('data routes (p4)', () => {
   });
 
   it('deleteMeData with stub storage deletes the objects', async () => {
-    const rawToken = 'user-token-with-storage';
-    const csrf = 'csrf-storage-valid';
-    await createSession(USER_REGULAR, rawToken, csrf);
+    const { cookie, csrf } = await createSession(USER_REGULAR, 'regularuser');
 
     const [cat] = await db
       .insert(categories)
@@ -220,7 +209,7 @@ describe('data routes (p4)', () => {
       method: 'DELETE',
       url: '/api/v1/me/data',
       headers: {
-        cookie: `nt_session=${rawToken}`,
+        cookie,
         'x-csrf-token': csrf,
       },
     });
@@ -234,9 +223,7 @@ describe('data routes (p4)', () => {
   });
 
   it('deleteMeData with a failing storage delete leaves the row', async () => {
-    const rawToken = 'user-token-failing-storage';
-    const csrf = 'csrf-storage-fail';
-    await createSession(USER_REGULAR, rawToken, csrf);
+    const { cookie, csrf } = await createSession(USER_REGULAR, 'regularuser');
 
     const [cat] = await db
       .insert(categories)
@@ -293,7 +280,7 @@ describe('data routes (p4)', () => {
       method: 'DELETE',
       url: '/api/v1/me/data',
       headers: {
-        cookie: `nt_session=${rawToken}`,
+        cookie,
         'x-csrf-token': csrf,
       },
     });
@@ -308,13 +295,8 @@ describe('data routes (p4)', () => {
   });
 
   it('getExport requires staff and sets Content-Disposition header', async () => {
-    const staffToken = 'staff-token-32b';
-    const staffCsrf = 'staff-csrf-123';
-    await createSession(USER_STAFF, staffToken, staffCsrf);
-
-    const regularToken = 'regular-token-32b';
-    const regularCsrf = 'regular-csrf-123';
-    await createSession(USER_REGULAR, regularToken, regularCsrf);
+    const staff = await createSession(USER_STAFF, 'staffuser');
+    const regular = await createSession(USER_REGULAR, 'regularuser');
 
     // Seed some data to export
     const [cat] = await db
@@ -351,7 +333,7 @@ describe('data routes (p4)', () => {
       method: 'GET',
       url: `/api/v1/guilds/${GUILD_ALLOWED}/export`,
       headers: {
-        cookie: `nt_session=${regularToken}`,
+        cookie: regular.cookie,
       },
     });
     expect(resForbidden.statusCode).toBe(403);
@@ -361,7 +343,7 @@ describe('data routes (p4)', () => {
       method: 'GET',
       url: `/api/v1/guilds/${GUILD_ALLOWED}/export`,
       headers: {
-        cookie: `nt_session=${staffToken}`,
+        cookie: staff.cookie,
       },
     });
     expect(resExport.statusCode).toBe(200);

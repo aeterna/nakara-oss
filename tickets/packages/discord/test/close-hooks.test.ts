@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { runCloseHooks, type CloseHook } from '../src/handlers/close-hooks.js';
 import type { CloseHookContext, DiscordPort } from '../src/types.js';
 import { handleClose } from '../src/handlers/ticket-actions.js';
+import { startGateway } from '../src/gateway.js';
 
 describe('close hooks (x1)', () => {
   it('calls both hooks once and handles a rejecting hook without stopping the other', async () => {
@@ -119,67 +120,18 @@ describe('close hooks (x1)', () => {
     expect(mockPort.editReply).toHaveBeenCalled();
   });
 
-  it('handleClose throws error when dataKey is missing (no fallback key)', async () => {
-    const mockPort: any = {
-      sendMessage: vi.fn().mockResolvedValue({ id: 'msg-1' }),
-      deferReply: vi.fn().mockResolvedValue(undefined),
-      editReply: vi.fn().mockResolvedValue(undefined),
-      lockAndArchiveThread: vi.fn().mockResolvedValue(undefined),
-    };
-
-    const mockDb: any = {
-      select: vi.fn().mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue([
-              { id: 'ticket-1', guild_id: 'guild-1', channel_id: 'chan-1', category_id: 'cat-1', status: 'open' },
-            ]),
-          }),
-        }),
-      }),
-      transaction: vi.fn().mockImplementation(async (cb) => {
-        return cb({
-          select: vi.fn().mockReturnValue({
-            from: vi.fn().mockReturnValue({
-              where: vi.fn().mockReturnValue({
-                for: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue([
-                    { id: 'ticket-1', guild_id: 'guild-1', channel_id: 'chan-1', category_id: 'cat-1', status: 'open', reopened_count: 0 },
-                  ]),
-                }),
-              }),
-            }),
-          }),
-          update: vi.fn().mockReturnValue({
-            set: vi.fn().mockReturnValue({
-              where: vi.fn().mockReturnValue({
-                returning: vi.fn().mockResolvedValue([
-                  { id: 'ticket-1', status: 'closed' },
-                ]),
-              }),
-            }),
-          }),
-          insert: vi.fn().mockReturnValue({
-            values: vi.fn().mockResolvedValue({}),
-          }),
-        });
-      }),
-    };
-
-    const mockInteraction: any = {
-      guildId: 'guild-1',
-      channelId: 'chan-1',
-      user: { id: 'user-1' },
-      memberPermissions: 8n,
-    };
-
-    // Missing dataKey
-    const depsWithoutKey = {
+  it('startGateway rejects when dataKey is missing (no fallback key)', async () => {
+    const depsWithoutKey: any = {
+      token: 'test-token',
+      appId: 'test-app',
+      allowedGuildIds: ['guild-1'],
+      db: {} as any,
+      pool: { connect: vi.fn() },
       log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     };
 
     await expect(
-      handleClose(mockPort, mockDb, mockInteraction, 'ticket-1', 'resolved', depsWithoutKey)
+      startGateway(depsWithoutKey)
     ).rejects.toThrow('dataKey is required');
   });
 });

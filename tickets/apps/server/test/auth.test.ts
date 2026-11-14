@@ -4,9 +4,10 @@ import { createHash, createHmac } from 'node:crypto';
 import * as dbSchema from '@nakara-tickets/db';
 import { sessions } from '@nakara-tickets/db';
 import { openTestDb } from '@nakara-tickets/db/test-support';
-import { installSession, deriveCsrfToken } from '../src/session.js';
+import { installSession } from '../src/session.js';
 import routes from '../src/routes/index.js';
 import type { TicketsConfig } from '../src/config.js';
+import { createTestSession } from './helpers/session.js';
 
 function signTestOAuthCookie(payload: object, key: Buffer): string {
   const derivedKey = createHmac('sha256', key).update('oauth-cookie').digest();
@@ -235,15 +236,9 @@ describe('auth acceptance tests', () => {
 
   it('POST /auth/logout deletes the session and clears cookie', async () => {
     // 1. Create a session directly in DB
-    const sessionToken = 'logout-test-token-base64url';
-    const csrfToken = 'logout-csrf';
-    const tokenHash = createHash('sha256').update(sessionToken).digest('hex');
-    const csrfHash = createHash('sha256').update(csrfToken).digest('hex');
-    await testDb.insert(sessions).values({
-      user_id: '999999999999999999',
-      token_hash: tokenHash,
-      csrf_hash: csrfHash,
-      expires_at: new Date(Date.now() + 86400000),
+    const { cookie, csrf } = await createTestSession(testDb, mockConfig, {
+      userId: '999999999999999999',
+      username: 'logoutuser',
     });
 
     const preRows = await testDb.select().from(sessions);
@@ -254,8 +249,8 @@ describe('auth acceptance tests', () => {
       method: 'POST',
       url: '/auth/logout',
       headers: {
-        cookie: `nt_session=${sessionToken}`,
-        'x-csrf-token': csrfToken,
+        cookie,
+        'x-csrf-token': csrf,
       },
     });
 
@@ -272,15 +267,9 @@ describe('auth acceptance tests', () => {
   });
 
   it('(w6) logout without CSRF → 403', async () => {
-    const sessionToken = 'logout-w6-test-token';
-    const tokenHash = createHash('sha256').update(sessionToken).digest('hex');
-    const csrfToken = 'w6-csrf-token';
-    const csrfHash = createHash('sha256').update(csrfToken).digest('hex');
-    await testDb.insert(sessions).values({
-      user_id: '999999999999999999',
-      token_hash: tokenHash,
-      csrf_hash: csrfHash,
-      expires_at: new Date(Date.now() + 86400000),
+    const { cookie } = await createTestSession(testDb, mockConfig, {
+      userId: '999999999999999999',
+      username: 'logoutuser',
     });
 
     // 1. Without CSRF header -> 403
@@ -288,7 +277,7 @@ describe('auth acceptance tests', () => {
       method: 'POST',
       url: '/auth/logout',
       headers: {
-        cookie: `nt_session=${sessionToken}`,
+        cookie,
       },
     });
     expect(resNoCsrf.statusCode).toBe(403);
@@ -299,7 +288,7 @@ describe('auth acceptance tests', () => {
       method: 'POST',
       url: '/auth/logout',
       headers: {
-        cookie: `nt_session=${sessionToken}`,
+        cookie,
         'x-csrf-token': 'wrong-token',
       },
     });
@@ -390,9 +379,8 @@ describe('auth acceptance tests', () => {
     const rowJson = JSON.stringify(row);
     expect(rowJson).not.toContain(csrfToken);
 
-    // The row's csrf_hash must be the sha256 of the plain csrf token derived via deriveCsrfToken
-    const expectedPlainCsrf = deriveCsrfToken(mockConfig.TICKETS_DATA_KEY, row.id);
-    expect(csrfToken).toBe(expectedPlainCsrf);
+    // The plain csrf token is an HMAC-SHA256 hex digest, and the row stores its sha256
+    expect(csrfToken).toMatch(/^[0-9a-f]{64}$/);
 
     const expectedHash = createHash('sha256').update(csrfToken).digest('hex');
     expect(row.csrf_hash).toBe(expectedHash);

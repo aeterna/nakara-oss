@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import Fastify from 'fastify';
 import { eq, inArray } from 'drizzle-orm';
-import { createHash } from 'node:crypto';
-import { sessions, guilds, categories, panels } from '@nakara-tickets/db';
+import { guilds, categories, panels } from '@nakara-tickets/db';
 import { openTestDb } from '@nakara-tickets/db/test-support';
 import { installSession } from '../src/session.js';
 import { clearStaffCache } from '../src/staff.js';
 import routes from '../src/routes/index.js';
 import type { TicketsConfig } from '../src/config.js';
 import { buildPanelMessage } from '../src/panel-message.js';
+import { createTestSession } from './helpers/session.js';
 
 vi.mock('@nakara-tickets/core', async (importOriginal) => {
   const orig = await importOriginal<Record<string, any>>();
@@ -31,8 +31,8 @@ describe('panels acceptance tests', () => {
   const USER_STAFF = '333333333333333333';
   const ROLE_STAFF = '444444444444444444';
   const CHANNEL_ID = '555555555555555555';
-  const SESSION_TOKEN = 'panels-test-session-token';
-  const CSRF_TOKEN = 'panels-test-csrf-token';
+  let cookie: string;
+  let csrf: string;
 
   let catA1Id: string;
   let catA2Id: string;
@@ -110,13 +110,10 @@ describe('panels acceptance tests', () => {
     catB1Id = cb.id;
 
     // Seed session
-    const tokenHash = createHash('sha256').update(SESSION_TOKEN).digest('hex');
-    await testDb.insert(sessions).values({
-      user_id: USER_STAFF,
-      token_hash: tokenHash,
-      csrf_hash: CSRF_TOKEN,
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    });
+    ({ cookie, csrf } = await createTestSession(testDb, mockConfig, {
+      userId: USER_STAFF,
+      username: 'staffuser',
+    }));
 
     app = Fastify();
     app.decorate('config', mockConfig);
@@ -230,8 +227,8 @@ describe('panels acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/panels`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
         'content-type': 'application/json',
       },
       payload: {
@@ -254,8 +251,8 @@ describe('panels acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/panels`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
         'content-type': 'application/json',
       },
       payload: {
@@ -277,8 +274,8 @@ describe('panels acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/panels`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
         'content-type': 'application/json',
       },
       payload: {
@@ -305,8 +302,8 @@ describe('panels acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/panels`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
         'content-type': 'application/json',
       },
       payload: {
@@ -330,8 +327,8 @@ describe('panels acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/panels/${panel.id}/send`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
     });
     expect(sendRes1.statusCode).toBe(200);
@@ -353,8 +350,8 @@ describe('panels acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/panels/${panel.id}/send`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
     });
     expect(sendRes2.statusCode).toBe(200);
@@ -372,8 +369,8 @@ describe('panels acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/panels/${panel.id}/send`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
     });
     expect(sendRes3.statusCode).toBe(200);
@@ -409,8 +406,8 @@ describe('panels acceptance tests', () => {
       method: 'DELETE',
       url: `/api/v1/guilds/${GUILD_A}/panels/${inserted.id}`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
     });
 
@@ -428,8 +425,8 @@ describe('panels acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/panels`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
         'content-type': 'application/json',
       },
       payload: {
@@ -446,7 +443,7 @@ describe('panels acceptance tests', () => {
     const listRes = await app.inject({
       method: 'GET',
       url: `/api/v1/guilds/${GUILD_A}/panels`,
-      headers: { cookie: `nt_session=${SESSION_TOKEN}` },
+      headers: { cookie },
     });
     expect(listRes.statusCode).toBe(200);
     expect(listRes.json().length).toBe(1);
@@ -457,8 +454,8 @@ describe('panels acceptance tests', () => {
       method: 'PUT',
       url: `/api/v1/guilds/${GUILD_B}/panels/${panelA.id}`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
         'content-type': 'application/json',
       },
       payload: {
@@ -475,8 +472,8 @@ describe('panels acceptance tests', () => {
       method: 'DELETE',
       url: `/api/v1/guilds/${GUILD_B}/panels/${panelA.id}`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
     });
     expect(delRes.statusCode).toBe(404);
@@ -493,8 +490,8 @@ describe('panels acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/panels`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
         'content-type': 'application/json',
       },
       payload: {
@@ -532,8 +529,8 @@ describe('panels acceptance tests', () => {
       method: 'PUT',
       url: `/api/v1/guilds/${GUILD_A}/panels/${inserted.id}`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
         'content-type': 'application/json',
       },
       payload: {

@@ -4,12 +4,6 @@ import { and, eq, asc, inArray } from 'drizzle-orm';
 import { panels, categories, inGuild, type TicketsDb } from '@nakara-tickets/db';
 import { buildPanelMessage } from '../panel-message.js';
 
-declare module '../discord-rest.js' {
-  interface DiscordRest {
-    getChannel?(channelId: string): Promise<{ id: string; guild_id?: string; type?: number }>;
-  }
-}
-
 const snowflakeRegex = /^[0-9]{17,20}$/;
 
 const buttonSchema = z.object({

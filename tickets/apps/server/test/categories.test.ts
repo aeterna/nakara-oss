@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import Fastify from 'fastify';
 import { eq } from 'drizzle-orm';
-import { createHash } from 'node:crypto';
 import * as dbSchema from '@nakara-tickets/db';
-import { sessions, guilds, categories, tickets } from '@nakara-tickets/db';
+import { guilds, categories, tickets } from '@nakara-tickets/db';
 import { openTestDb } from '@nakara-tickets/db/test-support';
 import { installSession } from '../src/session.js';
 import { clearStaffCache } from '../src/staff.js';
 import routes from '../src/routes/index.js';
 import type { TicketsConfig } from '../src/config.js';
+import { createTestSession } from './helpers/session.js';
 
 vi.mock('@nakara-tickets/core', async (importOriginal) => {
   const orig = await importOriginal<Record<string, any>>();
@@ -132,8 +132,8 @@ describe('categories acceptance tests', () => {
   const GUILD_B = '222222222222222222';
   const USER_STAFF = '333333333333333333';
   const ROLE_STAFF = '444444444444444444';
-  const SESSION_TOKEN = 'categories-test-session-token';
-  const CSRF_TOKEN = 'categories-test-csrf-token';
+  let cookie: string;
+  let csrf: string;
 
   const mockConfig: TicketsConfig = {
     ROLE: 'all',
@@ -168,13 +168,10 @@ describe('categories acceptance tests', () => {
     ]);
 
     // Seed session
-    const tokenHash = createHash('sha256').update(SESSION_TOKEN).digest('hex');
-    await testDb.insert(sessions).values({
-      user_id: USER_STAFF,
-      token_hash: tokenHash,
-      csrf_hash: CSRF_TOKEN,
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    });
+    ({ cookie, csrf } = await createTestSession(testDb, mockConfig, {
+      userId: USER_STAFF,
+      username: 'staffuser',
+    }));
 
     app = Fastify();
     app.decorate('config', mockConfig);
@@ -220,8 +217,8 @@ describe('categories acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/categories`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
         'content-type': 'application/json',
       },
       payload: {
@@ -237,7 +234,7 @@ describe('categories acceptance tests', () => {
       method: 'GET',
       url: `/api/v1/guilds/${GUILD_A}/categories`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
+        cookie,
       },
     });
     expect(getRes.statusCode).toBe(200);
@@ -253,8 +250,8 @@ describe('categories acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/categories`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
         'content-type': 'application/json',
       },
       payload: {
@@ -273,8 +270,8 @@ describe('categories acceptance tests', () => {
       method: 'PUT',
       url: `/api/v1/guilds/${GUILD_B}/categories/${catAId}`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
         'content-type': 'application/json',
       },
       payload: {
@@ -292,8 +289,8 @@ describe('categories acceptance tests', () => {
       method: 'DELETE',
       url: `/api/v1/guilds/${GUILD_B}/categories/${catAId}`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
     });
     expect(delRes.statusCode).toBe(404);
@@ -306,8 +303,8 @@ describe('categories acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/categories`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
         'content-type': 'application/json',
       },
       payload: {
@@ -324,8 +321,8 @@ describe('categories acceptance tests', () => {
       method: 'PUT',
       url: `/api/v1/guilds/${GUILD_A}/categories/${cat.id}`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
         'content-type': 'application/json',
       },
       payload: {
@@ -353,8 +350,8 @@ describe('categories acceptance tests', () => {
       method: 'DELETE',
       url: `/api/v1/guilds/${GUILD_A}/categories/${cat.id}`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
     });
     expect(delConflictRes.statusCode).toBe(409);
@@ -368,8 +365,8 @@ describe('categories acceptance tests', () => {
       method: 'DELETE',
       url: `/api/v1/guilds/${GUILD_A}/categories/${cat.id}`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
     });
     expect(delCleanRes.statusCode).toBe(204);

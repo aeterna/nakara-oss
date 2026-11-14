@@ -1,20 +1,20 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import Fastify from 'fastify';
-import { createHash } from 'node:crypto';
 import { openTestDb } from '@nakara-tickets/db/test-support';
-import { guilds, sessions, tags } from '@nakara-tickets/db';
+import { guilds, tags } from '@nakara-tickets/db';
 import { installSession } from '../src/session.js';
 import { clearStaffCache } from '../src/staff.js';
 import routes from '../src/routes/index.js';
 import type { TicketsConfig } from '../src/config.js';
+import { createTestSession } from './helpers/session.js';
 
 describe('a2 tags route acceptance tests', () => {
   const GUILD_A = '111111111111111111';
   const GUILD_B = '222222222222222222';
   const USER_STAFF = '333333333333333333';
   const ROLE_STAFF = '444444444444444444';
-  const SESSION_TOKEN = 'tags-test-session-token';
-  const CSRF_TOKEN = 'tags-test-csrf-token';
+  let cookie: string;
+  let csrf: string;
 
   const mockConfig: TicketsConfig = {
     ROLE: 'all',
@@ -53,13 +53,10 @@ describe('a2 tags route acceptance tests', () => {
     ]);
 
     // Seed session for staff user
-    const tokenHash = createHash('sha256').update(SESSION_TOKEN).digest('hex');
-    await testDb.insert(sessions).values({
-      user_id: USER_STAFF,
-      token_hash: tokenHash,
-      csrf_hash: CSRF_TOKEN,
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    });
+    ({ cookie, csrf } = await createTestSession(testDb, mockConfig, {
+      userId: USER_STAFF,
+      username: 'staffuser',
+    }));
 
     // Mock fetch for staff check
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => {
@@ -107,8 +104,8 @@ describe('a2 tags route acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/tags`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
       payload: {
         name: 'rules-general',
@@ -126,8 +123,8 @@ describe('a2 tags route acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/tags`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
       payload: {
         name: 'rules-general',
@@ -146,8 +143,8 @@ describe('a2 tags route acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/tags`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
       payload: {
         name: 'INVALID_NAME',
@@ -161,8 +158,8 @@ describe('a2 tags route acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/tags`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
       payload: {
         name: '',
@@ -176,8 +173,8 @@ describe('a2 tags route acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/tags`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
       payload: {
         name: 'a'.repeat(33),
@@ -191,8 +188,8 @@ describe('a2 tags route acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/tags`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
       payload: {
         name: 'long-body',
@@ -208,8 +205,8 @@ describe('a2 tags route acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/tags`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
       payload: {
         name: 'welcome-tag',
@@ -222,8 +219,8 @@ describe('a2 tags route acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_B}/tags`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
       payload: {
         name: 'welcome-tag',
@@ -237,7 +234,7 @@ describe('a2 tags route acceptance tests', () => {
       method: 'GET',
       url: `/api/v1/guilds/${GUILD_A}/tags`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
+        cookie,
       },
     });
     expect(resListA.statusCode).toBe(200);
@@ -250,7 +247,7 @@ describe('a2 tags route acceptance tests', () => {
       method: 'GET',
       url: `/api/v1/guilds/${GUILD_B}/tags`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
+        cookie,
       },
     });
     expect(resListB.statusCode).toBe(200);
@@ -265,8 +262,8 @@ describe('a2 tags route acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_A}/tags`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
       payload: {
         name: 'my-tag',
@@ -280,8 +277,8 @@ describe('a2 tags route acceptance tests', () => {
       method: 'PUT',
       url: `/api/v1/guilds/${GUILD_A}/tags/${tagId}`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
       payload: {
         name: 'my-tag-renamed',
@@ -297,8 +294,8 @@ describe('a2 tags route acceptance tests', () => {
       method: 'DELETE',
       url: `/api/v1/guilds/${GUILD_A}/tags/${tagId}`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
-        'x-csrf-token': CSRF_TOKEN,
+        cookie,
+        'x-csrf-token': csrf,
       },
     });
     expect(resDel.statusCode).toBe(204);
@@ -308,7 +305,7 @@ describe('a2 tags route acceptance tests', () => {
       method: 'GET',
       url: `/api/v1/guilds/${GUILD_A}/tags`,
       headers: {
-        cookie: `nt_session=${SESSION_TOKEN}`,
+        cookie,
       },
     });
     expect(JSON.parse(resList.body).length).toBe(0);

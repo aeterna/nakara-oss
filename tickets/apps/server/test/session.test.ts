@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import Fastify from 'fastify';
-import { createHash } from 'node:crypto';
 import * as dbSchema from '@nakara-tickets/db';
 import { sessions, guilds, categories } from '@nakara-tickets/db';
 import { openTestDb } from '@nakara-tickets/db/test-support';
@@ -8,6 +7,7 @@ import { installSession, deriveCsrfToken } from '../src/session.js';
 import { checkStaff, clearStaffCache } from '../src/staff.js';
 import routes from '../src/routes/index.js';
 import type { TicketsConfig } from '../src/config.js';
+import { createTestSession } from './helpers/session.js';
 
 vi.mock('@nakara-tickets/core', async (importOriginal) => {
   const orig = await importOriginal<Record<string, any>>();
@@ -183,16 +183,8 @@ describe('session & staff acceptance tests', () => {
     await testEnv.close();
   });
 
-  async function createSession(userId: string, rawToken: string, csrf: string) {
-    const tokenHash = createHash('sha256').update(rawToken).digest('hex');
-    const csrfHash = createHash('sha256').update(csrf).digest('hex');
-    const [row] = await testDb.insert(sessions).values({
-      user_id: userId,
-      token_hash: tokenHash,
-      csrf_hash: csrfHash,
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    }).returning();
-    return row;
+  async function createSession(userId: string, username: string) {
+    return createTestSession(testDb, mockConfig, { userId, username });
   }
 
   it('(a1) no cookie → 401', async () => {
@@ -211,15 +203,13 @@ describe('session & staff acceptance tests', () => {
   });
 
   it('(a2) valid session, not staff → 403', async () => {
-    const rawToken = 'regular-user-session-token-32b-base64url';
-    const csrf = 'regular-csrf-token';
-    await createSession(USER_NON_STAFF, rawToken, csrf);
+    const { cookie } = await createSession(USER_NON_STAFF, 'regularuser');
 
     const res = await app.inject({
       method: 'GET',
       url: `/api/v1/guilds/${GUILD_ALLOWED}/categories`,
       headers: {
-        cookie: `nt_session=${rawToken}`,
+        cookie,
       },
     });
     expect(res.statusCode).toBe(403);
@@ -227,15 +217,13 @@ describe('session & staff acceptance tests', () => {
   });
 
   it('(a3) staff, guild not in allowlist → 403', async () => {
-    const rawToken = 'staff-user-session-token-32b-base64url';
-    const csrf = 'staff-csrf-token';
-    await createSession(USER_STAFF, rawToken, csrf);
+    const { cookie } = await createSession(USER_STAFF, 'staffuser');
 
     const res = await app.inject({
       method: 'GET',
       url: `/api/v1/guilds/${GUILD_NOT_ALLOWED}/categories`,
       headers: {
-        cookie: `nt_session=${rawToken}`,
+        cookie,
       },
     });
     expect(res.statusCode).toBe(403);
@@ -243,9 +231,8 @@ describe('session & staff acceptance tests', () => {
   });
 
   it('(a4) POST without CSRF → 403, with → 201; header with csrf_hash directly is rejected', async () => {
-    const rawToken = 'staff-user-csrf-test-token-base64url';
-    const csrf = 'valid-csrf-token-12345';
-    const sessionRow = await createSession(USER_STAFF, rawToken, csrf);
+    const { cookie, csrf } = await createSession(USER_STAFF, 'staffuser');
+    const [sessionRow] = await testDb.select().from(sessions);
 
     const validBody = {
       name: 'Support',
@@ -259,7 +246,7 @@ describe('session & staff acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_ALLOWED}/categories`,
       headers: {
-        cookie: `nt_session=${rawToken}`,
+        cookie,
         'content-type': 'application/json',
       },
       payload: validBody,
@@ -272,7 +259,7 @@ describe('session & staff acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_ALLOWED}/categories`,
       headers: {
-        cookie: `nt_session=${rawToken}`,
+        cookie,
         'x-csrf-token': 'wrong-csrf-token',
         'content-type': 'application/json',
       },
@@ -286,7 +273,7 @@ describe('session & staff acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_ALLOWED}/categories`,
       headers: {
-        cookie: `nt_session=${rawToken}`,
+        cookie,
         'x-csrf-token': sessionRow.csrf_hash,
         'content-type': 'application/json',
       },
@@ -300,7 +287,7 @@ describe('session & staff acceptance tests', () => {
       method: 'POST',
       url: `/api/v1/guilds/${GUILD_ALLOWED}/categories`,
       headers: {
-        cookie: `nt_session=${rawToken}`,
+        cookie,
         'x-csrf-token': csrf,
         'content-type': 'application/json',
       },

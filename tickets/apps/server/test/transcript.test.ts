@@ -1,20 +1,20 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import Fastify from 'fastify';
-import { createHash } from 'node:crypto';
 import { openTestDb } from '@nakara-tickets/db/test-support';
-import { guilds, categories, tickets, messages, sessions } from '@nakara-tickets/db';
+import { guilds, categories, tickets, messages } from '@nakara-tickets/db';
 import { sealBytes } from '@nakara-tickets/core';
 import { installSession } from '../src/session.js';
 import routes from '../src/routes/index.js';
 import type { TicketsConfig } from '../src/config.js';
+import { createTestSession } from './helpers/session.js';
 
 describe('Ticket transcript (acceptance test t3)', () => {
   const GUILD_ID = '111111111111111111';
   const USER_STAFF = '222222222222222222';
   const ROLE_STAFF = '333333333333333333';
-  const SESSION_TOKEN = 'transcript-test-session-token';
-  const CSRF_TOKEN = 'transcript-test-csrf-token';
   const testKey = Buffer.alloc(32, 9);
+
+  let cookie: string;
 
   const mockConfig: TicketsConfig = {
     ROLE: 'all',
@@ -60,13 +60,10 @@ describe('Ticket transcript (acceptance test t3)', () => {
     }).returning();
 
     // 2. Seed session
-    const tokenHash = createHash('sha256').update(SESSION_TOKEN).digest('hex');
-    await testDb.insert(sessions).values({
-      user_id: USER_STAFF,
-      token_hash: tokenHash,
-      csrf_hash: CSRF_TOKEN,
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    });
+    ({ cookie } = await createTestSession(testDb, mockConfig, {
+      userId: USER_STAFF,
+      username: 'staffuser',
+    }));
 
     // 3. Setup app
     app = Fastify();
@@ -129,7 +126,7 @@ describe('Ticket transcript (acceptance test t3)', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/api/v1/guilds/${GUILD_ID}/tickets/${ticket.id}/transcript`,
-      cookies: { nt_session: SESSION_TOKEN },
+      headers: { cookie },
     });
 
     expect(res.statusCode).toBe(200);
