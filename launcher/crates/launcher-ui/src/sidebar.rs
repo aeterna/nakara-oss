@@ -12,14 +12,22 @@ pub fn view<'a>(selected: usize) -> Element<'a, Message> {
         .width(Length::Fill)
         .height(Length::Fill);
 
-    for index in 0..3 {
+    let instances = crate::sample::instances().len();
+
+    for index in 0..instances.min(3) {
         list = list.push(instance_button(index, selected));
     }
 
-    list = list.push(section("เครื่องมือ"));
-    list = list.push(instance_button(3, selected));
+    if instances > 3 {
+        list = list.push(section("เครื่องมือ"));
+        list = list.push(instance_button(3, selected));
+    }
+
     list = list.push(Space::new().height(Length::Fill));
-    list = list.push(discord_button());
+
+    if crate::profile::invite_url().is_some() {
+        list = list.push(discord_button());
+    }
     list = list.push(container(row![label("เว็บไซต์", 14.0, theme::T2)]).padding([8, 8]));
     list =
         list.push(container(row![label("Launcher 0.1.0 · ร่าง", 11.0, theme::T3)]).padding([4, 8]));
@@ -33,7 +41,14 @@ pub fn view<'a>(selected: usize) -> Element<'a, Message> {
 }
 
 fn brand<'a>() -> Element<'a, Message> {
-    let mark = container(label("A", 15.0, Color::WHITE))
+    let brand = crate::profile::brand();
+    let letter = brand
+        .chars()
+        .next()
+        .map(|first| first.to_uppercase().collect::<String>())
+        .unwrap_or_else(|| "?".to_string());
+
+    let mark = container(label(&letter, 15.0, Color::WHITE))
         .width(28)
         .height(28)
         .align_x(iced::Center)
@@ -41,7 +56,7 @@ fn brand<'a>() -> Element<'a, Message> {
         .style(theme::panel(theme::rgb(0x119a7a), 8.0));
 
     let name = column![
-        label("AETERNA Game", 15.0, theme::T1),
+        label(brand, 15.0, theme::T1),
         label("Launcher", 12.0, theme::T3),
     ]
     .spacing(0);

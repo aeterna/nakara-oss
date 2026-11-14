@@ -162,17 +162,19 @@ fn segment<'a>(width: f32, height: f32, color: Color, border: Border) -> Element
 }
 
 fn actions<'a>(inst: &Instance) -> Element<'a, Message> {
-    let mut bar = row![
-        play_button(inst),
-        picker(inst),
-        chrome_button("ตรวจเครื่อง"),
-        chrome_button("โฟลเดอร์ภาพ"),
-        Space::new().width(Length::Fill),
-    ]
-    .spacing(12)
-    .width(Length::Fill)
-    .height(56)
-    .align_y(iced::Center);
+    let mut bar = row![play_button(inst), picker(inst)];
+
+    if crate::profile::connect_on() {
+        bar = bar.push(chrome_button("ตรวจเครื่อง"));
+    }
+
+    bar = bar.push(chrome_button("โฟลเดอร์ภาพ"));
+    bar = bar.push(Space::new().width(Length::Fill));
+    bar = bar
+        .spacing(12)
+        .width(Length::Fill)
+        .height(56)
+        .align_y(iced::Center);
 
     if inst.show_invite {
         bar = bar.push(invite());

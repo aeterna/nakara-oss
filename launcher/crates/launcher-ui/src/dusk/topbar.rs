@@ -10,18 +10,19 @@ use iced::{Element, Length, Padding};
 const NAV: [&str; 5] = ["หน้าหลัก", "ข่าว", "เซิร์ฟเวอร์", "ตรวจเครื่อง", "บันทึกแพตช์"];
 
 pub fn view<'a>() -> Element<'a, Message> {
-    let nav = container(
-        row![
-            nav_button(NAV[0], true),
-            nav_button(NAV[1], false),
-            nav_button(NAV[2], false),
-            nav_button(NAV[3], false),
-            nav_button(NAV[4], false),
-        ]
-        .spacing(2),
-    )
-    .padding(4)
-    .style(glass::glass(14.0));
+    let mut buttons: Vec<Element<'a, Message>> = Vec::new();
+    for title in NAV.iter() {
+        if *title == "ตรวจเครื่อง" && !crate::profile::connect_on() {
+            continue;
+        }
+
+        let active = buttons.is_empty();
+        buttons.push(nav_button(*title, active));
+    }
+
+    let nav = container(row(buttons).spacing(2))
+        .padding(4)
+        .style(glass::glass(14.0));
 
     row![nav, Space::new().width(Length::Fill), account(), settings(),]
         .spacing(12)

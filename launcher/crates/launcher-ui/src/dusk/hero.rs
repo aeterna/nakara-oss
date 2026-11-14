@@ -39,17 +39,15 @@ pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
     .spacing(10)
     .align_y(iced::Center);
 
-    let actions = container(
-        row![
-            play_group(inst),
-            picker(inst),
-            icon_button(Icon::Shield),
-            icon_button(Icon::Folder),
-        ]
-        .spacing(12)
-        .align_y(iced::Center),
-    )
-    .padding(Padding {
+    let mut actions_row = row![play_group(inst), picker(inst)];
+
+    if crate::profile::connect_on() {
+        actions_row = actions_row.push(icon_button(Icon::Shield));
+    }
+
+    actions_row = actions_row.push(icon_button(Icon::Folder));
+
+    let actions = container(actions_row.spacing(12).align_y(iced::Center)).padding(Padding {
         top: 18.0,
         right: 0.0,
         bottom: 0.0,

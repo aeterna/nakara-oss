@@ -22,7 +22,11 @@ pub fn view<'a>(selected: usize) -> Element<'a, Message> {
     list = list.push(section("กิจกรรมของเมือง", 16.0));
     list = list.push(event_card());
     list = list.push(Space::new().height(Length::Fill));
-    list = list.push(discord_button());
+
+    if crate::profile::invite_url().is_some() {
+        list = list.push(discord_button());
+    }
+
     list = list.push(website());
     list = list.push(version());
 
@@ -35,7 +39,14 @@ pub fn view<'a>(selected: usize) -> Element<'a, Message> {
 }
 
 fn brand<'a>() -> Element<'a, Message> {
-    let mark = container(label("A", 15.0, Color::WHITE))
+    let brand = crate::profile::brand();
+    let letter = brand
+        .chars()
+        .next()
+        .map(|first| first.to_uppercase().collect::<String>())
+        .unwrap_or_else(|| "?".to_string());
+
+    let mark = container(label(&letter, 15.0, Color::WHITE))
         .width(30)
         .height(30)
         .align_x(iced::Center)
@@ -43,7 +54,7 @@ fn brand<'a>() -> Element<'a, Message> {
         .style(theme::panel(theme::rgb(0x119a7a), 9.0));
 
     let name = column![
-        label("AETERNA Game", 15.0, glass::INK),
+        label(brand, 15.0, glass::INK),
         label("Launcher", 12.0, glass::MUTED),
     ]
     .spacing(0);
