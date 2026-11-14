@@ -493,10 +493,7 @@ mod tests {
             handoff_timeout(Duration::from_secs(60)),
             Duration::from_secs(30)
         );
-        assert_eq!(
-            HANDOFF_TIMEOUT,
-            Duration::from_secs(30)
-        );
+        assert_eq!(HANDOFF_TIMEOUT, Duration::from_secs(30));
     }
 
     #[test]
