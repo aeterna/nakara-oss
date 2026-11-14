@@ -12,7 +12,9 @@ export async function runMigrations(databaseUrl: string, migrationsDir: string |
   const client = new pg.Client({ connectionString: databaseUrl });
   await client.connect();
   try {
-    const dirUrl = typeof migrationsDir === 'string' ? new URL(migrationsDir, import.meta.url) : migrationsDir;
+    const rawDir = typeof migrationsDir === 'string' ? migrationsDir : migrationsDir.href;
+    const normalizedDir = rawDir.endsWith('/') ? rawDir : `${rawDir}/`;
+    const dirUrl = typeof migrationsDir === 'string' ? new URL(normalizedDir, import.meta.url) : new URL(normalizedDir);
     const files = readdirSync(dirUrl)
       .filter((f) => f.endsWith('.sql'))
       .sort();

@@ -86,5 +86,14 @@ export function createDiscordPort(client: Client): DiscordPort {
         }
       }
     },
+
+    async fetchMessages(channelId: string, before?: string) {
+      const channel = (await client.channels.fetch(channelId)) as TextChannel | ThreadChannel;
+      if (!channel || !channel.messages) return [];
+      const opts: { limit: number; before?: string } = { limit: 100 };
+      if (before) opts.before = before;
+      const fetched = await channel.messages.fetch(opts);
+      return Array.from(fetched.values());
+    },
   };
 }

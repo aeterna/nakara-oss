@@ -44,6 +44,8 @@ export async function handleInteraction(
         await handleClose(port, deps.db, interaction, ticketId, undefined, deps);
       } else if (customId.startsWith('nt:rate:')) {
         await handleRatingButton(port, deps.db, interaction, deps);
+      } else if (customId === 'nt:delme:confirm' || customId.startsWith('nt:delme:confirm')) {
+        await handleDeleteMyData(port, deps.db, interaction, deps);
       }
     } else if (interaction.isModalSubmit && interaction.isModalSubmit()) {
       const customId: string = interaction.customId ?? '';

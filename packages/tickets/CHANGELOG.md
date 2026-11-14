@@ -13,6 +13,7 @@ All notable changes to `nakara_tickets` are documented here. The format follows
 - Credential and action execution deduplication storage (`store.js`) using KVP.
 - Console pairing command (`pairing.js`) with `nakara_tickets pair <code>`, `status`, and `unpair`.
 - Built-in action execution handlers (`actions.js`) for `player.info` and `player.teleport`.
+- Built-in action execution handlers for `player.revive` (via `qbx_medical`) and `player.give_item` (via `ox_inventory`) with allowlist and quantity caps.
 - Custom action registration export `exports('registerAction', ...)`.
 - Long-poll worker and periodic heartbeat loop (`main.js`).
 

@@ -28,6 +28,7 @@ export interface DiscordPort {
     message: string | { content: string; embeds?: any[]; components?: any[] }
   ): Promise<void>;
   lockAndArchiveThread(threadId: string): Promise<void>;
+  fetchMessages(channelId: string, before?: string): Promise<any[]>;
 }
 
 export type GatewayStatus = 'standby' | 'connecting' | 'connected';

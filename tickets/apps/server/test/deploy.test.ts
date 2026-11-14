@@ -196,4 +196,35 @@ describe('deploy compose sanity acceptance tests', () => {
     expect(backup).toBeDefined();
     expect(backup.depends_on?.postgres?.condition).toBe('service_healthy');
   });
+
+  it('d4: Dockerfile CMD runs server.mjs, sets MIGRATIONS_DIR and WEB_DIR, and runtime copies no src/ directory', () => {
+    const dockerfilePath = fileURLToPath(new URL('../../../Dockerfile', import.meta.url));
+    expect(fs.existsSync(dockerfilePath), 'tickets/Dockerfile must exist').toBe(true);
+    const content = fs.readFileSync(dockerfilePath, 'utf8');
+
+    const runtimeMatch = content.match(/FROM\s+\S+\s+AS\s+runtime([\s\S]*)$/i);
+    expect(runtimeMatch, 'Dockerfile must have runtime stage').toBeDefined();
+    const runtimeStage = runtimeMatch![1];
+
+    // CMD runs server.mjs
+    const cmdMatch = runtimeStage.match(/CMD\s*(\[[^\]]+\])/);
+    expect(cmdMatch, 'runtime stage must have CMD').toBeDefined();
+    const cmdArgs = JSON.parse(cmdMatch![1].replace(/'/g, '"'));
+    expect(cmdArgs).toEqual(['node', 'server.mjs']);
+
+    // sets MIGRATIONS_DIR and WEB_DIR
+    expect(runtimeStage).toMatch(/ENV\s+[^#\n]*\bMIGRATIONS_DIR=/);
+    expect(runtimeStage).toMatch(/ENV\s+[^#\n]*\bWEB_DIR=/);
+
+    // runtime stage copies no src/ directory
+    const copyLines = runtimeStage
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith('COPY'));
+
+    expect(copyLines.length).toBeGreaterThan(0);
+    for (const line of copyLines) {
+      expect(line).not.toMatch(/\bsrc\b/);
+    }
+  });
 });

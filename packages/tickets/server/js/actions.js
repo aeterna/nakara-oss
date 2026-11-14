@@ -17,6 +17,19 @@ if (typeof globalThis.exports !== 'undefined' && typeof globalThis.exports === '
   } catch {}
 }
 
+function getResourceExport(resourceName) {
+  if (typeof globalThis.exports === 'undefined') return null;
+  if (globalThis.exports && globalThis.exports[resourceName]) {
+    return globalThis.exports[resourceName];
+  }
+  if (typeof globalThis.exports === 'function') {
+    try {
+      return globalThis.exports(resourceName);
+    } catch {}
+  }
+  return null;
+}
+
 function findPlayerByDiscordId(targetDiscordId) {
   if (!targetDiscordId || typeof GetPlayers !== 'function') return null;
 
@@ -88,12 +101,9 @@ async function executeAction(action) {
       let job = null;
       if (typeof GetResourceState === 'function' && GetResourceState('qbx_core') === 'started') {
         try {
-          if (
-            typeof globalThis.exports !== 'undefined' &&
-            globalThis.exports['qbx_core'] &&
-            typeof globalThis.exports['qbx_core'].GetPlayer === 'function'
-          ) {
-            const qbxPlayer = globalThis.exports['qbx_core'].GetPlayer(playerId);
+          const qbxCore = getResourceExport('qbx_core');
+          if (qbxCore && typeof qbxCore.GetPlayer === 'function') {
+            const qbxPlayer = qbxCore.GetPlayer(playerId);
             job = qbxPlayer?.PlayerData?.job?.name ?? null;
           }
         } catch {}
@@ -145,6 +155,126 @@ async function executeAction(action) {
             code: 'done',
             data: { spot: spotName },
           };
+        }
+      }
+    }
+  } else if (actionName === 'player.revive') {
+    if (typeof GetResourceState !== 'function' || GetResourceState('qbx_medical') !== 'started') {
+      result = {
+        ok: false,
+        code: 'adapter_missing',
+        message: 'qbx_medical resource is not started',
+      };
+    } else {
+      const playerId = findPlayerByDiscordId(action.discordId);
+      if (!playerId) {
+        result = {
+          ok: false,
+          code: 'player_offline',
+          message: 'Player is not online',
+        };
+      } else {
+        const qbxMedical = getResourceExport('qbx_medical');
+        if (!qbxMedical || typeof qbxMedical.Revive !== 'function') {
+          result = {
+            ok: false,
+            code: 'adapter_missing',
+            message: 'qbx_medical Revive export not found',
+          };
+        } else {
+          try {
+            qbxMedical.Revive(playerId);
+            result = {
+              ok: true,
+              code: 'done',
+              data: { playerId: Number(playerId) },
+            };
+          } catch (err) {
+            result = {
+              ok: false,
+              code: 'error',
+              message: err?.message || 'Error executing Revive',
+            };
+          }
+        }
+      }
+    }
+  } else if (actionName === 'player.give_item') {
+    if (typeof GetResourceState !== 'function' || GetResourceState('ox_inventory') !== 'started') {
+      result = {
+        ok: false,
+        code: 'adapter_missing',
+        message: 'ox_inventory resource is not started',
+      };
+    } else {
+      const item = action.params?.item;
+      const count = action.params?.count;
+      const allowedCaps = config.giveItem?.allow;
+
+      if (!allowedCaps || typeof allowedCaps !== 'object' || typeof item !== 'string' || !(item in allowedCaps)) {
+        result = {
+          ok: false,
+          code: 'not_allowed',
+          message: `Item ${item} is not allowed`,
+        };
+      } else {
+        const maxCount = allowedCaps[item];
+        if (typeof count !== 'number' || !Number.isInteger(count) || count < 1 || count > maxCount) {
+          result = {
+            ok: false,
+            code: 'over_cap',
+            message: `Count ${count} is invalid or exceeds cap of ${maxCount}`,
+          };
+        } else {
+          const playerId = findPlayerByDiscordId(action.discordId);
+          if (!playerId) {
+            result = {
+              ok: false,
+              code: 'player_offline',
+              message: 'Player is not online',
+            };
+          } else {
+            const oxInv = getResourceExport('ox_inventory');
+            if (!oxInv || typeof oxInv.CanCarryItem !== 'function' || typeof oxInv.AddItem !== 'function') {
+              result = {
+                ok: false,
+                code: 'adapter_missing',
+                message: 'ox_inventory exports not found',
+              };
+            } else {
+              try {
+                const canCarry = oxInv.CanCarryItem(playerId, item, count);
+                if (!canCarry) {
+                  result = {
+                    ok: false,
+                    code: 'error',
+                    message: 'Player cannot carry item',
+                  };
+                } else {
+                  const added = oxInv.AddItem(playerId, item, count);
+                  if (added === false || added === null || added === undefined) {
+                    result = {
+                      ok: false,
+                      code: 'error',
+                      message: 'Failed to add item',
+                    };
+                  } else {
+                    result = {
+                      ok: true,
+                      code: 'done',
+                      data: { item, count },
+                    };
+                  }
+                }
+              } catch (err) {
+                result = {
+                  ok: false,
+                  code: 'error',
+                  message: err?.message || 'Error executing ox_inventory AddItem',
+                };
+              }
+            }
+          }
         }
       }
     }

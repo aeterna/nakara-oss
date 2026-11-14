@@ -20,6 +20,7 @@ export interface DiscordRest {
   editMessage(channelId: string, messageId: string, body: any): Promise<any>;
   deleteMessage(channelId: string, messageId: string): Promise<void>;
   createDM(userId: string): Promise<any>;
+  patchChannel(channelId: string, body: any): Promise<any>;
 }
 
 export function createDiscordRest(opts: DiscordRestOptions): DiscordRest {
@@ -121,6 +122,13 @@ export function createDiscordRest(opts: DiscordRestOptions): DiscordRest {
       return request('/users/@me/channels', {
         method: 'POST',
         body: { recipient_id: userId },
+      });
+    },
+
+    async patchChannel(channelId: string, body: any): Promise<any> {
+      return request(`/channels/${channelId}`, {
+        method: 'PATCH',
+        body,
       });
     },
   };
