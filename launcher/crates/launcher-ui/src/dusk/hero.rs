@@ -10,14 +10,15 @@ use iced::widget::{button, column, container, row, text_input, Space};
 use iced::{Background, Border, Color, Element, Length, Padding};
 
 pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
-    let chips = row![
-        container(label(inst.chips[0], 12.0, INK))
-            .padding([4, 10])
-            .style(glass::glass(8.0)),
-        container(label(inst.chips[1], 12.0, INK2)).padding([4, 10]),
-    ]
+    let mut chips = row![container(label(inst.chips[0], 12.0, INK))
+        .padding([4, 10])
+        .style(glass::glass(8.0))]
     .spacing(8)
     .align_y(iced::Center);
+
+    if !inst.chips[1].is_empty() {
+        chips = chips.push(container(label(inst.chips[1], 12.0, INK2)).padding([4, 10]));
+    }
 
     let title = row![title_tile(inst), label(inst.name, 68.0, Color::WHITE)]
         .spacing(18)

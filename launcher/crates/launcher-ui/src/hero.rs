@@ -10,12 +10,13 @@ use iced::{Background, Border, Color, Element, Length};
 pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
     let skin = theme::rgb(inst.skin);
 
-    let chips = row![
-        chip(inst.chips[0], theme::T1),
-        chip(inst.chips[1], theme::T2),
-    ]
-    .spacing(8)
-    .align_y(iced::Center);
+    let mut chips = row![chip(inst.chips[0], theme::T1)]
+        .spacing(8)
+        .align_y(iced::Center);
+
+    if !inst.chips[1].is_empty() {
+        chips = chips.push(chip(inst.chips[1], theme::T2));
+    }
 
     let title = row![
         container(label(inst.initials, 20.0, skin))

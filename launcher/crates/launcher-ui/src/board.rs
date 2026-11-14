@@ -78,12 +78,24 @@ fn body<'a>(inst: &'a Instance) -> Element<'a, Message> {
     ]
     .align_y(iced::Center);
 
-    let news_cards = row![
-        news_card(inst.news[0].0, inst.news[0].1),
-        news_card(inst.news[1].0, inst.news[1].1),
-    ]
-    .spacing(12)
-    .width(Length::Fill);
+    let news_cards: Element<'a, Message> = if inst.news.is_empty() {
+        container(label("ยังไม่มีข่าว", 13.0, theme::T3))
+            .padding(Padding {
+                top: 12.0,
+                right: 0.0,
+                bottom: 0.0,
+                left: 0.0,
+            })
+            .into()
+    } else {
+        let mut cards = row![].spacing(12).width(Length::Fill);
+
+        for &(title, date) in inst.news {
+            cards = cards.push(news_card(title, date));
+        }
+
+        cards.into()
+    };
 
     let news = column![news_header, news_cards]
         .spacing(12)

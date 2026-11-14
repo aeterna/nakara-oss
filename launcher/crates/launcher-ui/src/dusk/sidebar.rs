@@ -19,8 +19,11 @@ pub fn view<'a>(selected: usize) -> Element<'a, Message> {
         list = list.push(instance_button(index, selected));
     }
 
-    list = list.push(section("กิจกรรมของเมือง", 16.0));
-    list = list.push(event_card());
+    if let Some((title, when)) = sample::event() {
+        list = list.push(section("กิจกรรมของเมือง", 16.0));
+        list = list.push(event_card(title, when));
+    }
+
     list = list.push(Space::new().height(Length::Fill));
 
     if crate::profile::invite_url().is_some() {
@@ -126,10 +129,10 @@ fn instance_button<'a>(index: usize, selected: usize) -> Element<'a, Message> {
         .into()
 }
 
-fn event_card<'a>() -> Element<'a, Message> {
+fn event_card<'a>(title: &str, when: &str) -> Element<'a, Message> {
     let info = column![
-        label(sample::EVENT.0, 15.0, glass::INK),
-        label(sample::EVENT.1, 12.0, glass::MUTED),
+        label(title, 15.0, glass::INK),
+        label(when, 12.0, glass::MUTED),
         detail_button(),
     ]
     .spacing(4)

@@ -16,7 +16,7 @@ pub struct Instance {
     pub play_enabled: bool,
     pub show_hours: bool,
     pub show_invite: bool,
-    pub news: [(&'static str, &'static str); 2],
+    pub news: &'static [(&'static str, &'static str)],
     pub patch_title: &'static str,
     pub patch: &'static [(&'static str, &'static [&'static str])],
     pub operator: &'static str,
@@ -38,7 +38,7 @@ const SAMPLES: [Instance; 4] = [
         play_enabled: false,
         show_hours: true,
         show_invite: true,
-        news: [
+        news: &[
             ("ชั่วโมงเมืองใหม่ 17:00–00:00", "13 พ.ย."),
             ("ภารกิจวันแรกสำหรับคนเพิ่งเข้าเมือง", "10 พ.ย."),
         ],
@@ -67,7 +67,7 @@ const SAMPLES: [Instance; 4] = [
         play_enabled: false,
         show_hours: false,
         show_invite: false,
-        news: [
+        news: &[
             ("ระบบทดสอบในเกมพร้อมแล้ว", "8 พ.ย."),
             ("Lobby สำหรับทดสอบสองคน", "8 พ.ย."),
         ],
@@ -90,7 +90,7 @@ const SAMPLES: [Instance; 4] = [
         play_enabled: false,
         show_hours: false,
         show_invite: false,
-        news: [
+        news: &[
             ("ภาพตัวละครชุดใหม่", "22 ต.ค."),
             ("เปิดห้อง Playtest ใน Discord", "12 พ.ย."),
         ],
@@ -113,7 +113,7 @@ const SAMPLES: [Instance; 4] = [
         play_enabled: true,
         show_hours: false,
         show_invite: false,
-        news: [
+        news: &[
             ("กฎใหม่: ชื่อโปรแกรมนอกโฟลเดอร์ Windows", "12 พ.ย."),
             ("Connect พร้อมทดสอบวงปิด", "7 พ.ย."),
         ],
@@ -127,20 +127,48 @@ const SAMPLES: [Instance; 4] = [
     },
 ];
 
+/// The neutral entry 0 for builds without the studio's games. Everything that
+/// belongs to Nakara City is left blank and filled from the profile.
+const NEUTRAL: Instance = Instance {
+    initials: "",
+    name: "",
+    status: "ยังไม่มีข้อมูลสถานะ",
+    status_on: false,
+    skin: SAMPLES[0].skin,
+    chips: ["", ""],
+    sub: "สถานะและข่าวจะขึ้นที่นี่เมื่อเซิร์ฟเชื่อมต่อ feed",
+    pick_label: "เซิร์ฟเวอร์",
+    pick_value: "",
+    play_label: "เข้าเกม",
+    play_enabled: true,
+    show_hours: false,
+    show_invite: false,
+    news: &[],
+    patch_title: "ยังไม่มีแพตช์",
+    patch: &[],
+    operator: "",
+    contact: "",
+};
+
 /// The instances shown on Home. Entry 0 is the profile's server; the studio's
 /// other games follow only when the profile enables `studio_games`. Status, news
-/// and patch notes are sample data for every entry.
+/// and patch notes are sample data for the studio's entries.
 pub fn instances() -> &'static [Instance] {
     static INSTANCES: std::sync::OnceLock<Vec<Instance>> = std::sync::OnceLock::new();
     INSTANCES.get_or_init(|| {
         let p = crate::profile::get();
-        let mut first = SAMPLES[0];
+        let studio = p.features.studio_games;
+        let mut first = if studio { SAMPLES[0] } else { NEUTRAL };
 
         first.name = &p.server.name;
         first.initials = Box::leak(crate::profile::initials(&p.server.name).into_boxed_str());
         first.chips[0] = crate::profile::game_label(&p.server.game);
         first.operator = &p.server.operator;
         first.contact = &p.server.contact_email;
+
+        if !studio {
+            first.pick_value = &p.server.name;
+        }
 
         let mut instances = vec![first];
         if p.features.studio_games {
@@ -151,5 +179,12 @@ pub fn instances() -> &'static [Instance] {
     })
 }
 
-/// Sample featured event; the real one comes from the feed.
-pub const EVENT: (&str, &str) = ("ลอยกระทงที่ท่าน้ำนคร", "เสาร์ 22 พ.ย. · 20:00 ในเมือง");
+/// Sample featured event; the real one comes from the feed. Only the studio
+/// build shows it.
+pub fn event() -> Option<(&'static str, &'static str)> {
+    if crate::profile::get().features.studio_games {
+        Some(("ลอยกระทงที่ท่าน้ำนคร", "เสาร์ 22 พ.ย. · 20:00 ในเมือง"))
+    } else {
+        None
+    }
+}
