@@ -17,7 +17,10 @@ release_repo = "aeterna/nakara-oss"
 
 [theme]
 template = "dusk"
+brand = "AETERNA Game"
 accent = "#0c7a60"
 
 [features]
 rongroi_connect = true
+# The studio's other games in the sidebar (sample data until the feed lists them).
+studio_games = true
