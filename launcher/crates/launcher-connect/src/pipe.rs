@@ -325,7 +325,7 @@ pub fn serve_for_test(
 /// A new launch pipe name, from 16 random bytes.
 pub(crate) fn random_pipe_name() -> io::Result<String> {
     let mut bytes = [0u8; 16];
-    getrandom::fill(&mut bytes).map_err(io::Error::other)?;
+    getrandom::fill(&mut bytes).map_err(|err| io::Error::other(format!("random bytes: {err}")))?;
     Ok(pipe_name_from(bytes))
 }
 
