@@ -1,6 +1,6 @@
 # ADR 0003 — Nakara Tickets (`tickets/`, `packages/tickets`): a self-hosted Discord ticket system with a FiveM bridge
 
-- Status: proposed — owner answered Q1–Q7 and Q4b/Q7b as recommended, 2026-11-14; accepted when this PR merges
+- Status: accepted — owner answered Q1–Q7 and Q4b/Q7b as recommended and started W1, 2026-11-14 (W1 PR)
 - Date: 2026-11-14
 - Related: ADR 0001 (Server Kit: KVP settings, Node `crypto`, measured S1/S3/S5); ADR 0002 (a product under its own
   folder with its own workflow); this repo's `AGENTS.md` hard rules 3, 4, 5, 7 and 8; plan "Nakara Tickets"

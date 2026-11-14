@@ -34,6 +34,8 @@ jobs:
         run: npm test --workspace packages/devkit
       - name: Rongroi Server Kit specs
         run: npm test --workspace packages/rongroi
+      - name: nakara_tickets resource specs
+        run: npm test --workspace packages/tickets
       - name: static checks (dogfood)
         run: node packages/devkit/bin/fivem-devkit.js check
       - name: safety scan (every package + template)
