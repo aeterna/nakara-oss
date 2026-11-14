@@ -18,7 +18,7 @@ use iced::{Element, Length};
 
 fn main() -> iced::Result {
     iced::application(App::default, App::update, App::view)
-        .title(format!("{} Launcher", profile::brand()))
+        .title(|_: &App| format!("{} Launcher", profile::brand()))
         .window_size((1280.0, 800.0))
         .font(include_bytes!("../../../assets/Anuphan.ttf").as_slice())
         .default_font(iced::Font::with_name("Anuphan"))
