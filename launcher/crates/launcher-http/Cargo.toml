@@ -10,7 +10,7 @@ publish = false
 
 [dependencies]
 ureq = { version = "=2.12.1", default-features = false, features = ["tls"] }
-thiserror = "=2.0.17"
+thiserror = "=2.0.21"
 launcher-net = { path = "../launcher-net" }
 
 [dev-dependencies]
