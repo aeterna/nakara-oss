@@ -7,12 +7,11 @@ schema = 1
 id = "nakara"
 name = "Nakara City"
 game = "fivem-enhanced"
-# Placeholder until the owner sets the public join address.
-connect = "play.example.com:30120"
+connect = "play.nakara-city.com:30120"
 operator = "AETERNA Game"
-# Placeholder until the owner sets the public contact address (Creator PLA §2.3).
-contact_email = "contact@example.com"
+contact_email = "support@nakara-city.com"
 feed = "https://nakara-city.com/api/launcher/v1"
+invite_url = "https://discord.gg/8EVHX5R9CE"
 release_repo = "aeterna/nakara-oss"
 
 [theme]
