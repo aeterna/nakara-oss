@@ -61,18 +61,28 @@ function recordExecutedAction(actionId, result) {
   const list = loadKvpExecutedList();
   list.push({ id: actionId, result, timestamp: now });
 
-  // Trim list to the last 120 seconds
+  // Trim list and memory to the last 120 seconds
   const cutoff = now - 120 * 1000;
+  for (const [id, entry] of memoryActions.entries()) {
+    if (typeof entry.timestamp === 'number' && entry.timestamp < cutoff) {
+      memoryActions.delete(id);
+    }
+  }
+
   const trimmed = list.filter((item) => typeof item.timestamp === 'number' && item.timestamp >= cutoff);
   saveKvpExecutedList(trimmed);
 }
 
 function getExecutedIds(windowSeconds = 60) {
-  const cutoff = Date.now() - windowSeconds * 1000;
+  const now = Date.now();
+  const cutoff = now - windowSeconds * 1000;
+  const memoryCutoff = now - 120 * 1000;
   const ids = new Set();
 
   for (const [id, entry] of memoryActions.entries()) {
-    if (entry.timestamp >= cutoff) {
+    if (entry.timestamp < memoryCutoff) {
+      memoryActions.delete(id);
+    } else if (entry.timestamp >= cutoff) {
       ids.add(id);
     }
   }

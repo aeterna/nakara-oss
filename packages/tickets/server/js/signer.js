@@ -12,8 +12,9 @@ function bridgeCanonical(parts) {
 }
 
 function signBridge(secret, parts) {
+  const key = Buffer.isBuffer(secret) ? secret : Buffer.from(secret, 'base64url');
   const canonical = bridgeCanonical(parts);
-  return crypto.createHmac('sha256', secret).update(canonical, 'utf8').digest('hex');
+  return crypto.createHmac('sha256', key).update(canonical, 'utf8').digest('hex');
 }
 
 function buildHeaders(serverId, secret, method, pathWithQuery, body, options = {}) {

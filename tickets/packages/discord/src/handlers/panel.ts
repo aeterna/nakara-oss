@@ -1,8 +1,7 @@
 import type { DiscordPort } from '../types.js';
 import type { TicketsDb } from '@nakara-tickets/db';
-import { panels } from '@nakara-tickets/db';
-import { getCategory, getSettings } from '../db-bridge.js';
-import { isStaff, MANAGE_GUILD, ADMINISTRATOR } from '../core-bridge.js';
+import { panels, getCategory, getSettings } from '@nakara-tickets/db';
+import { isStaff, MANAGE_GUILD, ADMINISTRATOR } from '@nakara-tickets/core';
 import { t } from '../i18n.js';
 
 function extractMemberInfo(interaction: any): { permissions: bigint; roleIds: string[] } {
@@ -43,8 +42,11 @@ export async function handlePanelSend(
   targetChannelId: string
 ): Promise<void> {
   const guildId = interaction.guildId;
-  const settings = await getSettings(db, guildId);
-  const locale = settings?.locale ?? 'th';
+  let locale = 'th';
+  try {
+    const settings = await getSettings(db, guildId);
+    if (settings?.locale) locale = settings.locale;
+  } catch {}
 
   const memberInfo = extractMemberInfo(interaction);
   const hasManageServer =
@@ -55,15 +57,19 @@ export async function handlePanelSend(
   let userIsStaff = hasManageServer;
 
   for (const catId of categoryIds) {
-    const cat = await getCategory(db, guildId, catId);
-    if (cat) {
-      validCategories.push(cat);
-      if (!userIsStaff) {
-        const staffRoles = (cat.staff_role_ids ?? []) as string[];
-        if (isStaff({ permissions: memberInfo.permissions, roleIds: memberInfo.roleIds, staffRoleIds: staffRoles })) {
-          userIsStaff = true;
+    try {
+      const cat = await getCategory(db, guildId, catId);
+      if (cat) {
+        validCategories.push(cat);
+        if (!userIsStaff) {
+          const staffRoles = (cat.staff_role_ids ?? []) as string[];
+          if (isStaff({ permissions: memberInfo.permissions, roleIds: memberInfo.roleIds, staffRoleIds: staffRoles })) {
+            userIsStaff = true;
+          }
         }
       }
+    } catch {
+      // category not found or other error, skip
     }
   }
 

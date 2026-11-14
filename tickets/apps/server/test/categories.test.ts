@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
+import { eq } from 'drizzle-orm';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -146,6 +147,7 @@ describe('categories acceptance tests', () => {
   const GUILD_A = '111111111111111111';
   const GUILD_B = '222222222222222222';
   const USER_STAFF = '333333333333333333';
+  const ROLE_STAFF = '444444444444444444';
   const SESSION_TOKEN = 'categories-test-session-token';
   const CSRF_TOKEN = 'categories-test-csrf-token';
 
@@ -199,7 +201,7 @@ describe('categories acceptance tests', () => {
           ok: true,
           status: 200,
           json: async () => ({
-            roles: ['role-staff'],
+            roles: [ROLE_STAFF],
             user: { id: USER_STAFF, username: 'staffuser', avatar: null },
           }),
         };
@@ -211,7 +213,7 @@ describe('categories acceptance tests', () => {
           status: 200,
           json: async () => [
             { id: guildId, name: '@everyone', permissions: '0' },
-            { id: 'role-staff', name: 'Staff', permissions: String(1n << 5n) }, // MANAGE_GUILD
+            { id: ROLE_STAFF, name: 'Staff', permissions: String(1n << 5n) }, // MANAGE_GUILD
           ],
         };
       }
@@ -230,7 +232,7 @@ describe('categories acceptance tests', () => {
       },
       payload: {
         name: 'Billing',
-        staffRoleIds: ['role-staff'],
+        staffRoleIds: [ROLE_STAFF],
         mode: 'thread',
         parentChannelId: '123456789012345678',
       },
@@ -263,7 +265,7 @@ describe('categories acceptance tests', () => {
       },
       payload: {
         name: 'Guild A Secret Category',
-        staffRoleIds: ['role-staff'],
+        staffRoleIds: [ROLE_STAFF],
         mode: 'thread',
         parentChannelId: '123456789012345678',
       },
@@ -283,7 +285,7 @@ describe('categories acceptance tests', () => {
       },
       payload: {
         name: 'Hacked Name',
-        staffRoleIds: ['role-staff'],
+        staffRoleIds: [ROLE_STAFF],
         mode: 'thread',
         parentChannelId: '123456789012345678',
       },
@@ -316,7 +318,7 @@ describe('categories acceptance tests', () => {
       },
       payload: {
         name: 'Technical',
-        staffRoleIds: ['role-staff'],
+        staffRoleIds: [ROLE_STAFF],
         mode: 'thread',
         parentChannelId: '123456789012345678',
       },
@@ -334,7 +336,7 @@ describe('categories acceptance tests', () => {
       },
       payload: {
         name: 'Technical Support',
-        staffRoleIds: ['role-staff'],
+        staffRoleIds: [ROLE_STAFF],
         mode: 'channel',
         parentChannelId: '123456789012345678',
       },
@@ -365,7 +367,7 @@ describe('categories acceptance tests', () => {
     expect(delConflictRes.json().code).toBe('conflict');
 
     // Remove referencing ticket
-    await testDb.delete(tickets).where(dbSchema.eq(tickets.category_id, cat.id));
+    await testDb.delete(tickets).where(eq(tickets.category_id, cat.id));
 
     // Delete category cleanly -> 204
     const delCleanRes = await app.inject({

@@ -6,5 +6,5 @@ export * from './gateway.js';
 export * from './adapter.js';
 export * from './i18n.js';
 export * from './handlers/index.js';
-export { TicketError } from './db-bridge.js';
-export { isStaff } from './core-bridge.js';
+export { TicketError } from '@nakara-tickets/db';
+export { isStaff } from '@nakara-tickets/core';

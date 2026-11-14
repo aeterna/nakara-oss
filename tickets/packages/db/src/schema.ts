@@ -13,10 +13,12 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
-export const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+export const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array }>({
   dataType() {
     return 'bytea';
   },
+  fromDriver: (v) => Buffer.from(v as Uint8Array),
+  toDriver: (v) => v,
 });
 
 export const ticketStatusEnum = pgEnum('ticket_status', ['open', 'claimed', 'closed']);

@@ -11,9 +11,9 @@ function registerAction(name, schema, fn) {
   customActions.set(name, { schema, fn });
 }
 
-if (typeof exports !== 'undefined' && typeof exports === 'function') {
+if (typeof globalThis.exports !== 'undefined' && typeof globalThis.exports === 'function') {
   try {
-    exports('registerAction', registerAction);
+    globalThis.exports('registerAction', registerAction);
   } catch {}
 }
 
@@ -83,13 +83,17 @@ async function executeAction(action) {
       const name = typeof GetPlayerName === 'function' ? GetPlayerName(playerId) : 'Unknown';
       const ping = typeof GetPlayerPing === 'function' ? GetPlayerPing(playerId) : 0;
       const ped = typeof GetPlayerPed === 'function' ? GetPlayerPed(playerId) : null;
-      const coords = (ped !== null && typeof GetEntityCoords === 'function') ? GetEntityCoords(ped) : null;
+      const coords = (ped !== null && ped !== 0 && typeof GetEntityCoords === 'function') ? GetEntityCoords(ped) : null;
 
       let job = null;
       if (typeof GetResourceState === 'function' && GetResourceState('qbx_core') === 'started') {
         try {
-          if (typeof exports !== 'undefined' && exports['qbx_core'] && typeof exports['qbx_core'].GetPlayer === 'function') {
-            const qbxPlayer = exports['qbx_core'].GetPlayer(playerId);
+          if (
+            typeof globalThis.exports !== 'undefined' &&
+            globalThis.exports['qbx_core'] &&
+            typeof globalThis.exports['qbx_core'].GetPlayer === 'function'
+          ) {
+            const qbxPlayer = globalThis.exports['qbx_core'].GetPlayer(playerId);
             job = qbxPlayer?.PlayerData?.job?.name ?? null;
           }
         } catch {}
@@ -126,14 +130,22 @@ async function executeAction(action) {
         };
       } else {
         const ped = typeof GetPlayerPed === 'function' ? GetPlayerPed(playerId) : null;
-        if (ped !== null && typeof SetEntityCoords === 'function') {
-          SetEntityCoords(ped, spot.x, spot.y, spot.z, false, false, false, false);
+        if (!ped || ped === 0) {
+          result = {
+            ok: false,
+            code: 'error',
+            message: 'Player ped not found',
+          };
+        } else {
+          if (typeof SetEntityCoords === 'function') {
+            SetEntityCoords(ped, spot.x, spot.y, spot.z, false, false, false, false);
+          }
+          result = {
+            ok: true,
+            code: 'done',
+            data: { spot: spotName },
+          };
         }
-        result = {
-          ok: true,
-          code: 'done',
-          data: { spot: spotName },
-        };
       }
     }
   } else {

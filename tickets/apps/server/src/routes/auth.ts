@@ -69,7 +69,7 @@ export default async function (app: FastifyInstance) {
       code_challenge_method: 'S256',
     });
 
-    return reply.redirect(302, `https://discord.com/oauth2/authorize?${params.toString()}`);
+    return reply.redirect(`https://discord.com/oauth2/authorize?${params.toString()}`);
   });
 
   app.get('/auth/callback', async (req: FastifyRequest, reply: FastifyReply) => {
@@ -169,7 +169,7 @@ export default async function (app: FastifyInstance) {
     reply.clearCookie('nt_oauth', { path: '/auth' });
     reply.setCookie('nt_session', sessionToken, getSessionCookieOptions(config));
 
-    return reply.redirect(302, '/');
+    return reply.redirect('/');
   });
 
   app.post('/auth/logout', async (req: FastifyRequest, reply: FastifyReply) => {

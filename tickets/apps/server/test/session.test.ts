@@ -111,6 +111,8 @@ describe('session & staff acceptance tests', () => {
   const GUILD_NOT_ALLOWED = '999999999999999999';
   const USER_STAFF = '222222222222222222';
   const USER_NON_STAFF = '333333333333333333';
+  const ROLE_STAFF = '444444444444444444';
+  const ROLE_MEMBER = '555555555555555555';
 
   const mockConfig: TicketsConfig = {
     ROLE: 'all',
@@ -153,7 +155,7 @@ describe('session & staff acceptance tests', () => {
           ok: true,
           status: 200,
           json: async () => ({
-            roles: ['role-staff'],
+            roles: [ROLE_STAFF],
             user: { id: USER_STAFF, username: 'staffuser', avatar: null },
           }),
         };
@@ -163,7 +165,7 @@ describe('session & staff acceptance tests', () => {
           ok: true,
           status: 200,
           json: async () => ({
-            roles: ['role-member'],
+            roles: [ROLE_MEMBER],
             user: { id: USER_NON_STAFF, username: 'regularuser', avatar: null },
           }),
         };
@@ -174,8 +176,8 @@ describe('session & staff acceptance tests', () => {
           status: 200,
           json: async () => [
             { id: GUILD_ALLOWED, name: '@everyone', permissions: '0' },
-            { id: 'role-staff', name: 'Staff', permissions: String(1n << 5n) }, // MANAGE_GUILD
-            { id: 'role-member', name: 'Member', permissions: '0' },
+            { id: ROLE_STAFF, name: 'Staff', permissions: String(1n << 5n) }, // MANAGE_GUILD
+            { id: ROLE_MEMBER, name: 'Member', permissions: '0' },
           ],
         };
       }
@@ -251,7 +253,7 @@ describe('session & staff acceptance tests', () => {
 
     const validBody = {
       name: 'Support',
-      staffRoleIds: ['role-staff'],
+      staffRoleIds: [ROLE_STAFF],
       mode: 'thread',
       parentChannelId: '123456789012345678',
     };
@@ -306,7 +308,7 @@ describe('session & staff acceptance tests', () => {
           ok: true,
           status: 200,
           json: async () => ({
-            roles: ['role-staff'],
+            roles: [ROLE_STAFF],
             user: { id: USER_STAFF },
           }),
         };
@@ -317,7 +319,7 @@ describe('session & staff acceptance tests', () => {
           status: 200,
           json: async () => [
             { id: GUILD_ALLOWED, name: '@everyone', permissions: '0' },
-            { id: 'role-staff', name: 'Staff', permissions: String(1n << 5n) },
+            { id: ROLE_STAFF, name: 'Staff', permissions: String(1n << 5n) },
           ],
         };
       }
@@ -328,7 +330,7 @@ describe('session & staff acceptance tests', () => {
       { token: 'bot-token', fetchImpl: fetchSpy as any },
       GUILD_ALLOWED,
       USER_STAFF,
-      ['role-staff']
+      [ROLE_STAFF]
     );
     expect(isStaffFirst).toBe(true);
     const callCountAfterFirst = fetchSpy.mock.calls.length;
@@ -339,7 +341,7 @@ describe('session & staff acceptance tests', () => {
       { token: 'bot-token', fetchImpl: fetchSpy as any },
       GUILD_ALLOWED,
       USER_STAFF,
-      ['role-staff']
+      [ROLE_STAFF]
     );
     expect(isStaffSecond).toBe(true);
     expect(fetchSpy.mock.calls.length).toBe(callCountAfterFirst);

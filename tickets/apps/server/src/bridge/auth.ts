@@ -47,6 +47,14 @@ export function installBridgeAuth(
       return reply.code(401).send({ code: 'unauthorized', message: 'unauthorized' });
     }
 
+    const tsStr = String(tsHeader);
+    if (!/^\d{1,12}$/.test(tsStr)) {
+      return reply.code(401).send({ code: 'unauthorized', message: 'unauthorized' });
+    }
+    if (!/^[A-Za-z0-9_-]{16,64}$/.test(nonceHeader)) {
+      return reply.code(401).send({ code: 'unauthorized', message: 'unauthorized' });
+    }
+
     // Load game_servers row (not revoked)
     let server: typeof gameServers.$inferSelect | undefined;
     try {

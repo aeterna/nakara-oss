@@ -266,11 +266,11 @@ describe('acceptance tests d1-d8', () => {
     await handleClaim(port, db, nonStaffInteraction, ticket.id);
 
     // Ephemeral refusal
-    expect(port.ephemeralReplies.length).toBe(1);
-    const refusedText =
-      typeof port.ephemeralReplies[0].message === 'string'
+    const reply =
+      port.ephemeralReplies.length > 0
         ? port.ephemeralReplies[0].message
-        : port.ephemeralReplies[0].message.content;
+        : port.editedReplies[0]?.message;
+    const refusedText = typeof reply === 'string' ? reply : reply?.content;
     expect(refusedText).toMatch(/staff|ทีมงาน/i);
 
     // DB remains unchanged

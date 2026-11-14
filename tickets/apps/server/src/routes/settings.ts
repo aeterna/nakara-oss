@@ -13,8 +13,12 @@ const guildSettingsSchema = z.object({
 });
 
 export default async function (app: FastifyInstance) {
-  const requireStaff = (req: FastifyRequest, reply: FastifyReply) =>
-    app.requireStaff(req, reply);
+  const requireStaff = (req: FastifyRequest, reply: FastifyReply) => {
+    if (typeof app.requireStaff !== 'function') {
+      return reply.code(500).send({ code: 'misconfigured', message: 'Staff auth misconfigured' });
+    }
+    return app.requireStaff(req, reply);
+  };
 
   app.get(
     '/api/v1/guilds/:guildId/settings',

@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { eq, and, sql } from 'drizzle-orm';
 import { gameActions, tickets, categories, gameServers, inGuild } from '@nakara-tickets/db';
+import '../bridge/staff-types.js';
 
 function formatAction(r: typeof gameActions.$inferSelect) {
   return {
@@ -19,9 +20,10 @@ function formatAction(r: typeof gameActions.$inferSelect) {
 
 export default async function (app: FastifyInstance) {
   const requireStaffAuth = async (req: FastifyRequest, reply: FastifyReply) => {
-    if (app.requireStaff) {
-      return app.requireStaff(req, reply);
+    if (typeof app.requireStaff !== 'function') {
+      return reply.code(500).send({ code: 'misconfigured', message: 'Staff authentication not configured' });
     }
+    return app.requireStaff(req, reply);
   };
 
   // GET /api/v1/guilds/:guildId/tickets/:ticketId/actions

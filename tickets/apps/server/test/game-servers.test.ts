@@ -56,7 +56,7 @@ describe('game-servers and actions API acceptance tests', () => {
 
   function createTestApp() {
     const app = buildApp({ db, config });
-    // Fake staff auth decorator for test
+    // Staff auth decorator for test
     app.decorate('requireStaff', async (req: any) => {
       req.guildId = req.params?.guildId;
       req.user = { id: staffUserId, username: 'StaffMember' };
@@ -234,5 +234,18 @@ describe('game-servers and actions API acceptance tests', () => {
     const actionList = resList.json();
     expect(actionList.length).toBe(1);
     expect(actionList[0].id).toBe(actionBody.id);
+  });
+
+  it('fails with 500 misconfigured when requireStaff decorator is missing (fail-open protection)', async () => {
+    // App without requireStaff decorator
+    const bareApp = buildApp({ db, config });
+
+    const res = await bareApp.inject({
+      method: 'GET',
+      url: `/api/v1/guilds/${guildId}/game-servers`,
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(res.json().code).toBe('misconfigured');
   });
 });

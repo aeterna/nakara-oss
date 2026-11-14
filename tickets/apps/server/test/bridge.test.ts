@@ -54,9 +54,10 @@ describe('bridge API acceptance tests', () => {
     });
   });
 
-  function createTestApp() {
-    const app = buildApp({ db, config });
-    installBridgeAuth(app, { db, dataKey });
+  function createTestApp(overrideConfig?: Partial<TicketsConfig>) {
+    const finalConfig = overrideConfig ? { ...config, ...overrideConfig } : config;
+    const app = buildApp({ db, config: finalConfig });
+    installBridgeAuth(app, { db, dataKey: finalConfig.TICKETS_DATA_KEY });
     return app;
   }
 
@@ -253,6 +254,22 @@ describe('bridge API acceptance tests', () => {
     });
     expect(resSkew.statusCode).toBe(401);
     expect(resSkew.json().code).toBe('unauthorized');
+
+    // 5. Malformed timestamp or nonce -> 401
+    const resBadNonce = await app.inject({
+      method: 'POST',
+      url: '/bridge/v1/heartbeat',
+      headers: {
+        'content-type': 'application/json',
+        'x-tickets-server': server.id,
+        'x-tickets-timestamp': String(nowSec),
+        'x-tickets-nonce': 'short', // less than 16 chars
+        'x-tickets-signature': validSig,
+        'x-tickets-protocol': '1',
+      },
+      payload,
+    });
+    expect(resBadNonce.statusCode).toBe(401);
   });
 
   it('(b4) actions: queued action leased once, second poll gets null, after lease expiry the same id comes back; unconfirmed server gets null', async () => {
@@ -322,7 +339,7 @@ describe('bridge API acceptance tests', () => {
     // Helper to send signed actions GET request
     const getActions = async (srvId: string, queryWait = 0) => {
       const nowSec = Math.floor(Date.now() / 1000);
-      const nonce = 'nonce-' + Math.random().toString(36).slice(2);
+      const nonce = 'nonce-' + Math.random().toString(36).slice(2).padEnd(16, '0');
       const pathWithQuery = `/bridge/v1/actions?wait=${queryWait}`;
       const sig = signBridge(rawSecret, {
         timestamp: nowSec,
@@ -344,7 +361,7 @@ describe('bridge API acceptance tests', () => {
       });
     };
 
-    // 1. Unconfirmed server gets null
+    // 1. Unconfirmed server gets null (wait=0)
     const resUnconfirmed = await getActions(unconfirmedServer.id, 0);
     expect(resUnconfirmed.statusCode).toBe(200);
     expect(resUnconfirmed.json()).toEqual({ action: null });
@@ -430,7 +447,7 @@ describe('bridge API acceptance tests', () => {
 
     const postResult = async (resultObj: any) => {
       const nowSec = Math.floor(Date.now() / 1000);
-      const nonce = 'nonce-' + Math.random().toString(36).slice(2);
+      const nonce = 'nonce-' + Math.random().toString(36).slice(2).padEnd(16, '0');
       const pathWithQuery = `/bridge/v1/actions/${action.id}/result`;
       const payload = JSON.stringify(resultObj);
       const sig = signBridge(rawSecret, {
@@ -477,7 +494,7 @@ describe('bridge API acceptance tests', () => {
     expect(auditEntry).toBeDefined();
     expect(auditEntry.kind).toBe('action.result');
 
-    // 2. Same result again -> 200 (idempotent)
+    // 2. Same result again -> 200 (idempotent via deep equality)
     const res2 = await postResult(firstResult);
     expect(res2.statusCode).toBe(200);
     expect(res2.json()).toEqual({ ok: true });
@@ -487,5 +504,109 @@ describe('bridge API acceptance tests', () => {
     const res3 = await postResult(differentResult);
     expect(res3.statusCode).toBe(409);
     expect(res3.json().code).toBe('conflict');
+
+    // 4. Invalid result schema (extra key) -> 400
+    const invalidResult = { ok: true, code: 'done', extraField: 'bad' };
+    const res4 = await postResult(invalidResult);
+    expect(res4.statusCode).toBe(400);
+  });
+
+  it('(b7) pair → sign exactly as the resource does → API accepts', async () => {
+    const app = createTestApp();
+    const rawPairCode = 'CROCKFORD01';
+    // Test normalization with Crockford letters
+    const normCode = rawPairCode.trim().toUpperCase().replace(/[IL]/g, '1').replace(/O/g, '0');
+    const codeHash = sha256hex(normCode);
+
+    await db.insert(schema.pairCodes).values({
+      guild_id: guildId,
+      code_hash: codeHash,
+      server_name: 'Nakara RP #7',
+      expires_at: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    // 1. Pair request with unnormalized code (e.g. lowercase with Crockford 'o')
+    const pairRes = await app.inject({
+      method: 'POST',
+      url: '/bridge/v1/pair',
+      payload: {
+        code: 'crockford01',
+        serverName: 'Nakara RP #7',
+        edition: 'gta5',
+        resourceVersion: '0.1.0',
+        protocol: 1,
+      },
+    });
+    expect(pairRes.statusCode).toBe(200);
+    const { serverId, secret, guildName } = pairRes.json();
+    expect(serverId).toBeDefined();
+    expect(secret).toBeDefined();
+    expect(typeof secret).toBe('string');
+    expect(guildName).toBe('Test Guild');
+
+    // Confirm server
+    await db
+      .update(schema.gameServers)
+      .set({ confirmed: true })
+      .where(schema.inGuild(schema.gameServers, guildId));
+
+    // 2. Resource signs with Buffer.from(secret, 'base64url')
+    const decodedKey = Buffer.from(secret, 'base64url');
+    const nowSec = Math.floor(Date.now() / 1000);
+    const nonce = 'nonce-b7-test-unique123';
+    const payload = JSON.stringify({ players: [{ playerId: 1, discordId: '123456789012345678' }] });
+    const parts = {
+      timestamp: nowSec,
+      nonce,
+      method: 'POST',
+      pathWithQuery: '/bridge/v1/heartbeat',
+      body: payload,
+    };
+    const sig = signBridge(decodedKey, parts);
+
+    const heartbeatRes = await app.inject({
+      method: 'POST',
+      url: '/bridge/v1/heartbeat',
+      headers: {
+        'content-type': 'application/json',
+        'x-tickets-server': serverId,
+        'x-tickets-timestamp': String(nowSec),
+        'x-tickets-nonce': nonce,
+        'x-tickets-signature': sig,
+        'x-tickets-protocol': '1',
+      },
+      payload,
+    });
+
+    expect(heartbeatRes.statusCode).toBe(200);
+    expect(heartbeatRes.json()).toEqual({ ok: true });
+  });
+
+  it('pair fails with 500 misconfigured when TICKETS_DATA_KEY is missing', async () => {
+    const appWithoutKey = createTestApp({ TICKETS_DATA_KEY: null as any });
+    const pairCodePlain = 'KEYTEST100';
+    const codeHash = sha256hex(pairCodePlain);
+
+    await db.insert(schema.pairCodes).values({
+      guild_id: guildId,
+      code_hash: codeHash,
+      server_name: 'Key Test Server',
+      expires_at: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    const res = await appWithoutKey.inject({
+      method: 'POST',
+      url: '/bridge/v1/pair',
+      payload: {
+        code: pairCodePlain,
+        serverName: 'Key Test Server',
+        edition: 'gta5',
+        resourceVersion: '0.1.0',
+        protocol: 1,
+      },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(res.json().code).toBe('misconfigured');
   });
 });

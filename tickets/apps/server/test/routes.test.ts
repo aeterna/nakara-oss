@@ -22,6 +22,37 @@ for (const [path, pathItem] of Object.entries(spec.paths as Record<string, any>)
   }
 }
 
+const STUBBED_OPERATIONS = new Set([
+  // panels
+  'getPanels',
+  'postPanels',
+  'putPanel',
+  'deletePanel',
+  'postPanelSend',
+  // tickets read endpoints
+  'getTickets',
+  'getTicket',
+  'getTicketMessages',
+  'getTicketTranscript',
+  'getAttachment',
+  // tags
+  'getTags',
+  'postTags',
+  'putTag',
+  'deleteTag',
+  // blocks
+  'getBlocks',
+  'postBlocks',
+  'deleteBlock',
+  // stats
+  'getStats',
+  // audit
+  'getAudit',
+  // data
+  'deleteMeData',
+  'getExport',
+]);
+
 function resolvePath(path: string): string {
   return path
     .replace('{guildId}', '123456789012345678')
@@ -39,13 +70,15 @@ describe('OpenAPI route stubs', () => {
     }
   });
 
-  test('r2: every operation except getHealthz answers 501 with operationId', async () => {
+  test('r2: every operation has a registered route; stubbed operations answer 501', async () => {
     const app = buildApp();
     for (const op of operations) {
-      if (op.operationId === 'getHealthz') continue;
       const res = await app.inject({ method: op.method as any, url: resolvePath(op.path) });
-      expect(res.statusCode, `${op.method} ${op.path}`).toBe(501);
-      expect(res.json()).toEqual({ code: 'not_implemented', message: op.operationId });
+      expect(res.statusCode, `${op.method} ${op.path}`).not.toBe(404);
+      if (STUBBED_OPERATIONS.has(op.operationId)) {
+        expect(res.statusCode, `${op.method} ${op.path}`).toBe(501);
+        expect(res.json()).toEqual({ code: 'not_implemented', message: op.operationId });
+      }
     }
   });
 

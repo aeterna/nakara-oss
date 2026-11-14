@@ -61,7 +61,7 @@ describe('auth acceptance tests', () => {
     const location = res.headers.location;
     expect(location).toBeDefined();
 
-    const redirectUrl = new URL(location!);
+    const redirectUrl = new URL(location!, 'http://localhost');
     expect(redirectUrl.origin).toBe('https://discord.com');
     expect(redirectUrl.pathname).toBe('/oauth2/authorize');
     expect(redirectUrl.searchParams.get('client_id')).toBe('123456789012345678');
@@ -122,7 +122,7 @@ describe('auth acceptance tests', () => {
       method: 'GET',
       url: '/auth/login',
     });
-    const location = new URL(loginRes.headers.location!);
+    const location = new URL(loginRes.headers.location!, 'http://localhost');
     const state = location.searchParams.get('state')!;
     const setCookie = loginRes.headers['set-cookie'];
     const cookieHeader = Array.isArray(setCookie) ? setCookie[0] : String(setCookie);

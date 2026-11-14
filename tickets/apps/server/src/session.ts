@@ -160,7 +160,8 @@ export async function installSession(app: FastifyInstance, opts?: InstallSession
       return;
     }
 
-    const guildId = (req.params as Record<string, string | undefined>)?.guildId;
+    const guildId =
+      (req.params as Record<string, string | undefined>)?.guildId ?? req.guildId;
     const config = (req.server.config ?? opts?.config) as TicketsConfig | null;
     const db = (req.server.db ?? opts?.db) as TicketsDb | null;
 
@@ -182,7 +183,7 @@ export async function installSession(app: FastifyInstance, opts?: InstallSession
     }
 
     const isStaffMember = await checkStaff(
-      { token: config.DISCORD_TOKEN },
+      { token: config?.DISCORD_TOKEN },
       guildId,
       req.user.id,
       staffRoleIds

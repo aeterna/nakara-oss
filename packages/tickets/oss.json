@@ -4,7 +4,7 @@
   "resource": "nakara_tickets",
   "capabilities": {
     "http": [
-      "${nakara_tickets_api}/bridge/v1"
+      "${nakara_tickets_api}/bridge/v1/"
     ],
     "commands": [],
     "registeredCommands": [

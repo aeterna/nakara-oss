@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
+import { eq } from 'drizzle-orm';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -145,6 +146,40 @@ describe('database queries acceptance tests (pglite)', () => {
     expect(t2_2.number).toBe(2);
   });
 
+  it('(q3b) openTicket serializes concurrent openings and retries on unique violation', async () => {
+    await ensureGuild(db, '111111111111111111', 'Guild 1');
+
+    const cat = await createCategory(db, '111111111111111111', {
+      name: 'Concurrent',
+      parentChannelId: '100',
+      maxOpenPerUser: 10,
+    });
+
+    const results = await Promise.all([
+      openTicket(db, {
+        guildId: '111111111111111111',
+        categoryId: cat.id,
+        openerId: 'user_conc_1',
+        channelId: 'chan_c1',
+      }),
+      openTicket(db, {
+        guildId: '111111111111111111',
+        categoryId: cat.id,
+        openerId: 'user_conc_2',
+        channelId: 'chan_c2',
+      }),
+      openTicket(db, {
+        guildId: '111111111111111111',
+        categoryId: cat.id,
+        openerId: 'user_conc_3',
+        channelId: 'chan_c3',
+      }),
+    ]);
+
+    const numbers = results.map((t) => t.number).sort((a, b) => a - b);
+    expect(numbers).toEqual([1, 2, 3]);
+  });
+
   it('(q4) limit: enforces max_open_per_user and prevents category deletion while referenced', async () => {
     await ensureGuild(db, '111111111111111111', 'Guild 1');
 
@@ -273,9 +308,114 @@ describe('database queries acceptance tests (pglite)', () => {
     const logs = await db
       .select()
       .from(schema.auditLog)
-      .where(schema.eq(schema.auditLog.guild_id, '111111111111111111'));
+      .where(eq(schema.auditLog.guild_id, '111111111111111111'));
     expect(logs).toHaveLength(3);
     expect(logs.map((l) => l.kind)).toEqual(['ticket.claim', 'ticket.close', 'ticket.reopen']);
+  });
+
+  it('(q6b) unclaim by claimer ok, by other → not_claimer', async () => {
+    await ensureGuild(db, '111111111111111111', 'Guild 1');
+
+    const cat = await createCategory(db, '111111111111111111', {
+      name: 'General',
+      parentChannelId: '100',
+    });
+
+    const ticket = await openTicket(db, {
+      guildId: '111111111111111111',
+      categoryId: cat.id,
+      openerId: 'user_opener',
+      channelId: 'chan_q6b',
+    });
+
+    await transitionTicket(
+      db,
+      '111111111111111111',
+      ticket.id,
+      'claim',
+      'staff_claimer',
+    );
+
+    // Unclaim by other → rejects with code 'not_claimer'
+    await expect(
+      transitionTicket(
+        db,
+        '111111111111111111',
+        ticket.id,
+        'unclaim',
+        'other_staff',
+      ),
+    ).rejects.toMatchObject({ code: 'not_claimer' });
+
+    // Unclaim by claimer → succeeds, status is open, claimer_id is null
+    const unclaimed = await transitionTicket(
+      db,
+      '111111111111111111',
+      ticket.id,
+      'unclaim',
+      'staff_claimer',
+    );
+    expect(unclaimed.status).toBe('open');
+    expect(unclaimed.claimer_id).toBeNull();
+  });
+
+  it('(q6c) transfer with/without target and by non-claimer', async () => {
+    await ensureGuild(db, '111111111111111111', 'Guild 1');
+
+    const cat = await createCategory(db, '111111111111111111', {
+      name: 'General',
+      parentChannelId: '100',
+    });
+
+    const ticket = await openTicket(db, {
+      guildId: '111111111111111111',
+      categoryId: cat.id,
+      openerId: 'user_opener',
+      channelId: 'chan_q6c',
+    });
+
+    await transitionTicket(
+      db,
+      '111111111111111111',
+      ticket.id,
+      'claim',
+      'staff_claimer',
+    );
+
+    // Transfer without target → rejects with code 'target_required'
+    await expect(
+      transitionTicket(
+        db,
+        '111111111111111111',
+        ticket.id,
+        'transfer',
+        'staff_claimer',
+      ),
+    ).rejects.toMatchObject({ code: 'target_required' });
+
+    // Transfer by other → rejects with code 'not_claimer'
+    await expect(
+      transitionTicket(
+        db,
+        '111111111111111111',
+        ticket.id,
+        'transfer',
+        'other_staff',
+        'target_staff',
+      ),
+    ).rejects.toMatchObject({ code: 'not_claimer' });
+
+    // Transfer with target by claimer → succeeds, claimer_id is targetId
+    const transferred = await transitionTicket(
+      db,
+      '111111111111111111',
+      ticket.id,
+      'transfer',
+      'staff_claimer',
+      'target_staff',
+    );
+    expect(transferred.status).toBe('claimed');
+    expect(transferred.claimer_id).toBe('target_staff');
   });
 
   it('(q7) appendMessage stores bytes that do not contain the plain text and readMessages returns it', async () => {
@@ -309,7 +449,7 @@ describe('database queries acceptance tests (pglite)', () => {
     const rawMsgRows = await db
       .select()
       .from(schema.messages)
-      .where(schema.eq(schema.messages.id, 'msg_1001'));
+      .where(eq(schema.messages.id, 'msg_1001'));
     expect(rawMsgRows).toHaveLength(1);
     const rawMsg = rawMsgRows[0];
     expect(rawMsg.content_enc).toBeInstanceOf(Buffer);

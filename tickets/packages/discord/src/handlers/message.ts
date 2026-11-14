@@ -1,6 +1,6 @@
 import type { TicketsDb } from '@nakara-tickets/db';
-import { getCategory, getTicketByChannel, appendMessage } from '../db-bridge.js';
-import { isStaff } from '../core-bridge.js';
+import { getCategory, getTicketByChannel, appendMessage } from '@nakara-tickets/db';
+import { isStaff } from '@nakara-tickets/core';
 
 function extractMemberInfo(member: any): { permissions: bigint; roleIds: string[] } {
   let permissions = 0n;
@@ -56,13 +56,21 @@ export async function handleMessageCreate(
     return;
   }
 
-  const ticket = await getTicketByChannel(db, guildId, channelId);
+  let ticket: any;
+  try {
+    ticket = await getTicketByChannel(db, guildId, channelId);
+  } catch {
+    return;
+  }
   if (!ticket) {
     return;
   }
 
-  const category = await getCategory(db, guildId, ticket.category_id);
-  const staffRoleIds = (category?.staff_role_ids ?? []) as string[];
+  let staffRoleIds: string[] = [];
+  try {
+    const category = await getCategory(db, guildId, ticket.category_id);
+    staffRoleIds = (category?.staff_role_ids ?? []) as string[];
+  } catch {}
 
   const memberInfo = extractMemberInfo(message.member);
   const userIsStaff = isStaff({

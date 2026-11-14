@@ -7,7 +7,16 @@ import type { TicketsConfig } from '../config.js';
 export default async function (app: FastifyInstance) {
   app.get(
     '/api/v1/me',
-    { preHandler: [(req, reply) => app.requireUser(req, reply)] },
+    {
+      preHandler: [
+        (req, reply) => {
+          if (typeof app.requireUser !== 'function') {
+            return reply.code(500).send({ code: 'misconfigured', message: 'User auth misconfigured' });
+          }
+          return app.requireUser(req, reply);
+        },
+      ],
+    },
     async (req: FastifyRequest, reply: FastifyReply) => {
       const config = req.server.config as TicketsConfig | null;
       const db = req.server.db as TicketsDb | null;

@@ -45,9 +45,9 @@ services:
       TICKETS_DATA_KEY_FILE: /run/secrets/tickets_data_key
       DISCORD_TOKEN_FILE: /run/secrets/discord_token
       DISCORD_CLIENT_SECRET_FILE: /run/secrets/discord_client_secret
-      DISCORD_APP_ID: ${DISCORD_APP_ID:-}
+      DISCORD_APP_ID: ${DISCORD_APP_ID:?set DISCORD_APP_ID}
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
-      ALLOWED_GUILD_IDS: ${ALLOWED_GUILD_IDS:-}
+      ALLOWED_GUILD_IDS: ${ALLOWED_GUILD_IDS:?set ALLOWED_GUILD_IDS}
       STORAGE_DIR: /data/files
     secrets:
       - database_url
@@ -79,7 +79,7 @@ services:
       - app
 
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared:2024.11.0
     profiles:
       - cloudflared
     restart: unless-stopped

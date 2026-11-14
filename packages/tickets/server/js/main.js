@@ -38,14 +38,18 @@ function collectOnlinePlayers() {
 }
 
 async function heartbeatTick() {
-  const serverId = store.getServerId();
-  const secret = store.getSecret();
-  if (!serverId || !secret) return;
+  try {
+    const serverId = store.getServerId();
+    const secret = store.getSecret();
+    if (!serverId || !secret) return;
 
-  const players = collectOnlinePlayers();
-  const executedIds = store.getExecutedIds(60);
+    const players = collectOnlinePlayers();
+    const executedIds = store.getExecutedIds(60);
 
-  await api.sendHeartbeat(serverId, secret, { players, executedIds });
+    await api.sendHeartbeat(serverId, secret, { players, executedIds });
+  } catch (err) {
+    console.error('[nakara_tickets] Heartbeat error:', err.message);
+  }
 }
 
 let pollingActive = true;
@@ -60,33 +64,52 @@ async function pollActionsLoop() {
       continue;
     }
 
-    const pollRes = await api.getActions(serverId, secret, 25);
+    try {
+      const pollRes = await api.getActions(serverId, secret, 25);
 
-    if (!pollRes.ok) {
-      // On network error wait 5 s
-      await sleep(5000);
-      continue;
-    }
-
-    if (pollRes.action) {
-      const leasedAction = pollRes.action;
-      const result = await actions.executeAction(leasedAction);
-
-      // Retry POST result with backoff (1, 2, 4 ... up to 30 s) until accepted or unpaired
-      let backoffSec = 1;
-      while (pollingActive) {
-        const curServerId = store.getServerId();
-        const curSecret = store.getSecret();
-        if (!curServerId || !curSecret) break;
-
-        const resultRes = await api.postActionResult(curServerId, curSecret, leasedAction.id, result);
-        if (resultRes.ok) {
-          break;
-        }
-
-        await sleep(backoffSec * 1000);
-        backoffSec = Math.min(30, backoffSec * 2);
+      if (!pollRes.ok) {
+        console.warn(`[nakara_tickets] Actions poll failed: ${pollRes.error || 'network error'}`);
+        await sleep(5000);
+        continue;
       }
+
+      if (pollRes.action) {
+        const leasedAction = pollRes.action;
+        const result = await actions.executeAction(leasedAction);
+
+        let backoffSec = 1;
+        let attempts = 0;
+        while (pollingActive && attempts < 10) {
+          const curServerId = store.getServerId();
+          const curSecret = store.getSecret();
+          if (!curServerId || !curSecret) break;
+
+          attempts++;
+          const resultRes = await api.postActionResult(curServerId, curSecret, leasedAction.id, result);
+          if (resultRes.ok) {
+            break;
+          }
+
+          if (resultRes.status && resultRes.status >= 400 && resultRes.status < 500 && resultRes.status !== 429) {
+            console.warn(`[nakara_tickets] Result rejected with 4xx status ${resultRes.status} (${resultRes.error}): dropping action ${leasedAction.id}`);
+            break;
+          }
+
+          if (attempts >= 10) {
+            console.warn(`[nakara_tickets] Result retry exceeded 10 attempts for action ${leasedAction.id}: dropping`);
+            break;
+          }
+
+          await sleep(backoffSec * 1000);
+          backoffSec = Math.min(30, backoffSec * 2);
+        }
+      } else {
+        // null action received -> sleep at least 1 s
+        await sleep(1000);
+      }
+    } catch (err) {
+      console.error('[nakara_tickets] Error in actions poll loop:', err.message);
+      await sleep(5000);
     }
   }
 }

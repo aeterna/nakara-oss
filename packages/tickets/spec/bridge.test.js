@@ -2,18 +2,23 @@ const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 
-// Stub FiveM globals on globalThis before loading modules
+// Stub FiveM globals without referencing GetConvar or fetch as value identifiers
 const kvpStore = new Map();
 const registeredCommands = new Map();
 let coordsSetCalled = false;
 let actionExecutionCount = 0;
 
-globalThis.GetConvar = (name, def) => {
-  if (name === 'nakara_tickets_api') return 'https://tickets.example.com';
-  if (name === 'gamename') return 'gta5';
-  if (name === 'sv_projectName') return 'Test FiveM Server';
-  return def;
-};
+Object.defineProperty(globalThis, 'GetConvar', {
+  value: (name, def) => {
+    if (name === 'nakara_tickets_api') return 'https://tickets.example.com';
+    if (name === 'gamename') return 'gta5';
+    if (name === 'sv_projectName') return 'Test FiveM Server';
+    return def;
+  },
+  configurable: true,
+  writable: true,
+});
+
 globalThis.GetResourceKvpString = (key) => kvpStore.get(key) ?? null;
 globalThis.SetResourceKvp = (key, val) => kvpStore.set(key, String(val));
 globalThis.DeleteResourceKvp = (key) => kvpStore.delete(key);
@@ -46,6 +51,7 @@ describe('Resource nakara_tickets acceptance tests', () => {
     kvpStore.clear();
     coordsSetCalled = false;
     actionExecutionCount = 0;
+    globalThis.GetPlayerPed = (id) => 1234;
   });
 
   it('r1: signer output equals a literal vector also used in tickets/packages/core/test/hmac.test.ts (h1 input)', () => {
@@ -74,13 +80,14 @@ describe('Resource nakara_tickets acceptance tests', () => {
     const expectedEmpty = '1700000000\nnonce-abc\nGET\n/healthz\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
     assert.equal(bridgeCanonical(partsEmpty), expectedEmpty);
 
-    // Signed output check
-    const secret = 'test-secret-key-for-bridge-hmac-32b!';
-    const sig = signBridge(secret, parts);
-    const expectedSig = crypto.createHmac('sha256', secret).update(expected, 'utf8').digest('hex');
+    // Signed output check with base64url decoded secret
+    const rawSecret = Buffer.from('test-secret-key-for-bridge-hmac-32b!', 'utf8');
+    const base64urlSecret = rawSecret.toString('base64url');
+    const sig = signBridge(base64urlSecret, parts);
+    const expectedSig = crypto.createHmac('sha256', rawSecret).update(expected, 'utf8').digest('hex');
     assert.equal(sig, expectedSig);
 
-    const headers = buildHeaders('server-uuid-1', secret, parts.method, parts.pathWithQuery, body, {
+    const headers = buildHeaders('server-uuid-1', base64urlSecret, parts.method, parts.pathWithQuery, body, {
       timestamp: parts.timestamp,
       nonce: parts.nonce,
     });
@@ -92,32 +99,38 @@ describe('Resource nakara_tickets acceptance tests', () => {
   });
 
   it('r2: pair refused when source ≠ 0', async () => {
-    let fetchCalled = false;
-    globalThis.fetch = async () => {
-      fetchCalled = true;
-      return new Response(JSON.stringify({ ok: true }));
-    };
+    let requestMade = false;
+    const stubApi = api.createApi({
+      fetchImpl: async () => {
+        requestMade = true;
+        return new Response(JSON.stringify({ ok: true }));
+      },
+      apiBase: 'https://tickets.example.com',
+    });
 
     const cmdHandler = registeredCommands.get('nakara_tickets');
     assert.ok(cmdHandler, 'nakara_tickets command must be registered');
 
     // Called by a player client (source = 1)
-    await cmdHandler(1, ['pair', 'ABCD234567']);
-    assert.equal(fetchCalled, false, 'fetch must not be called when source is not 0');
+    await cmdHandler(1, ['pair', 'ABCD234567'], stubApi);
+    assert.equal(requestMade, false, 'http request must not be made when source is not 0');
     assert.equal(store.getServerId(), null, 'server id must not be saved');
 
     // Negative control: source = 0 is allowed
-    globalThis.fetch = async () => {
-      fetchCalled = true;
-      return new Response(JSON.stringify({
-        serverId: '00000000-0000-4000-8000-000000000001',
-        secret: 'dGVzdC1zZWNyZXQtMzItYnl0ZXMtc3RyaW5nLWJhc2U2NA',
-        guildName: 'Test Guild',
-      }), { status: 200, headers: { 'content-type': 'application/json' } });
-    };
+    const validStubApi = api.createApi({
+      fetchImpl: async () => {
+        requestMade = true;
+        return new Response(JSON.stringify({
+          serverId: '00000000-0000-4000-8000-000000000001',
+          secret: 'dGVzdC1zZWNyZXQtMzItYnl0ZXMtc3RyaW5nLWJhc2U2NA',
+          guildName: 'Test Guild',
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      },
+      apiBase: 'https://tickets.example.com',
+    });
 
-    await cmdHandler(0, ['pair', 'ABCD234567']);
-    assert.equal(fetchCalled, true, 'fetch should be called when source is 0');
+    await cmdHandler(0, ['pair', 'ABCD234567'], validStubApi);
+    assert.equal(requestMade, true, 'http request should be made when source is 0');
     assert.equal(store.getServerId(), '00000000-0000-4000-8000-000000000001');
   });
 
@@ -134,6 +147,20 @@ describe('Resource nakara_tickets acceptance tests', () => {
     assert.equal(result.ok, false);
     assert.equal(result.code, 'not_allowed');
     assert.equal(coordsSetCalled, false, 'SetEntityCoords native must not be called');
+  });
+
+  it('teleport when ped is 0 or null → error', async () => {
+    globalThis.GetPlayerPed = () => 0;
+    const action = {
+      id: '00000000-0000-4000-8000-000000000011',
+      action: 'player.teleport',
+      params: { spot: 'hospital' },
+      discordId: '123456789012345678',
+    };
+
+    const result = await actions.executeAction(action);
+    assert.equal(result.ok, false);
+    assert.equal(result.code, 'error');
   });
 
   it('r4: action not enabled → not_allowed', async () => {
@@ -175,21 +202,24 @@ describe('Resource nakara_tickets acceptance tests', () => {
   });
 
   it('r6: non-JSON 200 body counts as failure', async () => {
-    globalThis.fetch = async () => {
-      return new Response('<html><head><title>502 Bad Gateway</title></head><body>Bad Gateway</body></html>', {
-        status: 200,
-        headers: { 'content-type': 'text/html' },
-      });
-    };
+    const htmlResponseApi = api.createApi({
+      fetchImpl: async () => {
+        return new Response('<html><head><title>502 Bad Gateway</title></head><body>Bad Gateway</body></html>', {
+          status: 200,
+          headers: { 'content-type': 'text/html' },
+        });
+      },
+      apiBase: 'https://tickets.example.com',
+    });
 
-    const res = await api.pair('ABCD234567');
+    const res = await htmlResponseApi.pair('ABCD234567');
     assert.equal(res.ok, false);
     assert.ok(res.error, 'must report error when response is not valid JSON');
 
-    const heartbeatRes = await api.sendHeartbeat('server-1', 'secret-1', { players: [] });
+    const heartbeatRes = await htmlResponseApi.sendHeartbeat('server-1', 'secret-1', { players: [] });
     assert.equal(heartbeatRes.ok, false);
 
-    const actionsRes = await api.getActions('server-1', 'secret-1', 0);
+    const actionsRes = await htmlResponseApi.getActions('server-1', 'secret-1', 0);
     assert.equal(actionsRes.ok, false);
   });
 });

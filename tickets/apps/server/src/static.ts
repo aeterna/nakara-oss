@@ -32,25 +32,33 @@ export function installStatic(app: FastifyInstance, dir: string): void {
   const resolvedDir = path.resolve(dir);
   const staticPlugin = (fastifyStatic as any).default ?? fastifyStatic;
 
-  app.register(staticPlugin, {
-    root: resolvedDir,
-    wildcard: true,
-    setHeaders: (res: any) => {
-      res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.setHeader('Content-Security-Policy', CSP_HEADER);
-    },
-  });
+  app.register(async (scope: FastifyInstance) => {
+    await scope.register(staticPlugin, {
+      root: resolvedDir,
+      wildcard: true,
+      setHeaders: (res: any) => {
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Content-Security-Policy', CSP_HEADER);
+      },
+    });
 
-  app.setNotFoundHandler((req: FastifyRequest, reply: FastifyReply) => {
-    if (req.method === 'GET' && !isExcludedPath(req.url)) {
-      const indexPath = path.join(resolvedDir, 'index.html');
-      if (fs.existsSync(indexPath)) {
-        reply.header('X-Content-Type-Options', 'nosniff');
-        reply.header('Content-Security-Policy', CSP_HEADER);
-        return reply.status(200).sendFile('index.html');
+    scope.setNotFoundHandler((req: FastifyRequest, reply: FastifyReply) => {
+      if (req.method === 'GET' && !isExcludedPath(req.url)) {
+        const indexPath = path.join(resolvedDir, 'index.html');
+        if (fs.existsSync(indexPath)) {
+          reply.header('X-Content-Type-Options', 'nosniff');
+          reply.header('Content-Security-Policy', CSP_HEADER);
+          if (typeof (reply as any).sendFile === 'function') {
+            return (reply as any).status(200).sendFile('index.html');
+          }
+          return reply
+            .status(200)
+            .type('text/html; charset=utf-8')
+            .send(fs.readFileSync(indexPath, 'utf8'));
+        }
       }
-    }
 
-    return reply.status(404).send({ code: 'NOT_FOUND', message: 'Not found' });
+      return reply.status(404).send({ code: 'NOT_FOUND', message: 'Not found' });
+    });
   });
 }

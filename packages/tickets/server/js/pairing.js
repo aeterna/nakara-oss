@@ -1,7 +1,7 @@
 const store = require('./store.js');
 const api = require('./api.js');
 
-async function handleCommand(source, args) {
+async function handleCommand(source, args, injectedApi = api) {
   // Refuse unless source === 0 (server console)
   if (source !== 0) {
     if (typeof console !== 'undefined' && console.warn) {
@@ -19,7 +19,7 @@ async function handleCommand(source, args) {
       return;
     }
 
-    const res = await api.pair(code);
+    const res = await injectedApi.pair(code);
     if (res.ok && res.data) {
       store.setCredentials(res.data.serverId, res.data.secret);
       // NEVER print the secret

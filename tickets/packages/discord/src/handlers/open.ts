@@ -1,8 +1,22 @@
 import type { DiscordPort } from '../types.js';
 import type { TicketsDb } from '@nakara-tickets/db';
-import { tickets, eq } from '@nakara-tickets/db';
-import { getCategory, getSettings, openTicket, TicketError } from '../db-bridge.js';
-import { t, type TranslationKey } from '../i18n.js';
+import { tickets, getCategory, getSettings, openTicket, TicketError } from '@nakara-tickets/db';
+import { eq } from 'drizzle-orm';
+import { t, type TranslationKey, type SupportedLocale, translations } from '../i18n.js';
+
+function formatErrorMessage(locale: string, err: any): string {
+  const normLocale = (locale === 'th' ? 'th' : 'en') as SupportedLocale;
+  if (err instanceof TicketError || err?.name === 'TicketError' || err?.code) {
+    const codeKey = `ticket_${err.code}` as TranslationKey;
+    if (codeKey in translations[normLocale]) {
+      return t(locale, codeKey);
+    }
+    if (codeKey in translations.en) {
+      return t(locale, codeKey);
+    }
+  }
+  return t(locale, 'error');
+}
 
 export async function handleOpenButton(
   port: DiscordPort,
@@ -10,13 +24,25 @@ export async function handleOpenButton(
   interaction: any,
   categoryId: string
 ): Promise<void> {
-  const guildId = interaction.guildId;
-  const settings = await getSettings(db, guildId);
-  const locale = settings?.locale ?? 'th';
+  await port.deferReply(interaction, { ephemeral: true });
 
-  const category = await getCategory(db, guildId, categoryId);
-  if (!category) {
-    await port.replyEphemeral(interaction, t(locale, 'ticket_not_found'));
+  const guildId = interaction.guildId;
+  let locale = 'th';
+  try {
+    const settings = await getSettings(db, guildId);
+    if (settings?.locale) locale = settings.locale;
+  } catch {}
+
+  let category: any;
+  try {
+    category = await getCategory(db, guildId, categoryId);
+  } catch (err: any) {
+    if (err instanceof TicketError || err?.name === 'TicketError' || err?.code) {
+      await port.editReply(interaction, { content: formatErrorMessage(locale, err) });
+      return;
+    }
+    console.error('Error getting category:', err);
+    await port.editReply(interaction, { content: t(locale, 'error') });
     return;
   }
 
@@ -46,8 +72,7 @@ export async function handleOpenButton(
     return;
   }
 
-  // No form: acknowledge within 3s then open directly
-  await port.deferReply(interaction, { ephemeral: true });
+  // No form: open directly
   await executeOpenTicket(port, db, interaction, category, undefined, locale);
 }
 
@@ -57,13 +82,25 @@ export async function handleFormSubmit(
   interaction: any,
   categoryId: string
 ): Promise<void> {
-  const guildId = interaction.guildId;
-  const settings = await getSettings(db, guildId);
-  const locale = settings?.locale ?? 'th';
+  await port.deferReply(interaction, { ephemeral: true });
 
-  const category = await getCategory(db, guildId, categoryId);
-  if (!category) {
-    await port.replyEphemeral(interaction, t(locale, 'ticket_not_found'));
+  const guildId = interaction.guildId;
+  let locale = 'th';
+  try {
+    const settings = await getSettings(db, guildId);
+    if (settings?.locale) locale = settings.locale;
+  } catch {}
+
+  let category: any;
+  try {
+    category = await getCategory(db, guildId, categoryId);
+  } catch (err: any) {
+    if (err instanceof TicketError || err?.name === 'TicketError' || err?.code) {
+      await port.editReply(interaction, { content: formatErrorMessage(locale, err) });
+      return;
+    }
+    console.error('Error getting category on form submit:', err);
+    await port.editReply(interaction, { content: t(locale, 'error') });
     return;
   }
 
@@ -86,7 +123,6 @@ export async function handleFormSubmit(
     }
   }
 
-  await port.deferReply(interaction, { ephemeral: true });
   await executeOpenTicket(port, db, interaction, category, answers, locale);
 }
 
@@ -155,11 +191,11 @@ async function executeOpenTicket(
       content: t(locale, 'ticket_created', { channel: `<#${thread.id}>` }),
     });
   } catch (err: any) {
-    if (err instanceof TicketError || err?.code === 'limit' || err?.code === 'blocked') {
-      const codeKey = `ticket_${err.code}` as TranslationKey;
-      await port.editReply(interaction, { content: t(locale, codeKey) });
+    if (err instanceof TicketError || err?.name === 'TicketError' || err?.code) {
+      await port.editReply(interaction, { content: formatErrorMessage(locale, err) });
       return;
     }
-    throw err;
+    console.error('Error executing open ticket:', err);
+    await port.editReply(interaction, { content: t(locale, 'error') });
   }
 }
