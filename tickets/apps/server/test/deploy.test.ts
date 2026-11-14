@@ -196,4 +196,52 @@ describe('deploy compose sanity acceptance tests', () => {
     expect(backup).toBeDefined();
     expect(backup.depends_on?.postgres?.condition).toBe('service_healthy');
   });
+
+  it('d4: Dockerfile CMD runs server.mjs, sets MIGRATIONS_DIR and WEB_DIR, runtime copies no src/ directory, creates /data/files before USER node', () => {
+    const dockerfilePath = fileURLToPath(new URL('../../../Dockerfile', import.meta.url));
+    expect(fs.existsSync(dockerfilePath), 'tickets/Dockerfile must exist').toBe(true);
+    const content = fs.readFileSync(dockerfilePath, 'utf8');
+
+    const runtimeMatch = content.match(/FROM\s+\S+\s+AS\s+runtime([\s\S]*)$/i);
+    expect(runtimeMatch, 'Dockerfile must have runtime stage').toBeDefined();
+    const runtimeStage = runtimeMatch![1];
+
+    // CMD runs server.mjs
+    const cmdMatch = runtimeStage.match(/CMD\s*(\[[^\]]+\])/);
+    expect(cmdMatch, 'runtime stage must have CMD').toBeDefined();
+    const cmdArgs = JSON.parse(cmdMatch![1].replace(/'/g, '"'));
+    expect(cmdArgs).toEqual(['node', 'server.mjs']);
+
+    // sets MIGRATIONS_DIR and WEB_DIR
+    expect(runtimeStage).toMatch(/ENV\s+[^#\n]*\bMIGRATIONS_DIR=/);
+    expect(runtimeStage).toMatch(/ENV\s+[^#\n]*\bWEB_DIR=/);
+
+    // runtime stage copies no src/ directory
+    const copyLines = runtimeStage
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith('COPY'));
+
+    expect(copyLines.length).toBeGreaterThan(0);
+    for (const line of copyLines) {
+      expect(line).not.toMatch(/\bsrc\b/);
+    }
+
+    // RUN mkdir -p /data/files && chown node:node /data/files before USER node
+    const mkdirIndex = runtimeStage.indexOf('RUN mkdir -p /data/files && chown node:node /data/files');
+    const userNodeIndex = runtimeStage.indexOf('USER node');
+    expect(mkdirIndex, 'Dockerfile runtime must create and chown /data/files').toBeGreaterThan(-1);
+    expect(userNodeIndex, 'Dockerfile runtime must declare USER node').toBeGreaterThan(-1);
+    expect(mkdirIndex, 'mkdir /data/files must be before USER node').toBeLessThan(userNodeIndex);
+  });
+
+  it('Caddyfile does not proxy /metrics', () => {
+    const caddyfilePath = fileURLToPath(new URL('../../../deploy/Caddyfile', import.meta.url));
+    expect(fs.existsSync(caddyfilePath), 'tickets/deploy/Caddyfile must exist').toBe(true);
+    const content = fs.readFileSync(caddyfilePath, 'utf8');
+
+    // Must block /metrics with 404 and not proxy it
+    expect(content).toMatch(/@metrics\s+path\s+\/metrics/);
+    expect(content).toMatch(/respond\s+@metrics\s+404/);
+  });
 });

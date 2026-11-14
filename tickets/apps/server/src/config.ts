@@ -59,6 +59,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     STORAGE_DIR: rawStorageDir,
   };
 
+  // Only the app role needs the data key, web and Discord settings. ROLE=migrate needs DATABASE_URL alone;
+  // any other ROLE value (including a missing one) keeps the full requirement set.
+  const requireAppFields = rawRole !== 'migrate';
+  const appOnly = <T extends z.ZodType>(field: T) => (requireAppFields ? field : field.optional());
+
   const schema = z.object({
     ROLE: z.enum(['all', 'migrate'], {
       error: 'ROLE must be "all" or "migrate"',
@@ -76,7 +81,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     DATABASE_URL: z.string({
       error: 'DATABASE_URL is required',
     }).min(1, 'DATABASE_URL is required'),
-    TICKETS_DATA_KEY: z.string({
+    TICKETS_DATA_KEY: appOnly(z.string({
       error: 'TICKETS_DATA_KEY is required',
     }).transform((val, ctx) => {
       try {
@@ -88,11 +93,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
         });
         return z.NEVER;
       }
-    }),
+    })),
     DISCORD_TOKEN: z.string().optional(),
     DISCORD_APP_ID: z.string().optional(),
     DISCORD_CLIENT_SECRET: z.string().optional(),
-    PUBLIC_ORIGIN: z.string({
+    PUBLIC_ORIGIN: appOnly(z.string({
       error: 'PUBLIC_ORIGIN is required',
     }).refine((val) => {
       try {
@@ -107,8 +112,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       }
     }, {
       message: 'PUBLIC_ORIGIN must be a https URL, or http for localhost',
-    }),
-    ALLOWED_GUILD_IDS: z.string({
+    })),
+    ALLOWED_GUILD_IDS: appOnly(z.string({
       error: 'ALLOWED_GUILD_IDS is required',
     }).refine((val) => val.trim().length > 0, {
       message: 'ALLOWED_GUILD_IDS is required',
@@ -131,7 +136,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
         }
       }
       return items;
-    }),
+    })),
     STORAGE_DIR: z.string().optional().transform((val) => {
       if (val === undefined || val === '') return '/data/files';
       return val;
@@ -173,16 +178,18 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 
   const { data } = parsed;
 
+  // ROLE=migrate returns before any of these are read, so the empty fallbacks below only keep the
+  // TicketsConfig shape intact for the app role, where the fields are always present.
   const config: TicketsConfig = {
     ROLE: data.ROLE,
     PORT: data.PORT,
     DATABASE_URL: data.DATABASE_URL,
-    TICKETS_DATA_KEY: data.TICKETS_DATA_KEY,
+    TICKETS_DATA_KEY: data.TICKETS_DATA_KEY ?? Buffer.alloc(0),
     DISCORD_TOKEN: data.DISCORD_TOKEN,
     DISCORD_APP_ID: data.DISCORD_APP_ID,
     DISCORD_CLIENT_SECRET: data.DISCORD_CLIENT_SECRET,
-    PUBLIC_ORIGIN: data.PUBLIC_ORIGIN,
-    ALLOWED_GUILD_IDS: Object.freeze([...data.ALLOWED_GUILD_IDS]),
+    PUBLIC_ORIGIN: data.PUBLIC_ORIGIN ?? '',
+    ALLOWED_GUILD_IDS: Object.freeze([...(data.ALLOWED_GUILD_IDS ?? [])]),
     STORAGE_DIR: data.STORAGE_DIR,
   };
 

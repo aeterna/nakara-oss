@@ -321,6 +321,12 @@ export default async function (app: FastifyInstance) {
 
       const server = req.gameServer!;
       const actionId = (req.params as any).actionId;
+
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (typeof actionId !== 'string' || !UUID_REGEX.test(actionId)) {
+        return reply.code(400).send({ code: 'invalid', message: 'invalid actionId' });
+      }
+
       const body = req.body as any;
 
       if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -378,7 +384,7 @@ export default async function (app: FastifyInstance) {
         UPDATE game_actions
         SET status = ${newStatus}, result = ${JSON.stringify(body)}::jsonb
         WHERE id = ${actionId} AND server_id = ${server.id} AND status = 'leased'
-        RETURNING id, guild_id, ticket_id, action;
+        RETURNING id, guild_id, ticket_id, action, requested_by;
       `)) as { rows?: any[] };
 
       const updatedRows = updatedRes.rows || [];
@@ -408,6 +414,31 @@ export default async function (app: FastifyInstance) {
           result: body,
         },
       });
+
+      if (app.discord) {
+        try {
+          const [ticket] = await app.db
+            .select({ channel_id: tickets.channel_id })
+            .from(tickets)
+            .where(eq(tickets.id, updatedAction.ticket_id));
+
+          if (ticket?.channel_id) {
+            const icon = body.ok ? '✅' : '❌';
+            const requestedBy = updatedAction.requested_by || 'staff';
+            const message = `${icon} Action \`${updatedAction.action}\` (${body.code}) requested by ${requestedBy}`;
+            void app.discord
+              .sendMessage(ticket.channel_id, {
+                content: message,
+                allowed_mentions: { parse: [] },
+              })
+              .catch((err: unknown) => {
+                app.log?.warn?.(err, 'Failed to post action result to Discord channel');
+              });
+          }
+        } catch (err: unknown) {
+          app.log?.warn?.(err, 'Failed to post action result to Discord channel');
+        }
+      }
 
       return reply.code(200).send({ ok: true });
     }

@@ -1,0 +1,358 @@
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
+import Fastify from 'fastify';
+import { eq } from 'drizzle-orm';
+import { openTestDb, type TestDbHandle } from '@nakara-tickets/db/test-support';
+import {
+  guilds,
+  guildSettings,
+  categories,
+  tickets,
+  messages,
+  attachments,
+} from '@nakara-tickets/db';
+import { installSession } from '../src/session.js';
+import dataRoutes from '../src/routes/data.js';
+import type { TicketsConfig } from '../src/config.js';
+import { sealBytes } from '@nakara-tickets/core';
+import { createTestSession } from './helpers/session.js';
+
+describe('data routes (p4)', () => {
+  let testEnv: TestDbHandle;
+  let db: any;
+  let app: ReturnType<typeof Fastify>;
+
+  const GUILD_ALLOWED = '111111111111111111';
+  const USER_STAFF = '222222222222222222';
+  const USER_REGULAR = '333333333333333333';
+  const DATA_KEY = Buffer.alloc(32, 5);
+
+  const mockConfig: TicketsConfig = {
+    ROLE: 'all',
+    PORT: 8080,
+    DATABASE_URL: 'postgres://localhost:5432/mock',
+    TICKETS_DATA_KEY: DATA_KEY,
+    DISCORD_TOKEN: 'mock-bot-token',
+    DISCORD_APP_ID: '123456789012345678',
+    DISCORD_CLIENT_SECRET: 'mock-client-secret',
+    PUBLIC_ORIGIN: 'http://localhost:8080',
+    ALLOWED_GUILD_IDS: [GUILD_ALLOWED],
+    STORAGE_DIR: '/tmp/tickets',
+  };
+
+  beforeAll(async () => {
+    testEnv = await openTestDb();
+    db = testEnv.db;
+  });
+
+  beforeEach(async () => {
+    await testEnv.reset();
+
+    await db.insert(guilds).values({
+      guild_id: GUILD_ALLOWED,
+      name: 'Test Guild',
+    });
+
+    await db.insert(guildSettings).values({
+      guild_id: GUILD_ALLOWED,
+      retention_days: 90,
+    });
+
+    app = Fastify();
+    app.decorate('config', mockConfig);
+    app.decorate('db', db);
+    app.decorate('storage', null);
+    await installSession(app, { config: mockConfig, db });
+    await app.register(dataRoutes);
+    await app.ready();
+
+    // Stub global fetch for Discord API calls (staff check)
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => {
+      const urlStr = String(url);
+      if (urlStr.includes(`/guilds/${GUILD_ALLOWED}/members/${USER_STAFF}`)) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            roles: ['staff-role-id'],
+            user: { id: USER_STAFF, username: 'staffuser' },
+          }),
+        };
+      }
+      if (urlStr.includes(`/guilds/${GUILD_ALLOWED}/roles`)) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [
+            { id: GUILD_ALLOWED, name: '@everyone', permissions: '0' },
+            { id: 'staff-role-id', name: 'Staff', permissions: String(1n << 5n) }, // MANAGE_GUILD
+          ],
+        };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    }));
+  });
+
+  afterAll(async () => {
+    await testEnv.close();
+  });
+
+  async function createSession(userId: string, username: string) {
+    return createTestSession(db, mockConfig, { userId, username });
+  }
+
+  // Acceptance test p4:
+  // p4 route deleteMeData without CSRF → 403.
+  it('p4: route deleteMeData without CSRF → 403', async () => {
+    const { cookie, csrf } = await createSession(USER_REGULAR, 'regularuser');
+
+    // 1. Without cookie -> 401
+    const resNoCookie = await app.inject({
+      method: 'DELETE',
+      url: '/api/v1/me/data',
+    });
+    expect(resNoCookie.statusCode).toBe(401);
+
+    // 2. With cookie, but NO CSRF header -> 403
+    const resNoCsrf = await app.inject({
+      method: 'DELETE',
+      url: '/api/v1/me/data',
+      headers: {
+        cookie,
+      },
+    });
+    expect(resNoCsrf.statusCode).toBe(403);
+    expect(resNoCsrf.json().code).toBe('csrf');
+
+    // 3. With wrong CSRF header -> 403
+    const resWrongCsrf = await app.inject({
+      method: 'DELETE',
+      url: '/api/v1/me/data',
+      headers: {
+        cookie,
+        'x-csrf-token': 'wrong-csrf',
+      },
+    });
+    expect(resWrongCsrf.statusCode).toBe(403);
+    expect(resWrongCsrf.json().code).toBe('csrf');
+
+    // 4. With valid cookie and matching CSRF -> 200 and returns counts
+    const resValid = await app.inject({
+      method: 'DELETE',
+      url: '/api/v1/me/data',
+      headers: {
+        cookie,
+        'x-csrf-token': csrf,
+      },
+    });
+    expect(resValid.statusCode).toBe(200);
+    const body = resValid.json();
+    expect(body.counts).toBeDefined();
+    expect(body.counts.messages).toBe(0);
+    expect(body.counts.attachments).toBe(0);
+  });
+
+  it('deleteMeData with stub storage deletes the objects', async () => {
+    const { cookie, csrf } = await createSession(USER_REGULAR, 'regularuser');
+
+    const [cat] = await db
+      .insert(categories)
+      .values({
+        guild_id: GUILD_ALLOWED,
+        name: 'General',
+        parent_channel_id: '555555555555555555',
+      })
+      .returning();
+
+    const [tkt] = await db
+      .insert(tickets)
+      .values({
+        guild_id: GUILD_ALLOWED,
+        number: 55,
+        category_id: cat.id,
+        opener_id: USER_REGULAR,
+        channel_id: '666666666666666655',
+      })
+      .returning();
+
+    const [msg] = await db
+      .insert(messages)
+      .values({
+        id: 'msg-user-att',
+        guild_id: GUILD_ALLOWED,
+        ticket_id: tkt.id,
+        author_id: USER_REGULAR,
+        author_name: 'Regular',
+        content_enc: sealBytes(DATA_KEY, Buffer.from('Message with attachment')),
+      })
+      .returning();
+
+    const [att] = await db
+      .insert(attachments)
+      .values({
+        guild_id: GUILD_ALLOWED,
+        ticket_id: tkt.id,
+        message_id: msg.id,
+        filename: 'user-doc.pdf',
+        size: 1024,
+        sha256: 'c'.repeat(64),
+        stored: true,
+        storage_key: 'app/user-doc.pdf',
+      })
+      .returning();
+
+    const mockStorage = {
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+    (app as any).storage = mockStorage;
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/v1/me/data',
+      headers: {
+        cookie,
+        'x-csrf-token': csrf,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockStorage.delete).toHaveBeenCalledWith('app/user-doc.pdf');
+
+    // Attachment row deleted
+    const remainingAtt = await db.select().from(attachments).where(eq(attachments.id, att.id));
+    expect(remainingAtt.length).toBe(0);
+  });
+
+  it('deleteMeData with a failing storage delete leaves the row', async () => {
+    const { cookie, csrf } = await createSession(USER_REGULAR, 'regularuser');
+
+    const [cat] = await db
+      .insert(categories)
+      .values({
+        guild_id: GUILD_ALLOWED,
+        name: 'General',
+        parent_channel_id: '555555555555555555',
+      })
+      .returning();
+
+    const [tkt] = await db
+      .insert(tickets)
+      .values({
+        guild_id: GUILD_ALLOWED,
+        number: 56,
+        category_id: cat.id,
+        opener_id: USER_REGULAR,
+        channel_id: '666666666666666656',
+      })
+      .returning();
+
+    const [msg] = await db
+      .insert(messages)
+      .values({
+        id: 'msg-user-fail',
+        guild_id: GUILD_ALLOWED,
+        ticket_id: tkt.id,
+        author_id: USER_REGULAR,
+        author_name: 'Regular',
+        content_enc: sealBytes(DATA_KEY, Buffer.from('Message with failing attachment')),
+      })
+      .returning();
+
+    const [att] = await db
+      .insert(attachments)
+      .values({
+        guild_id: GUILD_ALLOWED,
+        ticket_id: tkt.id,
+        message_id: msg.id,
+        filename: 'failing-doc.pdf',
+        size: 2048,
+        sha256: 'd'.repeat(64),
+        stored: true,
+        storage_key: 'app/failing-doc.pdf',
+      })
+      .returning();
+
+    const failingStorage = {
+      delete: vi.fn().mockRejectedValue(new Error('S3 error 500')),
+    };
+    (app as any).storage = failingStorage;
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/v1/me/data',
+      headers: {
+        cookie,
+        'x-csrf-token': csrf,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(failingStorage.delete).toHaveBeenCalledWith('app/failing-doc.pdf');
+
+    // Attachment row must be left in database
+    const remainingAtt = await db.select().from(attachments).where(eq(attachments.id, att.id));
+    expect(remainingAtt.length).toBe(1);
+    expect(remainingAtt[0].storage_key).toBe('app/failing-doc.pdf');
+  });
+
+  it('getExport requires staff and sets Content-Disposition header', async () => {
+    const staff = await createSession(USER_STAFF, 'staffuser');
+    const regular = await createSession(USER_REGULAR, 'regularuser');
+
+    // Seed some data to export
+    const [cat] = await db
+      .insert(categories)
+      .values({
+        guild_id: GUILD_ALLOWED,
+        name: 'Billing',
+        parent_channel_id: '555555555555555555',
+      })
+      .returning();
+
+    const [tkt] = await db
+      .insert(tickets)
+      .values({
+        guild_id: GUILD_ALLOWED,
+        number: 1,
+        category_id: cat.id,
+        opener_id: USER_REGULAR,
+        channel_id: '666666666666666666',
+      })
+      .returning();
+
+    await db.insert(messages).values({
+      id: 'msg-exp-route',
+      guild_id: GUILD_ALLOWED,
+      ticket_id: tkt.id,
+      author_id: USER_REGULAR,
+      author_name: 'Regular',
+      content_enc: sealBytes(DATA_KEY, Buffer.from('Export route message content')),
+    });
+
+    // 1. Regular user -> 403 forbidden
+    const resForbidden = await app.inject({
+      method: 'GET',
+      url: `/api/v1/guilds/${GUILD_ALLOWED}/export`,
+      headers: {
+        cookie: regular.cookie,
+      },
+    });
+    expect(resForbidden.statusCode).toBe(403);
+
+    // 2. Staff user -> 200 with Content-Disposition
+    const resExport = await app.inject({
+      method: 'GET',
+      url: `/api/v1/guilds/${GUILD_ALLOWED}/export`,
+      headers: {
+        cookie: staff.cookie,
+      },
+    });
+    expect(resExport.statusCode).toBe(200);
+    expect(resExport.headers['content-disposition']).toBe(
+      `attachment; filename="nakara-tickets-${GUILD_ALLOWED}.json"`,
+    );
+
+    const exported = resExport.json();
+    expect(exported.tickets.length).toBe(1);
+    expect(exported.tickets[0].messages[0].content).toBe('Export route message content');
+  });
+});

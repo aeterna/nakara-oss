@@ -15,3 +15,4 @@ export * from './queries/guilds.js';
 export * from './queries/categories.js';
 export * from './queries/tickets.js';
 export * from './queries/messages.js';
+export * from './queries/privacy.js';

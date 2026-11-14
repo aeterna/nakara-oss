@@ -16,7 +16,8 @@
     "drizzle-orm": "0.45.4",
     "fastify": "5.12.8",
     "pg": "8.23.1",
-    "zod": "4.6.7"
+    "zod": "4.6.7",
+    "aws4fetch": "1.0.20"
   },
   "devDependencies": {
     "@types/node": "26.6.6",

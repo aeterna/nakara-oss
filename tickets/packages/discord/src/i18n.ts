@@ -1,6 +1,11 @@
+import archiveDict from './i18n/archive.js';
+import ratingDict from './i18n/rating.js';
+import tagDict from './i18n/tag.js';
+import dataDict from './i18n/data.js';
+
 export type SupportedLocale = 'th' | 'en';
 
-export const translations = {
+export const baseTranslations = {
   th: {
     ticket_limit: 'คุณมีตั๋วที่เปิดอยู่ครบตามจำนวนที่กำหนดแล้ว ไม่สามารถเปิดเพิ่มได้',
     ticket_blocked: 'คุณถูกระงับการเปิดตั๋วในเซิร์ฟเวอร์นี้',
@@ -45,11 +50,28 @@ export const translations = {
   },
 } as const;
 
-export type TranslationKey = keyof (typeof translations)['en'];
+export const translations: Record<SupportedLocale, Record<string, string>> = {
+  th: {
+    ...baseTranslations.th,
+    ...(archiveDict.th as Record<string, string>),
+    ...(ratingDict.th as Record<string, string>),
+    ...(tagDict.th as Record<string, string>),
+    ...(dataDict.th as Record<string, string>),
+  },
+  en: {
+    ...baseTranslations.en,
+    ...(archiveDict.en as Record<string, string>),
+    ...(ratingDict.en as Record<string, string>),
+    ...(tagDict.en as Record<string, string>),
+    ...(dataDict.en as Record<string, string>),
+  },
+};
+
+export type TranslationKey = keyof (typeof baseTranslations)['en'] | (string & {});
 
 export function t(locale: string | null | undefined, key: TranslationKey, params?: Record<string, string>): string {
   const normLocale: SupportedLocale = locale === 'th' ? 'th' : 'en';
-  let template: string = translations[normLocale][key] ?? translations.en[key] ?? key;
+  let template: string = translations[normLocale]?.[key] ?? translations.en?.[key] ?? key;
 
   if (params) {
     for (const [k, v] of Object.entries(params)) {

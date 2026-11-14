@@ -15,5 +15,8 @@
       "z": 30.0
     }
   },
+  "giveItem": {
+    "allow": {}
+  },
   "logPrefix": "[nakara_tickets]"
 }

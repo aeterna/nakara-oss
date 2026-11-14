@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, test } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import YAML from 'yaml';
+import { openTestDb } from '@nakara-tickets/db/test-support';
 import { buildApp } from '../src/app.js';
 import pkg from '../package.json' with { type: 'json' };
 
@@ -22,37 +23,6 @@ for (const [path, pathItem] of Object.entries(spec.paths as Record<string, any>)
   }
 }
 
-const STUBBED_OPERATIONS = new Set([
-  // panels
-  'getPanels',
-  'postPanels',
-  'putPanel',
-  'deletePanel',
-  'postPanelSend',
-  // tickets read endpoints
-  'getTickets',
-  'getTicket',
-  'getTicketMessages',
-  'getTicketTranscript',
-  'getAttachment',
-  // tags
-  'getTags',
-  'postTags',
-  'putTag',
-  'deleteTag',
-  // blocks
-  'getBlocks',
-  'postBlocks',
-  'deleteBlock',
-  // stats
-  'getStats',
-  // audit
-  'getAudit',
-  // data
-  'deleteMeData',
-  'getExport',
-]);
-
 function resolvePath(path: string): string {
   return path
     .replace('{guildId}', '123456789012345678')
@@ -62,31 +32,73 @@ function resolvePath(path: string): string {
 }
 
 describe('OpenAPI route stubs', () => {
+  const METRICS_TOKEN = 'routes-test-metrics-token';
+  let previousMetricsToken: string | undefined;
+
+  // /metrics answers 404 unless METRICS_TOKEN is set, so the route sweep sets it.
+  beforeEach(() => {
+    previousMetricsToken = process.env.METRICS_TOKEN;
+    process.env.METRICS_TOKEN = METRICS_TOKEN;
+  });
+
+  afterEach(() => {
+    if (previousMetricsToken === undefined) {
+      delete process.env.METRICS_TOKEN;
+    } else {
+      process.env.METRICS_TOKEN = previousMetricsToken;
+    }
+  });
+
   test('r1: every operation is registered and does not 404', async () => {
     const app = buildApp();
     for (const op of operations) {
-      const res = await app.inject({ method: op.method as any, url: resolvePath(op.path) });
+      const url = resolvePath(op.path);
+      const res = await app.inject({
+        method: op.method as any,
+        url,
+        headers: url === '/metrics' ? { authorization: `Bearer ${METRICS_TOKEN}` } : {},
+      });
       expect(res.statusCode, `${op.method} ${op.path}`).not.toBe(404);
     }
   });
 
-  test('r2: every operation has a registered route; stubbed operations answer 501', async () => {
+  test('r1-metrics: GET /metrics without METRICS_TOKEN answers 404', async () => {
+    delete process.env.METRICS_TOKEN;
+    const app = buildApp();
+    const res = await app.inject({ method: 'GET', url: '/metrics' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  test('r2: every operation has a registered route (status ≠ 404)', async () => {
     const app = buildApp();
     for (const op of operations) {
-      const res = await app.inject({ method: op.method as any, url: resolvePath(op.path) });
+      const url = resolvePath(op.path);
+      const res = await app.inject({
+        method: op.method as any,
+        url,
+        headers: url === '/metrics' ? { authorization: `Bearer ${METRICS_TOKEN}` } : {},
+      });
       expect(res.statusCode, `${op.method} ${op.path}`).not.toBe(404);
-      if (STUBBED_OPERATIONS.has(op.operationId)) {
-        expect(res.statusCode, `${op.method} ${op.path}`).toBe(501);
-        expect(res.json()).toEqual({ code: 'not_implemented', message: op.operationId });
-      }
     }
   });
 
-  test('r3: GET /healthz answers 200 with ok: true and version', async () => {
+  test('r3: GET /healthz without db answers 503 with ok: false, db: down', async () => {
     const app = buildApp();
     const res = await app.inject({ method: 'GET', url: '/healthz' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ ok: true, db: 'down', gateway: 'standby', version: pkg.version });
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual({ ok: false, db: 'down', gateway: 'connecting', version: pkg.version });
+  });
+
+  test('r3-pglite: GET /healthz with working db answers 200 with ok: true, db: up', async () => {
+    const testDb = await openTestDb();
+    try {
+      const app = buildApp({ db: testDb.db as any });
+      const res = await app.inject({ method: 'GET', url: '/healthz' });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ ok: true, db: 'up', gateway: 'connecting', version: pkg.version });
+    } finally {
+      await testDb.close();
+    }
   });
 
   test("r4: registered METHOD path set equals the spec's set (path params converted)", async () => {

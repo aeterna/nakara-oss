@@ -185,6 +185,7 @@ async function executeOpenTicket(
     await port.sendMessage(thread.id, {
       content: welcomeMsg,
       components: [buttons],
+      allowed_mentions: { parse: [] },
     });
 
     await port.editReply(interaction, {

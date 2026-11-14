@@ -9,3 +9,6 @@ packages/*/test-support/**/*.js
 packages/*/test-support/**/*.map
 packages/*/test-support/**/*.d.ts
 *.tsbuildinfo
+
+# operator secrets for compose (deploy/README) — never commit
+secrets/

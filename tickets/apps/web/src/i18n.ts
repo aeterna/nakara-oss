@@ -1,6 +1,13 @@
+import ticketsDict from './i18n/tickets.js';
+import panelsDict from './i18n/panels.js';
+import analyticsDict from './i18n/analytics.js';
+import tagsDict from './i18n/tags.js';
+import serversDict from './i18n/servers.js';
+import privacyDict from './i18n/privacy.js';
+
 export type Locale = 'th' | 'en';
 
-export const translations = {
+export const baseTranslations = {
   th: {
     appTitle: 'ระบบตั๋ว Nakara',
     loginWithDiscord: 'เข้าสู่ระบบด้วย Discord',
@@ -97,7 +104,28 @@ export const translations = {
   },
 } as const;
 
-export type TranslationKey = keyof typeof translations.en;
+export const translations: Record<Locale, Record<string, string>> = {
+  th: {
+    ...baseTranslations.th,
+    ...(ticketsDict.th as Record<string, string>),
+    ...(panelsDict.th as Record<string, string>),
+    ...(analyticsDict.th as Record<string, string>),
+    ...(tagsDict.th as Record<string, string>),
+    ...(serversDict.th as Record<string, string>),
+    ...(privacyDict.th as Record<string, string>),
+  },
+  en: {
+    ...baseTranslations.en,
+    ...(ticketsDict.en as Record<string, string>),
+    ...(panelsDict.en as Record<string, string>),
+    ...(analyticsDict.en as Record<string, string>),
+    ...(tagsDict.en as Record<string, string>),
+    ...(serversDict.en as Record<string, string>),
+    ...(privacyDict.en as Record<string, string>),
+  },
+};
+
+export type TranslationKey = keyof typeof baseTranslations.en | (string & {});
 
 export function t(key: TranslationKey, locale: Locale = 'th'): string {
   const dict = translations[locale] || translations.th;

@@ -11,11 +11,14 @@
     "packages/*"
   ],
   "scripts": {
+    "build": "tsc -b && npm run build:server && npm --workspace @nakara-tickets/web run build",
+    "build:server": "esbuild apps/server/src/main.ts --bundle --platform=node --format=esm --target=node22 --packages=external --alias:@nakara-tickets/core=./packages/core/src/index.ts --alias:@nakara-tickets/db=./packages/db/src/index.ts --alias:@nakara-tickets/discord=./packages/discord/src/index.ts --outfile=apps/server/dist/server.mjs",
     "test": "vitest run",
     "typecheck": "tsc -b"
   },
   "devDependencies": {
     "typescript": "7.0.2",
-    "vitest": "5.1.0"
+    "vitest": "5.1.0",
+    "esbuild": "0.28.2"
   }
 }

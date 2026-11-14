@@ -13,15 +13,15 @@ describe('server config acceptance tests', () => {
     PUBLIC_ORIGIN: 'https://tickets.example.com',
   };
 
-  it('(e1) minimal valid env (ROLE=migrate, DATABASE_URL, key, ALLOWED_GUILD_IDS, PUBLIC_ORIGIN) loads', () => {
-    const config = loadConfig(validBaseEnv);
+  it('(e1) ROLE=migrate with only DATABASE_URL loads', () => {
+    const config = loadConfig({
+      ROLE: 'migrate',
+      DATABASE_URL: 'postgres://user:pass@localhost:5432/tickets',
+    });
     expect(config.ROLE).toBe('migrate');
     expect(config.PORT).toBe(8080);
     expect(config.STORAGE_DIR).toBe('/data/files');
     expect(config.DATABASE_URL).toBe('postgres://user:pass@localhost:5432/tickets');
-    expect(config.TICKETS_DATA_KEY).toEqual(Buffer.alloc(32, 7));
-    expect(config.ALLOWED_GUILD_IDS).toEqual(['123456789012345678']);
-    expect(config.PUBLIC_ORIGIN).toBe('https://tickets.example.com');
     expect(Object.isFrozen(config)).toBe(true);
   });
 
@@ -97,5 +97,18 @@ describe('server config acceptance tests', () => {
       PUBLIC_ORIGIN: 'http://localhost:8080',
     });
     expect(configLocal.PUBLIC_ORIGIN).toBe('http://localhost:8080');
+  });
+
+  it('(e7) ROLE=all without PUBLIC_ORIGIN throws naming it', () => {
+    const envAllNoOrigin = {
+      ROLE: 'all',
+      DATABASE_URL: validBaseEnv.DATABASE_URL,
+      TICKETS_DATA_KEY: validBaseEnv.TICKETS_DATA_KEY,
+      ALLOWED_GUILD_IDS: validBaseEnv.ALLOWED_GUILD_IDS,
+      DISCORD_TOKEN: 'some-discord-token',
+      DISCORD_APP_ID: '123456789012345678',
+      DISCORD_CLIENT_SECRET: 'some-client-secret',
+    };
+    expect(() => loadConfig(envAllNoOrigin)).toThrow(/PUBLIC_ORIGIN/);
   });
 });
