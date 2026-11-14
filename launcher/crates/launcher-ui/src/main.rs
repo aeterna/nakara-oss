@@ -44,7 +44,11 @@ fn fetch_feed(profile: &'static launcher_core::Profile, url: &'static str) -> Ta
     std::thread::spawn(move || {
         let client = launcher_http::Client::new(
             NetPolicy::from_profile(profile),
-            &format!("{}-launcher/{}", profile.server.id, env!("CARGO_PKG_VERSION")),
+            &format!(
+                "{}-launcher/{}",
+                profile.server.id,
+                env!("CARGO_PKG_VERSION")
+            ),
         );
         let result = client.fetch_feed(url).map_err(|err| err.to_string());
         let _ = tx.send(result);
@@ -127,9 +131,8 @@ impl App {
                             }
                             Err(err) => {
                                 eprintln!("{err}");
-                                self.notice = Some(
-                                    "เปิดเกมไม่ได้ ลองอีกครั้ง หรือเปิด FiveM เอง".to_string(),
-                                );
+                                self.notice =
+                                    Some("เปิดเกมไม่ได้ ลองอีกครั้ง หรือเปิด FiveM เอง".to_string());
                             }
                         }
                     }

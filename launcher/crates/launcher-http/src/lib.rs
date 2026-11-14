@@ -170,9 +170,9 @@ pub fn checked_addrs(
     addrs: Vec<SocketAddr>,
 ) -> io::Result<Vec<SocketAddr>> {
     for addr in &addrs {
-        policy.check_ip(role, addr.ip()).map_err(|err| {
-            io::Error::new(io::ErrorKind::PermissionDenied, err.to_string())
-        })?;
+        policy
+            .check_ip(role, addr.ip())
+            .map_err(|err| io::Error::new(io::ErrorKind::PermissionDenied, err.to_string()))?;
     }
     Ok(addrs)
 }
@@ -283,7 +283,8 @@ allow_local_feed = true
 
     #[test]
     fn read_capped_empty() {
-        let bytes = read_capped(Cursor::new(Vec::<u8>::new()), 64).expect("empty reader should pass");
+        let bytes =
+            read_capped(Cursor::new(Vec::<u8>::new()), 64).expect("empty reader should pass");
         assert!(bytes.is_empty());
     }
 
@@ -331,8 +332,8 @@ allow_local_feed = true
             sock4([8, 8, 8, 8]),
             sock6([0x2620, 0x00fe, 0, 0, 0, 0, 0, 0x00fe]),
         ];
-        let checked = checked_addrs(&p, Role::Feed, addrs.clone())
-            .expect("public addresses should pass");
+        let checked =
+            checked_addrs(&p, Role::Feed, addrs.clone()).expect("public addresses should pass");
         assert_eq!(checked, addrs);
     }
 

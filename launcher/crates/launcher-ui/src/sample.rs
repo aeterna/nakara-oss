@@ -34,10 +34,7 @@ pub fn studio() -> Vec<Instance> {
                 },
             ],
             patch_title: "PoC · ร่าง".to_string(),
-            patch: vec![(
-                "ใหม่".to_string(),
-                vec!["ปุ่มทดสอบทั้งชุดในเมนู F6".to_string()],
-            )],
+            patch: vec![("ใหม่".to_string(), vec!["ปุ่มทดสอบทั้งชุดในเมนู F6".to_string()])],
             operator: "AETERNA Game".to_string(),
             contact: "contact@example.com".to_string(),
             kind: Kind::Studio,
@@ -82,7 +79,8 @@ pub fn studio() -> Vec<Instance> {
             status_on: true,
             skin: 0x4fc2ad,
             chips: ["เครื่องมือ".to_string(), "0.14.0".to_string()],
-            sub: "ตรวจเครื่องของตัวเองแบบออฟไลน์ หรือวางรหัสจับคู่ที่เซิร์ฟให้มาเพื่อส่งรายงานด้วย Connect".to_string(),
+            sub: "ตรวจเครื่องของตัวเองแบบออฟไลน์ หรือวางรหัสจับคู่ที่เซิร์ฟให้มาเพื่อส่งรายงานด้วย Connect"
+                .to_string(),
             pick_label: "โหมด".to_string(),
             pick_value: "Offline".to_string(),
             play_label: "เปิด Rongroi".to_string(),

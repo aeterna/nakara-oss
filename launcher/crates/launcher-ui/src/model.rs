@@ -107,10 +107,7 @@ pub fn server(profile: &Profile, feed: Option<&Feed>) -> Instance {
                     }
                 });
                 let (status, sub) = match open {
-                    Some(open) => (
-                        format!("เปิด {open}"),
-                        format!("เมืองปิดอยู่ เปิดอีกครั้ง {open}"),
-                    ),
+                    Some(open) => (format!("เปิด {open}"), format!("เมืองปิดอยู่ เปิดอีกครั้ง {open}")),
                     None => ("ปิดอยู่".to_string(), "เมืองปิดอยู่".to_string()),
                 };
                 let play_label = status.clone();
@@ -474,10 +471,7 @@ studio_games = {studio_games}
             let list = instances(&p, None);
             let first = &list[0];
             assert!(!first.patch_title.contains("แพตช์ 13 พ.ย."));
-            assert!(first
-                .news
-                .iter()
-                .all(|n| !n.title.contains("ชั่วโมงเมืองใหม่")));
+            assert!(first.news.iter().all(|n| !n.title.contains("ชั่วโมงเมืองใหม่")));
             assert!(!first.sub.contains("ชั่วโมงเมืองใหม่"));
         }
 

@@ -1978,6 +1978,8 @@ dependencies = [
  "dirs",
  "iced",
  "launcher-core",
+ "launcher-games",
+ "launcher-http",
  "launcher-net",
  "launcher-thai",
 ]
