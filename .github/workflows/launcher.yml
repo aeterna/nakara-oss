@@ -28,6 +28,12 @@ jobs:
         run: |
           cargo test --locked --workspace
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Format and clippy
+        run: |
+          cargo fmt --all --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo clippy --locked --workspace --all-targets -- -D warnings
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build (release)
         run: |
           cargo build --locked --release -p launcher-ui
