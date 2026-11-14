@@ -12,6 +12,25 @@ pub fn get() -> &'static launcher_core::Profile {
     PROFILE.get_or_init(|| launcher_core::parse(TEXT).expect("build.rs validated the profile"))
 }
 
+/// The name shown in the window title: the theme brand when set, else the server name.
+pub fn brand() -> &'static str {
+    get()
+        .theme
+        .brand
+        .as_deref()
+        .unwrap_or_else(|| get().server.name.as_str())
+}
+
+/// Whether this build offers Rongroi Connect.
+pub fn connect_on() -> bool {
+    get().features.rongroi_connect
+}
+
+/// The invite link this build opens, when the profile sets one.
+pub fn invite_url() -> Option<&'static str> {
+    get().server.invite_url.as_deref()
+}
+
 /// The Home layout this build uses.
 pub fn template() -> launcher_core::Template {
     get().theme.template

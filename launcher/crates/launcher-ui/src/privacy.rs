@@ -92,7 +92,11 @@ fn header<'a>() -> Element<'a, Message> {
 fn rows<'a>() -> Element<'a, Message> {
     let mut list = column![].spacing(8).width(Length::Fill);
 
-    for &(dot, title, body) in &ROWS {
+    for (index, &(dot, title, body)) in ROWS.iter().enumerate() {
+        if index == 3 && !crate::profile::connect_on() {
+            continue;
+        }
+
         list = list.push(row_item(dot, title, body));
     }
 

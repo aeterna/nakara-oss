@@ -127,21 +127,26 @@ const SAMPLES: [Instance; 4] = [
     },
 ];
 
-/// The instances shown on Home. Entry 0 is the profile's server; the rest stay
-/// sample data until the feed lands. Status, news and patch notes are sample
-/// data for every entry.
-pub fn instances() -> &'static [Instance; 4] {
-    static INSTANCES: std::sync::OnceLock<[Instance; 4]> = std::sync::OnceLock::new();
+/// The instances shown on Home. Entry 0 is the profile's server; the studio's
+/// other games follow only when the profile enables `studio_games`. Status, news
+/// and patch notes are sample data for every entry.
+pub fn instances() -> &'static [Instance] {
+    static INSTANCES: std::sync::OnceLock<Vec<Instance>> = std::sync::OnceLock::new();
     INSTANCES.get_or_init(|| {
         let p = crate::profile::get();
-        let mut instances = SAMPLES;
+        let mut first = SAMPLES[0];
 
-        instances[0].name = &p.server.name;
-        instances[0].initials =
+        first.name = &p.server.name;
+        first.initials =
             Box::leak(crate::profile::initials(&p.server.name).into_boxed_str());
-        instances[0].chips[0] = crate::profile::game_label(&p.server.game);
-        instances[0].operator = &p.server.operator;
-        instances[0].contact = &p.server.contact_email;
+        first.chips[0] = crate::profile::game_label(&p.server.game);
+        first.operator = &p.server.operator;
+        first.contact = &p.server.contact_email;
+
+        let mut instances = vec![first];
+        if p.features.studio_games {
+            instances.extend_from_slice(&SAMPLES[1..]);
+        }
 
         instances
     })

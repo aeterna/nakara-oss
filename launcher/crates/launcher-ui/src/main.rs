@@ -18,7 +18,7 @@ use iced::{Element, Length};
 
 fn main() -> iced::Result {
     iced::application(App::default, App::update, App::view)
-        .title("AETERNA Game Launcher")
+        .title(format!("{} Launcher", profile::brand()))
         .window_size((1280.0, 800.0))
         .font(include_bytes!("../../../assets/Anuphan.ttf").as_slice())
         .default_font(iced::Font::with_name("Anuphan"))
@@ -33,7 +33,8 @@ pub struct App {
 
 impl Default for App {
     fn default() -> Self {
-        let state_dir = dirs::config_dir().map(|d| d.join("AETERNA Game Launcher"));
+        let state_dir = dirs::config_dir()
+            .map(|d| d.join(format!("{}-launcher", profile::get().server.id)));
         let show_privacy = match &state_dir {
             Some(d) => !launcher_core::first_run::seen(d),
             None => true,
@@ -86,8 +87,8 @@ impl App {
     }
 
     fn classic(&self) -> Element<'_, Message> {
-        let instances: &'static [sample::Instance; 4] = sample::instances();
-        let inst = &instances[self.selected];
+        let instances = sample::instances();
+        let inst = &instances[self.selected.min(instances.len() - 1)];
 
         let main = column![topbar::view(), hero::view(inst), board::view(inst),]
             .spacing(16)
