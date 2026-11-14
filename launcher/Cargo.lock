@@ -1675,6 +1675,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "launcher-connect"
+version = "0.1.0"
+
+[[package]]
 name = "launcher-core"
 version = "0.1.0"
 dependencies = [
@@ -1682,6 +1686,14 @@ dependencies = [
  "thiserror 2.0.21",
  "toml",
 ]
+
+[[package]]
+name = "launcher-games"
+version = "0.1.0"
+
+[[package]]
+name = "launcher-net"
+version = "0.1.0"
 
 [[package]]
 name = "launcher-thai"
@@ -1699,6 +1711,10 @@ dependencies = [
  "launcher-core",
  "launcher-thai",
 ]
+
+[[package]]
+name = "launcher-update"
+version = "0.1.0"
 
 [[package]]
 name = "libc"

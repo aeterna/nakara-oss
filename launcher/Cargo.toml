@@ -1,7 +1,15 @@
 # SPDX-License-Identifier: MIT
 
 [workspace]
-members = ["crates/launcher-core", "crates/launcher-thai", "crates/launcher-ui"]
+members = [
+    "crates/launcher-core",
+    "crates/launcher-thai",
+    "crates/launcher-ui",
+    "crates/launcher-net",
+    "crates/launcher-update",
+    "crates/launcher-games",
+    "crates/launcher-connect",
+]
 resolver = "2"
 
 [workspace.package]
