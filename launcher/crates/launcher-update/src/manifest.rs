@@ -11,8 +11,8 @@ use std::collections::HashSet;
 
 use ed25519_dalek::{Signature, VerifyingKey};
 use serde::Deserialize;
-use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 
 use crate::error::UpdateError;
 

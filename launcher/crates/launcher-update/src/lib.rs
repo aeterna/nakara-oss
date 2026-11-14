@@ -17,5 +17,5 @@ pub mod swap;
 
 pub use error::UpdateError;
 pub use file::verify_file;
-pub use manifest::{Channel, FileEntry, Verified, verify_manifest};
+pub use manifest::{verify_manifest, Channel, FileEntry, Verified};
 pub use swap::{old_path, rollback, swap_exe};

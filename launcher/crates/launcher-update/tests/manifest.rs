@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
-use launcher_update::{Channel, FileEntry, UpdateError, Verified, verify_file, verify_manifest};
+use launcher_update::{verify_file, verify_manifest, Channel, FileEntry, UpdateError, Verified};
 use semver::Version;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use tempfile::tempdir;
-use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 
 const SEED_A: [u8; 32] = [7; 32];
 const SEED_B: [u8; 32] = [11; 32];
@@ -30,7 +30,13 @@ fn entry(name: &str, sha256: &str, size: u64) -> String {
     format!(r#"{{"name":"{name}","sha256":"{sha256}","size":{size}}}"#)
 }
 
-fn manifest(expires: &str, version: &str, product: &str, channel: &str, files: &[String]) -> String {
+fn manifest(
+    expires: &str,
+    version: &str,
+    product: &str,
+    channel: &str,
+    files: &[String],
+) -> String {
     format!(
         r#"{{"schema":1,"product":"{product}","version":"{version}","channel":"{channel}","expires":"{expires}","files":[{}]}}"#,
         files.join(",")
@@ -38,7 +44,13 @@ fn manifest(expires: &str, version: &str, product: &str, channel: &str, files: &
 }
 
 fn good_manifest(version: &str) -> String {
-    manifest(EXPIRES, version, PRODUCT, "stable", &[entry("launcher.exe", DIGEST, 5)])
+    manifest(
+        EXPIRES,
+        version,
+        PRODUCT,
+        "stable",
+        &[entry("launcher.exe", DIGEST, 5)],
+    )
 }
 
 fn current() -> Version {
@@ -330,10 +342,18 @@ fn rejects_forbidden_file_names() {
         ("", ""),
     ];
     for (json_name, real_name) in cases {
-        let bytes = manifest(EXPIRES, "1.2.3", PRODUCT, "stable", &[entry(json_name, DIGEST, 5)]);
+        let bytes = manifest(
+            EXPIRES,
+            "1.2.3",
+            PRODUCT,
+            "stable",
+            &[entry(json_name, DIGEST, 5)],
+        );
 
         match verify(bytes.as_bytes()) {
-            Err(UpdateError::FileName { name }) => assert_eq!(name, real_name, "name {json_name:?}"),
+            Err(UpdateError::FileName { name }) => {
+                assert_eq!(name, real_name, "name {json_name:?}")
+            }
             other => panic!("{json_name:?}: expected FileName, got {other:?}"),
         }
     }
@@ -341,7 +361,10 @@ fn rejects_forbidden_file_names() {
 
 #[test]
 fn rejects_duplicate_file_names() {
-    let files = [entry("launcher.exe", DIGEST, 5), entry("launcher.exe", DIGEST, 6)];
+    let files = [
+        entry("launcher.exe", DIGEST, 5),
+        entry("launcher.exe", DIGEST, 6),
+    ];
     let bytes = manifest(EXPIRES, "1.2.3", PRODUCT, "stable", &files);
 
     let err = verify(bytes.as_bytes()).unwrap_err();
@@ -362,10 +385,18 @@ fn rejects_a_digest_that_is_not_64_lowercase_hex_digits() {
         format!("g{}", &DIGEST[1..]),
     ];
     for sha256 in cases {
-        let bytes = manifest(EXPIRES, "1.2.3", PRODUCT, "stable", &[entry("launcher.exe", &sha256, 5)]);
+        let bytes = manifest(
+            EXPIRES,
+            "1.2.3",
+            PRODUCT,
+            "stable",
+            &[entry("launcher.exe", &sha256, 5)],
+        );
 
         match verify(bytes.as_bytes()) {
-            Err(UpdateError::Digest { name }) => assert_eq!(name, "launcher.exe", "digest {sha256:?}"),
+            Err(UpdateError::Digest { name }) => {
+                assert_eq!(name, "launcher.exe", "digest {sha256:?}")
+            }
             other => panic!("{sha256}: expected Digest, got {other:?}"),
         }
     }

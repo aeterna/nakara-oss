@@ -73,7 +73,9 @@ fn answer(line: &str) -> i32 {
 fn digits_after<'a>(line: &'a str, name: &str) -> Option<&'a str> {
     let start = line.find(name)? + name.len();
     let rest = &line[start..];
-    let end = rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len());
+    let end = rest
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(rest.len());
     if end == 0 {
         return None; // a bare `rr1.exit` counts as no directive
     }

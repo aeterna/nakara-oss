@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::error::{UpdateError, io_error};
+use crate::error::{io_error, UpdateError};
 
 /// Path of the previous exe kept for rollback: the file name of `current`
 /// with `.old` appended, in the same directory.

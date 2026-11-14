@@ -12,7 +12,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use launcher_connect::{CodeError, ConnectError, Outcome, start_connect};
+use launcher_connect::{start_connect, CodeError, ConnectError, Outcome};
 
 fn mock_path() -> &'static Path {
     Path::new(env!("CARGO_BIN_EXE_mock-connect"))
@@ -41,7 +41,9 @@ fn run_mock_raw(args: &[&str], stdin_text: &[u8]) -> (Option<i32>, Vec<u8>, Vec<
         .expect("piped stdin should be captured")
         .write_all(stdin_text)
         .expect("mock-connect should accept the line while it reads");
-    let output = child.wait_with_output().expect("mock-connect should finish");
+    let output = child
+        .wait_with_output()
+        .expect("mock-connect should finish");
     (output.status.code(), output.stdout, output.stderr)
 }
 
@@ -56,7 +58,9 @@ fn run_mock_raw_no_input(args: &[&str]) -> (Option<i32>, Vec<u8>, Vec<u8>) {
         .spawn()
         .expect("mock-connect should spawn");
     drop(child.stdin.take());
-    let output = child.wait_with_output().expect("mock-connect should finish");
+    let output = child
+        .wait_with_output()
+        .expect("mock-connect should finish");
     (output.status.code(), output.stdout, output.stderr)
 }
 
@@ -178,20 +182,34 @@ fn an_over_long_code_is_refused_before_the_child_starts() {
     let code = format!("rr1.{}", "x".repeat(4093));
     assert_eq!(code.len(), 4097);
     let outcome = start_connect(mock_path(), &code, None);
-    assert!(matches!(outcome, Err(ConnectError::Code(CodeError::TooLong))), "{outcome:?}");
+    assert!(
+        matches!(outcome, Err(ConnectError::Code(CodeError::TooLong))),
+        "{outcome:?}"
+    );
 }
 
 #[test]
 fn a_timeout_kills_the_child_and_reports_timeout() {
     let start = Instant::now();
-    let outcome = start_connect(mock_path(), "rr1.sleep5000", Some(Duration::from_millis(200)));
+    let outcome = start_connect(
+        mock_path(),
+        "rr1.sleep5000",
+        Some(Duration::from_millis(200)),
+    );
     assert!(matches!(outcome, Err(ConnectError::Timeout)), "{outcome:?}");
     let elapsed = start.elapsed();
-    assert!(elapsed < Duration::from_secs(3), "the child should be killed, not waited out");
+    assert!(
+        elapsed < Duration::from_secs(3),
+        "the child should be killed, not waited out"
+    );
 }
 
 #[test]
 fn a_missing_executable_is_an_io_error() {
-    let outcome = start_connect(Path::new("definitely-not-a-connect-binary"), "rr1.exit0", None);
+    let outcome = start_connect(
+        Path::new("definitely-not-a-connect-binary"),
+        "rr1.exit0",
+        None,
+    );
     assert!(matches!(outcome, Err(ConnectError::Io(_))), "{outcome:?}");
 }

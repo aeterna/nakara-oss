@@ -64,7 +64,11 @@ pub enum UpdateError {
 
     /// A downloaded file has another size than the manifest says.
     #[error("file {name:?} is {got} bytes, the manifest says {expected}")]
-    FileSize { name: String, expected: u64, got: u64 },
+    FileSize {
+        name: String,
+        expected: u64,
+        got: u64,
+    },
 
     /// A downloaded file does not match its SHA-256 digest.
     #[error("file {name:?} does not match its SHA-256 digest")]

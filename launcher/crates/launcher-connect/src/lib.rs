@@ -205,7 +205,10 @@ pub fn start_connect(
 
     match timeout {
         Some(limit) => wait_with_timeout(child, limit),
-        None => child.wait().map(Outcome::from_exit).map_err(ConnectError::Io),
+        None => child
+            .wait()
+            .map(Outcome::from_exit)
+            .map_err(ConnectError::Io),
     }
 }
 
@@ -253,14 +256,20 @@ mod tests {
 
     #[test]
     fn accepts_a_code_of_exactly_max_bytes() {
-        let code = format!("{CODE_PREFIX}{}", "x".repeat(MAX_CODE_BYTES - CODE_PREFIX.len()));
+        let code = format!(
+            "{CODE_PREFIX}{}",
+            "x".repeat(MAX_CODE_BYTES - CODE_PREFIX.len())
+        );
         assert_eq!(code.len(), MAX_CODE_BYTES);
         assert_eq!(validate_code(&code), Ok(code.as_str()));
     }
 
     #[test]
     fn rejects_a_code_over_max_bytes() {
-        let code = format!("{CODE_PREFIX}{}", "x".repeat(MAX_CODE_BYTES - CODE_PREFIX.len() + 1));
+        let code = format!(
+            "{CODE_PREFIX}{}",
+            "x".repeat(MAX_CODE_BYTES - CODE_PREFIX.len() + 1)
+        );
         assert_eq!(code.len(), MAX_CODE_BYTES + 1);
         assert_eq!(validate_code(&code), Err(CodeError::TooLong));
     }
@@ -324,7 +333,11 @@ mod tests {
             (16, Outcome::DeclineAccepted),
         ];
         for (code, expected) in cases {
-            assert_eq!(Outcome::from_exit(status_for(code)), expected, "exit {code}");
+            assert_eq!(
+                Outcome::from_exit(status_for(code)),
+                expected,
+                "exit {code}"
+            );
         }
     }
 

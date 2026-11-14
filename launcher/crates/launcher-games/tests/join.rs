@@ -138,7 +138,12 @@ fn fivem_accepts_port_boundaries() {
 
 #[test]
 fn fivem_refuses_ipv6_addresses() {
-    for case in ["2001:db8::1:30120", "[::1]:30120", "::1:30120", "[2001:db8::1]:30120"] {
+    for case in [
+        "2001:db8::1:30120",
+        "[::1]:30120",
+        "::1:30120",
+        "[2001:db8::1]:30120",
+    ] {
         assert!(matches!(refused(case), JoinError::Ipv6), "{case:?}");
     }
 }
@@ -308,21 +313,34 @@ fn roblox_accepts_decimal_place_ids() {
 #[test]
 fn roblox_refuses_non_decimal_place_ids() {
     for case in ["", "-1", "+1", "1 ", " 1", "1.0", "12a", "0x10", "๑๒"] {
-        assert!(matches!(roblox_join_url(case), Err(JoinError::Place)), "{case:?}");
+        assert!(
+            matches!(roblox_join_url(case), Err(JoinError::Place)),
+            "{case:?}"
+        );
     }
 }
 
 #[test]
 fn roblox_refuses_leading_zeros_and_zero() {
     for case in ["0", "00", "007", "0123", "000000000000000000001"] {
-        assert!(matches!(roblox_join_url(case), Err(JoinError::Place)), "{case:?}");
+        assert!(
+            matches!(roblox_join_url(case), Err(JoinError::Place)),
+            "{case:?}"
+        );
     }
 }
 
 #[test]
 fn roblox_refuses_overlong_or_overflowing_place_ids() {
-    for case in ["123456789012345678901", "18446744073709551616", "99999999999999999999"] {
-        assert!(matches!(roblox_join_url(case), Err(JoinError::Place)), "{case:?}");
+    for case in [
+        "123456789012345678901",
+        "18446744073709551616",
+        "99999999999999999999",
+    ] {
+        assert!(
+            matches!(roblox_join_url(case), Err(JoinError::Place)),
+            "{case:?}"
+        );
     }
 }
 
@@ -370,11 +388,17 @@ fn join_opens_the_selected_url() {
 
     let fivem = profile_for("fivem-enhanced", "play.nakara-city.com:30120");
     let fivem_target = join(&fivem, &opener).expect("FiveM profile should open");
-    assert_eq!(fivem_target.url, "fivem://connect/play.nakara-city.com:30120");
+    assert_eq!(
+        fivem_target.url,
+        "fivem://connect/play.nakara-city.com:30120"
+    );
 
     let roblox = profile_for("roblox", "1234567890");
     let roblox_target = join(&roblox, &opener).expect("Roblox profile should open");
-    assert_eq!(roblox_target.url, "https://www.roblox.com/games/start?placeId=1234567890");
+    assert_eq!(
+        roblox_target.url,
+        "https://www.roblox.com/games/start?placeId=1234567890"
+    );
 
     let urls = opener.urls();
     assert_eq!(urls.len(), 2);
@@ -396,5 +420,8 @@ fn join_does_not_open_when_the_target_is_invalid() {
 fn join_reports_opener_failure() {
     let profile = profile_for("fivem-legacy", "play.example.com:30120");
 
-    assert!(matches!(join(&profile, &FailingOpener), Err(JoinError::Open(_))));
+    assert!(matches!(
+        join(&profile, &FailingOpener),
+        Err(JoinError::Open(_))
+    ));
 }

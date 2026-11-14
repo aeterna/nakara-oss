@@ -117,7 +117,9 @@ pub fn roblox_join_url(place: &str) -> Result<String, JoinError> {
 
     place.parse::<u64>().map_err(|_| JoinError::Place)?;
 
-    Ok(format!("https://www.roblox.com/games/start?placeId={place}"))
+    Ok(format!(
+        "https://www.roblox.com/games/start?placeId={place}"
+    ))
 }
 
 /// Build the join target for a profile.
@@ -164,7 +166,10 @@ fn validate_host(host: &str) -> Result<(), JoinError> {
     if !host.is_ascii() {
         return Err(JoinError::Host);
     }
-    if host.bytes().all(|byte| byte.is_ascii_digit() || byte == b'.') {
+    if host
+        .bytes()
+        .all(|byte| byte.is_ascii_digit() || byte == b'.')
+    {
         validate_ipv4(host)
     } else {
         validate_dns(host)
@@ -220,7 +225,9 @@ fn valid_dns_label(label: &str) -> bool {
         return false;
     }
 
-    let ldh = bytes.iter().all(|byte| byte.is_ascii_alphanumeric() || *byte == b'-');
+    let ldh = bytes
+        .iter()
+        .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'-');
     ldh && bytes[0] != b'-' && bytes[bytes.len() - 1] != b'-'
 }
 
