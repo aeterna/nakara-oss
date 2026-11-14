@@ -23,7 +23,7 @@ strings, passwords, tokens or keys.
 ## R-A · wiring, image, session (owner of: main.ts app.ts types.ts worker.ts discord-rest.ts session.ts routes/auth.ts routes/system.ts Dockerfile compose.yaml deploy/ test files for these)
 1. **Blocker — migrations:** `ROLE=migrate` uses the drizzle journal runner in `src/migrate.ts` (`runMigrations`), never a
    replay of every `.sql`. Test: migrating twice on pglite succeeds and leaves one journal row per migration.
-2. Storage wiring per interfaces above; `startGateway(…, storage)`.
+2. Storage wiring per interfaces above; `startGateway(…, storage)`; `JobContext.gateway?: { closeHooks?(guildId, ticketId, actorId): Promise<void> }` filled from the gateway handle.
 3. `discord-rest.ts`: add `getChannel`; 429 waits at most 2 s once, then throws `DiscordRestError{status:429}`.
 4. Dockerfile: `RUN mkdir -p /data/files && chown node:node /data/files` before `USER node`.
 5. `/metrics` requires `Authorization: Bearer <METRICS_TOKEN>` when env `METRICS_TOKEN` (or `_FILE`) is set, else 404;
