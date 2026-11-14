@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::{
     CloseHandle, LocalFree, ERROR_BROKEN_PIPE, ERROR_IO_INCOMPLETE, ERROR_IO_PENDING,
-    ERROR_PIPE_CONNECTED, FALSE, HANDLE, INVALID_HANDLE_VALUE, TRUE,
+    ERROR_PIPE_CONNECTED, ERROR_PIPE_NOT_CONNECTED, FALSE, HANDLE, INVALID_HANDLE_VALUE, TRUE,
 };
 use windows_sys::Win32::Security::Authorization::{
     ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
@@ -22,12 +22,12 @@ use windows_sys::Win32::Security::{
     GetTokenInformation, TokenUser, SECURITY_ATTRIBUTES, TOKEN_QUERY, TOKEN_USER,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    FlushFileBuffers, WriteFile, FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_FLAG_OVERLAPPED,
+    ReadFile, WriteFile, FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_FLAG_OVERLAPPED,
     PIPE_ACCESS_DUPLEX,
 };
 use windows_sys::Win32::System::Pipes::{
     ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, GetNamedPipeClientProcessId,
-    PeekNamedPipe, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
+    PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
 };
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 use windows_sys::Win32::System::IO::{CancelIoEx, GetOverlappedResult, OVERLAPPED};
@@ -43,7 +43,7 @@ const POLL_INTERVAL: Duration = Duration::from_millis(10);
 /// How a handoff ended.
 #[derive(Debug)]
 pub enum Handoff {
-    /// The client read the whole line and the pipe was disconnected.
+    /// The client read the whole line and closed its end of the pipe.
     Written,
     /// The connected client is not the expected process.
     Mismatch {
@@ -81,8 +81,8 @@ impl ServerPipe {
 
     /// Serve `bytes` to the one client that connects, and check that its
     /// process id is `expected_pid`. `child_exit` is polled while the wait
-    /// for the client and the write run; a child that exits first ends the
-    /// handoff. Every wait ends at `deadline`.
+    /// for the client, the write, and the wait for client close run; a child
+    /// that exits first ends the handoff. Every wait ends at `deadline`.
     pub fn hand_off(
         &mut self,
         bytes: &[u8],
@@ -115,12 +115,13 @@ impl ServerPipe {
             return Err(io::Error::other("the pipe took only part of the line"));
         }
 
-        // FlushFileBuffers waits for the client to read, and so could block
-        // past the deadline. Wait for the pipe to drain first, then flush.
-        if let Some(ended) = self.wait_drained(deadline, &mut *child_exit)? {
+        // Wait for the client to close its end of the pipe before disconnecting.
+        // No FlushFileBuffers is used so a stalling client cannot block past
+        // the deadline.
+        if let Some(ended) = self.wait_client_close(deadline, &mut *child_exit)? {
             return Ok(ended);
         }
-        self.flush_and_disconnect();
+        self.disconnect();
         Ok(Handoff::Written)
     }
 
@@ -238,63 +239,109 @@ impl ServerPipe {
         }
     }
 
-    /// Wait until the client has read every byte in the pipe. Returns None
-    /// once the pipe is empty. Otherwise it returns how the handoff ended: the
-    /// child exited with bytes unread, or the deadline passed.
-    fn wait_drained(
+    /// Wait until the client closes its end of the pipe. If the client sends
+    /// bytes instead, they are discarded and the wait continues.
+    fn wait_client_close(
         &self,
         deadline: Instant,
         child_exit: &mut dyn FnMut() -> io::Result<Option<ExitStatus>>,
     ) -> io::Result<Option<Handoff>> {
+        let mut sink = [0u8; 1];
         loop {
-            if self.pending_bytes()? == 0 {
+            let mut op = Overlapped::new();
+            // SAFETY: `sink` and `op` stay alive until the read completes or is
+            // cancelled by `cancel_and_drain`.
+            let ok = unsafe {
+                ReadFile(
+                    self.handle.raw(),
+                    sink.as_mut_ptr().cast(),
+                    1,
+                    null_mut(),
+                    op.as_mut_ptr(),
+                )
+            };
+            if ok != FALSE {
+                // The client sent bytes synchronously; discard and keep waiting.
+                continue;
+            }
+            if last_error_is(ERROR_BROKEN_PIPE) || last_error_is(ERROR_PIPE_NOT_CONNECTED) {
                 return Ok(None);
             }
-            if let Some(status) = child_exit()? {
-                return Ok(Some(Handoff::ChildExited(status)));
+            if !last_error_is(ERROR_IO_PENDING) {
+                return Err(last_os_error());
+            }
+
+            match self.wait_read(&mut op, deadline, child_exit)? {
+                ReadWait::Closed => return Ok(None),
+                ReadWait::Data => continue,
+                ReadWait::ChildExited(status) => return Ok(Some(Handoff::ChildExited(status))),
+                ReadWait::Deadline => return Ok(Some(Handoff::Deadline)),
+            }
+        }
+    }
+
+    /// Poll an overlapped read until the client closes or sends bytes, or
+    /// until a child exit or deadline. The pending operation is cancelled and
+    /// drained before returning on child exit, deadline, or error.
+    fn wait_read(
+        &self,
+        op: &mut Overlapped,
+        deadline: Instant,
+        child_exit: &mut dyn FnMut() -> io::Result<Option<ExitStatus>>,
+    ) -> io::Result<ReadWait> {
+        loop {
+            match self.poll_op(op) {
+                Ok(Some(_count)) => return Ok(ReadWait::Data),
+                Ok(None) => {}
+                Err(err)
+                    if err.raw_os_error() == Some(ERROR_BROKEN_PIPE as i32)
+                        || err.raw_os_error() == Some(ERROR_PIPE_NOT_CONNECTED as i32) =>
+                {
+                    return Ok(ReadWait::Closed);
+                }
+                Err(err) => {
+                    self.cancel_and_drain(op);
+                    return Err(err);
+                }
+            }
+            match child_exit() {
+                Ok(Some(status)) => {
+                    self.cancel_and_drain(op);
+                    return Ok(ReadWait::ChildExited(status));
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    self.cancel_and_drain(op);
+                    return Err(err);
+                }
             }
             let left = deadline.saturating_duration_since(Instant::now());
             if left.is_zero() {
-                return Ok(Some(Handoff::Deadline));
+                self.cancel_and_drain(op);
+                return Ok(ReadWait::Deadline);
             }
             thread::sleep(POLL_INTERVAL.min(left));
         }
     }
 
-    /// Bytes the client has not read yet. A pipe the client has left counts
-    /// as empty.
-    fn pending_bytes(&self) -> io::Result<u32> {
-        let mut total = 0u32;
-        // SAFETY: the handle is a live pipe. The buffer is null with size 0,
-        // which is allowed when only the total is wanted.
-        let ok = unsafe {
-            PeekNamedPipe(
-                self.handle.raw(),
-                null_mut(),
-                0,
-                null_mut(),
-                &mut total,
-                null_mut(),
-            )
-        };
-        if ok != FALSE {
-            Ok(total)
-        } else if last_error_is(ERROR_BROKEN_PIPE) {
-            Ok(0)
-        } else {
-            Err(last_os_error())
-        }
-    }
-
-    /// Flush and disconnect. Both calls are best effort: every byte has been
-    /// read, so a failure here only means the client has gone.
-    fn flush_and_disconnect(&self) {
-        // SAFETY: the handle is a live pipe, and every byte has been read, so
-        // the flush returns at once.
-        unsafe { FlushFileBuffers(self.handle.raw()) };
+    /// Disconnect the server end of the pipe. Best effort: the client has
+    /// already closed its end.
+    fn disconnect(&self) {
         // SAFETY: the handle is a live server pipe.
         unsafe { DisconnectNamedPipe(self.handle.raw()) };
     }
+}
+
+/// The result of waiting on the client to close its end of the pipe.
+enum ReadWait {
+    /// The client closed its end of the pipe.
+    Closed,
+    /// The client wrote bytes to the pipe instead of closing.
+    Data,
+    /// The child exited first; the operation was cancelled.
+    ChildExited(ExitStatus),
+    /// The deadline passed first; the operation was cancelled.
+    Deadline,
 }
 
 /// The result of waiting on one overlapped operation.
@@ -486,7 +533,8 @@ fn create_pipe(name: &str, attributes: &SECURITY_ATTRIBUTES) -> io::Result<HANDL
     let handle = unsafe {
         CreateNamedPipeW(
             wide_name.as_ptr(),
-            // Duplex is needed so the server handle may query the client process id; the launcher never reads.
+            // Duplex is needed so the server handle may query the client process
+            // id and wait for the client to close.
             PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE | FILE_FLAG_OVERLAPPED,
             PIPE_TYPE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
             1,

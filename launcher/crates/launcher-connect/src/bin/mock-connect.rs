@@ -70,6 +70,10 @@ const LINE_LIMIT: u64 = 4097;
 #[cfg(windows)]
 const ERROR_BROKEN_PIPE: i32 = 109;
 
+/// Win32 error for a pipe that is not connected.
+#[cfg(windows)]
+const ERROR_PIPE_NOT_CONNECTED: i32 = 233;
+
 /// Win32 error for a pipe with no free instance yet.
 #[cfg(windows)]
 const ERROR_PIPE_BUSY: i32 = 231;
@@ -92,7 +96,9 @@ fn read_line(name: &str) -> Option<String> {
     match reader.read_until(b'\n', &mut buf) {
         Ok(_) => {}
         // The server disconnects after the last byte, which ends the stream.
-        Err(err) if err.raw_os_error() == Some(ERROR_BROKEN_PIPE) => {}
+        Err(err)
+            if err.raw_os_error() == Some(ERROR_BROKEN_PIPE)
+                || err.raw_os_error() == Some(ERROR_PIPE_NOT_CONNECTED) => {}
         Err(_) => return None,
     }
     let text = std::str::from_utf8(&buf).ok()?;
