@@ -9,7 +9,7 @@ import {
 } from '../src/handlers/index.js';
 import { FakeDiscordPort } from './fake-port.js';
 import { guilds, guildSettings, categories, tickets, messages, type TicketsDb } from '@nakara-tickets/db';
-import { openTestDb, type TestDbHandle } from '../../db/test-support/pglite.js';
+import { openTestDb, type TestDbHandle } from '@nakara-tickets/db/test-support';
 import { openBytes } from '@nakara-tickets/core';
 import { startGateway } from '../src/gateway.js';
 import { eq } from 'drizzle-orm';

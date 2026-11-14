@@ -3,7 +3,7 @@ import Fastify from 'fastify';
 import { createHash } from 'node:crypto';
 import * as dbSchema from '@nakara-tickets/db';
 import { sessions, guilds, categories } from '@nakara-tickets/db';
-import { openTestDb } from '../../../packages/db/test-support/pglite.js';
+import { openTestDb } from '@nakara-tickets/db/test-support';
 import { installSession } from '../src/session.js';
 import { checkStaff, clearStaffCache } from '../src/staff.js';
 import routes from '../src/routes/index.js';

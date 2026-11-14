@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import * as schema from '@nakara-tickets/db';
 import { signBridge, sealBytes } from '@nakara-tickets/core';
-import { openTestDb } from '../../../packages/db/test-support/pglite.js';
+import { openTestDb } from '@nakara-tickets/db/test-support';
 import { buildApp } from '../src/app.js';
 import { installBridgeAuth } from '../src/bridge/auth.js';
 import { sha256hex, normalizePairCode } from '../src/bridge/pair-code.js';
