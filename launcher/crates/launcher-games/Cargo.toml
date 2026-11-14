@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "launcher-games"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Join a server: FiveM, Roblox and Rongroi adapters (ADR 0002 decision 6)"
+publish = false
+
+[dependencies]
+launcher-core = { path = "../launcher-core" }
+open = "=5.3.2"
