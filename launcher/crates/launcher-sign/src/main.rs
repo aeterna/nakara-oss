@@ -141,27 +141,27 @@ fn cmd_manifest(args: &[String]) -> Result<(), CliError> {
         match arg.as_str() {
             "--product" => {
                 i += 1;
-                let val = args.get(i).ok_or_else(|| {
-                    CliError::Usage("missing value for --product".to_owned())
-                })?;
+                let val = args
+                    .get(i)
+                    .ok_or_else(|| CliError::Usage("missing value for --product".to_owned()))?;
                 if product.replace(val.clone()).is_some() {
                     return Err(CliError::Usage("duplicate --product flag".to_owned()));
                 }
             }
             "--version" => {
                 i += 1;
-                let val = args.get(i).ok_or_else(|| {
-                    CliError::Usage("missing value for --version".to_owned())
-                })?;
+                let val = args
+                    .get(i)
+                    .ok_or_else(|| CliError::Usage("missing value for --version".to_owned()))?;
                 if version_str.replace(val.clone()).is_some() {
                     return Err(CliError::Usage("duplicate --version flag".to_owned()));
                 }
             }
             "--channel" => {
                 i += 1;
-                let val = args.get(i).ok_or_else(|| {
-                    CliError::Usage("missing value for --channel".to_owned())
-                })?;
+                let val = args
+                    .get(i)
+                    .ok_or_else(|| CliError::Usage("missing value for --channel".to_owned()))?;
                 if channel.replace(val.clone()).is_some() {
                     return Err(CliError::Usage("duplicate --channel flag".to_owned()));
                 }
@@ -252,11 +252,13 @@ fn cmd_sign(args: &[String]) -> Result<(), CliError> {
         match args[i].as_str() {
             "--manifest" => {
                 i += 1;
-                let val = args.get(i).ok_or_else(|| {
-                    CliError::Usage("missing value for --manifest".to_owned())
-                })?;
+                let val = args
+                    .get(i)
+                    .ok_or_else(|| CliError::Usage("missing value for --manifest".to_owned()))?;
                 if val.is_empty() {
-                    return Err(CliError::Usage("--manifest path must not be empty".to_owned()));
+                    return Err(CliError::Usage(
+                        "--manifest path must not be empty".to_owned(),
+                    ));
                 }
                 if manifest_path.replace(PathBuf::from(val)).is_some() {
                     return Err(CliError::Usage("duplicate --manifest flag".to_owned()));

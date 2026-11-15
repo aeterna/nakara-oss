@@ -377,7 +377,11 @@ fn valid_repo(value: &str) -> bool {
 
 fn decode_update_key(value: &str) -> Option<[u8; 32]> {
     let b = value.as_bytes();
-    if b.len() != 64 || !b.iter().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(c)) {
+    if b.len() != 64
+        || !b
+            .iter()
+            .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(c))
+    {
         return None;
     }
     let mut out = [0u8; 32];
