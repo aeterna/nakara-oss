@@ -53,20 +53,6 @@ pub fn well(radius: f32) -> impl Fn(&iced::Theme) -> container::Style {
     }
 }
 
-pub fn tint(alpha: f32, radius: f32) -> impl Fn(&iced::Theme) -> container::Style {
-    move |_theme| container::Style {
-        background: Some(Background::Color(Color {
-            a: alpha,
-            ..rgba(0xdcf0ea, 1.0)
-        })),
-        border: Border {
-            radius: radius.into(),
-            ..Border::default()
-        },
-        ..container::Style::default()
-    }
-}
-
 pub fn pill(active: bool, radius: f32) -> impl Fn(&iced::Theme, button::Status) -> button::Style {
     move |_theme, status| {
         let (background, text_color) = if active {
