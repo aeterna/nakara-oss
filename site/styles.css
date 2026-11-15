@@ -15,6 +15,7 @@
   --ease:cubic-bezier(.2,.7,.2,1);
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-body);font-size:16px;line-height:1.7;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 a{color:inherit}
@@ -25,7 +26,7 @@ code,.mono{font-family:var(--f-mono);font-size:.86em}
 :focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
 
 /* nav */
-.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:rgba(18,17,16,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);margin:16px calc(-1*max(16px,env(safe-area-inset-left,0px))) 0;padding:0 max(16px,env(safe-area-inset-left,0px))}
+.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:rgba(18,17,16,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);margin:0 calc(-1*max(16px,env(safe-area-inset-left,0px)));padding:0 max(16px,env(safe-area-inset-left,0px))}
 .nav-in{max-width:1120px;margin:0 auto;height:60px;display:flex;align-items:center;gap:24px}
 .brand{display:flex;align-items:center;gap:10px;font-family:var(--f-mono);font-weight:500;font-size:15px;text-decoration:none}
 .brand i{width:26px;height:26px;border-radius:7px;background:var(--text);color:var(--bg);display:grid;place-items:center;font-style:normal;font-family:var(--f-display);font-weight:600;font-size:15px}
