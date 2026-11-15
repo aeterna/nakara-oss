@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Check a FiveM script for dangerous code before you install it | nakara-oss</title>
+  <meta name="description" content="Check a FiveM script for dangerous code and backdoor-like patterns before installing. Free open-source tool fivem-devkit safety reads code and never runs it.">
+  <link rel="canonical" href="https://aeterna.github.io/nakara-oss/en/safety-scanner/">
+  <link rel="alternate" hreflang="th" href="https://aeterna.github.io/nakara-oss/safety-scanner/">
+  <link rel="alternate" hreflang="en" href="https://aeterna.github.io/nakara-oss/en/safety-scanner/">
+  <link rel="alternate" hreflang="x-default" href="https://aeterna.github.io/nakara-oss/en/safety-scanner/">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Check a FiveM script for dangerous code before you install it | nakara-oss">
+  <meta property="og:description" content="Check a FiveM script for dangerous code and backdoor-like patterns before installing. Free open-source tool fivem-devkit safety reads code and never runs it.">
+  <meta property="og:url" content="https://aeterna.github.io/nakara-oss/en/safety-scanner/">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="th_TH">
+  <meta property="og:image" content="https://aeterna.github.io/nakara-oss/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="fivem-devkit dangerous code scanner for FiveM scripts">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Check a FiveM script for dangerous code before you install it | nakara-oss">
+  <meta name="twitter:description" content="Check a FiveM script for dangerous code and backdoor-like patterns before installing. Free open-source tool fivem-devkit safety reads code and never runs it.">
+  <meta name="twitter:image" content="https://aeterna.github.io/nakara-oss/og.png">
+  <meta name="theme-color" content="#121110">
+  <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="../../styles.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "name": "fivem-devkit",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "macOS, Linux (Node.js 22+)",
+        "softwareVersion": "{{devkit.version}}",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "THB"
+        },
+        "downloadUrl": "https://www.npmjs.com/package/@aeterna_game/fivem-devkit",
+        "inLanguage": "en"
+      },
+      {
+        "@type": "HowTo",
+        "name": "How to check a FiveM script for dangerous code with fivem-devkit safety",
+        "description": "Step-by-step instructions to scan FiveM scripts for dangerous code and backdoor-like patterns before installing them on your server.",
+        "step": [
+          {
+            "@type": "HowToStep",
+            "name": "Configure for third-party scripts",
+            "text": "Create a .fivem-devkit.json file specifying {\"safety\": {\"requireManifest\": false}} to scan scripts without oss.json."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Run the safety scan",
+            "text": "Execute npx @aeterna_game/fivem-devkit safety ./script_folder using Node.js 22+."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Inspect each finding",
+            "text": "Review the reported file, line number, and rule id to inspect the actual code at each flagged location."
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+<header class="nav">
+  <div class="nav-in">
+    <a class="brand" href="../#top"><i>N</i>nakara-oss</a>
+    <nav class="links" aria-label="Main navigation"><a href="../#scan">Scan</a><a href="../#packages">Packages</a><a href="../#trust">Trust Architecture</a><a href="../#limits">Limits</a><a href="../#faq">FAQ</a></nav>
+    <a class="nav-btn" href="https://github.com/aeterna/nakara-oss"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.15-1.11-1.46-1.11-1.46-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>GitHub</a>
+    <a class="lang" href="../../safety-scanner/" hreflang="th">ไทย</a>
+  </div>
+  <div class="progress" aria-hidden="true"></div>
+</header>
+
+<main class="wrap">
+  <article class="article">
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="../">Home</a> <span aria-hidden="true">›</span> <span>fivem-devkit safety</span></nav>
+    <p class="kicker">fivem-devkit {{devkit.version}}</p>
+    <h1>Check a FiveM script for dangerous code before you install it</h1>
+    <p class="lede">Free and open source. Reads code and never runs it. Points at specific lines for you to review, not a verdict.</p>
+
+    <div class="prose">
+      <h2>Quick start</h2>
+      <p>Requires Node.js 22 or newer. To inspect downloaded or purchased scripts that lack an <code>oss.json</code> capability manifest, place a <code>.fivem-devkit.json</code> configuration file in the working directory:</p>
+      <pre><code>{
+  "safety": {
+    "requireManifest": false
+  }
+}</code></pre>
+      <p>Run the scanner pointing to the script directory:</p>
+      <pre><code>npx @aeterna_game/fivem-devkit safety ./folder</code></pre>
+      <p>Real output when dangerous code and backdoor-like patterns are detected:</p>
+      <pre><code>✗ [safety/dynamic-load] resources/some_script/server/main.lua:2
+    load called — loads code at runtime that nobody reviewed
+✗ [safety/host-exec] resources/some_script/server/main.lua:3
+    os.execute — runs or changes things on the host machine
+✗ [safety/secret-convar] resources/some_script/server/main.lua:4
+    GetConvar('mysql_connection_string') reads a secret convar
+
+safety: 3 error(s), 0 warning(s)</code></pre>
+
+      <h2>What it looks for</h2>
+      <p>Rules are divided into hard-deny rules that must never appear in resource code, security and code quality rules, and capability rules checked against <code>oss.json</code>. When <code>requireManifest: false</code> is set, the scanner evaluates hard-deny and quality rules only:</p>
+
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Rule ID</th>
+              <th>What it catches</th>
+              <th>With requireManifest: false</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>dynamic-load</code></td>
+              <td>Runtime code execution such as Lua <code>load</code>, <code>loadstring</code>, <code>dofile</code>, <code>loadfile</code>, <code>package.loadlib</code>, JS runtime <code>require</code>/<code>import</code>, or <code>&lt;script src="https://…"&gt;</code> in NUI — the backdoor pattern used to fetch unreviewed code</td>
+              <td><span class="st st-ok">Active</span></td>
+            </tr>
+            <tr>
+              <td><code>host-exec</code></td>
+              <td>Host command execution and host filesystem modifications, including <code>os.execute</code>, <code>io.popen</code>, <code>os.remove</code>, <code>os.rename</code>, <code>os.exit</code>, file writing via <code>io.open</code>, or JS <code>child_process</code> and <code>vm</code></td>
+              <td><span class="st st-ok">Active</span></td>
+            </tr>
+            <tr>
+              <td><code>host-access</code></td>
+              <td>Host environment and raw network access, including reading environment variables (<code>os.getenv</code>, <code>process.env</code>), raw sockets (<code>net</code>, <code>dgram</code>, <code>tls</code>), or direct filesystem access through <code>fs</code></td>
+              <td><span class="st st-ok">Active</span></td>
+            </tr>
+            <tr>
+              <td><code>code-eval</code></td>
+              <td>JavaScript code evaluation via <code>eval</code>, <code>Function</code> / <code>new Function</code>, or string execution in <code>setTimeout</code>/<code>setInterval</code></td>
+              <td><span class="st st-ok">Active</span></td>
+            </tr>
+            <tr>
+              <td><code>env-tamper</code></td>
+              <td>Global environment manipulation such as <code>debug.*</code>, <code>getfenv</code>, <code>setfenv</code>, <code>string.dump</code>, <code>_G[computed]</code>, or JS <code>globalThis[x]</code> to evade name-based checks</td>
+              <td><span class="st st-ok">Active</span></td>
+            </tr>
+            <tr>
+              <td><code>invoke-native</code></td>
+              <td>Calling server-side natives by hash (<code>Citizen.InvokeNative</code>, <code>_in</code>) to bypass capability checks</td>
+              <td><span class="st st-ok">Active</span></td>
+            </tr>
+            <tr>
+              <td><code>secret-convar</code></td>
+              <td>Reading secret convars like <code>rcon_password</code>, <code>sv_licenseKey</code>, <code>steam_webApiKey</code>, <code>mysql_connection_string</code>, or names matching token, secret, password, apikey, or webhook (never allowlistable)</td>
+              <td><span class="st st-ok">Active</span></td>
+            </tr>
+            <tr>
+              <td><code>ace-command</code></td>
+              <td>Console commands modifying permissions or controlling the server via <code>ExecuteCommand</code> (e.g. <code>add_ace</code>, <code>add_principal</code>, <code>exec</code>, <code>set</code>, <code>rcon</code>, <code>quit</code>, <code>restart</code>, <code>ensure</code>) or runtime command names (never allowlistable)</td>
+              <td><span class="st st-ok">Active</span></td>
+            </tr>
+            <tr>
+              <td><code>command-injection</code></td>
+              <td>Server-side <code>ExecuteCommand</code> appending runtime arguments to command strings, risking command injection through <code>;</code> separators</td>
+              <td><span class="st st-ok">Active</span></td>
+            </tr>
+            <tr>
+              <td><code>obfuscation</code></td>
+              <td>Obfuscated patterns designed to bypass inspection, including long escape runs, large base64 strings, repeated <code>string.char</code> calls, or lines over 1,000 characters</td>
+              <td><span class="st st-ok">Active</span></td>
+            </tr>
+            <tr>
+              <td><code>opaque-file</code></td>
+              <td>Unreviewable opaque files such as binaries (<code>.dll</code>, <code>.so</code>, <code>.luac</code>), compressed archives (<code>.zip</code>, <code>.rar</code>), or minified JavaScript (<code>*.min.js</code>)</td>
+              <td><span class="st st-ok">Active</span></td>
+            </tr>
+            <tr>
+              <td><code>nui-html-injection</code></td>
+              <td>Dynamic HTML assignment in NUI (e.g. <code>innerHTML</code>, <code>outerHTML</code>, <code>document.write</code>) with non-static strings, risking script execution in player clients</td>
+              <td><span class="st st-ok">Active</span></td>
+            </tr>
+            <tr>
+              <td><code>net-event-rate-limit</code></td>
+              <td>Server net-event handlers lacking a recognized rate-limiting helper, leaving the event vulnerable to client spam (reported as a warning)</td>
+              <td><span class="st st-ok">Active</span></td>
+            </tr>
+            <tr>
+              <td><code>missing-manifest</code></td>
+              <td>Missing <code>oss.json</code> next to <code>fxmanifest.lua</code> or an invalid manifest structure</td>
+              <td><span class="st st-warn">Skipped (needs oss.json)</span></td>
+            </tr>
+            <tr>
+              <td><code>undeclared-http</code></td>
+              <td>HTTP requests via <code>PerformHttpRequest</code>, <code>fetch</code>, <code>axios</code>, etc., to destinations not declared in <code>capabilities.http</code></td>
+              <td><span class="st st-warn">Skipped (needs oss.json)</span></td>
+            </tr>
+            <tr>
+              <td><code>undeclared-http-handler</code></td>
+              <td>Handling inbound HTTP requests via <code>SetHttpHandler</code> without declaration in <code>capabilities.httpHandlers</code></td>
+              <td><span class="st st-warn">Skipped (needs oss.json)</span></td>
+            </tr>
+            <tr>
+              <td><code>undeclared-command</code></td>
+              <td>Invoking console commands via <code>ExecuteCommand</code> not declared in <code>capabilities.commands</code></td>
+              <td><span class="st st-warn">Skipped (needs oss.json)</span></td>
+            </tr>
+            <tr>
+              <td><code>undeclared-registered-command</code></td>
+              <td>Registering console or chat commands via <code>RegisterCommand</code> or <code>lib.addCommand</code> not listed in <code>capabilities.registeredCommands</code></td>
+              <td><span class="st st-warn">Skipped (needs oss.json)</span></td>
+            </tr>
+            <tr>
+              <td><code>undeclared-convar</code></td>
+              <td>Reading or setting convars not declared in <code>capabilities.convars</code></td>
+              <td><span class="st st-warn">Skipped (needs oss.json)</span></td>
+            </tr>
+            <tr>
+              <td><code>undeclared-net-event</code></td>
+              <td>Registering server or client net events not declared in <code>capabilities.netEvents</code></td>
+              <td><span class="st st-warn">Skipped (needs oss.json)</span></td>
+            </tr>
+            <tr>
+              <td><code>undeclared-nui</code></td>
+              <td>Using NUI pages, focus natives, or NUI callbacks without setting <code>capabilities.nui: true</code></td>
+              <td><span class="st st-warn">Skipped (needs oss.json)</span></td>
+            </tr>
+            <tr>
+              <td><code>undeclared-file-write</code></td>
+              <td>Writing files via <code>SaveResourceFile</code> without declaring them in <code>capabilities.files.write</code> (writes to other resources are always errors)</td>
+              <td><span class="st st-warn">Skipped (needs oss.json)</span></td>
+            </tr>
+            <tr>
+              <td><code>undeclared-db</code></td>
+              <td>Accessing database tables not listed in <code>capabilities.db.tables</code>, or executing DDL without declaring <code>capabilities.db.ddl: true</code></td>
+              <td><span class="st st-warn">Skipped (needs oss.json)</span></td>
+            </tr>
+            <tr>
+              <td><code>over-declared</code></td>
+              <td>Capabilities listed in <code>oss.json</code> that the resource code never actually uses (reported as a warning to prevent silent capability expansion)</td>
+              <td><span class="st st-warn">Skipped (needs oss.json)</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Reading the output and allowlisting</h2>
+      <p>Each reported finding displays <strong>file:line</strong>, the rule ID in brackets <code>[safety/&lt;rule-id&gt;]</code>, and a descriptive reason on the line below. These findings point out lines for you to review and inspect manually, rather than acting as an automated verdict.</p>
+      <p>If you have reviewed the code and confirmed an intentional use case in your environment, you can configure an exception in <code>.fivem-devkit.json</code>:</p>
+      <pre><code>{
+  "safety": {
+    "allow": {
+      "dynamic-load": [
+        { "path": "resources/my_pkg/server/catalog.lua", "reason": "loads catalog.lua shipped in this resource into an empty env" }
+      ]
+    }
+  }
+}</code></pre>
+      <p>Rules for allowlisting:</p>
+      <ul>
+        <li>Every entry must supply a specific <code>path</code> (relative to the project root or resource folder) and a clear <code>reason</code>.</li>
+        <li>Catch-all paths like <code>*</code>, <code>**</code>, or <code>.</code> are rejected with <code>invalid-allow</code>.</li>
+        <li><strong>Rules that can never be allowlisted:</strong> <code>secret-convar</code> and <code>ace-command</code> cannot be exempted under any circumstance. Allowing credential reads exposes database passwords and API keys, while allowing ACE command execution grants complete server takeover capabilities. Any allowlist entry targeting them is rejected with <code>invalid-allow</code>.</li>
+      </ul>
+
+      <div class="callout callout-warn">
+        <h3>What it cannot catch</h3>
+        <ul>
+          <li><strong>Logic bombs inside allowed APIs:</strong> A resource declared to access <code>db.tables: ["players"]</code> can drop or wipe player records on a specified date. An endpoint declared for HTTP can transmit arbitrary payloads.</li>
+          <li><strong>Abuse through other resources' exports:</strong> Invocations like <code>exports.some_admin:giveAdmin(src)</code> look like normal export calls; the scanner cannot judge what external resources expose.</li>
+          <li><strong>Trusting the client:</strong> Server net events that hand out items or money to any client caller remain severe vulnerabilities even when declared and rate limited.</li>
+          <li><strong>Data-dependent behaviour / values built at runtime:</strong> URLs, commands, or convar names assembled dynamically are flagged as dynamic values, but their runtime values cannot be traced.</li>
+          <li><strong>Native calls by hash or unlisted names:</strong> Client-side natives invoked by hash, or new engine capabilities added to FiveM after the scanner was built.</li>
+        </ul>
+        <p><strong>A human still has to read the code:</strong> A scan with zero errors indicates only that automated checks found no violations, not that the code is free from risk. Server owners must always inspect and review code manually.</p>
+      </div>
+
+      <h2>For resource authors</h2>
+      <p>Every resource declares its required capabilities in an <code>oss.json</code> manifest (validated against <a href="https://github.com/aeterna/nakara-oss/blob/main/oss.schema.json">oss.schema.json</a>), explicitly listing its HTTP endpoints, console commands, convars, net events, database tables, and file writes. Declaring exact capabilities informs server owners before installation, and CI runs <code>fivem-devkit safety</code> on every Pull Request to ensure the code never accesses anything undeclared. For configuration details, see the <a href="https://github.com/aeterna/nakara-oss/blob/main/packages/devkit/docs/safety.md">safety.md documentation</a>.</p>
+
+      <div class="cta">
+        <a class="btn btn-p" href="https://github.com/aeterna/nakara-oss/blob/main/packages/devkit/docs/safety.md">All options</a>
+        <a class="btn btn-s" href="https://www.npmjs.com/package/@aeterna_game/fivem-devkit">npm</a>
+      </div>
+    </div>
+  </article>
+
+  <footer>
+    <span>MIT · Built by the Nakara City team</span>
+    <span><a href="https://github.com/aeterna/nakara-oss">GitHub</a> · Updated {{site.date}}</span>
+  </footer>
+</main>
+</body>
+</html>

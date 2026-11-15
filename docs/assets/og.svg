@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <!-- Social preview for https://aeterna.github.io/nakara-oss/ , drawn in the style of aeterna-rongroi's
+       Forensic Architecture diagram (sources fan into a ringed core, results fan out, one wire is cut).
+       pages.yml renders it to og.png with rsvg-convert and Noto fonts. Agent: Claude Code - Claude Opus 5.5 -->
+  <style>
+    .bg{fill:#121110}
+    .lab{fill:#f2ede5;font-family:"Noto Sans Thai","Noto Sans","Segoe UI",sans-serif;font-size:19px;font-weight:600}
+    .sub{fill:#9a8f83;font-family:"Noto Sans Thai","Noto Sans","Segoe UI",sans-serif;font-size:15px}
+    .mono{fill:#9a8f83;font-family:"DejaVu Sans Mono",Menlo,Consolas,monospace;font-size:14px}
+    .src{fill:#191715;stroke:#4a433c;stroke-width:1.4}
+    .wire{fill:none;stroke:#2e2a26;stroke-width:3}
+    .flow{fill:none;stroke:#e9a66b;stroke-width:3;stroke-dasharray:5 15;opacity:.8}
+    .flow.out{stroke:#86c493}
+    .core{fill:#2a2018;stroke:#e9a66b;stroke-width:2.5}
+    .ring{fill:none;stroke:#e9a66b;stroke-width:9;stroke-dasharray:2 7.2;opacity:.7}
+    .ring2{fill:none;stroke:#e9a66b;stroke-width:1.3;stroke-dasharray:2.5 10;opacity:.35}
+    .pkt{fill:#e9a66b}
+    .pkt.out{fill:#86c493}
+    .badge{fill:#1f2a20;stroke:#86c493;stroke-width:2}
+    .okt{fill:#86c493;font-family:"Noto Sans Thai","Noto Sans","Segoe UI",sans-serif;font-size:15px;font-weight:600}
+    .dash{fill:none;stroke:#4a433c;stroke-width:2;stroke-dasharray:7 7}
+    .x{stroke:#e48471;stroke-width:4;stroke-linecap:round}
+    .bad{fill:#e48471}
+    .badt{fill:#e48471;font-family:"DejaVu Sans Mono",Menlo,Consolas,monospace;font-size:15px}
+    .h1{fill:#f2ede5;font-family:"Noto Sans Thai","Noto Sans","Segoe UI",sans-serif;font-size:50px;font-weight:600}
+  </style>
+  <rect class="bg" width="1200" height="630"/>
+
+  <!-- headline -->
+  <rect x="60" y="44" width="34" height="34" rx="9" fill="#f2ede5"/>
+  <text x="77" y="69" text-anchor="middle" font-family="Noto Sans,Segoe UI,sans-serif" font-size="20" font-weight="700" fill="#121110">N</text>
+  <text class="mono" x="106" y="68" style="fill:#f2ede5;font-size:20px">nakara-oss</text>
+  <text class="mono" x="1140" y="68" text-anchor="end">MIT · open source</text>
+  <text class="h1" x="60" y="146">สคริปต์ FiveM ฟรี ที่<tspan fill="#e9a66b">ตรวจได้</tspan> ก่อนลง server</text>
+
+  <!-- wires in -->
+  <path class="wire" d="M310 300 C420 300 430 400 520 400"/>
+  <path class="wire" d="M310 380 C420 380 430 400 520 400"/>
+  <path class="wire" d="M310 460 C420 460 430 400 520 400"/>
+  <path class="flow" d="M310 300 C420 300 430 400 520 400"/>
+  <path class="flow" d="M310 380 C420 380 430 400 520 400" style="stroke-dashoffset:-8"/>
+  <path class="flow" d="M310 460 C420 460 430 400 520 400" style="stroke-dashoffset:-4"/>
+  <!-- wires out -->
+  <path class="wire" d="M680 400 C760 400 760 320 840 320"/>
+  <path class="wire" d="M680 400 L840 400"/>
+  <path class="wire" d="M680 400 C760 400 760 480 840 480"/>
+  <path class="flow out" d="M680 400 C760 400 760 320 840 320"/>
+  <path class="flow out" d="M680 400 L840 400" style="stroke-dashoffset:-6"/>
+  <path class="flow out" d="M680 400 C760 400 760 480 840 480" style="stroke-dashoffset:-12"/>
+  <!-- the cut wire: undeclared http never reaches a release -->
+  <path class="dash" d="M600 294 C600 246 700 236 840 236"/>
+  <line class="x" x1="718" y1="226" x2="738" y2="248"/><line class="x" x1="738" y1="226" x2="718" y2="248"/>
+  <circle class="bad" cx="672" cy="246" r="6"/>
+  <rect class="src" x="840" y="212" width="300" height="48" rx="12" stroke-dasharray="7 7"/>
+  <text class="badt" x="860" y="242">✗ undeclared-http · PR ล้ม</text>
+
+  <!-- sources -->
+  <rect class="src" x="60" y="270" width="250" height="60" rx="13"/>
+  <text class="lab" x="78" y="296">source Lua / JS</text><text class="sub" x="78" y="318">resource ใน repo</text>
+  <rect class="src" x="60" y="350" width="250" height="60" rx="13"/>
+  <text class="lab" x="78" y="376">oss.json</text><text class="sub" x="78" y="398">ประกาศว่าจะแตะอะไร</text>
+  <rect class="src" x="60" y="430" width="250" height="60" rx="13"/>
+  <text class="lab" x="78" y="456">สคริปต์ที่โหลดมา</text><text class="sub" x="78" y="478">ไม่มี oss.json ก็สแกนได้</text>
+  <rect x="236" y="440" width="64" height="22" rx="6" fill="#3a1f1a" stroke="#e48471" stroke-width="1.3"/>
+  <text class="mono" x="268" y="456" text-anchor="middle" style="fill:#e48471;font-size:12px">load()</text>
+
+  <!-- core -->
+  <circle class="ring2" cx="600" cy="400" r="106"/>
+  <circle class="ring" cx="600" cy="400" r="88"/>
+  <circle class="core" cx="600" cy="400" r="70"/>
+  <text class="lab" x="600" y="390" text-anchor="middle" style="font-size:20px">devkit safety</text>
+  <text class="sub" x="600" y="413" text-anchor="middle">อ่านโค้ด ไม่รันโค้ด</text>
+  <text class="mono" x="600" y="433" text-anchor="middle" style="font-size:12.5px">CI · เครื่องคุณ</text>
+
+  <!-- results -->
+  <rect class="badge" x="840" y="290" width="300" height="60" rx="13"/>
+  <text class="lab" x="858" y="316">provenance attestation</text><text class="okt" x="858" y="338">build ใน CI เท่านั้น</text>
+  <rect class="src" x="840" y="370" width="300" height="60" rx="13"/>
+  <text class="lab" x="858" y="396">SHA256SUMS</text><text class="sub" x="858" y="418">ไฟล์ไม่ถูกแก้</text>
+  <rect class="src" x="840" y="450" width="300" height="60" rx="13"/>
+  <text class="lab" x="858" y="476">ensure resource</text><text class="sub" x="858" y="498">ตรวจซ้ำเองได้ก่อนลง</text>
+
+  <!-- packets frozen mid-wire -->
+  <circle class="pkt" cx="415" cy="350" r="6"/>
+  <circle class="pkt" cx="415" cy="390" r="6"/>
+  <circle class="pkt" cx="415" cy="430" r="6"/>
+  <circle class="pkt out" cx="760" cy="360" r="6"/>
+  <circle class="pkt out" cx="760" cy="400" r="6"/>
+  <circle class="pkt out" cx="760" cy="440" r="6"/>
+
+  <!-- footer -->
+  <text class="sub" x="60" y="580">ทุก resource ประกาศสิทธิ์ · ทุก PR ถูกสแกน · release มี attestation · ยังต้องมีคนอ่านโค้ด</text>
+  <text class="mono" x="1140" y="580" text-anchor="end" style="font-size:16px">aeterna.github.io/nakara-oss</text>
+</svg>

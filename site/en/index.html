@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Free FiveM scripts you can check before installing | nakara-oss</title>
   <meta name="description" content="Free open-source FiveM resources with explicit oss.json capabilities, plus a fivem-devkit scanner you run yourself before installing on your server.">
+  <meta name="google-site-verification" content="MZvPevRRu6B7x72RKBwtfmq5-Ci8DajscdDVcwdQ12k">
   <link rel="canonical" href="https://aeterna.github.io/nakara-oss/en/">
   <link rel="alternate" hreflang="th" href="https://aeterna.github.io/nakara-oss/">
   <link rel="alternate" hreflang="en" href="https://aeterna.github.io/nakara-oss/en/">
@@ -139,16 +140,22 @@
           <div class="card-h"><h3><a href="https://github.com/aeterna/nakara-oss/tree/main/packages/devkit">fivem-devkit</a></h3><span class="ver">{{devkit.version}}</span></div>
           <p>Finds dangerous code and silent bugs in anyone's resources, plus a busted harness for Lua tests</p>
           <div class="checks"><span>export-calls</span><span>export-self-param</span><span>export-funcref</span><span>nui-callbacks</span><span>nui-escape</span><span>+ 4 more checks</span></div>
-          <p class="foot mono">npx @aeterna_game/fivem-devkit check</p>
+          <p class="foot">
+            <span class="mono">npx @aeterna_game/fivem-devkit check</span><br>
+            <a href="safety-scanner/">How to use the safety scanner →</a>
+          </p>
         </article>
         <article class="card">
           <div class="card-h"><h3><a href="https://github.com/aeterna/nakara-oss/tree/main/packages/cargen-fix">nakara_cargen_fix</a></h3><span class="ver">{{cargen.version}}</span></div>
-          <p>Stops the <code>CNetworkCarGenWorldStateData Pool Full</code> client crash and explains why the popular <code>GAMECONFIG_FILE</code> fix does nothing</p>
+          <p>A guard against the <code>CNetworkCarGenWorldStateData Pool Full</code> client crash, and why the popular <code>GAMECONFIG_FILE</code> fix does nothing</p>
           <div class="manifest"><span class="k">oss.json</span> → capabilities
   http        <span class="e">[]</span>    commands  <span class="e">[]</span>
   convars     <span class="e">[]</span>    netEvents <span class="e">[]</span>
   db.tables   <span class="e">[]</span>    files     <span class="e">[]</span></div>
-          <p class="foot">Declares that it touches nothing, and CI checks on every PR that the code agrees</p>
+          <p class="foot">
+            Declares that it touches nothing, and CI checks on every PR that the code agrees<br>
+            <a href="cargen-crash/">Read what is proven →</a>
+          </p>
         </article>
       </div>
       <div class="dev">
