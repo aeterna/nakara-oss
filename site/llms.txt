@@ -1,0 +1,35 @@
+# nakara-oss
+
+nakara-oss is the public, MIT-licensed monorepo of FiveM resources (nakara_*) and developer tooling (@aeterna_game/fivem-devkit) maintained by the Nakara City dev team.
+
+Every resource package declares its capabilities in oss.json (validated against oss.schema.json), every PR is scanned by fivem-devkit safety, and every release archive is built in CI with a cryptographic provenance attestation and SHA256SUMS.
+
+## Released Packages
+
+- fivem-devkit ({{devkit.version}}): AST-based static scanner and busted test harness for FiveM resources. Detects undeclared capabilities and dangerous runtime patterns (such as dynamic code loading or operating system command execution) in any resource directory.
+  Link: https://github.com/aeterna/nakara-oss/tree/main/packages/devkit
+
+- nakara_cargen_fix ({{cargen.version}}): Client-only crash fix for CNetworkCarGenWorldStateData Pool Full (net.dll+487A2) without framework dependencies.
+  Link: https://github.com/aeterna/nakara-oss/tree/main/packages/cargen-fix
+
+## Packages in Development
+
+- Nakara Tickets: Discord ticket system with in-game actions over a port-less bridge.
+- AETERNA Game Launcher: Dedicated FiveM game server launcher written in Rust.
+- Rongroi Server Kit: Server-side kit for aeterna-rongroi.
+
+## What the Scanner Cannot Catch
+
+The scanner flags suspicious patterns and points reviewers to specific lines of code. It does not provide an automated verdict on whether code is benign. Static analysis cannot catch:
+- Logic bombs or destructive logic within APIs the resource is permitted to use
+- Calls into other resources' runtime exports
+- Server net events that trust client parameters without validation
+- Dynamically evaluated or computed values constructed at runtime (reported as warnings, but cannot be statically traced)
+
+Human review of the source code remains indispensable.
+
+## Documentation & Links
+
+- Main README: https://github.com/aeterna/nakara-oss/blob/main/README.md
+- Scanner Documentation & Rules: https://github.com/aeterna/nakara-oss/blob/main/packages/devkit/docs/safety.md
+- Security Policy & Reporting: https://github.com/aeterna/nakara-oss/blob/main/SECURITY.md
