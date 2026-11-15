@@ -8,15 +8,19 @@ use iced::widget::{button, column, container, row, Space};
 use iced::{Background, Border, Color, Element, Length, Padding};
 
 pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
-    let board = container(column![tabs(inst), body(inst)].spacing(12).width(Length::Fill))
-        .width(Length::Fill)
-        .padding(Padding {
-            top: 8.0,
-            right: 8.0,
-            bottom: 16.0,
-            left: 8.0,
-        })
-        .style(theme::panel(theme::SURF, 16.0));
+    let board = container(
+        column![tabs(inst), body(inst)]
+            .spacing(12)
+            .width(Length::Fill),
+    )
+    .width(Length::Fill)
+    .padding(Padding {
+        top: 8.0,
+        right: 8.0,
+        bottom: 16.0,
+        left: 8.0,
+    })
+    .style(theme::panel(theme::SURF, 16.0));
 
     let board = container(board).width(Length::Fill).padding(Padding {
         top: 8.0,
