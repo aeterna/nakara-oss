@@ -269,4 +269,6 @@ footer{margin-top:112px;border-top:1px solid var(--line);padding-block:28px 40px
 .st-warn{color:var(--accent);background:var(--accent-soft)}
 .article .cta{margin-top:40px}
 @media (max-width:880px){ .article{padding-block:48px 0} }
+.article h1,.lede,.prose p,.prose li,.prose td,.prose th,.prose h2,.prose h3,.callout{overflow-wrap:anywhere}
+.prose code{overflow-wrap:anywhere;word-break:break-word}
 
