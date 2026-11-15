@@ -15,7 +15,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use launcher_sign::{
-    build_manifest, new_seed, parse_key_hex, public_key_hex, sign, to_hex, ManifestInput, SignError,
+    build_manifest, new_seed, parse_key_hex, public_key_hex, sign_checked, to_hex, ManifestInput,
+    SignError,
 };
 use semver::Version;
 use time::{Duration, OffsetDateTime};
@@ -300,7 +301,7 @@ fn cmd_sign(args: &[String]) -> Result<(), CliError> {
         ))
     })?;
 
-    let sig = sign(&seed, &manifest_bytes);
+    let sig = sign_checked(&seed, &manifest_bytes)?;
     fs::write(&out_path, sig).map_err(|e| {
         CliError::Fail(format!(
             "could not write signature {}: {e}",

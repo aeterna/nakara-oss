@@ -73,6 +73,8 @@ pub enum SignError {
     },
     /// The serialized manifest is larger than [`MAX_MANIFEST_BYTES`].
     ManifestTooLarge(usize),
+    /// Self-verification of the signature with the derived verifying key failed.
+    Signature,
     /// Reading a file or serializing the manifest failed.
     Io(String),
 }
@@ -105,6 +107,9 @@ impl fmt::Display for SignError {
             }
             SignError::ManifestTooLarge(size) => {
                 write!(f, "manifest is {size} bytes, the limit is 64 KiB")
+            }
+            SignError::Signature => {
+                write!(f, "signature failed verification with derived public key")
             }
             SignError::Io(msg) => write!(f, "{msg}"),
         }
@@ -207,6 +212,19 @@ pub fn new_seed() -> Result<[u8; 32], SignError> {
 pub fn sign(seed: &[u8; 32], manifest: &[u8]) -> [u8; 64] {
     let signing_key = SigningKey::from_bytes(seed);
     signing_key.sign(manifest).to_bytes()
+}
+
+/// Signs `manifest` with the ed25519 `seed`, verifies the signature strictly
+/// with the matching [`ed25519_dalek::VerifyingKey`] before returning, and
+/// returns the raw 64-byte signature.
+pub fn sign_checked(seed: &[u8; 32], manifest: &[u8]) -> Result<[u8; 64], SignError> {
+    let signing_key = SigningKey::from_bytes(seed);
+    let signature = signing_key.sign(manifest);
+    let verifying_key = signing_key.verifying_key();
+    verifying_key
+        .verify_strict(manifest, &signature)
+        .map_err(|_| SignError::Signature)?;
+    Ok(signature.to_bytes())
 }
 
 /// Builds a canonical update manifest JSON byte vector from `input`.
@@ -496,6 +514,69 @@ mod tests {
 
         let err = build_manifest(&input).unwrap_err();
         assert_eq!(err, SignError::DuplicateFile("launcher.exe".to_owned()));
+    }
+
+    #[test]
+    fn invalid_file_names_are_refused() {
+        let dir = tempdir().unwrap();
+        let expires = OffsetDateTime::parse("2026-12-01T00:00:00Z", &Rfc3339).unwrap();
+        let overlong = format!("{}.exe", "a".repeat(61));
+        assert_eq!(overlong.len(), 65);
+
+        for bad_name in ["bad name.exe", "CON.exe", overlong.as_str()] {
+            let path = dir.path().join(bad_name);
+            let input = ManifestInput {
+                product: "aeterna".to_owned(),
+                version: Version::parse("1.0.0").unwrap(),
+                channel: "stable".to_owned(),
+                expires,
+                files: vec![path],
+            };
+
+            let err = build_manifest(&input).unwrap_err();
+            assert_eq!(err, SignError::FileName(bad_name.to_owned()));
+        }
+    }
+
+    #[test]
+    fn sign_checked_verifies_with_launcher_update() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("launcher.exe");
+        std::fs::write(&file, b"payload").unwrap();
+
+        let seed = [7u8; 32];
+        let pub_hex = public_key_hex(&seed);
+        let pub_bytes = parse_key_hex(&pub_hex).unwrap();
+
+        let now = OffsetDateTime::parse("2026-11-15T00:00:00Z", &Rfc3339).unwrap();
+        let expires = OffsetDateTime::parse("2026-12-15T00:00:00Z", &Rfc3339).unwrap();
+
+        let input = ManifestInput {
+            product: "aeterna".to_owned(),
+            version: Version::parse("2.0.0").unwrap(),
+            channel: "stable".to_owned(),
+            expires,
+            files: vec![file],
+        };
+
+        let manifest_bytes = build_manifest(&input).unwrap();
+        let sig = sign_checked(&seed, &manifest_bytes).unwrap();
+
+        let older = Version::parse("1.9.0").unwrap();
+        let verified = verify_manifest(
+            &manifest_bytes,
+            &sig,
+            &[pub_bytes],
+            "aeterna",
+            &older,
+            Channel::Stable,
+            now,
+        )
+        .unwrap();
+
+        assert_eq!(verified.version, Version::parse("2.0.0").unwrap());
+        assert_eq!(verified.files.len(), 1);
+        assert_eq!(verified.files[0].name, "launcher.exe");
     }
 
     #[test]
