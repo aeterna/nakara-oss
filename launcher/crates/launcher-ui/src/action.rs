@@ -14,6 +14,10 @@ pub fn can_play(inst: &Instance) -> bool {
     inst.kind == Kind::Server && inst.play_enabled
 }
 
+pub fn opens_connect(inst: &Instance, connect_on: bool) -> bool {
+    inst.kind == Kind::Rongroi && connect_on
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -84,5 +88,15 @@ mod tests {
         assert!(!can_play(&dummy_instance(Kind::Studio, false)));
         assert!(!can_play(&dummy_instance(Kind::Rongroi, true)));
         assert!(!can_play(&dummy_instance(Kind::Rongroi, false)));
+    }
+
+    #[test]
+    fn opens_connect_requires_rongroi_kind_and_connect_on() {
+        assert!(opens_connect(&dummy_instance(Kind::Rongroi, true), true));
+        assert!(opens_connect(&dummy_instance(Kind::Rongroi, false), true));
+        assert!(!opens_connect(&dummy_instance(Kind::Rongroi, true), false));
+        assert!(!opens_connect(&dummy_instance(Kind::Rongroi, false), false));
+        assert!(!opens_connect(&dummy_instance(Kind::Server, true), true));
+        assert!(!opens_connect(&dummy_instance(Kind::Studio, true), true));
     }
 }
