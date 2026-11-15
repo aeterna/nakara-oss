@@ -1965,6 +1965,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "launcher-sign"
+version = "0.1.0"
+dependencies = [
+ "ed25519-dalek",
+ "getrandom 0.3.4",
+ "launcher-update",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "time",
+]
+
+[[package]]
 name = "launcher-thai"
 version = "0.1.0"
 dependencies = [

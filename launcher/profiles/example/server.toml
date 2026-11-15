@@ -11,6 +11,8 @@ game = "fivem-legacy"
 connect = "play.example.com:30120"
 operator = "Example RP Team"
 contact_email = "team@example.com"
+# Put your fork's ed25519 update public key here (omitted or empty disables updates).
+# update_keys = ["<64 hex from: launcher-sign keygen>"]
 
 [theme]
 template = "classic"

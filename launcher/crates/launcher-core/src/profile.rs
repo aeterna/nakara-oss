@@ -39,6 +39,19 @@ pub struct Server {
     pub invite_url: Option<String>,
     /// `owner/name` of the GitHub repository releases come from.
     pub release_repo: Option<String>,
+    /// ed25519 public keys (64 lowercase hex) that may sign this build's update manifests; empty means the build never installs updates.
+    #[serde(default)]
+    pub update_keys: Vec<String>,
+}
+
+impl Server {
+    /// Decodes [`Self::update_keys`] into 32-byte ed25519 public keys, skipping any entry that does not decode.
+    pub fn update_key_bytes(&self) -> Vec<[u8; 32]> {
+        self.update_keys
+            .iter()
+            .filter_map(|key| decode_update_key(key))
+            .collect()
+    }
 }
 
 /// Supported game clients.
@@ -126,6 +139,9 @@ pub enum ProfileError {
     #[error("{field}: {value:?} is not an owner/name repository")]
     ReleaseRepo { field: &'static str, value: String },
 
+    #[error("{field}: {value:?} is not a valid update key")]
+    UpdateKey { field: &'static str, value: String },
+
     #[error("{field}: {value:?} is not # followed by six hex digits")]
     Accent { field: &'static str, value: String },
 
@@ -203,6 +219,14 @@ pub fn validate(p: &Profile) -> Result<(), ProfileError> {
             return Err(ProfileError::ReleaseRepo {
                 field: "server.release_repo",
                 value: repo.clone(),
+            });
+        }
+    }
+    for (i, key) in s.update_keys.iter().enumerate() {
+        if i >= 4 || decode_update_key(key).is_none() || s.update_keys[..i].contains(key) {
+            return Err(ProfileError::UpdateKey {
+                field: "server.update_keys",
+                value: key.clone(),
             });
         }
     }
@@ -351,6 +375,30 @@ fn valid_repo(value: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
 }
 
+fn decode_update_key(value: &str) -> Option<[u8; 32]> {
+    let b = value.as_bytes();
+    if b.len() != 64
+        || !b
+            .iter()
+            .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(c))
+    {
+        return None;
+    }
+    let mut out = [0u8; 32];
+    for (pair, slot) in b.as_chunks::<2>().0.iter().zip(out.iter_mut()) {
+        *slot = (hex_nibble(pair[0]) << 4) | hex_nibble(pair[1]);
+    }
+    Some(out)
+}
+
+fn hex_nibble(b: u8) -> u8 {
+    match b {
+        b'0'..=b'9' => b - b'0',
+        b'a'..=b'f' => b - b'a' + 10,
+        _ => 0,
+    }
+}
+
 fn valid_accent(value: &str) -> bool {
     let b = value.as_bytes();
     b.len() == 7 && b[0] == b'#' && b[1..].iter().all(|c| c.is_ascii_hexdigit())
@@ -376,4 +424,130 @@ fn valid_asset(value: &str, allow_jpg: bool) -> bool {
         return false;
     };
     rest.len() > ext.len()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const BASE: &str = r##"schema = 1
+
+[server]
+id = "nakara"
+name = "Nakara"
+game = "fivem-legacy"
+connect = "play.nakara.example:30120"
+operator = "Nakara Team"
+contact_email = "ops@nakara.example"
+
+[theme]
+accent = "#1a2b3c"
+
+[features]
+"##;
+
+    fn with_update_keys(keys_toml: &str) -> String {
+        BASE.replacen(
+            "contact_email = \"ops@nakara.example\"",
+            &format!("contact_email = \"ops@nakara.example\"\nupdate_keys = {keys_toml}"),
+            1,
+        )
+    }
+
+    #[test]
+    fn update_keys_empty_is_ok() {
+        let omitted = parse(BASE).expect("omitted update_keys should parse");
+        assert!(omitted.server.update_keys.is_empty());
+        assert!(omitted.server.update_key_bytes().is_empty());
+
+        let empty = parse(&with_update_keys("[]")).expect("empty update_keys should parse");
+        assert!(empty.server.update_keys.is_empty());
+        assert!(empty.server.update_key_bytes().is_empty());
+    }
+
+    #[test]
+    fn update_keys_valid_key_is_ok_and_decodes_bytes() {
+        let hex = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+        let profile = parse(&with_update_keys(&format!("[\"{hex}\"]")))
+            .expect("valid update key should parse");
+        assert_eq!(profile.server.update_keys, vec![hex.to_string()]);
+        let expected: [u8; 32] = std::array::from_fn(|i| i as u8);
+        assert_eq!(profile.server.update_key_bytes(), vec![expected]);
+    }
+
+    #[test]
+    fn update_keys_63_chars_is_refused() {
+        let short = "a".repeat(63);
+        let err = parse(&with_update_keys(&format!("[\"{short}\"]")))
+            .expect_err("63-char key must be refused");
+        assert_eq!(
+            err,
+            ProfileError::UpdateKey {
+                field: "server.update_keys",
+                value: short,
+            }
+        );
+    }
+
+    #[test]
+    fn update_keys_uppercase_hex_is_refused() {
+        let upper = format!("A{}", "a".repeat(63));
+        let err = parse(&with_update_keys(&format!("[\"{upper}\"]")))
+            .expect_err("uppercase hex key must be refused");
+        assert_eq!(
+            err,
+            ProfileError::UpdateKey {
+                field: "server.update_keys",
+                value: upper,
+            }
+        );
+    }
+
+    #[test]
+    fn update_keys_non_hex_is_refused() {
+        let non_hex = format!("g{}", "a".repeat(63));
+        let err = parse(&with_update_keys(&format!("[\"{non_hex}\"]")))
+            .expect_err("non-hex key must be refused");
+        assert_eq!(
+            err,
+            ProfileError::UpdateKey {
+                field: "server.update_keys",
+                value: non_hex,
+            }
+        );
+    }
+
+    #[test]
+    fn update_keys_five_keys_is_refused() {
+        let k1 = "1".repeat(64);
+        let k2 = "2".repeat(64);
+        let k3 = "3".repeat(64);
+        let k4 = "4".repeat(64);
+        let k5 = "5".repeat(64);
+        let err = parse(&with_update_keys(&format!(
+            "[\"{k1}\", \"{k2}\", \"{k3}\", \"{k4}\", \"{k5}\"]"
+        )))
+        .expect_err("5 update keys must be refused");
+        assert_eq!(
+            err,
+            ProfileError::UpdateKey {
+                field: "server.update_keys",
+                value: k5,
+            }
+        );
+    }
+
+    #[test]
+    fn update_keys_duplicate_is_refused() {
+        let dup = "a".repeat(64);
+        let err = parse(&with_update_keys(&format!("[\"{dup}\", \"{dup}\"]")))
+            .expect_err("duplicate update key must be refused");
+        assert_eq!(
+            err,
+            ProfileError::UpdateKey {
+                field: "server.update_keys",
+                value: dup,
+            }
+        );
+    }
 }

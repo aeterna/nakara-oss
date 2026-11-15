@@ -1,0 +1,200 @@
+# SPDX-License-Identifier: MIT
+# Owner-only launcher release (ADR 0002 decisions 7, 8 and 11). Triggered by hand. The build job has read access
+# only; the sign-and-publish job runs in the `launcher-release` environment, which requires the owner's approval
+# and is the only place the signing key (secret LAUNCHER_SIGNING_KEY) exists. The release is created as a draft:
+# the owner checks it on Windows, then publishes it. Steps for the owner: docs/maintainers/launcher-release.md.
+# Anyone can check an asset with:
+#   gh attestation verify <file> --repo aeterna/nakara-oss --signer-workflow aeterna/nakara-oss/.github/workflows/launcher-release.yml
+name: launcher-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      connect_tag:
+        description: "Rongroi Connect release tag to bundle (aeterna/aeterna-rongroi-connect)"
+        required: true
+        type: string
+      channel:
+        description: "update channel"
+        required: true
+        type: choice
+        options: [stable, beta]
+        default: stable
+      expires_days:
+        description: "days until the signed manifest expires (1-365)"
+        required: true
+        type: string
+        default: "90"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build launcher + bundle Connect
+    runs-on: windows-latest
+    timeout-minutes: 60
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: launcher
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Version
+        id: meta
+        run: |
+          $v = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages |
+            Where-Object { $_.name -eq 'launcher-ui' } | Select-Object -ExpandProperty version
+          if ($v -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { throw "launcher-ui version '$v' is not plain semver" }
+          "version=$v" | Out-File -Encoding utf8 -Append $env:GITHUB_OUTPUT
+      - name: Test
+        run: |
+          cargo test --locked --workspace --all-features
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build (release)
+        run: |
+          cargo build --locked --release -p launcher-ui
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      # Connect ships next to the launcher (decision 8). Before anything is unpacked, the zip must match Connect's
+      # SHA256SUMS and carry a build-provenance attestation from Connect's own repository (the sums alone come from
+      # the same release, so they only catch corruption). Until Connect's repository is public and attests its
+      # releases, this step fails (K5, K7 in the plan).
+      - name: Download and check Rongroi Connect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONNECT_TAG: ${{ inputs.connect_tag }}
+        run: |
+          if ($env:CONNECT_TAG -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$') { throw "connect_tag has characters a tag cannot have" }
+          New-Item -ItemType Directory -Force -Path connect-dl | Out-Null
+          gh release download -R aeterna/aeterna-rongroi-connect -D connect-dl -p '*-win32-x64.zip' -p 'SHA256SUMS' -- $env:CONNECT_TAG
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $zips = @(Get-ChildItem connect-dl -Filter '*-win32-x64.zip')
+          if ($zips.Count -ne 1) { throw "expected one Connect win32-x64 zip, found $($zips.Count)" }
+          $zip = $zips[0]
+          $want = (Get-Content connect-dl/SHA256SUMS | Where-Object { $_ -match ('  ' + [regex]::Escape($zip.Name) + '$') }) -replace '\s.*$', ''
+          if (-not $want) { throw "Connect SHA256SUMS has no line for $($zip.Name)" }
+          $got = (Get-FileHash -Algorithm SHA256 $zip.FullName).Hash.ToLower()
+          if ($got -ne $want.ToLower()) { throw "Connect zip SHA-256 mismatch" }
+          gh attestation verify $zip.FullName --repo aeterna/aeterna-rongroi-connect
+          if ($LASTEXITCODE -ne 0) { throw "Connect zip has no valid attestation from aeterna/aeterna-rongroi-connect" }
+          # Unpack entry by entry and refuse any entry whose path leaves connect-x (zip-slip).
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $dest = [IO.Path]::GetFullPath((Join-Path (Get-Location) 'connect-x')) + [IO.Path]::DirectorySeparatorChar
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          $archive = [IO.Compression.ZipFile]::OpenRead($zip.FullName)
+          try {
+            foreach ($entry in $archive.Entries) {
+              $target = [IO.Path]::GetFullPath((Join-Path $dest $entry.FullName))
+              if (-not $target.StartsWith($dest, [StringComparison]::OrdinalIgnoreCase)) { throw "zip entry leaves the folder: $($entry.FullName)" }
+              if ($entry.FullName.EndsWith('/')) { New-Item -ItemType Directory -Force -Path $target | Out-Null; continue }
+              New-Item -ItemType Directory -Force -Path ([IO.Path]::GetDirectoryName($target)) | Out-Null
+              [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $target, $false)
+            }
+          } finally { $archive.Dispose() }
+      - name: Assemble the zip
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          $name = "aeterna-launcher-$env:VERSION-windows-x64"
+          $root = "out/$name"
+          $exe = @(Get-ChildItem connect-x -Recurse -Filter 'rongroi-connect.exe')
+          if ($exe.Count -ne 1) { throw "expected one rongroi-connect.exe in the Connect zip, found $($exe.Count)" }
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          Copy-Item target/release/aeterna-launcher.exe $root/
+          Copy-Item -Recurse $exe[0].DirectoryName "$root/rongroi-connect"
+          Copy-Item ../LICENSE "$root/LICENSE-launcher.txt"
+          Compress-Archive -Path $root -DestinationPath "out/$name.zip"
+          Copy-Item target/release/aeterna-launcher.exe out/aeterna-launcher.exe
+          Remove-Item -Recurse $root
+          # Hash first, then write: SHA256SUMS must not list itself.
+          $sums = @(Get-ChildItem out -File | ForEach-Object { "{0}  {1}" -f (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower(), $_.Name })
+          # LF line endings: the sign job appends to this file on Linux and the attestation step parses it.
+          [IO.File]::WriteAllText((Join-Path (Get-Location) 'out/SHA256SUMS'), (($sums -join "`n") + "`n"))
+          Get-Content out/SHA256SUMS
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: launcher-release-out
+          path: launcher/out/
+          if-no-files-found: error
+          retention-days: 7
+
+  tool:
+    name: build launcher-sign
+    runs-on: ubuntu-24.04   # pinned: ubuntu-latest moves to 26.04 from 2026-10-19
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build launcher-sign
+        working-directory: launcher
+        run: cargo build --locked --release -p launcher-sign
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: launcher-sign
+          path: launcher/target/release/launcher-sign
+          if-no-files-found: error
+          retention-days: 1
+
+  sign-and-publish:
+    name: sign manifest + draft release
+    needs: [build, tool]
+    runs-on: ubuntu-24.04   # pinned: ubuntu-latest moves to 26.04 from 2026-10-19
+    environment: launcher-release
+    permissions:
+      contents: write        # create the draft release
+      id-token: write        # OIDC for attestations
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: launcher-release-out
+          path: out/
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: launcher-sign
+          path: tool/
+      # The key reaches the tool only through the environment; launcher-sign never prints it.
+      - name: Write and sign the manifest
+        env:
+          LAUNCHER_SIGNING_KEY: ${{ secrets.LAUNCHER_SIGNING_KEY }}
+          VERSION: ${{ needs.build.outputs.version }}
+          CHANNEL: ${{ inputs.channel }}
+          EXPIRES_DAYS: ${{ inputs.expires_days }}
+        run: |
+          set -euo pipefail
+          case "$EXPIRES_DAYS" in ''|*[!0-9]*) echo "expires_days must be a number"; exit 1;; esac
+          SIGN=tool/launcher-sign
+          chmod +x "$SIGN"
+          # The key in the environment must be one the shipped profile trusts, or no build accepts this release.
+          PUB=$("$SIGN" pubkey)
+          echo "signing key (public): $PUB"
+          grep -Eq "^update_keys *= *\[.*\"$PUB\"" launcher/profiles/aeterna/server.toml \
+            || { echo "public key $PUB is not in launcher/profiles/aeterna/server.toml update_keys"; exit 1; }
+          "$SIGN" manifest --product aeterna-launcher --version "$VERSION" --channel "$CHANNEL" \
+            --expires-days "$EXPIRES_DAYS" out/aeterna-launcher.exe "out/aeterna-launcher-$VERSION-windows-x64.zip" \
+            > out/manifest.json
+          "$SIGN" sign --manifest out/manifest.json --out out/manifest.json.sig
+          ( cd out && sha256sum manifest.json manifest.json.sig >> SHA256SUMS )
+          cat out/manifest.json
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: out/SHA256SUMS
+      - name: Draft GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+          CONNECT_TAG: ${{ inputs.connect_tag }}
+        run: |
+          set -euo pipefail
+          TAG="launcher-v$VERSION"
+          printf 'AETERNA Game Launcher %s\n\nBundles Rongroi Connect %s (GPL-3.0-or-later; source: https://github.com/aeterna/aeterna-rongroi-connect/releases/tag/%s).\nCheck the files against SHA256SUMS, or with gh attestation verify.\n' \
+            "$VERSION" "$CONNECT_TAG" "$CONNECT_TAG" > notes.md
+          gh release create "$TAG" out/* --draft --target "$GITHUB_SHA" --title "$TAG" --notes-file notes.md
