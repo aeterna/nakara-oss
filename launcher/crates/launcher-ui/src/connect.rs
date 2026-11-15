@@ -7,7 +7,7 @@ use crate::theme;
 use crate::Message;
 use iced::widget::{button, column, container, opaque, row, text_input, Space};
 use iced::{Background, Border, Color, Element, Length};
-use launcher_connect::{ConnectError, Outcome};
+use launcher_connect::{CodeError, ConnectError, Outcome};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -37,20 +37,27 @@ pub fn outcome_text(o: &Outcome) -> String {
         Outcome::DeclineAccepted => "แจ้งทีมงานแล้วว่าคุณไม่ยินยอม".to_string(),
         Outcome::ClosedByPlayer => "ปิด Connect ก่อนส่ง ไม่มีอะไรถูกส่ง".to_string(),
         Outcome::Refused => "รหัสนี้ใช้ไม่ได้ ขอรหัสใหม่จากทีมงาน".to_string(),
+        Outcome::RecordRefused | Outcome::UploadFailed => {
+            "ส่งผลตรวจไม่สำเร็จ ขอรหัสใหม่จากทีมงาน".to_string()
+        }
         Outcome::Unknown(n) => {
             format!("Connect จบด้วยรหัส {n} ลองอีกครั้ง หรือติดต่อทีมงาน")
         }
-        Outcome::Internal
-        | Outcome::Sidecar
-        | Outcome::RecordRefused
-        | Outcome::UploadFailed
-        | Outcome::Signal => "Connect ทำงานไม่สำเร็จ ลองอีกครั้ง หรือติดต่อทีมงาน".to_string(),
+        Outcome::Internal | Outcome::Sidecar | Outcome::Signal => {
+            "Connect ทำงานไม่สำเร็จ ลองอีกครั้ง หรือติดต่อทีมงาน".to_string()
+        }
     }
 }
 
 pub fn error_text(e: &ConnectError) -> String {
     match e {
-        ConnectError::Code(_) => "รหัสไม่ถูกต้อง ต้องขึ้นต้นด้วย rr1.".to_string(),
+        ConnectError::Code(CodeError::Prefix) => {
+            "รหัสไม่ถูกต้อง ต้องขึ้นต้นด้วย rr1.".to_string()
+        }
+        ConnectError::Code(CodeError::TooLong) => "รหัสยาวเกินไป".to_string(),
+        ConnectError::Code(CodeError::NotPrintable) => {
+            "รหัสมีช่องว่างหรือตัวอักษรที่ใช้ไม่ได้".to_string()
+        }
         ConnectError::Unsupported => "Rongroi Connect ใช้ได้บน Windows เท่านั้น".to_string(),
         ConnectError::Timeout => "Connect ไม่ตอบในเวลาที่กำหนด".to_string(),
         ConnectError::Io(_)
@@ -119,7 +126,7 @@ fn header<'a>() -> Element<'a, Message> {
     let lines = column![
         label("ตรวจเครื่องด้วย Rongroi Connect", 22.0, INK),
         label(
-            "วางรหัสที่ทีมงานให้ แล้วกดเปิด Connect จะถามความยินยอมก่อนส่งทุกครั้ง",
+            "วางรหัสที่ทีมงานให้ แล้วกดเปิด หน้าต่าง Connect จะถามความยินยอมของคุณเอง",
             13.0,
             MUTED,
         ),
@@ -202,7 +209,6 @@ fn rgba(hex: u32, a: f32) -> Color {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use launcher_connect::CodeError;
     use std::io;
 
     #[test]
@@ -244,13 +250,14 @@ mod tests {
             outcome_text(&Outcome::Unknown(77)),
             "Connect จบด้วยรหัส 77 ลองอีกครั้ง หรือติดต่อทีมงาน"
         );
-        for other in [
-            Outcome::Internal,
-            Outcome::Sidecar,
-            Outcome::RecordRefused,
-            Outcome::UploadFailed,
-            Outcome::Signal,
-        ] {
+        for other in [Outcome::RecordRefused, Outcome::UploadFailed] {
+            assert_eq!(
+                outcome_text(&other),
+                "ส่งผลตรวจไม่สำเร็จ ขอรหัสใหม่จากทีมงาน",
+                "{other:?}"
+            );
+        }
+        for other in [Outcome::Internal, Outcome::Sidecar, Outcome::Signal] {
             assert_eq!(
                 outcome_text(&other),
                 "Connect ทำงานไม่สำเร็จ ลองอีกครั้ง หรือติดต่อทีมงาน",
@@ -267,11 +274,11 @@ mod tests {
         );
         assert_eq!(
             error_text(&ConnectError::Code(CodeError::TooLong)),
-            "รหัสไม่ถูกต้อง ต้องขึ้นต้นด้วย rr1."
+            "รหัสยาวเกินไป"
         );
         assert_eq!(
             error_text(&ConnectError::Code(CodeError::NotPrintable)),
-            "รหัสไม่ถูกต้อง ต้องขึ้นต้นด้วย rr1."
+            "รหัสมีช่องว่างหรือตัวอักษรที่ใช้ไม่ได้"
         );
         assert_eq!(
             error_text(&ConnectError::Unsupported),

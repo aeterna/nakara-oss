@@ -191,17 +191,21 @@ impl App {
             Message::ConnectOpen => {
                 self.show_connect = true;
                 self.connect_status = None;
+                if !self.connect_busy {
+                    self.connect_code.clear();
+                }
                 Task::none()
             }
             Message::ConnectClose => {
                 if !self.connect_busy {
                     self.show_connect = false;
+                    self.connect_code.clear();
                 }
                 Task::none()
             }
             Message::ConnectCode(code) => {
                 if !self.connect_busy {
-                    let trimmed = code.trim_start();
+                    let trimmed = code.trim();
                     if trimmed.len() <= launcher_connect::MAX_CODE_BYTES {
                         self.connect_code = trimmed.to_string();
                     }
@@ -329,9 +333,29 @@ mod tests {
     }
 
     #[test]
+    fn connect_close_and_reopen_clear_code() {
+        let mut app = App::default();
+        let _ = app.update(Message::ConnectOpen);
+        let _ = app.update(Message::ConnectCode("rr1.abc".to_string()));
+        assert_eq!(app.connect_code, "rr1.abc");
+
+        let _ = app.update(Message::ConnectClose);
+        assert!(!app.show_connect);
+        assert_eq!(app.connect_code, "");
+
+        let _ = app.update(Message::ConnectOpen);
+        assert!(app.show_connect);
+        assert_eq!(app.connect_code, "");
+
+        let _ = app.update(Message::ConnectCode("rr1.stale".to_string()));
+        let _ = app.update(Message::ConnectOpen);
+        assert_eq!(app.connect_code, "");
+    }
+
+    #[test]
     fn connect_code_trims_start_caps_length_and_ignores_when_busy() {
         let mut app = App::default();
-        let _ = app.update(Message::ConnectCode("  rr1.abc".to_string()));
+        let _ = app.update(Message::ConnectCode("  rr1.abc  \n".to_string()));
         assert_eq!(app.connect_code, "rr1.abc");
 
         let max = format!("rr1.{}", "a".repeat(4092));
@@ -347,6 +371,33 @@ mod tests {
         app.connect_busy = true;
         let _ = app.update(Message::ConnectCode("rr1.other".to_string()));
         assert_eq!(app.connect_code, max);
+    }
+
+    #[test]
+    fn connect_start_while_busy_leaves_state_unchanged() {
+        let mut app = App {
+            connect_busy: true,
+            connect_code: "rr1.abc".to_string(),
+            connect_status: Some("กำลังทำงาน".to_string()),
+            ..App::default()
+        };
+
+        let _ = app.update(Message::ConnectStart);
+        assert!(app.connect_busy);
+        assert_eq!(app.connect_code, "rr1.abc");
+        assert_eq!(app.connect_status.as_deref(), Some("กำลังทำงาน"));
+    }
+
+    #[test]
+    fn connect_start_without_connect_binary_sets_missing_status() {
+        let mut app = App {
+            connect_code: "rr1.abc".to_string(),
+            ..App::default()
+        };
+
+        let _ = app.update(Message::ConnectStart);
+        assert!(!app.connect_busy);
+        assert_eq!(app.connect_status.as_deref(), Some(connect::MISSING));
     }
 
     #[test]

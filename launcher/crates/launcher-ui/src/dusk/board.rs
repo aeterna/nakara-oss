@@ -30,7 +30,7 @@ fn tabs<'a>(inst: &'a Instance) -> Element<'a, Message> {
     let news_title = if inst.news.is_empty() {
         "ข่าว".to_string()
     } else {
-        format!("ข่าว {}", inst.news.len())
+        format!("ข่าว {}", inst.news.len().min(4))
     };
 
     row![tab("ภาพรวม", true), tab(&news_title, false)]
