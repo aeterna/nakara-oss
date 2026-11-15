@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>สคริปต์ FiveM ฟรี ที่ตรวจได้ก่อนลง server | nakara-oss</title>
+  <meta name="description" content="สคริปต์ FiveM ฟรี โอเพนซอร์ส ประกาศ capability ใน oss.json ชัดเจน พร้อมเครื่องมือตรวจโค้ด fivem-devkit ให้คุณรันสแกนตรวจสอบได้เองก่อนลง server จริง">
+  <link rel="canonical" href="https://aeterna.github.io/nakara-oss/">
+  <link rel="alternate" hreflang="th" href="https://aeterna.github.io/nakara-oss/">
+  <link rel="alternate" hreflang="en" href="https://aeterna.github.io/nakara-oss/en/">
+  <link rel="alternate" hreflang="x-default" href="https://aeterna.github.io/nakara-oss/en/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="สคริปต์ FiveM ฟรี ที่ตรวจได้ก่อนลง server | nakara-oss">
+  <meta property="og:description" content="สคริปต์ FiveM ฟรี โอเพนซอร์ส ประกาศ capability ใน oss.json ชัดเจน พร้อมเครื่องมือตรวจโค้ด fivem-devkit ให้คุณรันสแกนตรวจสอบได้เองก่อนลง server จริง">
+  <meta property="og:url" content="https://aeterna.github.io/nakara-oss/">
+  <meta property="og:locale" content="th_TH">
+  <meta property="og:locale:alternate" content="en_US">
+  <meta property="og:image" content="https://aeterna.github.io/nakara-oss/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="nakara-oss สคริปต์ FiveM โอเพนซอร์ส และเครื่องมือตรวจโค้ด">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="สคริปต์ FiveM ฟรี ที่ตรวจได้ก่อนลง server | nakara-oss">
+  <meta name="twitter:description" content="สคริปต์ FiveM ฟรี โอเพนซอร์ส ประกาศ capability ใน oss.json ชัดเจน พร้อมเครื่องมือตรวจโค้ด fivem-devkit ให้คุณรันสแกนตรวจสอบได้เองก่อนลง server จริง">
+  <meta name="twitter:image" content="https://aeterna.github.io/nakara-oss/og.png">
+  <meta name="theme-color" content="#15803d">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareSourceCode",
+        "name": "nakara-oss",
+        "codeRepository": "https://github.com/aeterna/nakara-oss",
+        "license": "https://opensource.org/licenses/MIT",
+        "programmingLanguage": ["Lua", "JavaScript", "Rust"],
+        "inLanguage": ["th", "en"]
+      },
+      {
+        "@type": "SoftwareApplication",
+        "name": "fivem-devkit",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "macOS, Linux (Node.js 22+)",
+        "softwareVersion": "{{devkit.version}}",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "THB"
+        },
+        "downloadUrl": "https://www.npmjs.com/package/@aeterna_game/fivem-devkit"
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="#" class="nav-brand">nakara-oss</a>
+      <nav aria-label="เมนูหลัก">
+        <ul class="nav-links">
+          <li><a href="#scan" class="nav-item">ตรวจก่อนลง</a></li>
+          <li><a href="#packages" class="nav-item">มีอะไรบ้าง</a></li>
+          <li><a href="#trust" class="nav-item">สถาปัตยกรรม</a></li>
+          <li><a href="#limits" class="nav-item">ข้อจำกัด</a></li>
+          <li><a href="#faq" class="nav-item">คำถามที่พบบ่อย</a></li>
+          <li><a href="en/" class="nav-item lang-switch" hreflang="en">EN</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <h1>สคริปต์ FiveM ฟรี ที่ตรวจได้ก่อนลง server</h1>
+        <p class="lead">ทุก resource ประกาศใน oss.json อย่างชัดเจนว่าเรียกใช้อะไรบ้าง (HTTP host, command, convar, net event, DB table, file) ทุก PR ถูกตรวจด้วย fivem-devkit safety ทุก release zip ถูกสร้างใน CI พร้อม provenance attestation และ SHA256SUMS โดยคุณสามารถรันคำสั่งตรวจสอบชุดเดียวกันนี้ซ้ำได้ด้วยตัวเอง</p>
+        <div class="btn-group">
+          <a href="#scan" class="btn btn-primary">ตรวจสคริปต์ของคุณ</a>
+          <a href="https://github.com/aeterna/nakara-oss" class="btn btn-secondary">ดูโค้ดบน GitHub</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="scan" class="section">
+      <div class="container">
+        <h2 class="section-title">ตรวจ resource ก่อนลง</h2>
+        <p class="section-lead">คุณสามารถรันคำสั่งนี้เพื่อสแกนโครงสร้างและคำสั่งใน resource โฟลเดอร์ใดก็ได้ก่อนนำไปใส่ server จริง</p>
+        <div class="code-box">
+          <div class="code-label">คำสั่งสแกน</div>
+          <pre><code>npx @aeterna_game/fivem-devkit safety ./ชื่อโฟลเดอร์</code></pre>
+        </div>
+        <p class="section-lead">สำหรับสคริปต์ภายนอกที่ไม่มี oss.json ให้ตั้งค่า <code>requireManifest</code> เป็น <code>false</code> ตามรายละเอียดที่อธิบายไว้ใน <a href="https://github.com/aeterna/nakara-oss/blob/main/packages/devkit/docs/safety.md">safety.md</a></p>
+        <div class="code-box">
+          <div class="code-label">ไฟล์ .fivem-devkit.json ในโฟลเดอร์ที่รันคำสั่ง</div>
+          <pre><code>{"safety": {"requireManifest": false}}</code></pre>
+        </div>
+        <div class="code-box">
+          <div class="code-label">ตัวอย่างผลจริง (resource ทดสอบ)</div>
+          <pre><code>✗ [safety/dynamic-load] resources/some_script/server/main.lua:2
+    load called — loads code at runtime that nobody reviewed
+✗ [safety/host-exec] resources/some_script/server/main.lua:3
+    os.execute — runs or changes things on the host machine
+✗ [safety/secret-convar] resources/some_script/server/main.lua:4
+    GetConvar('mysql_connection_string') reads a secret convar
+
+safety: 3 error(s), 0 warning(s)</code></pre>
+        </div>
+        <p class="section-lead">ผลลัพธ์จากการสแกนคือรายการจุดในโค้ดที่ต้องเปิดอ่าน ไม่ใช่คำตัดสินว่าโค้ดนั้นทำงานถูกต้องสมบูรณ์หรือไร้ปัญหา</p>
+      </div>
+    </section>
+
+    <section id="packages" class="section">
+      <div class="container">
+        <h2 class="section-title">มีอะไรบ้าง</h2>
+        <div class="cards-grid">
+          <article class="card">
+            <div class="card-header">
+              <h3 class="card-title"><a href="https://github.com/aeterna/nakara-oss/tree/main/packages/devkit">fivem-devkit</a></h3>
+              <span class="chip chip-release">{{devkit.version}}</span>
+            </div>
+            <p class="card-desc">หาโค้ดอันตรายและ bug ใน resource ของใครก็ได้ + busted test harness</p>
+          </article>
+          <article class="card">
+            <div class="card-header">
+              <h3 class="card-title"><a href="https://github.com/aeterna/nakara-oss/tree/main/packages/cargen-fix">nakara_cargen_fix</a></h3>
+              <span class="chip chip-release">{{cargen.version}}</span>
+            </div>
+            <p class="card-desc">แก้ crash CNetworkCarGenWorldStateData Pool Full (net.dll+487A2) · client-only · ไม่ผูก framework</p>
+            <p class="card-note">วิธีแก้ที่แชร์กันอย่างการปรับ GAMECONFIG_FILE ไม่ได้ช่วยแก้ปัญหานี้</p>
+          </article>
+          <article class="card">
+            <div class="card-header">
+              <h3 class="card-title">Nakara Tickets</h3>
+              <span class="chip chip-dev">กำลังพัฒนา · ยังไม่มี release</span>
+            </div>
+            <p class="card-desc">ระบบ ticket บน Discord ที่สั่งงานในเกมได้ · bridge ไม่เปิด port</p>
+          </article>
+          <article class="card">
+            <div class="card-header">
+              <h3 class="card-title">AETERNA Game Launcher</h3>
+              <span class="chip chip-dev">กำลังพัฒนา · ยังไม่มี release</span>
+            </div>
+            <p class="card-desc">launcher ของ server คุณเอง เขียนด้วย Rust</p>
+          </article>
+          <article class="card">
+            <div class="card-header">
+              <h3 class="card-title">Rongroi Server Kit</h3>
+              <span class="chip chip-dev">กำลังพัฒนา · ยังไม่มี release</span>
+            </div>
+            <p class="card-desc">ฝั่ง server ของ aeterna-rongroi</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="trust" class="section">
+      <div class="container">
+        <h2 class="section-title">🏗️ Trust Architecture</h2>
+        <ol class="trust-pipeline">
+          <li class="trust-step">
+            <div class="trust-step-num">ผู้เขียน</div>
+            <div class="trust-step-body">source + oss.json</div>
+          </li>
+          <li class="trust-step">
+            <div class="trust-step-num">PR gate ใน CI</div>
+            <div class="trust-step-body">devkit check, devkit safety — ใช้เกิน oss.json = PR ล้ม; oss.json ที่เปลี่ยนต้องผ่านการ review ของ CODEOWNERS</div>
+          </li>
+          <li class="trust-step">
+            <div class="trust-step-num">release ใน CI</div>
+            <div class="trust-step-body">build zip, provenance attestation, SHA256SUMS</div>
+          </li>
+          <li class="trust-step">
+            <div class="trust-step-num">server ของคุณ</div>
+            <div class="trust-step-body"><code>gh attestation verify &lt;zip&gt; --repo aeterna/nakara-oss</code><br><code>sha256sum -c SHA256SUMS</code><br><code>npx @aeterna_game/fivem-devkit safety ./resource</code> แล้วค่อย ensure</div>
+          </li>
+        </ol>
+        <p class="trust-note">ด่าน 2–3 เราทำใน CI ด่าน 4 คุณทำซ้ำเองได้ด้วยเครื่องมือตัวเดียวกัน</p>
+      </div>
+    </section>
+
+    <section id="limits" class="section">
+      <div class="container">
+        <h2 class="section-title">สิ่งที่ scanner จับไม่ได้</h2>
+        <ul class="limits-list">
+          <li>logic bomb ที่ซ่อนอยู่ใน API ที่ resource ได้รับอนุญาตให้ใช้</li>
+          <li>การเรียก export ของ resource อื่น</li>
+          <li>server event ที่เชื่อข้อมูลจาก client โดยไม่ตรวจ</li>
+          <li>ค่าที่ประกอบขึ้นตอน runtime: รายงานว่าเจอ แต่ไม่ได้ตามว่าค่าจริงคืออะไร</li>
+        </ul>
+        <p class="limits-end">ยังต้องมีคนอ่านโค้ด</p>
+      </div>
+    </section>
+
+    <section id="faq" class="section">
+      <div class="container">
+        <h2 class="section-title">คำถามที่พบบ่อย</h2>
+        <div class="faq-list">
+          <details class="faq-item">
+            <summary>ใช้ฟรีไหม</summary>
+            <div class="faq-answer">ฟรีทุกตัวภายใต้สัญญาอนุญาต MIT สามารถนำไปใช้งาน ปรับแต่ง หรือแจกจ่ายได้โดยไม่มีค่าใช้จ่าย</div>
+          </details>
+          <details class="faq-item">
+            <summary>สคริปต์ที่ซื้อมาและไม่มี oss.json ตรวจได้ไหม</summary>
+            <div class="faq-answer">ได้ ตั้ง requireManifest เป็น false ในไฟล์ .fivem-devkit.json แล้วเครื่องมือจะสแกนหาโค้ดอันตราย (เช่น dynamic-load · host-exec · secret-convar) โดยไม่ต้องมี oss.json</div>
+          </details>
+          <details class="faq-item">
+            <summary>ผลสแกนไม่เจออะไรแปลว่าไม่มีปัญหาไหม</summary>
+            <div class="faq-answer">ไม่ ดูรายละเอียดในหัวข้อ <a href="#limits">สิ่งที่ scanner จับไม่ได้</a> เครื่องมือนี้ตรวจจับเฉพาะรูปแบบคำสั่งและโครงสร้างที่ระบุไว้เท่านั้น จึงไม่สามารถทดแทนการตรวจสอบโค้ดโดยมนุษย์ได้</div>
+          </details>
+          <details class="faq-item">
+            <summary>ดาวน์โหลด resource ที่ไหน</summary>
+            <div class="faq-answer">ดาวน์โหลดได้จากหน้า Releases บน GitHub ของ repo aeterna/nakara-oss เท่านั้น อย่าใช้ปุ่ม Download ZIP ของโค้ดทั้ง repo เพราะไฟล์ release ถูก build ใน CI และมี provenance attestation กับ SHA256SUMS ให้ตรวจ ส่วน ZIP ของ repo มีเทสต์และเครื่องมือที่ server ไม่ต้องใช้</div>
+          </details>
+          <details class="faq-item">
+            <summary>เจอช่องโหว่แจ้งที่ไหน</summary>
+            <div class="faq-answer">กรุณาแจ้งผ่านแนวทางใน SECURITY.md ของ repository เท่านั้น เพื่อให้ทีมงานตรวจสอบเป็นการภายใน ห้ามเปิด issue สาธารณะเพื่อแจ้งช่องโหว่</div>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-content">
+      <div>MIT License · สร้างโดยทีม Nakara City</div>
+      <div>
+        <a href="https://github.com/aeterna/nakara-oss">GitHub</a> · อัปเดต {{site.date}}
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

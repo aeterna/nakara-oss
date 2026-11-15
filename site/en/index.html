@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Free FiveM scripts you can check before installing | nakara-oss</title>
+  <meta name="description" content="Free open-source FiveM resources with explicit oss.json capabilities, plus a fivem-devkit scanner you run yourself before installing on your server.">
+  <link rel="canonical" href="https://aeterna.github.io/nakara-oss/en/">
+  <link rel="alternate" hreflang="th" href="https://aeterna.github.io/nakara-oss/">
+  <link rel="alternate" hreflang="en" href="https://aeterna.github.io/nakara-oss/en/">
+  <link rel="alternate" hreflang="x-default" href="https://aeterna.github.io/nakara-oss/en/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Free FiveM scripts you can check before installing | nakara-oss">
+  <meta property="og:description" content="Free open-source FiveM resources with explicit oss.json capabilities, plus a fivem-devkit scanner you run yourself before installing on your server.">
+  <meta property="og:url" content="https://aeterna.github.io/nakara-oss/en/">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="th_TH">
+  <meta property="og:image" content="https://aeterna.github.io/nakara-oss/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="nakara-oss open-source FiveM scripts and code scanner">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Free FiveM scripts you can check before installing | nakara-oss">
+  <meta name="twitter:description" content="Free open-source FiveM resources with explicit oss.json capabilities, plus a fivem-devkit scanner you run yourself before installing on your server.">
+  <meta name="twitter:image" content="https://aeterna.github.io/nakara-oss/og.png">
+  <meta name="theme-color" content="#15803d">
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <link rel="stylesheet" href="../styles.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareSourceCode",
+        "name": "nakara-oss",
+        "codeRepository": "https://github.com/aeterna/nakara-oss",
+        "license": "https://opensource.org/licenses/MIT",
+        "programmingLanguage": ["Lua", "JavaScript", "Rust"],
+        "inLanguage": ["th", "en"]
+      },
+      {
+        "@type": "SoftwareApplication",
+        "name": "fivem-devkit",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "macOS, Linux (Node.js 22+)",
+        "softwareVersion": "{{devkit.version}}",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "THB"
+        },
+        "downloadUrl": "https://www.npmjs.com/package/@aeterna_game/fivem-devkit"
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="#" class="nav-brand">nakara-oss</a>
+      <nav aria-label="Main navigation">
+        <ul class="nav-links">
+          <li><a href="#scan" class="nav-item">Scan</a></li>
+          <li><a href="#packages" class="nav-item">Packages</a></li>
+          <li><a href="#trust" class="nav-item">Trust Architecture</a></li>
+          <li><a href="#limits" class="nav-item">Limits</a></li>
+          <li><a href="#faq" class="nav-item">FAQ</a></li>
+          <li><a href="../" class="nav-item lang-switch" hreflang="th">ไทย</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <h1>Free FiveM scripts you can check before they touch your server</h1>
+        <p class="lead">Every resource declares in oss.json what it touches (HTTP host, command, convar, net event, DB table, file); every PR is scanned by fivem-devkit safety; every release zip is built in CI with a provenance attestation and SHA256SUMS; you can re-run the same checks yourself.</p>
+        <div class="btn-group">
+          <a href="#scan" class="btn btn-primary">Scan your script</a>
+          <a href="https://github.com/aeterna/nakara-oss" class="btn btn-secondary">Code on GitHub</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="scan" class="section">
+      <div class="container">
+        <h2 class="section-title">Check a resource before you install it</h2>
+        <p class="section-lead">Run this command to inspect any resource folder before deploying it to your server:</p>
+        <div class="code-box">
+          <div class="code-label">Scan command</div>
+          <pre><code>npx @aeterna_game/fivem-devkit safety ./your_folder</code></pre>
+        </div>
+        <p class="section-lead">For a script from elsewhere with no <code>oss.json</code>, configure <a href="https://github.com/aeterna/nakara-oss/blob/main/packages/devkit/docs/safety.md">safety.md</a> options:</p>
+        <div class="code-box">
+          <div class="code-label">.fivem-devkit.json in the folder you run from</div>
+          <pre><code>{
+  "safety": {
+    "requireManifest": false
+  }
+}</code></pre>
+        </div>
+        <div class="code-box">
+          <div class="code-label">Real output (test resource)</div>
+          <pre><code>✗ [safety/dynamic-load] resources/some_script/server/main.lua:2
+    load called — loads code at runtime that nobody reviewed
+✗ [safety/host-exec] resources/some_script/server/main.lua:3
+    os.execute — runs or changes things on the host machine
+✗ [safety/secret-convar] resources/some_script/server/main.lua:4
+    GetConvar('mysql_connection_string') reads a secret convar
+
+safety: 3 error(s), 0 warning(s)</code></pre>
+        </div>
+        <p class="section-lead">The output is a list of places to read, not a verdict.</p>
+      </div>
+    </section>
+
+    <section id="packages" class="section">
+      <div class="container">
+        <h2 class="section-title">What's here</h2>
+        <div class="cards-grid">
+          <article class="card">
+            <div class="card-header">
+              <h3 class="card-title"><a href="https://github.com/aeterna/nakara-oss/tree/main/packages/devkit">fivem-devkit</a></h3>
+              <span class="chip chip-release">{{devkit.version}}</span>
+            </div>
+            <p class="card-desc">Finds dangerous code and silent bugs in anyone's FiveM resources, plus a busted test harness</p>
+          </article>
+          <article class="card">
+            <div class="card-header">
+              <h3 class="card-title"><a href="https://github.com/aeterna/nakara-oss/tree/main/packages/cargen-fix">nakara_cargen_fix</a></h3>
+              <span class="chip chip-release">{{cargen.version}}</span>
+            </div>
+            <p class="card-desc">Stops the CNetworkCarGenWorldStateData Pool Full crash (net.dll+487A2) · client-only · no framework needed</p>
+            <p class="card-note">The popular GAMECONFIG_FILE fix does nothing for this crash.</p>
+          </article>
+          <article class="card">
+            <div class="card-header">
+              <h3 class="card-title">Nakara Tickets</h3>
+              <span class="chip chip-dev">in development · no release yet</span>
+            </div>
+            <p class="card-desc">Self-hosted Discord tickets with in-game actions · the bridge opens no port</p>
+          </article>
+          <article class="card">
+            <div class="card-header">
+              <h3 class="card-title">AETERNA Game Launcher</h3>
+              <span class="chip chip-dev">in development · no release yet</span>
+            </div>
+            <p class="card-desc">A launcher for your own server, written in Rust</p>
+          </article>
+          <article class="card">
+            <div class="card-header">
+              <h3 class="card-title">Rongroi Server Kit</h3>
+              <span class="chip chip-dev">in development · no release yet</span>
+            </div>
+            <p class="card-desc">Server side of aeterna-rongroi</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="trust" class="section">
+      <div class="container">
+        <h2 class="section-title">🏗️ Trust Architecture</h2>
+        <ol class="trust-pipeline">
+          <li class="trust-step">
+            <div class="trust-step-num">Author</div>
+            <div class="trust-step-body">source + oss.json</div>
+          </li>
+          <li class="trust-step">
+            <div class="trust-step-num">PR gate in CI</div>
+            <div class="trust-step-body">devkit check, devkit safety — using more than oss.json = PR fails; oss.json changes need CODEOWNERS review</div>
+          </li>
+          <li class="trust-step">
+            <div class="trust-step-num">Release in CI</div>
+            <div class="trust-step-body">build zip, provenance attestation, SHA256SUMS</div>
+          </li>
+          <li class="trust-step">
+            <div class="trust-step-num">Your server</div>
+            <div class="trust-step-body">
+              <code>gh attestation verify &lt;zip&gt; --repo aeterna/nakara-oss</code><br>
+              <code>sha256sum -c SHA256SUMS</code><br>
+              <code>npx @aeterna_game/fivem-devkit safety ./resource</code><br>
+              then ensure
+            </div>
+          </li>
+        </ol>
+        <p class="trust-note">Steps 2–3 run in our CI. Step 4 you repeat yourself with the same tools.</p>
+      </div>
+    </section>
+
+    <section id="limits" class="section">
+      <div class="container">
+        <h2 class="section-title">What the scanner cannot catch</h2>
+        <ul class="limits-list">
+          <li>A logic bomb inside an API the resource is allowed to use</li>
+          <li>Calls to other resources' exports</li>
+          <li>A server event that trusts the client</li>
+          <li>Values built at runtime (reported where they occur, but not traced)</li>
+        </ul>
+        <p class="limits-end">A person still has to read the code.</p>
+      </div>
+    </section>
+
+    <section id="faq" class="section">
+      <div class="container">
+        <h2 class="section-title">Questions</h2>
+        <div class="faq-list">
+          <details class="faq-item">
+            <summary>Is it free?</summary>
+            <div class="faq-answer">Yes, everything is free under the MIT license. You can use, modify, and distribute all resources without cost.</div>
+          </details>
+          <details class="faq-item">
+            <summary>Can I scan a script I bought that has no oss.json?</summary>
+            <div class="faq-answer">Yes. Set <code>requireManifest</code> to <code>false</code> in <code>.fivem-devkit.json</code>. The scanner still finds dangerous code such as dynamic-load, host-exec, and secret-convar.</div>
+          </details>
+          <details class="faq-item">
+            <summary>The scan found nothing. Is the script fine?</summary>
+            <div class="faq-answer">No. See <a href="#limits">What the scanner cannot catch</a>. The tool looks for known patterns and does not replace reading the code.</div>
+          </details>
+          <details class="faq-item">
+            <summary>Where do I download resources?</summary>
+            <div class="faq-answer">Only from GitHub Releases, not the repo ZIP. Release files are built in CI with a provenance attestation and SHA256SUMS; the repo ZIP carries tests and tooling a server does not need.</div>
+          </details>
+          <details class="faq-item">
+            <summary>Where do I report a vulnerability?</summary>
+            <div class="faq-answer">Follow <a href="https://github.com/aeterna/nakara-oss/blob/main/SECURITY.md">SECURITY.md</a> in the repository, never open a public issue.</div>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-content">
+      <div>MIT · Built by the Nakara City team</div>
+      <div>
+        <a href="https://github.com/aeterna/nakara-oss">GitHub</a> · Updated {{site.date}}
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
