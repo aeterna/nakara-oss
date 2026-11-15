@@ -59,17 +59,18 @@ jobs:
         run: |
           cargo build --locked --release -p launcher-ui
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      # Connect ships next to the launcher (decision 8). Its own SHA256SUMS is checked before anything is unpacked.
-      # Until Connect's repository is public this download needs access the runner token does not have, so the
-      # job stops here (K7 in the plan).
-      - name: Download Rongroi Connect
+      # Connect ships next to the launcher (decision 8). Before anything is unpacked, the zip must match Connect's
+      # SHA256SUMS and carry a build-provenance attestation from Connect's own repository (the sums alone come from
+      # the same release, so they only catch corruption). Until Connect's repository is public and attests its
+      # releases, this step fails (K5, K7 in the plan).
+      - name: Download and check Rongroi Connect
         env:
           GH_TOKEN: ${{ github.token }}
           CONNECT_TAG: ${{ inputs.connect_tag }}
         run: |
-          if ($env:CONNECT_TAG -notmatch '^[A-Za-z0-9._-]{1,64}$') { throw "connect_tag has characters a tag cannot have" }
+          if ($env:CONNECT_TAG -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$') { throw "connect_tag has characters a tag cannot have" }
           New-Item -ItemType Directory -Force -Path connect-dl | Out-Null
-          gh release download $env:CONNECT_TAG -R aeterna/aeterna-rongroi-connect -D connect-dl -p '*-win32-x64.zip' -p 'SHA256SUMS'
+          gh release download -R aeterna/aeterna-rongroi-connect -D connect-dl -p '*-win32-x64.zip' -p 'SHA256SUMS' -- $env:CONNECT_TAG
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $zips = @(Get-ChildItem connect-dl -Filter '*-win32-x64.zip')
           if ($zips.Count -ne 1) { throw "expected one Connect win32-x64 zip, found $($zips.Count)" }
@@ -78,19 +79,33 @@ jobs:
           if (-not $want) { throw "Connect SHA256SUMS has no line for $($zip.Name)" }
           $got = (Get-FileHash -Algorithm SHA256 $zip.FullName).Hash.ToLower()
           if ($got -ne $want.ToLower()) { throw "Connect zip SHA-256 mismatch" }
-          Expand-Archive -Path $zip.FullName -DestinationPath connect-x
-          $exe = @(Get-ChildItem connect-x -Recurse -Filter 'rongroi-connect.exe')
-          if ($exe.Count -ne 1) { throw "expected one rongroi-connect.exe in the Connect zip, found $($exe.Count)" }
-          "connect_dir=$($exe[0].DirectoryName)" | Out-File -Encoding utf8 -Append $env:GITHUB_ENV
+          gh attestation verify $zip.FullName --repo aeterna/aeterna-rongroi-connect
+          if ($LASTEXITCODE -ne 0) { throw "Connect zip has no valid attestation from aeterna/aeterna-rongroi-connect" }
+          # Unpack entry by entry and refuse any entry whose path leaves connect-x (zip-slip).
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $dest = [IO.Path]::GetFullPath((Join-Path (Get-Location) 'connect-x')) + [IO.Path]::DirectorySeparatorChar
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          $archive = [IO.Compression.ZipFile]::OpenRead($zip.FullName)
+          try {
+            foreach ($entry in $archive.Entries) {
+              $target = [IO.Path]::GetFullPath((Join-Path $dest $entry.FullName))
+              if (-not $target.StartsWith($dest, [StringComparison]::OrdinalIgnoreCase)) { throw "zip entry leaves the folder: $($entry.FullName)" }
+              if ($entry.FullName.EndsWith('/')) { New-Item -ItemType Directory -Force -Path $target | Out-Null; continue }
+              New-Item -ItemType Directory -Force -Path ([IO.Path]::GetDirectoryName($target)) | Out-Null
+              [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $target, $false)
+            }
+          } finally { $archive.Dispose() }
       - name: Assemble the zip
         env:
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
           $name = "aeterna-launcher-$env:VERSION-windows-x64"
           $root = "out/$name"
+          $exe = @(Get-ChildItem connect-x -Recurse -Filter 'rongroi-connect.exe')
+          if ($exe.Count -ne 1) { throw "expected one rongroi-connect.exe in the Connect zip, found $($exe.Count)" }
           New-Item -ItemType Directory -Force -Path $root | Out-Null
           Copy-Item target/release/aeterna-launcher.exe $root/
-          Copy-Item -Recurse $env:connect_dir "$root/rongroi-connect"
+          Copy-Item -Recurse $exe[0].DirectoryName "$root/rongroi-connect"
           Copy-Item ../LICENSE "$root/LICENSE-launcher.txt"
           Compress-Archive -Path $root -DestinationPath "out/$name.zip"
           Copy-Item target/release/aeterna-launcher.exe out/aeterna-launcher.exe
@@ -107,9 +122,27 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  tool:
+    name: build launcher-sign
+    runs-on: ubuntu-24.04   # pinned: ubuntu-latest moves to 26.04 from 2026-10-19
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build launcher-sign
+        working-directory: launcher
+        run: cargo build --locked --release -p launcher-sign
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: launcher-sign
+          path: launcher/target/release/launcher-sign
+          if-no-files-found: error
+          retention-days: 1
+
   sign-and-publish:
     name: sign manifest + draft release
-    needs: build
+    needs: [build, tool]
     runs-on: ubuntu-24.04   # pinned: ubuntu-latest moves to 26.04 from 2026-10-19
     environment: launcher-release
     permissions:
@@ -124,9 +157,10 @@ jobs:
         with:
           name: launcher-release-out
           path: out/
-      - name: Build launcher-sign
-        working-directory: launcher
-        run: cargo build --locked --release -p launcher-sign
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: launcher-sign
+          path: tool/
       # The key reaches the tool only through the environment; launcher-sign never prints it.
       - name: Write and sign the manifest
         env:
@@ -137,7 +171,13 @@ jobs:
         run: |
           set -euo pipefail
           case "$EXPIRES_DAYS" in ''|*[!0-9]*) echo "expires_days must be a number"; exit 1;; esac
-          SIGN=launcher/target/release/launcher-sign
+          SIGN=tool/launcher-sign
+          chmod +x "$SIGN"
+          # The key in the environment must be one the shipped profile trusts, or no build accepts this release.
+          PUB=$("$SIGN" pubkey)
+          echo "signing key (public): $PUB"
+          grep -Eq "^update_keys *= *\[.*\"$PUB\"" launcher/profiles/aeterna/server.toml \
+            || { echo "public key $PUB is not in launcher/profiles/aeterna/server.toml update_keys"; exit 1; }
           "$SIGN" manifest --product aeterna-launcher --version "$VERSION" --channel "$CHANNEL" \
             --expires-days "$EXPIRES_DAYS" out/aeterna-launcher.exe "out/aeterna-launcher-$VERSION-windows-x64.zip" \
             > out/manifest.json

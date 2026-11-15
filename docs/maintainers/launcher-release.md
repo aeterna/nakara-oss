@@ -27,20 +27,27 @@ Environment secret, and nowhere else. No agent ever sees it.
    cargo run --release -p launcher-sign -- keygen --out ~/aeterna-launcher-signing.key
    ```
 
-   The command prints one line: the **public key**, 64 hex characters. It writes the private key to the file
-   (mode 600) and never prints it.
+   The command prints one line: the **public key**, 64 hex characters. It writes the private key to the file and
+   never prints it. On macOS and Linux the file is created with mode 600. On Windows it inherits your profile
+   folder's permissions.
 2. Save the file's contents in your password manager.
 3. GitHub → `aeterna/nakara-oss` → Settings → Environments:
    - create `launcher-release`;
    - under Required reviewers, add yourself;
    - turn on "Prevent self-review" only if someone else will approve;
    - restrict Deployment branches to `main`;
-   - add an environment secret `LAUNCHER_SIGNING_KEY` whose value is the file's contents.
+   - add the environment secret from the file, without printing it to the terminal:
+
+     ```bash
+     gh secret set LAUNCHER_SIGNING_KEY --env launcher-release --repo aeterna/nakara-oss < ~/aeterna-launcher-signing.key
+     ```
 4. Delete the key file:
 
    ```bash
    rm ~/aeterna-launcher-signing.key
    ```
+
+   `rm` removes the file name; it does not overwrite the disk. With FileVault on, that is enough.
 
 5. Send the **public** key (only that line) to the agent, or open a PR yourself that adds it to
    `launcher/profiles/aeterna/server.toml`:
@@ -51,14 +58,16 @@ Environment secret, and nowhere else. No agent ever sees it.
 
    A build made before this PR has no key and never installs updates.
 
-To check which key the environment holds without seeing it, look at the sign step of any run. It prints the
-public key that signed.
+The sign step prints the public key that signs (`signing key (public): …`), and it fails unless that key is in
+`launcher/profiles/aeterna/server.toml` `update_keys`. A wrong or replaced secret therefore stops the release
+instead of producing one that no build accepts. The manifest's product name is `aeterna-launcher`. The update check
+must pass the same name when it is wired.
 
 ## Each release (owner)
 
-1. Rongroi Connect must have a public release whose assets include a `*-win32-x64.zip` and its `SHA256SUMS` (K5, K7).
-   The workflow checks the zip against those sums before it unpacks anything. Until Connect is public, the
-   download step fails.
+1. Rongroi Connect must have a public release with a `*-win32-x64.zip`, its `SHA256SUMS`, and a build-provenance
+   attestation from `aeterna/aeterna-rongroi-connect` (K5, K7). The workflow checks all three, then unpacks entry by
+   entry and refuses any path that leaves the folder. Until Connect is public, the download step fails.
 2. Bump `version` in `launcher/crates/launcher-ui/Cargo.toml` through a normal PR.
 3. Actions → launcher-release → Run workflow on `main`, with:
    - `connect_tag`: the Connect release tag;
@@ -72,12 +81,14 @@ public key that signed.
 
 - **Bad release:** do not delete the release, since its tag is protected. Publish a newer version. The launcher
   installs only a version newer than its own, so the newer release takes over, and the bad manifest expires on its own.
-- **Key exposed:**
-  1. Create a new key (step 1 above) and replace the secret.
-  2. Add the new public key next to the old one in `update_keys` and release.
-  3. In the next release, remove the old key.
-
-  Builds that only know the old key need one release signed with the old key that carries the new list. If the old
-  key itself is untrusted, players must download the new zip by hand.
+- **Retiring or rotating a key.** The profile, and with it `update_keys`, is compiled into the exe, so a new key
+  list reaches players through a release signed with a key they already trust. Do it in this order:
+  1. Create the new key (step 1, with a new file name) and keep it out of GitHub for now.
+  2. Release, signed with the **old** key, with `update_keys = ["<old>", "<new>"]`.
+  3. Replace the secret with the new key (`gh secret set …`, as in step 3).
+  4. Release, signed with the **new** key, with `update_keys = ["<new>"]`.
+- **Key exposed and possibly used by someone else:** the steps above cannot repair this. Whoever holds the old key
+  can sign updates that old builds accept. Create a new key, release a build that trusts only the new key, and tell
+  players to download the new zip by hand.
 - **Connect inside the zip:** Connect is GPL-3.0-or-later. The release notes link to the matching Connect release,
   where its source is published.
