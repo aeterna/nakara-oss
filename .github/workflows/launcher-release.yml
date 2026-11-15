@@ -79,7 +79,7 @@ jobs:
           if (-not $want) { throw "Connect SHA256SUMS has no line for $($zip.Name)" }
           $got = (Get-FileHash -Algorithm SHA256 $zip.FullName).Hash.ToLower()
           if ($got -ne $want.ToLower()) { throw "Connect zip SHA-256 mismatch" }
-          gh attestation verify $zip.FullName --repo aeterna/aeterna-rongroi-connect
+          gh attestation verify $zip.FullName --repo aeterna/aeterna-rongroi-connect --signer-workflow aeterna/aeterna-rongroi-connect/.github/workflows/release.yml --source-ref "refs/tags/$env:CONNECT_TAG" --deny-self-hosted-runners
           if ($LASTEXITCODE -ne 0) { throw "Connect zip has no valid attestation from aeterna/aeterna-rongroi-connect" }
           # Unpack entry by entry and refuse any entry whose path leaves connect-x (zip-slip).
           Add-Type -AssemblyName System.IO.Compression.FileSystem
