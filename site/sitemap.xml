@@ -15,4 +15,32 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://aeterna.github.io/nakara-oss/en/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://aeterna.github.io/nakara-oss/en/"/>
   </url>
+  <url>
+    <loc>https://aeterna.github.io/nakara-oss/cargen-crash/</loc>
+    <lastmod>{{site.date}}</lastmod>
+    <xhtml:link rel="alternate" hreflang="th" href="https://aeterna.github.io/nakara-oss/cargen-crash/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://aeterna.github.io/nakara-oss/en/cargen-crash/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://aeterna.github.io/nakara-oss/en/cargen-crash/"/>
+  </url>
+  <url>
+    <loc>https://aeterna.github.io/nakara-oss/en/cargen-crash/</loc>
+    <lastmod>{{site.date}}</lastmod>
+    <xhtml:link rel="alternate" hreflang="th" href="https://aeterna.github.io/nakara-oss/cargen-crash/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://aeterna.github.io/nakara-oss/en/cargen-crash/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://aeterna.github.io/nakara-oss/en/cargen-crash/"/>
+  </url>
+  <url>
+    <loc>https://aeterna.github.io/nakara-oss/safety-scanner/</loc>
+    <lastmod>{{site.date}}</lastmod>
+    <xhtml:link rel="alternate" hreflang="th" href="https://aeterna.github.io/nakara-oss/safety-scanner/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://aeterna.github.io/nakara-oss/en/safety-scanner/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://aeterna.github.io/nakara-oss/en/safety-scanner/"/>
+  </url>
+  <url>
+    <loc>https://aeterna.github.io/nakara-oss/en/safety-scanner/</loc>
+    <lastmod>{{site.date}}</lastmod>
+    <xhtml:link rel="alternate" hreflang="th" href="https://aeterna.github.io/nakara-oss/safety-scanner/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://aeterna.github.io/nakara-oss/en/safety-scanner/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://aeterna.github.io/nakara-oss/en/safety-scanner/"/>
+  </url>
 </urlset>

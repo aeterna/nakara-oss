@@ -140,16 +140,22 @@
         <div class="card-h"><h3><a href="https://github.com/aeterna/nakara-oss/tree/main/packages/devkit">fivem-devkit</a></h3><span class="ver">{{devkit.version}}</span></div>
         <p>หาโค้ดอันตรายและ bug ที่ runtime ไม่เตือน ใน resource ของใครก็ได้ พร้อม busted harness สำหรับเขียนเทสต์ Lua</p>
         <div class="checks"><span>export-calls</span><span>export-self-param</span><span>export-funcref</span><span>nui-callbacks</span><span>nui-escape</span><span>+ อีก 4 check</span></div>
-        <p class="foot mono">npx @aeterna_game/fivem-devkit check</p>
+        <p class="foot">
+          <span class="mono">npx @aeterna_game/fivem-devkit check</span><br>
+          <a href="safety-scanner/">วิธีใช้ safety scanner →</a>
+        </p>
       </article>
       <article class="card">
         <div class="card-h"><h3><a href="https://github.com/aeterna/nakara-oss/tree/main/packages/cargen-fix">nakara_cargen_fix</a></h3><span class="ver">{{cargen.version}}</span></div>
-        <p>กัน crash <code>CNetworkCarGenWorldStateData Pool Full</code> ฝั่ง client และบอกว่าทำไมวิธี <code>GAMECONFIG_FILE</code> ที่แชร์กันใช้ไม่ได้</p>
+        <p>ตัวกันสำหรับ crash <code>CNetworkCarGenWorldStateData Pool Full</code> ฝั่ง client และบอกว่าทำไมวิธี <code>GAMECONFIG_FILE</code> ที่แชร์กันใช้ไม่ได้</p>
         <div class="manifest"><span class="k">oss.json</span> → capabilities
   http        <span class="e">[]</span>    commands  <span class="e">[]</span>
   convars     <span class="e">[]</span>    netEvents <span class="e">[]</span>
   db.tables   <span class="e">[]</span>    files     <span class="e">[]</span></div>
-        <p class="foot">ประกาศว่าไม่แตะอะไรเลย และ CI ตรวจทุก PR ว่าโค้ดเป็นอย่างนั้นจริง</p>
+        <p class="foot">
+          ประกาศว่าไม่แตะอะไรเลย และ CI ตรวจทุก PR ว่าโค้ดเป็นอย่างนั้นจริง<br>
+          <a href="cargen-crash/">อ่านสิ่งที่พิสูจน์แล้ว →</a>
+        </p>
       </article>
     </div>
     <div class="dev">
