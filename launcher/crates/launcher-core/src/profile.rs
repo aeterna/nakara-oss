@@ -385,7 +385,7 @@ fn decode_update_key(value: &str) -> Option<[u8; 32]> {
         return None;
     }
     let mut out = [0u8; 32];
-    for (pair, slot) in b.chunks_exact(2).zip(out.iter_mut()) {
+    for (pair, slot) in b.as_chunks::<2>().0.iter().zip(out.iter_mut()) {
         *slot = (hex_nibble(pair[0]) << 4) | hex_nibble(pair[1]);
     }
     Some(out)
