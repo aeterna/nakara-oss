@@ -23,8 +23,10 @@
   <meta name="twitter:title" content="สคริปต์ FiveM ฟรี ที่ตรวจได้ก่อนลง server | nakara-oss">
   <meta name="twitter:description" content="สคริปต์ FiveM ฟรี โอเพนซอร์ส ประกาศ capability ใน oss.json ชัดเจน พร้อมเครื่องมือตรวจโค้ด fivem-devkit ให้คุณรันสแกนตรวจสอบได้เองก่อนลง server จริง">
   <meta name="twitter:image" content="https://aeterna.github.io/nakara-oss/og.png">
-  <meta name="theme-color" content="#15803d">
+  <meta name="theme-color" content="#121110">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="styles.css">
   <script type="application/ld+json">
   {
@@ -56,180 +58,221 @@
   </script>
 </head>
 <body>
-  <header class="site-header">
-    <div class="container nav-wrap">
-      <a href="#" class="nav-brand">nakara-oss</a>
-      <nav aria-label="เมนูหลัก">
-        <ul class="nav-links">
-          <li><a href="#scan" class="nav-item">ตรวจก่อนลง</a></li>
-          <li><a href="#packages" class="nav-item">มีอะไรบ้าง</a></li>
-          <li><a href="#trust" class="nav-item">สถาปัตยกรรม</a></li>
-          <li><a href="#limits" class="nav-item">ข้อจำกัด</a></li>
-          <li><a href="#faq" class="nav-item">คำถามที่พบบ่อย</a></li>
-          <li><a href="en/" class="nav-item lang-switch" hreflang="en">EN</a></li>
-        </ul>
-      </nav>
-    </div>
-  </header>
+<header class="nav">
+  <div class="nav-in">
+    <a class="brand" href="#top"><i>N</i>nakara-oss</a>
+    <nav class="links" aria-label="เมนูหลัก"><a href="#scan">ตรวจก่อนลง</a><a href="#packages">มีอะไรบ้าง</a><a href="#trust">Trust Architecture</a><a href="#limits">ข้อจำกัด</a><a href="#faq">คำถาม</a></nav>
+    <a class="nav-btn" href="https://github.com/aeterna/nakara-oss"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.15-1.11-1.46-1.11-1.46-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>GitHub</a>
+    <a class="lang" href="en/" hreflang="en">EN</a>
+  </div>
+  <div class="progress" aria-hidden="true"></div>
+</header>
 
-  <main>
-    <section class="hero">
-      <div class="container">
-        <h1>สคริปต์ FiveM ฟรี ที่ตรวจได้ก่อนลง server</h1>
-        <p class="lead">ทุก resource ประกาศใน oss.json อย่างชัดเจนว่าเรียกใช้อะไรบ้าง (HTTP host, command, convar, net event, DB table, file) ทุก PR ถูกตรวจด้วย fivem-devkit safety ทุก release zip ถูกสร้างใน CI พร้อม provenance attestation และ SHA256SUMS โดยคุณสามารถรันคำสั่งตรวจสอบชุดเดียวกันนี้ซ้ำได้ด้วยตัวเอง</p>
-        <div class="btn-group">
-          <a href="#scan" class="btn btn-primary">ตรวจสคริปต์ของคุณ</a>
-          <a href="https://github.com/aeterna/nakara-oss" class="btn btn-secondary">ดูโค้ดบน GitHub</a>
-        </div>
+<main class="wrap" id="top">
+
+  <section class="hero">
+    <div>
+      <span class="eyebrow"><span class="dot"></span>MIT · open source · จากทีม Nakara City</span>
+      <h1>สคริปต์ FiveM ฟรี ที่<span class="hl">ตรวจได้</span> ก่อนลง server</h1>
+      <p class="lead">ทุก resource บอกไว้ใน <code>oss.json</code> ว่าจะแตะอะไรบ้าง ทุก PR ถูกสแกน ทุก release build ใน CI พร้อมหลักฐานว่ามาจากไหน และคุณรันการตรวจชุดเดียวกันซ้ำเองได้</p>
+      <div class="cta">
+        <a class="btn btn-p" href="#scan">ตรวจสคริปต์ของคุณ <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+        <a class="btn btn-s" href="#trust">ดูว่าตรวจอะไรบ้าง</a>
       </div>
-    </section>
-
-    <section id="scan" class="section">
-      <div class="container">
-        <h2 class="section-title">ตรวจ resource ก่อนลง</h2>
-        <p class="section-lead">คุณสามารถรันคำสั่งนี้เพื่อสแกนโครงสร้างและคำสั่งใน resource โฟลเดอร์ใดก็ได้ก่อนนำไปใส่ server จริง</p>
-        <div class="code-box">
-          <div class="code-label">คำสั่งสแกน</div>
-          <pre><code>npx @aeterna_game/fivem-devkit safety ./ชื่อโฟลเดอร์</code></pre>
-        </div>
-        <p class="section-lead">สำหรับสคริปต์ภายนอกที่ไม่มี oss.json ให้ตั้งค่า <code>requireManifest</code> เป็น <code>false</code> ตามรายละเอียดที่อธิบายไว้ใน <a href="https://github.com/aeterna/nakara-oss/blob/main/packages/devkit/docs/safety.md">safety.md</a></p>
-        <div class="code-box">
-          <div class="code-label">ไฟล์ .fivem-devkit.json ในโฟลเดอร์ที่รันคำสั่ง</div>
-          <pre><code>{"safety": {"requireManifest": false}}</code></pre>
-        </div>
-        <div class="code-box">
-          <div class="code-label">ตัวอย่างผลจริง (resource ทดสอบ)</div>
-          <pre><code>✗ [safety/dynamic-load] resources/some_script/server/main.lua:2
-    load called — loads code at runtime that nobody reviewed
-✗ [safety/host-exec] resources/some_script/server/main.lua:3
-    os.execute — runs or changes things on the host machine
-✗ [safety/secret-convar] resources/some_script/server/main.lua:4
-    GetConvar('mysql_connection_string') reads a secret convar
-
-safety: 3 error(s), 0 warning(s)</code></pre>
-        </div>
-        <p class="section-lead">ผลลัพธ์จากการสแกนคือรายการจุดในโค้ดที่ต้องเปิดอ่าน ไม่ใช่คำตัดสินว่าโค้ดนั้นทำงานถูกต้องสมบูรณ์หรือไร้ปัญหา</p>
-      </div>
-    </section>
-
-    <section id="packages" class="section">
-      <div class="container">
-        <h2 class="section-title">มีอะไรบ้าง</h2>
-        <div class="cards-grid">
-          <article class="card">
-            <div class="card-header">
-              <h3 class="card-title"><a href="https://github.com/aeterna/nakara-oss/tree/main/packages/devkit">fivem-devkit</a></h3>
-              <span class="chip chip-release">{{devkit.version}}</span>
-            </div>
-            <p class="card-desc">หาโค้ดอันตรายและ bug ใน resource ของใครก็ได้ + busted test harness</p>
-          </article>
-          <article class="card">
-            <div class="card-header">
-              <h3 class="card-title"><a href="https://github.com/aeterna/nakara-oss/tree/main/packages/cargen-fix">nakara_cargen_fix</a></h3>
-              <span class="chip chip-release">{{cargen.version}}</span>
-            </div>
-            <p class="card-desc">แก้ crash CNetworkCarGenWorldStateData Pool Full (net.dll+487A2) · client-only · ไม่ผูก framework</p>
-            <p class="card-note">วิธีแก้ที่แชร์กันอย่างการปรับ GAMECONFIG_FILE ไม่ได้ช่วยแก้ปัญหานี้</p>
-          </article>
-          <article class="card">
-            <div class="card-header">
-              <h3 class="card-title">Nakara Tickets</h3>
-              <span class="chip chip-dev">กำลังพัฒนา · ยังไม่มี release</span>
-            </div>
-            <p class="card-desc">ระบบ ticket บน Discord ที่สั่งงานในเกมได้ · bridge ไม่เปิด port</p>
-          </article>
-          <article class="card">
-            <div class="card-header">
-              <h3 class="card-title">AETERNA Game Launcher</h3>
-              <span class="chip chip-dev">กำลังพัฒนา · ยังไม่มี release</span>
-            </div>
-            <p class="card-desc">launcher ของ server คุณเอง เขียนด้วย Rust</p>
-          </article>
-          <article class="card">
-            <div class="card-header">
-              <h3 class="card-title">Rongroi Server Kit</h3>
-              <span class="chip chip-dev">กำลังพัฒนา · ยังไม่มี release</span>
-            </div>
-            <p class="card-desc">ฝั่ง server ของ aeterna-rongroi</p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section id="trust" class="section">
-      <div class="container">
-        <h2 class="section-title">🏗️ Trust Architecture</h2>
-        <ol class="trust-pipeline">
-          <li class="trust-step">
-            <div class="trust-step-num">ผู้เขียน</div>
-            <div class="trust-step-body">source + oss.json</div>
-          </li>
-          <li class="trust-step">
-            <div class="trust-step-num">PR gate ใน CI</div>
-            <div class="trust-step-body">devkit check, devkit safety — ใช้เกิน oss.json = PR ล้ม; oss.json ที่เปลี่ยนต้องผ่านการ review ของ CODEOWNERS</div>
-          </li>
-          <li class="trust-step">
-            <div class="trust-step-num">release ใน CI</div>
-            <div class="trust-step-body">build zip, provenance attestation, SHA256SUMS</div>
-          </li>
-          <li class="trust-step">
-            <div class="trust-step-num">server ของคุณ</div>
-            <div class="trust-step-body"><code>gh attestation verify &lt;zip&gt; --repo aeterna/nakara-oss</code><br><code>sha256sum -c SHA256SUMS</code><br><code>npx @aeterna_game/fivem-devkit safety ./resource</code> แล้วค่อย ensure</div>
-          </li>
-        </ol>
-        <p class="trust-note">ด่าน 2–3 เราทำใน CI ด่าน 4 คุณทำซ้ำเองได้ด้วยเครื่องมือตัวเดียวกัน</p>
-      </div>
-    </section>
-
-    <section id="limits" class="section">
-      <div class="container">
-        <h2 class="section-title">สิ่งที่ scanner จับไม่ได้</h2>
-        <ul class="limits-list">
-          <li>logic bomb ที่ซ่อนอยู่ใน API ที่ resource ได้รับอนุญาตให้ใช้</li>
-          <li>การเรียก export ของ resource อื่น</li>
-          <li>server event ที่เชื่อข้อมูลจาก client โดยไม่ตรวจ</li>
-          <li>ค่าที่ประกอบขึ้นตอน runtime: รายงานว่าเจอ แต่ไม่ได้ตามว่าค่าจริงคืออะไร</li>
-        </ul>
-        <p class="limits-end">ยังต้องมีคนอ่านโค้ด</p>
-      </div>
-    </section>
-
-    <section id="faq" class="section">
-      <div class="container">
-        <h2 class="section-title">คำถามที่พบบ่อย</h2>
-        <div class="faq-list">
-          <details class="faq-item">
-            <summary>ใช้ฟรีไหม</summary>
-            <div class="faq-answer">ฟรีทุกตัวภายใต้สัญญาอนุญาต MIT สามารถนำไปใช้งาน ปรับแต่ง หรือแจกจ่ายได้โดยไม่มีค่าใช้จ่าย</div>
-          </details>
-          <details class="faq-item">
-            <summary>สคริปต์ที่ซื้อมาและไม่มี oss.json ตรวจได้ไหม</summary>
-            <div class="faq-answer">ได้ ตั้ง requireManifest เป็น false ในไฟล์ .fivem-devkit.json แล้วเครื่องมือจะสแกนหาโค้ดอันตราย (เช่น dynamic-load · host-exec · secret-convar) โดยไม่ต้องมี oss.json</div>
-          </details>
-          <details class="faq-item">
-            <summary>ผลสแกนไม่เจออะไรแปลว่าไม่มีปัญหาไหม</summary>
-            <div class="faq-answer">ไม่ ดูรายละเอียดในหัวข้อ <a href="#limits">สิ่งที่ scanner จับไม่ได้</a> เครื่องมือนี้ตรวจจับเฉพาะรูปแบบคำสั่งและโครงสร้างที่ระบุไว้เท่านั้น จึงไม่สามารถทดแทนการตรวจสอบโค้ดโดยมนุษย์ได้</div>
-          </details>
-          <details class="faq-item">
-            <summary>ดาวน์โหลด resource ที่ไหน</summary>
-            <div class="faq-answer">ดาวน์โหลดได้จากหน้า Releases บน GitHub ของ repo aeterna/nakara-oss เท่านั้น อย่าใช้ปุ่ม Download ZIP ของโค้ดทั้ง repo เพราะไฟล์ release ถูก build ใน CI และมี provenance attestation กับ SHA256SUMS ให้ตรวจ ส่วน ZIP ของ repo มีเทสต์และเครื่องมือที่ server ไม่ต้องใช้</div>
-          </details>
-          <details class="faq-item">
-            <summary>เจอช่องโหว่แจ้งที่ไหน</summary>
-            <div class="faq-answer">กรุณาแจ้งผ่านแนวทางใน SECURITY.md ของ repository เท่านั้น เพื่อให้ทีมงานตรวจสอบเป็นการภายใน ห้ามเปิด issue สาธารณะเพื่อแจ้งช่องโหว่</div>
-          </details>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <footer class="site-footer">
-    <div class="container footer-content">
-      <div>MIT License · สร้างโดยทีม Nakara City</div>
-      <div>
-        <a href="https://github.com/aeterna/nakara-oss">GitHub</a> · อัปเดต {{site.date}}
+      <div class="facts">
+        <span><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h7"/></svg>อ่านโค้ด ไม่รันโค้ด</span>
+        <span><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="12" rx="2"/><path d="M8 21h8"/></svg>รันในเครื่องคุณ</span>
+        <span><svg viewBox="0 0 24 24"><path d="M12 3 4 7v5c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V7l-8-4Z"/></svg>release มี attestation</span>
       </div>
     </div>
+    <figure class="term" aria-label="ผลจริงของ fivem-devkit safety บน resource ทดสอบ" style="margin:0">
+      <div class="term-bar"><i></i><i></i><i></i><span>ผลจริง · resource ทดสอบ</span></div>
+<pre><span class="ln c" style="animation-delay:.1s"># สคริปต์ที่โหลดมา ไม่มี oss.json</span>
+<span class="ln" style="animation-delay:.2s"><span class="p">$</span> <span class="s">npx @aeterna_game/fivem-devkit safety</span></span>
+<span class="ln" style="animation-delay:.45s"><span class="x">✗</span> [safety/dynamic-load] server/main.lua:2</span>
+<span class="ln c" style="animation-delay:.55s">    load called — loads code at runtime that nobody reviewed</span>
+<span class="ln" style="animation-delay:.7s"><span class="x">✗</span> [safety/host-exec] server/main.lua:3</span>
+<span class="ln c" style="animation-delay:.8s">    os.execute — runs or changes things on the host machine</span>
+<span class="ln" style="animation-delay:.95s"><span class="x">✗</span> [safety/secret-convar] server/main.lua:4</span>
+<span class="ln c" style="animation-delay:1.05s">    GetConvar('mysql_connection_string') reads a secret convar</span>
+<span class="ln" style="animation-delay:1.25s">&nbsp;</span>
+<span class="ln s" style="animation-delay:1.3s">safety: 3 error(s), 0 warning(s)</span></pre>
+    </figure>
+  </section>
+
+  <div class="stats" aria-label="ตัวเลขของ repo">
+    <div>แพ็กเกจที่มี release <b>2</b></div>
+    <div>fivem-devkit <b>{{devkit.version}}</b></div>
+    <div>check ของ devkit <b>9</b></div>
+    <div>ด่านบังคับใน CI <b>4</b></div>
+  </div>
+
+  <section class="sec" id="scan">
+    <p class="kicker">ตรวจก่อนลง</p>
+    <h2>สามขั้น ก่อน <code style="font-size:.8em">ensure</code> สคริปต์ที่โหลดมา</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-h"><span class="num">01</span><h3>บอกว่าไม่มี oss.json</h3></div>
+        <p>สคริปต์จากที่อื่นไม่ได้ประกาศสิทธิ์ ใส่ไฟล์นี้ในโฟลเดอร์ที่จะรันคำสั่ง</p>
+        <div class="snip">// .fivem-devkit.json
+{ "safety": { "requireManifest": false } }</div>
+      </div>
+      <div class="step">
+        <div class="step-h"><span class="num">02</span><h3>สแกน</h3></div>
+        <p>ต้องมี Node.js 22 ขึ้นไป เครื่องมืออ่านไฟล์อย่างเดียว ไม่รันโค้ดของสคริปต์</p>
+        <div class="snip">npx @aeterna_game/fivem-devkit \
+  safety ./ชื่อโฟลเดอร์</div>
+      </div>
+      <div class="step">
+        <div class="step-h"><span class="num">03</span><h3>อ่านทีละจุด</h3></div>
+        <p>แต่ละบรรทัดบอกไฟล์ เลขบรรทัด และเหตุผล เป็นจุดที่ต้องเปิดอ่าน ไม่ใช่คำตัดสิน</p>
+        <div class="snip"><span style="color:var(--bad)">✗</span> [safety/host-exec]
+  server/main.lua:3</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="packages">
+    <p class="kicker">มีอะไรบ้าง</p>
+    <h2>สองชิ้นใช้ได้แล้ว <em>สามชิ้นกำลังทำ</em></h2>
+    <div class="pk-grid">
+      <article class="card">
+        <div class="card-h"><h3><a href="https://github.com/aeterna/nakara-oss/tree/main/packages/devkit">fivem-devkit</a></h3><span class="ver">{{devkit.version}}</span></div>
+        <p>หาโค้ดอันตรายและ bug ที่ runtime ไม่เตือน ใน resource ของใครก็ได้ พร้อม busted harness สำหรับเขียนเทสต์ Lua</p>
+        <div class="checks"><span>export-calls</span><span>export-self-param</span><span>export-funcref</span><span>nui-callbacks</span><span>nui-escape</span><span>+ อีก 4 check</span></div>
+        <p class="foot mono">npx @aeterna_game/fivem-devkit check</p>
+      </article>
+      <article class="card">
+        <div class="card-h"><h3><a href="https://github.com/aeterna/nakara-oss/tree/main/packages/cargen-fix">nakara_cargen_fix</a></h3><span class="ver">{{cargen.version}}</span></div>
+        <p>กัน crash <code>CNetworkCarGenWorldStateData Pool Full</code> ฝั่ง client และบอกว่าทำไมวิธี <code>GAMECONFIG_FILE</code> ที่แชร์กันใช้ไม่ได้</p>
+        <div class="manifest"><span class="k">oss.json</span> → capabilities
+  http        <span class="e">[]</span>    commands  <span class="e">[]</span>
+  convars     <span class="e">[]</span>    netEvents <span class="e">[]</span>
+  db.tables   <span class="e">[]</span>    files     <span class="e">[]</span></div>
+        <p class="foot">ประกาศว่าไม่แตะอะไรเลย และ CI ตรวจทุก PR ว่าโค้ดเป็นอย่างนั้นจริง</p>
+      </article>
+    </div>
+    <div class="dev">
+      <div class="dev-row"><b>Nakara Tickets</b><span>ticket บน Discord ที่สั่งงานในเกมได้ bridge ไม่เปิด port</span><span class="chip-dev">กำลังพัฒนา</span></div>
+      <div class="dev-row"><b>AETERNA Game Launcher</b><span>launcher ของ server คุณเอง เขียนด้วย Rust</span><span class="chip-dev">กำลังพัฒนา</span></div>
+      <div class="dev-row"><b>Rongroi Server Kit</b><span>ฝั่ง server ของ aeterna-rongroi</span><span class="chip-dev">กำลังพัฒนา</span></div>
+    </div>
+  </section>
+
+  <section class="sec" id="trust">
+    <p class="kicker">🏗️ Trust Architecture</p>
+    <h2>โค้ดหนึ่งชิ้นผ่านอะไรบ้าง <em>กว่าจะถึง server ของคุณ</em></h2>
+    <p class="sub">กล่องสีส้มประกาศสิทธิ์ตรงกับโค้ด จึงผ่านทุกด่านไปถึงเครื่องคุณ กล่องสีเทาเรียก HTTP ที่ไม่ได้ประกาศ เลยถูกหยุดที่ด่านแรก ด่านที่สองและสามเราทำใน CI ด่านสุดท้ายคุณทำซ้ำเองได้</p>
+    <div class="flow-panel">
+      <button class="flow-ctl" type="button" id="flow-toggle" aria-pressed="false"><svg viewBox="0 0 12 12" id="flow-ico"><g id="flow-ico-pause"><rect x="2" y="1.5" width="3" height="9" rx="1"/><rect x="7" y="1.5" width="3" height="9" rx="1"/></g><g id="flow-ico-play" hidden><path d="M3 1.5v9l7.5-4.5z"/></g></svg><span id="flow-lab">หยุด</span></button>
+      <div class="flow-scroll">
+      <svg class="flow anim" id="flow" viewBox="0 80 1120 360" role="img" aria-labelledby="flow-t flow-d">
+        <title id="flow-t">Trust Architecture ของ nakara-oss</title>
+        <desc id="flow-d">ภาพเคลื่อนไหว: กล่องที่ประกาศสิทธิ์ใน oss.json ตรงกับโค้ด วิ่งผ่าน PR gate (devkit check และ devkit safety) ผ่านด่าน release ใน CI ได้ตรา attestation และ SHA256SUMS แล้วถึง server ของคุณ ซึ่งตรวจซ้ำสามคำสั่งก่อน ensure ส่วนกล่องที่เรียก HTTP โดยไม่ประกาศ ถูก devkit safety หยุดที่ PR gate และตกลงช่องปฏิเสธ PR ล้ม ไม่มี release</desc>
+        <rect class="road" x="60" y="186" width="1000" height="28" rx="14"/>
+        <line class="road-line" x1="80" y1="200" x2="1040" y2="200"/>
+
+        <!-- station 1: author -->
+        <text class="st-lab" x="150" y="118" text-anchor="middle">ผู้เขียน</text>
+        <text class="st-sub" x="150" y="140" text-anchor="middle">source + oss.json</text>
+        <rect class="chipbox" x="58" y="240" width="190" height="70" rx="9"/>
+        <text class="chip-k" x="72" y="262">oss.json</text>
+        <text class="chip-t" x="72" y="282">http  api.example.com</text>
+        <text class="chip-t" x="72" y="300">netEvents  server ×2</text>
+
+        <!-- gate 2: PR gate -->
+        <g class="g2">
+          <rect class="beam" x="392" y="148" width="76" height="9" rx="3"/>
+          <line class="post" x1="400" y1="157" x2="400" y2="214"/>
+          <line class="post" x1="460" y1="157" x2="460" y2="214"/>
+        </g>
+        <text class="st-lab" x="430" y="104" text-anchor="middle">PR gate · CI</text>
+        <text class="st-sub" x="430" y="126" text-anchor="middle">devkit check · devkit safety</text>
+        <rect class="chipbox" x="330" y="240" width="200" height="34" rx="9"/>
+        <text class="chip-t" x="344" y="262">ใช้เกิน oss.json = PR ล้ม</text>
+        <rect class="chipbox" x="330" y="282" width="200" height="34" rx="9"/>
+        <text class="chip-t" x="344" y="304">oss.json เปลี่ยน → CODEOWNERS</text>
+
+        <g class="tray-g">
+          <rect class="tray" x="330" y="340" width="250" height="72" rx="12"/>
+          <text class="tray-t" x="400" y="370">✗ safety/undeclared-http</text>
+          <text class="tray-s" x="400" y="392">PR ล้ม · ไม่มี release</text>
+        </g>
+
+        <!-- gate 3: release -->
+        <g class="g3">
+          <rect class="beam" x="652" y="148" width="76" height="9" rx="3"/>
+          <line class="post" x1="660" y1="157" x2="660" y2="214"/>
+          <line class="post" x1="720" y1="157" x2="720" y2="214"/>
+        </g>
+        <text class="st-lab" x="690" y="118" text-anchor="middle">Release · CI</text>
+        <text class="st-sub" x="690" y="140" text-anchor="middle">build zip ใน CI เท่านั้น</text>
+        <rect class="chipbox" x="592" y="240" width="196" height="34" rx="9"/>
+        <text class="chip-t" x="606" y="262">provenance attestation</text>
+        <rect class="chipbox" x="592" y="282" width="196" height="34" rx="9"/>
+        <text class="chip-t" x="606" y="304">SHA256SUMS</text>
+
+        <!-- station 4: your server -->
+        <text class="st-lab" x="950" y="118" text-anchor="middle">server ของคุณ</text>
+        <text class="st-sub" x="950" y="140" text-anchor="middle">ตรวจซ้ำด้วยเครื่องมือเดียวกัน</text>
+        <circle class="ck ck1" cx="862" cy="257" r="6"/><text class="ck-t" x="878" y="261">gh attestation verify</text>
+        <circle class="ck ck2" cx="862" cy="287" r="6"/><text class="ck-t" x="878" y="291">sha256sum -c SHA256SUMS</text>
+        <circle class="ck ck3" cx="862" cy="317" r="6"/><text class="ck-t" x="878" y="321">devkit safety ./resource</text>
+        <rect class="ens-box" x="848" y="340" width="204" height="40" rx="10"/>
+        <text class="ens-t" x="950" y="365" text-anchor="middle">ensure resource</text>
+
+        <!-- packets -->
+        <g class="pk pk-b">
+          <rect class="crate" x="-15" y="-15" width="30" height="30" rx="6"/>
+          <line class="band" x1="-15" y1="0" x2="15" y2="0"/>
+          <text class="tag-t" x="0" y="-24" text-anchor="middle">http ?</text>
+        </g>
+        <g class="pk pk-a">
+          <circle class="seal" r="22"/>
+          <rect class="crate" x="-15" y="-15" width="30" height="30" rx="6"/>
+          <line class="band" x1="-15" y1="0" x2="15" y2="0"/>
+          <text class="tag-t" x="0" y="-28" text-anchor="middle">oss.json ✓</text>
+        </g>
+      </svg>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--accent)"></i>ประกาศสิทธิ์ตรงกับโค้ด: ผ่าน PR gate ได้ตรา attestation ใน release ตรวจซ้ำสามคำสั่งแล้ว ensure</span>
+        <span><i style="background:var(--bad)"></i>เรียก HTTP ที่ไม่ได้ประกาศ: devkit safety หยุดไว้ PR ล้ม ไม่มี release</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="limits">
+    <p class="kicker">ข้อจำกัด</p>
+    <h2>สิ่งที่ scanner จับไม่ได้</h2>
+    <p class="sub">scanner บอกได้ว่าโค้ดใช้แค่สิ่งที่ประกาศไว้ แต่บอกไม่ได้ว่าใช้อย่างสุจริตหรือเปล่า</p>
+    <div class="limits">
+      <div><b>logic bomb ใน API ที่ได้รับอนุญาต</b><span>resource ที่ประกาศ <code>db.tables: ["players"]</code> ลบทุกแถวในวันใดวันหนึ่งได้</span></div>
+      <div><b>การเรียก export ของ resource อื่น</b><span><code>exports.some_admin:giveAdmin(src)</code> ดูเหมือนการเรียก export ทั่วไป</span></div>
+      <div><b>server ที่เชื่อ client</b><span>event ที่ให้ของกับใครก็ได้ที่ขอ ประกาศครบ จำกัดอัตราแล้ว ก็ยังเป็นช่องโหว่</span></div>
+      <div><b>ค่าที่ประกอบตอน runtime</b><span>รายงานว่าเจอ แต่ไม่ได้ตามว่าค่าจริงคืออะไร</span></div>
+    </div>
+    <p class="end-line">ยังต้องมีคนอ่านโค้ด</p>
+  </section>
+
+  <section class="sec" id="faq">
+    <p class="kicker">คำถาม</p>
+    <h2>คำถามที่พบบ่อย</h2>
+    <div class="faq">
+      <details><summary>ใช้ฟรีไหม</summary><p>ฟรีทุกตัว ภายใต้สัญญาอนุญาต MIT</p></details>
+      <details><summary>สคริปต์ที่ซื้อมาและไม่มี oss.json ตรวจได้ไหม</summary><p>ได้ ตั้ง <code>requireManifest</code> เป็น <code>false</code> ในไฟล์ <code>.fivem-devkit.json</code> แล้วเครื่องมือจะสแกนหาโค้ดอันตราย เช่น dynamic-load, host-exec, secret-convar โดยไม่ต้องมี oss.json</p></details>
+      <details><summary>ผลสแกนไม่เจออะไร แปลว่าไม่มีปัญหาไหม</summary><p>ไม่ ดูหัวข้อสิ่งที่ scanner จับไม่ได้ เครื่องมือหาแบบแผนที่รู้จัก และไม่แทนการอ่านโค้ด</p></details>
+      <details><summary>ดาวน์โหลด resource ที่ไหน</summary><p>หน้า Releases บน GitHub เท่านั้น ไฟล์ release build ใน CI และมี provenance attestation กับ SHA256SUMS ให้ตรวจ ส่วน ZIP ของ repo มีเทสต์และเครื่องมือที่ server ไม่ต้องใช้</p></details>
+      <details><summary>เจอช่องโหว่ แจ้งที่ไหน</summary><p>ตามขั้นตอนใน SECURITY.md ของ repo ห้ามเปิด issue สาธารณะ</p></details>
+    </div>
+  </section>
+
+  <footer>
+    <span>MIT · สร้างโดยทีม Nakara City</span>
+    <span><a href="https://github.com/aeterna/nakara-oss">GitHub</a> · อัปเดต {{site.date}}</span>
   </footer>
+</main>
+
+<script src="flow.js" defer></script>
 </body>
 </html>
