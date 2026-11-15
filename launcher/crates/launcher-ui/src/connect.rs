@@ -227,10 +227,7 @@ mod tests {
 
     #[test]
     fn outcome_text_maps_every_variant() {
-        assert_eq!(
-            outcome_text(&Outcome::ReportAccepted),
-            "ส่งผลตรวจให้ทีมงานแล้ว"
-        );
+        assert_eq!(outcome_text(&Outcome::ReportAccepted), "ส่งผลตรวจให้ทีมงานแล้ว");
         assert_eq!(
             outcome_text(&Outcome::DeclineAccepted),
             "แจ้งทีมงานแล้วว่าคุณไม่ยินยอม"

@@ -356,9 +356,6 @@ mod tests {
         let _ = app.update(Message::ConnectDone("ส่งผลตรวจให้ทีมงานแล้ว".to_string()));
         assert!(!app.connect_busy);
         assert_eq!(app.connect_code, "");
-        assert_eq!(
-            app.connect_status.as_deref(),
-            Some("ส่งผลตรวจให้ทีมงานแล้ว")
-        );
+        assert_eq!(app.connect_status.as_deref(), Some("ส่งผลตรวจให้ทีมงานแล้ว"));
     }
 }
