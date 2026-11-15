@@ -57,12 +57,18 @@ a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px soli
 
 .container { width: 100%; max-width: 960px; margin: 0 auto; padding: 0 1.25rem; }
 .site-header { border-bottom: 1px solid var(--border); background: var(--bg); position: sticky; top: 0; z-index: 10; }
-.nav-wrap { display: flex; align-items: center; justify-content: space-between; padding: 0.875rem 0; flex-wrap: wrap; gap: 0.75rem; }
+.nav-wrap { display: flex; align-items: center; justify-content: space-between; padding-block: 0.875rem; flex-wrap: wrap; gap: 0.75rem; }
 .nav-brand { font-family: var(--font-mono); font-weight: 700; font-size: 1.125rem; color: var(--text); text-decoration: none; }
 .nav-links { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; list-style: none; }
 .nav-item { color: var(--text-muted); text-decoration: none; font-size: 0.9375rem; }
 .nav-item:hover { color: var(--text); }
 .lang-switch { font-family: var(--font-mono); font-weight: 600; padding: 0.2rem 0.5rem; border: 1px solid var(--border); border-radius: 4px; }
+@media (max-width: 640px) {
+  .site-header { position: static; }
+  .nav-wrap { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+  .nav-wrap nav { max-width: 100%; }
+  .nav-links { flex-wrap: nowrap; overflow-x: auto; gap: 0.875rem; padding-bottom: 0.25rem; }
+}
 
 .hero { padding: 3.5rem 0 2.5rem; border-bottom: 1px solid var(--border); }
 h1 { font-size: clamp(1.75rem, 4vw, 2.5rem); line-height: 1.25; font-weight: 700; margin-bottom: 1rem; letter-spacing: -0.01em; }
@@ -74,7 +80,7 @@ h1 { font-size: clamp(1.75rem, 4vw, 2.5rem); line-height: 1.25; font-weight: 700
 .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
 .btn-secondary:hover { background: var(--bg-subtle); }
 
-.section { padding: 3rem 0; border-bottom: 1px solid var(--border); }
+.section { padding: 3rem 0; border-bottom: 1px solid var(--border); scroll-margin-top: 4.5rem; }
 .section-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.75rem; }
 .section-lead { color: var(--text-muted); margin-bottom: 1.25rem; }
 
