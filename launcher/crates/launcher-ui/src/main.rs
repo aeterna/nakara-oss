@@ -310,8 +310,10 @@ mod tests {
 
     #[test]
     fn connect_open_and_close_respect_busy_state() {
-        let mut app = App::default();
-        app.connect_status = Some("old".to_string());
+        let mut app = App {
+            connect_status: Some("old".to_string()),
+            ..App::default()
+        };
 
         let _ = app.update(Message::ConnectOpen);
         assert!(app.show_connect);
@@ -349,9 +351,11 @@ mod tests {
 
     #[test]
     fn connect_done_clears_busy_and_code_and_sets_status() {
-        let mut app = App::default();
-        app.connect_busy = true;
-        app.connect_code = "rr1.secret".to_string();
+        let mut app = App {
+            connect_busy: true,
+            connect_code: "rr1.secret".to_string(),
+            ..App::default()
+        };
 
         let _ = app.update(Message::ConnectDone("ส่งผลตรวจให้ทีมงานแล้ว".to_string()));
         assert!(!app.connect_busy);
