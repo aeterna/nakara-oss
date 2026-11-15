@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>แก้ crash CNetworkCarGenWorldStateData Pool Full (net.dll) ใน FiveM | nakara-oss</title>
+  <meta name="description" content="วิเคราะห์ crash CNetworkCarGenWorldStateData Pool Full บน FiveM OneSync ทำไม GAMECONFIG_FILE ถึงไม่ได้ผล และการทำงานของ nakara_cargen_fix">
+  <link rel="canonical" href="https://aeterna.github.io/nakara-oss/cargen-crash/">
+  <link rel="alternate" hreflang="th" href="https://aeterna.github.io/nakara-oss/cargen-crash/">
+  <link rel="alternate" hreflang="en" href="https://aeterna.github.io/nakara-oss/en/cargen-crash/">
+  <link rel="alternate" hreflang="x-default" href="https://aeterna.github.io/nakara-oss/en/cargen-crash/">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="แก้ crash CNetworkCarGenWorldStateData Pool Full (net.dll) ใน FiveM | nakara-oss">
+  <meta property="og:description" content="วิเคราะห์ crash CNetworkCarGenWorldStateData Pool Full บน FiveM OneSync ทำไม GAMECONFIG_FILE ถึงไม่ได้ผล และการทำงานของ nakara_cargen_fix">
+  <meta property="og:url" content="https://aeterna.github.io/nakara-oss/cargen-crash/">
+  <meta property="og:locale" content="th_TH">
+  <meta property="og:locale:alternate" content="en_US">
+  <meta property="og:image" content="https://aeterna.github.io/nakara-oss/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="nakara-oss nakara_cargen_fix">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="แก้ crash CNetworkCarGenWorldStateData Pool Full (net.dll) ใน FiveM | nakara-oss">
+  <meta name="twitter:description" content="วิเคราะห์ crash CNetworkCarGenWorldStateData Pool Full บน FiveM OneSync ทำไม GAMECONFIG_FILE ถึงไม่ได้ผล และการทำงานของ nakara_cargen_fix">
+  <meta name="twitter:image" content="https://aeterna.github.io/nakara-oss/og.png">
+  <meta name="theme-color" content="#121110">
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="../styles.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "TechArticle",
+        "headline": "แก้ crash CNetworkCarGenWorldStateData Pool Full (net.dll) ใน FiveM",
+        "inLanguage": "th",
+        "about": "FiveM",
+        "author": {
+          "@type": "Organization",
+          "name": "Nakara City team"
+        },
+        "dateModified": "{{site.date}}"
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "name": "nakara_cargen_fix",
+        "codeRepository": "https://github.com/aeterna/nakara-oss/tree/main/packages/cargen-fix",
+        "programmingLanguage": "Lua",
+        "license": "https://opensource.org/licenses/MIT",
+        "version": "{{cargen.version}}"
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+<header class="nav">
+  <div class="nav-in">
+    <a class="brand" href="../"><i>N</i>nakara-oss</a>
+    <nav class="links" aria-label="เมนูหลัก"><a href="../#scan">ตรวจก่อนลง</a><a href="../#packages">มีอะไรบ้าง</a><a href="../#trust">Trust Architecture</a><a href="../#limits">ข้อจำกัด</a><a href="../#faq">คำถาม</a></nav>
+    <a class="nav-btn" href="https://github.com/aeterna/nakara-oss"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.15-1.11-1.46-1.11-1.46-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>GitHub</a>
+    <a class="lang" href="../en/cargen-crash/" hreflang="en">EN</a>
+  </div>
+  <div class="progress" aria-hidden="true"></div>
+</header>
+
+<main class="wrap">
+  <article class="article">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a href="../">หน้าแรก</a> <span aria-hidden="true">›</span> <span>cargen-crash</span>
+    </nav>
+    <p class="kicker">nakara_cargen_fix {{cargen.version}}</p>
+    <h1>crash CNetworkCarGenWorldStateData Pool Full: อะไรได้ผล อะไรไม่ได้ผล</h1>
+    <p class="lede">สรุปข้อเท็จจริงเกี่ยวกับปัญหา client-log spam และ net.dll crash ใน FiveM OneSync: ทำไมวิธีแก้ด้วย GAMECONFIG_FILE ที่นิยมแชร์กันถึงไม่ทำงาน และการเรียก native อย่างถูกต้องช่วยป้องกันการจัดสรร pool เกินได้อย่างไร โดยไม่ต้องพึ่ง framework และไม่ต้องตั้งค่าใดๆ</p>
+
+    <div class="prose">
+      <pre><code>CNetworkCarGenWorldStateData Pool Full, Size == 100   (crash_hash net.dll+487A2)</code></pre>
+
+      <h2>ปัญหา</h2>
+      <p><code>CNetworkCarGenWorldStateData</code> เป็น network pool ที่มีขนาดคงที่ 100 ช่อง บนเซิร์ฟเวอร์ OneSync ที่แผนที่มี vehicle generators (รถ ambient ที่จอดอยู่ตามแมปของเกม) เกินกว่า 100 จุด ตัว pool สามารถเต็มได้ และ client จะบันทึก log ข้อความด้านบนซ้ำๆ อย่างต่อเนื่อง เมื่อเกิดขึ้นระหว่างที่ผู้เล่นหลุดจากการเชื่อมต่อ (disconnect) เหตุการณ์ connection lost ธรรมดาสามารถลุกลามจนกลายเป็น <code>net.dll</code> crash dump ได้</p>
+
+      <h2>ทำไมวิธี GAMECONFIG_FILE ถึงไม่ได้ผล</h2>
+      <p>วิธีแก้ปัญหาที่แชร์กันอย่างแพร่หลายคือการใส่ partial gameconfig overlay ที่อ้างว่าสามารถขยายขนาด pool จาก 100 เป็น 1000 ได้:</p>
+      <pre><code>data_file 'GAMECONFIG_FILE' 'gameconfig.meta'</code></pre>
+      <p>แต่ในความเป็นจริงมันไม่ทำงานเลย (silent no-op) ทุก client จะพ่นข้อความนี้ลง log เมื่อเชื่อมต่อ และขนาด pool ไม่เคยถูกแตะต้อง:</p>
+      <pre><code>Could not add data_file resources:/&lt;resource&gt;/gameconfig.meta - invalid type GAMECONFIG_FILE</code></pre>
+      <p>เหตุผลเมื่อตรวจสอบกับซอร์สโค้ดของ CitizenFX และเอกสารอ้างอิงทางการ:</p>
+      <ul>
+        <li>ฟังก์ชัน <code>LookupDataFileType</code> (ไฟล์ <code>gta-streaming-five/src/LoadStreamingFile.cpp</code> ใน <a href="https://github.com/citizenfx/fivem">citizenfx/fivem</a>) จะหาประเภท <code>data_file</code> โดยการ hash ชื่อที่เป็นตัวพิมพ์ใหญ่ แล้วเทียบกับ enum ประเภทไฟล์ดั้งเดิมของ RAGE เท่านั้น FiveM ไม่มีการลงทะเบียนประเภท <code>GAMECONFIG_FILE</code> ใดๆ (การค้นหาทั่วทั้งโค้ดของ citizenfx/fivem ไม่พบประเภทนี้) และไม่มีระบุไว้ใน <a href="https://docs.fivem.net/docs/game-references/data-files/">data-files reference</a> ประเภทนี้จึงใช้ไม่ได้บนทุก game build และไม่มี mounter ตัวใดมารองรับ</li>
+        <li><code>CNetworkCarGenWorldStateData</code> ไม่สามารถขยายขนาดผ่านกลไกใดๆ ที่ระบบรองรับได้ มันไม่ได้อยู่ใน <code>&lt;PoolSizes&gt;</code> ของ <code>common/data/gameconfig.xml</code> ดั้งเดิม (เนื่องจากมันเป็น network world-state pool ที่ฮาร์ดโค้ดไว้) และไม่ได้อยู่ใน allow-list ของคำสั่ง <a href="https://docs.fivem.net/docs/server-manual/server-commands/#increase_pool_size"><code>increase_pool_size</code></a></li>
+      </ul>
+      <p>เนื่องจากขนาด pool ถูกฟิกไว้ที่ 100 ทางเดียวในการรับมือคือต้องหยุดสร้าง networked car-generator world state</p>
+
+      <h2>การทำงานของ nakara_cargen_fix</h2>
+      <p>เมื่อผู้เล่นเกิด (spawn) และทำซ้ำทุกๆ 5 วินาที (เนื่องจาก engine ของเกมจะเปิดใช้งาน generator ใหม่อีกครั้งเมื่อผู้เล่นเปลี่ยนโซนหรือเกิดใหม่) แต่ละ client จะเรียกคำสั่ง native:</p>
+      <pre><code>SetAllVehicleGeneratorsActiveInArea(&lt;whole map&gt;, false --[[bActive]], false --[[bNetworked]])</code></pre>
+      <p>คำสั่งนี้จะปิดการทำงานของ vehicle generators (รถ ambient ที่จอดตามจุดต่างๆ) ทั่วทั้งแผนที่ในระดับเครื่องผู้เล่น (locally) ทำให้ไม่มีการจัดสรร <code>CNetworkCarGenWorldStateData</code> เกิดขึ้น ส่วนรถของผู้เล่นและรถที่เสกโดยสคริปต์ (ร้านขายรถ, โรงรถ, รถงาน) ไม่ใช่ vehicle generator จึงไม่ได้รับผลกระทบใดๆ เมื่อหยุด resource ตัวสคริปต์จะคืนค่ากลับสู่สถานะ vanilla ปกติ (เปิดใช้งาน generator) ทำให้การรีสตาร์ตไม่ทิ้งสถานะปิดค้างไว้</p>
+      <p>ตัว resource ไม่ได้ลบรถที่จอดอยู่แล้วในแมป หากต้องการนำรถเหล่านั้นออกด้วย ต้องดำเนินการใน resource จัดการ traffic หรือ density แยกต่างหาก (เช่น เรียก <code>SetParkedVehicleDensityMultiplierThisFrame(0.0)</code> ในทุก frame)</p>
+
+      <div class="callout callout-warn">
+        <p><strong>พารามิเตอร์สุดท้ายคือ <code>bNetworked</code> และต้องคงค่าเป็น <code>false</code> เท่านั้น</strong></p>
+        <p>native นี้ไม่มีพารามิเตอร์ประเภท "instantly" การส่งค่า <code>true</code> ในอาร์กิวเมนต์ที่ 8 จะเผยแพร่การเปลี่ยนแปลงนั้นเป็น network world state และจัดสรรช่อง <code>CNetworkCarGenWorldStateData</code> เพิ่มหนึ่งช่องต่อการเรียกแต่ละครั้ง ดังนั้นการเรียกซ้ำตามเวลาจึงกลายเป็นการเติมเต็ม pool 100 ช่องจนล้นด้วยตัวมันเอง และตัวแก้นั่นเองที่กลายเป็นต้นเหตุของบั๊ก</p>
+        <p>สิ่งนี้เคยเกิดขึ้นจริง: เวอร์ชันที่ส่งค่า <code>true</code> (โดยเขียนกำกับในคอมเมนต์ผิดเป็น <code>bInstantly</code>) ทำให้เกิด <code>Pool Full</code> spam กลับมา โดยมีช่วงเวลาของ log ตรงกับรอบการ re-assert พอดี ใน client crash dump พบข้อความ <code>Pool Full</code> ถึง 1,270 บรรทัด และ 423 บรรทัดในนั้นมีระยะห่างกันเป๊ะที่ 5,000 ms แต่เมื่อส่ง <code>false</code> การเรียกจะเป็นการทำงานภายในเครื่องเท่านั้น และระยะห่างของรอบการเรียกจะไม่ส่งผลเสียต่อ pool</p>
+      </div>
+
+      <h2>สิ่งที่เราตรวจสอบแล้ว</h2>
+      <p>ข้อมูลทั้งหมดมาจากการทดสอบบน OneSync server จริงหนึ่งเครื่อง ด้วยค่าเริ่มต้นที่อยู่ใน repository นี้:</p>
+
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>ข้ออ้างอิง</th>
+              <th>หลักฐาน</th>
+              <th>สถานะ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>การส่ง <code>bNetworked = true</code> บน timer จะทำให้ pool เต็มด้วยตัวมันเอง</td>
+              <td>client crash dump: พบข้อความ <code>Pool Full</code> 1,270 บรรทัด โดย 423 บรรทัดห่างกัน 5,000 ms พอดี ซึ่งตรงกับช่วง re-assert ของเวอร์ชันที่ส่ง <code>true</code></td>
+              <td><span class="st st-ok">พบจริง (game build: Legacy)</span></td>
+            </tr>
+            <tr>
+              <td>resource นี้ (<code>bNetworked = false</code>) ไม่จัดสรรช่องใน pool</td>
+              <td>busted spec ตรวจสอบการส่ง <code>false</code> แบบ literal ในทุกการเรียก; การทดสอบจริง 2.3 นาทีโดยเปิดการทำงาน (ต่อจากการรันแบบปิด 10.7 นาทีด้านล่าง) ไม่พบ <code>Pool Full</code></td>
+              <td><span class="st st-ok">spec</span> · <span class="st st-warn">การรันจริงช่วงสั้น (Enhanced / gen9)</span></td>
+            </tr>
+            <tr>
+              <td><code>data_file 'GAMECONFIG_FILE'</code> ไม่ทำงาน (no-op)</td>
+              <td>ซอร์สโค้ดของ CitizenFX และข้อความ log ใน client ตามด้านบน</td>
+              <td><span class="st st-ok">ตรวจสอบแล้ว (ทุก build)</span></td>
+            </tr>
+            <tr>
+              <td>การปิด generators ป้องกัน vanilla overflow ได้จริง</td>
+              <td>การทดสอบ A/B เมื่อปิดการทำงาน: ขับรถ 10.7 นาที โดยมีรถจอดอยู่ ~80 คันในระยะ 150 ม. ผู้เล่น 1 คน — <strong>ไม่พบ <code>Pool Full</code> ปรากฏขึ้น</strong> จึงไม่มีอาการให้ป้องกัน</td>
+              <td><span class="st st-warn">ยังจำลองอาการไม่ได้ — Enhanced, 1 ผู้เล่น (ยังไม่ได้ทดสอบบน Legacy และ session ผู้เล่นหลายคน)</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>หากคุณสามารถจำลองอาการ vanilla overflow ได้ โปรดเปิด issue พร้อมระบุ game build, จำนวนผู้เล่น และผลการทดสอบ A/B จาก export ด้านล่างที่ <a href="https://github.com/aeterna/nakara-oss/issues">GitHub Issues</a> — นั่นคือหลักฐานส่วนที่เรายังต้องการ</p>
+
+      <h2>วิธีติดตั้ง</h2>
+      <ol>
+        <li>ดาวน์โหลด <code>nakara_cargen_fix-{{cargen.version}}.zip</code> จากหน้า <a href="https://github.com/aeterna/nakara-oss/releases?q=nakara_cargen_fix">Releases</a> และตรวจสอบความถูกต้องของไฟล์</li>
+        <li>แตกไฟล์ลงในโฟลเดอร์ <code>resources/</code> เพื่อให้ได้โครงสร้าง <code>resources/nakara_cargen_fix/fxmanifest.lua</code></li>
+        <li>เพิ่มลงในไฟล์ <code>server.cfg</code>:
+          <pre><code>ensure nakara_cargen_fix</code></pre>
+        </li>
+        <li>ลบ overlay <code>data_file 'GAMECONFIG_FILE'</code> ใดๆ ที่เคยใส่ไว้แก้ปัญหานี้ออก เพราะมันไม่เคยทำงานได้จริง</li>
+      </ol>
+      <p>ลำดับการ ensure ไม่สำคัญ (เนื่องจากไม่ใช่ boot-time gameconfig override) ในการตรวจสอบผลบนเซิร์ฟเวอร์ ให้ขับรถผ่านพื้นที่หนาแน่นประมาณ 15 นาที ลองตายแล้วเกิดใหม่ และสังเกต client console (F8): จะต้องไม่มีข้อความ <code>CNetworkCarGenWorldStateData Pool Full</code> และไม่มีข้อความ <code>invalid type GAMECONFIG_FILE</code></p>
+
+      <p>หากต้องการตรวจสอบว่าเซิร์ฟเวอร์ของคุณพบปัญหา vanilla overflow หรือไม่ ให้ใช้ client exports สำหรับการทดสอบ A/B ดังนี้ (ทั้งสองคำสั่งทำงานฝั่ง client เท่านั้น และมีผลเฉพาะเครื่องที่เรียก):</p>
+
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Export</th>
+              <th>การทำงาน</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>exports.nakara_cargen_fix:setRelief(false)</code></td>
+              <td>คืนค่า vehicle generators แบบ vanilla และหยุดการ re-assert — ใช้เพื่อจำลองอาการ overflow สำหรับเทียบ baseline</td>
+            </tr>
+            <tr>
+              <td><code>exports.nakara_cargen_fix:setRelief(true)</code></td>
+              <td>ปิด generators อีกครั้งทันทีและกลับมาทำงานตาม loop ปกติ</td>
+            </tr>
+            <tr>
+              <td><code>exports.nakara_cargen_fix:isRelief()</code></td>
+              <td>คืนค่า <code>true</code> ขณะที่การป้องกันกำลังทำงานอยู่</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="cta">
+        <a class="btn btn-p" href="https://github.com/aeterna/nakara-oss/releases?q=nakara_cargen_fix">ดาวน์โหลดจาก Releases</a>
+        <a class="btn btn-s" href="https://github.com/aeterna/nakara-oss/tree/main/packages/cargen-fix">ดูโค้ด</a>
+      </div>
+    </div>
+  </article>
+
+  <footer>
+    <span>MIT · สร้างโดยทีม Nakara City</span>
+    <span><a href="https://github.com/aeterna/nakara-oss">GitHub</a> · อัปเดต {{site.date}}</span>
+  </footer>
+</main>
+</body>
+</html>
