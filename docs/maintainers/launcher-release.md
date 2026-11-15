@@ -65,7 +65,7 @@ must pass the same name when it is wired.
 
 ## Each release (owner)
 
-1. Rongroi Connect must have a public release with a `*-win32-x64.zip`, its `SHA256SUMS`, and a build-provenance
+1. Rongroi Connect must have a public release with a `rongroi-connect-<version>-windows-x64.zip`, its `SHA256SUMS`, and a build-provenance
    attestation from `aeterna/aeterna-rongroi-connect` (K5, K7). The workflow checks all three, then unpacks entry by
    entry and refuses any path that leaves the folder. Until Connect is public, the download step fails.
 2. Bump `version` in `launcher/crates/launcher-ui/Cargo.toml` through a normal PR.

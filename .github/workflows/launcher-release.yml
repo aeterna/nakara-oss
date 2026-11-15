@@ -70,10 +70,10 @@ jobs:
         run: |
           if ($env:CONNECT_TAG -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$') { throw "connect_tag has characters a tag cannot have" }
           New-Item -ItemType Directory -Force -Path connect-dl | Out-Null
-          gh release download -R aeterna/aeterna-rongroi-connect -D connect-dl -p '*-win32-x64.zip' -p 'SHA256SUMS' -- $env:CONNECT_TAG
+          gh release download -R aeterna/aeterna-rongroi-connect -D connect-dl -p 'rongroi-connect-*-windows-x64.zip' -p 'SHA256SUMS' -- $env:CONNECT_TAG
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $zips = @(Get-ChildItem connect-dl -Filter '*-win32-x64.zip')
-          if ($zips.Count -ne 1) { throw "expected one Connect win32-x64 zip, found $($zips.Count)" }
+          $zips = @(Get-ChildItem connect-dl -Filter 'rongroi-connect-*-windows-x64.zip')
+          if ($zips.Count -ne 1) { throw "expected one Connect windows-x64 zip, found $($zips.Count)" }
           $zip = $zips[0]
           $want = (Get-Content connect-dl/SHA256SUMS | Where-Object { $_ -match ('  ' + [regex]::Escape($zip.Name) + '$') }) -replace '\s.*$', ''
           if (-not $want) { throw "Connect SHA256SUMS has no line for $($zip.Name)" }
