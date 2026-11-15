@@ -1,0 +1,497 @@
+<!-- TEMPORARY design reference for engineer runs; removed before merge. Agent: Claude Code - Claude Opus 5.5 -->
+<title>nakara-oss Site Redesign</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: dark single-theme landing (one visual world: a night inspection lane), 1120px column,
+   split hero, stats strip, numbered steps, uneven package grid, animated Trust Architecture lane */
+:root{
+  color-scheme: dark;
+  --bg:#121110; --surface:#191715; --raised:#211e1b; --raised2:#2a2622;
+  --line:rgba(240,228,212,.09); --line2:rgba(240,228,212,.16);
+  --text:#f2ede5; --text2:#bdb3a6; --muted:#857b70;
+  --accent:#e9a66b; --accent-ink:#1d1309; --accent-soft:rgba(233,166,107,.14);
+  --ok:#86c493; --ok-soft:rgba(134,196,147,.14); --bad:#e48471; --bad-soft:rgba(228,132,113,.14);
+  --f-display:"Anuphan","IBM Plex Sans Thai",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans Thai","Anuphan",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --ease:cubic-bezier(.2,.7,.2,1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-body);font-size:16px;line-height:1.7;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+a{color:inherit}
+.wrap{max-width:1120px;margin:0 auto}
+h1,h2,h3{font-family:var(--f-display);font-weight:500;margin:0;text-wrap:balance;letter-spacing:-.01em}
+p{margin:0}
+code,.mono{font-family:var(--f-mono);font-size:.86em}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
+
+/* review bar */
+.review{margin:16px auto 0;max-width:1120px;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;
+  border:1px dashed var(--line2);border-radius:10px;padding:10px 16px;font-size:13px;color:var(--text2)}
+.review b{color:var(--accent);font-weight:500}
+.review a{color:var(--accent)}
+
+/* nav */
+.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:rgba(18,17,16,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);margin:16px calc(-1*max(16px,env(safe-area-inset-left,0px))) 0;padding:0 max(16px,env(safe-area-inset-left,0px))}
+.nav-in{max-width:1120px;margin:0 auto;height:60px;display:flex;align-items:center;gap:24px}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--f-mono);font-weight:500;font-size:15px;text-decoration:none}
+.brand i{width:26px;height:26px;border-radius:7px;background:var(--text);color:var(--bg);display:grid;place-items:center;font-style:normal;font-family:var(--f-display);font-weight:600;font-size:15px}
+.links{display:flex;gap:20px;margin-left:auto;font-size:14px;color:var(--text2)}
+.links a{text-decoration:none;white-space:nowrap;transition:color .15s var(--ease)}
+.links a:hover{color:var(--text)}
+.nav-btn{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border:1px solid var(--line2);border-radius:999px;font-size:13px;text-decoration:none;white-space:nowrap}
+.lang{font-family:var(--f-mono);font-size:12px;color:var(--text2);text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:2px 8px}
+.progress{position:absolute;left:0;bottom:-1px;height:1px;width:100%;background:var(--accent);transform-origin:0 50%;transform:scaleX(0);animation:prog linear both;animation-timeline:scroll(root)}
+@keyframes prog{to{transform:scaleX(1)}}
+
+/* hero */
+.hero{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center;padding-block:88px 72px}
+.hero>*{min-width:0}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);border:1px solid var(--line);border-radius:999px;padding:4px 12px 4px 8px}
+.eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+.hero h1{font-size:clamp(36px,5.4vw,60px);line-height:1.12;margin:20px 0 20px}
+.hl{position:relative;white-space:nowrap}
+.hl::before{content:"";position:absolute;left:-6px;right:-6px;top:58%;bottom:4%;background:var(--accent);opacity:.55;border-radius:3px;transform:skewX(-8deg) rotate(-1deg);z-index:-1}
+.hl{isolation:isolate;z-index:0}
+.lead{font-size:18px;color:var(--text2);max-width:34em}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:32px}
+.btn{display:inline-flex;align-items:center;gap:8px;height:46px;padding:0 20px;border-radius:999px;font-size:15px;font-weight:500;text-decoration:none;transition:background-color .15s var(--ease),transform .1s var(--ease)}
+.btn:active{transform:scale(.98)}
+.btn-p{background:var(--accent);color:var(--accent-ink)}
+.btn-p:hover{background:#f0b47d}
+.btn-s{border:1px solid var(--line2);color:var(--text)}
+.btn-s:hover{background:var(--raised)}
+.btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6}
+.facts{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:28px;font-size:13px;color:var(--muted)}
+.facts span{display:inline-flex;gap:8px;align-items:center}
+.facts svg{width:15px;height:15px;stroke:var(--text2);fill:none;stroke-width:1.5}
+
+.term{background:#0c0b0a;border:1px solid var(--line2);border-radius:14px;overflow:hidden;box-shadow:0 30px 60px -30px rgba(0,0,0,.7)}
+.term-bar{display:flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-bottom:1px solid var(--line);font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.term-bar i{width:9px;height:9px;border-radius:50%;background:var(--raised2)}
+.term-bar span{margin-left:auto}
+.term pre{margin:0;padding:18px 20px 22px;font-family:var(--f-mono);font-size:12.5px;line-height:1.8;color:#d8d0c4;overflow-x:auto}
+.term .c{color:var(--muted)}.term .p{color:var(--accent)}.term .x{color:var(--bad)}.term .s{color:var(--text)}
+.term .ln{display:inline-block;animation:ln .5s var(--ease) both}
+@keyframes ln{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.stats div{padding:18px 20px;display:flex;justify-content:space-between;align-items:baseline;gap:12px;border-left:1px solid var(--line);font-size:13px;color:var(--text2)}
+.stats div:first-child{border-left:0}
+.stats b{font-family:var(--f-mono);font-weight:500;color:var(--text);font-size:15px;font-variant-numeric:tabular-nums}
+
+/* sections */
+section.sec{padding-block:112px 0}
+.kicker{font-size:13px;color:var(--accent);margin-bottom:12px}
+.sec h2{font-size:clamp(28px,3.6vw,40px);line-height:1.2}
+.sec h2 em{font-style:normal;color:var(--text2)}
+.sec .sub{color:var(--text2);margin-top:14px;max-width:40em}
+
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px}
+.step{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.step-h{display:flex;align-items:center;gap:12px}
+.num{width:30px;height:30px;border-radius:50%;border:1px solid var(--line2);display:grid;place-items:center;font-family:var(--f-mono);font-size:12px;color:var(--text2);flex:none}
+.step h3{font-size:18px}
+.step p{font-size:14px;color:var(--text2)}
+.snip{background:#0c0b0a;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-family:var(--f-mono);font-size:12px;color:#d8d0c4;overflow-x:auto;white-space:pre;margin-top:auto}
+
+/* packages */
+.pk-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:40px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.card-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.card h3{font-size:22px}
+.card h3 a{text-decoration:none}
+.card h3 a:hover{text-decoration:underline;text-underline-offset:4px}
+.card p{color:var(--text2);font-size:15px}
+.ver{font-family:var(--f-mono);font-size:12px;color:var(--accent);border:1px solid rgba(233,166,107,.35);border-radius:999px;padding:2px 10px;white-space:nowrap}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-family:var(--f-mono);font-size:12px;color:var(--text2)}
+.checks span{display:flex;gap:8px;align-items:center}
+.checks span::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--muted)}
+.manifest{background:#0c0b0a;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-family:var(--f-mono);font-size:12px;line-height:1.75;color:var(--text2);white-space:pre;overflow-x:auto}
+.manifest .k{color:var(--text)}.manifest .e{color:var(--ok)}
+.card .foot{font-size:13px;color:var(--muted);margin-top:auto}
+.dev{margin-top:16px;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.dev-row{display:grid;grid-template-columns:220px 1fr auto;gap:16px;align-items:center;padding:16px 24px;border-top:1px solid var(--line);font-size:15px}
+.dev-row:first-child{border-top:0}
+.dev-row b{font-weight:500;font-family:var(--f-display)}
+.dev-row span{color:var(--text2)}
+.chip-dev{font-size:12px;color:var(--muted);border:1px solid var(--line2);border-radius:999px;padding:2px 10px;white-space:nowrap}
+
+/* trust */
+.flow-panel{margin-top:40px;background:linear-gradient(#171513,#141211);border:1px solid var(--line);border-radius:20px;padding:24px 24px 16px;position:relative}
+.flow-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.flow{display:block;width:100%;min-width:840px;height:auto}
+.flow-ctl{position:absolute;top:16px;right:16px;display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:1px solid var(--line2);border-radius:999px;background:var(--raised);color:var(--text2);font:12px var(--f-body);cursor:pointer}
+.flow-ctl svg{width:12px;height:12px;fill:currentColor}
+.legend{display:flex;flex-wrap:wrap;gap:12px 28px;margin-top:20px;font-size:14px;color:var(--text2)}
+.legend span{display:inline-flex;gap:10px;align-items:center}
+.legend i{width:14px;height:14px;border-radius:4px;flex:none}
+
+/* svg classes */
+.road{fill:#1f1c19}
+.road-line{stroke:rgba(240,228,212,.12);stroke-width:1.5;stroke-dasharray:2 10;fill:none}
+.st-lab{fill:var(--text);font-family:var(--f-display);font-size:16px;font-weight:500}
+.st-sub{fill:var(--muted);font-family:var(--f-body);font-size:12.5px}
+.chipbox{fill:#0d0c0b;stroke:var(--line2);stroke-width:1}
+.chip-t{fill:var(--text2);font-family:var(--f-mono);font-size:11.5px}
+.chip-k{fill:var(--text);font-family:var(--f-mono);font-size:11.5px}
+.post{stroke:#5a524a;stroke-width:4;stroke-linecap:round;fill:none}
+.beam{fill:#5a524a}
+.spur{stroke:var(--muted);stroke-width:1.2;stroke-dasharray:4 4;fill:none}
+.tray{fill:var(--bad-soft);stroke:rgba(228,132,113,.5);stroke-width:1}
+.tray-t{fill:var(--bad);font-family:var(--f-mono);font-size:12px}
+.tray-s{fill:var(--text2);font-family:var(--f-body);font-size:12px}
+.ck{fill:var(--raised2);stroke:var(--line2)}
+.ck-t{fill:var(--text2);font-family:var(--f-mono);font-size:11.5px}
+.ens-box{fill:none;stroke:var(--line2);stroke-dasharray:4 4}
+.ens-t{fill:var(--muted);font-family:var(--f-mono);font-size:12px}
+.crate{stroke-width:1.5}
+.pk-a .crate{fill:var(--accent);stroke:#f6c79c}
+.pk-a .band{stroke:var(--accent-ink);stroke-width:1.5;opacity:.5}
+.pk-b .crate{fill:#6d645b;stroke:#8b8178}
+.pk-b .band{stroke:#2a2622;stroke-width:1.5;opacity:.6}
+.seal{fill:none;stroke:var(--ok);stroke-width:2}
+.tag-t{font-family:var(--f-mono);font-size:10.5px}
+.pk-a .tag-t{fill:var(--accent)}
+.pk-b .tag-t{fill:var(--text2)}
+
+/* timeline: one 10s cycle */
+.anim .pk-a{animation:pa 10s var(--ease) infinite}
+.anim .pk-a .seal{animation:seal 10s linear infinite}
+.anim .pk-b{animation:pb 10s var(--ease) infinite}
+.anim .pk-b .crate{animation:bred 10s linear infinite}
+.anim .g2 .post{animation:g2 10s linear infinite}
+.anim .g2 .beam{animation:g2f 10s linear infinite}
+.anim .g3 .post{animation:g3 10s linear infinite}
+.anim .g3 .beam{animation:g3f 10s linear infinite}
+.anim .ck1{animation:ck1 10s linear infinite}
+.anim .ck2{animation:ck2 10s linear infinite}
+.anim .ck3{animation:ck3 10s linear infinite}
+.anim .ens-box{animation:ensb 10s linear infinite}
+.anim .ens-t{animation:enst 10s linear infinite}
+.anim .tray-g{animation:tray 10s linear infinite}
+.paused *{animation-play-state:paused!important}
+@keyframes pa{
+  0%{transform:translate(150px,200px);opacity:0}
+  5%{transform:translate(150px,200px);opacity:1}
+  27%{transform:translate(430px,200px)}
+  33%{transform:translate(430px,200px)}
+  50%{transform:translate(690px,200px)}
+  55%{transform:translate(690px,200px)}
+  71%{transform:translate(950px,200px)}
+  93%{transform:translate(950px,200px);opacity:1}
+  98%,100%{transform:translate(950px,200px);opacity:0}}
+@keyframes seal{0%,52%{opacity:0}55%,93%{opacity:1}98%,100%{opacity:0}}
+@keyframes pb{
+  0%,34%{transform:translate(150px,200px);opacity:0}
+  38%{transform:translate(150px,200px);opacity:1}
+  55%{transform:translate(430px,200px)}
+  61%{transform:translate(430px,200px)}
+  70%{transform:translate(368px,376px)}
+  93%{transform:translate(368px,376px);opacity:1}
+  98%,100%{transform:translate(368px,376px);opacity:0}}
+@keyframes bred{0%,56%{fill:#6d645b;stroke:#8b8178}59%,100%{fill:var(--bad);stroke:#f0a596}}
+@keyframes g2{0%,26%{stroke:#5a524a}29%,33%{stroke:var(--ok)}36%,55%{stroke:#5a524a}58%,64%{stroke:var(--bad)}68%,100%{stroke:#5a524a}}
+@keyframes g2f{0%,26%{fill:#5a524a}29%,33%{fill:var(--ok)}36%,55%{fill:#5a524a}58%,64%{fill:var(--bad)}68%,100%{fill:#5a524a}}
+@keyframes g3{0%,49%{stroke:#5a524a}52%,56%{stroke:var(--ok)}59%,100%{stroke:#5a524a}}
+@keyframes g3f{0%,49%{fill:#5a524a}52%,56%{fill:var(--ok)}59%,100%{fill:#5a524a}}
+@keyframes ck1{0%,73%{fill:var(--raised2)}75%,93%{fill:var(--ok)}97%,100%{fill:var(--raised2)}}
+@keyframes ck2{0%,78%{fill:var(--raised2)}80%,93%{fill:var(--ok)}97%,100%{fill:var(--raised2)}}
+@keyframes ck3{0%,83%{fill:var(--raised2)}85%,93%{fill:var(--ok)}97%,100%{fill:var(--raised2)}}
+@keyframes ensb{0%,86%{stroke:var(--line2)}88%,93%{stroke:var(--accent)}97%,100%{stroke:var(--line2)}}
+@keyframes enst{0%,86%{fill:var(--muted)}88%,93%{fill:var(--accent)}97%,100%{fill:var(--muted)}}
+@keyframes tray{0%,62%{opacity:.45}66%,93%{opacity:1}97%,100%{opacity:.45}}
+/* resting state (reduced motion or no animation): A at the server with every check lit, B in the tray */
+.pk-a{transform:translate(950px,200px)}
+.pk-b{transform:translate(368px,376px)}
+.pk-b .crate{fill:var(--bad);stroke:#f0a596}
+.ck1,.ck2,.ck3{fill:var(--ok)}
+@media (prefers-reduced-motion: reduce){
+  .anim *, .anim .pk-a, .anim .pk-b{animation:none!important}
+  .flow-ctl{display:none}
+  .term .ln{animation:none}
+  .progress{display:none}
+}
+
+/* limits */
+.limits{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-top:40px}
+.limits div{background:var(--bg);padding:22px 24px;display:flex;flex-direction:column;gap:6px}
+.limits b{font-weight:500;font-family:var(--f-display);font-size:17px}
+.limits span{font-size:14px;color:var(--text2)}
+.limits code{color:var(--text);background:var(--raised);padding:1px 6px;border-radius:4px}
+.end-line{margin-top:20px;font-size:15px;color:var(--text)}
+
+/* faq */
+.faq{margin-top:32px;border-top:1px solid var(--line)}
+.faq details{border-bottom:1px solid var(--line)}
+.faq summary{list-style:none;cursor:pointer;padding:18px 0;display:flex;justify-content:space-between;gap:16px;font-family:var(--f-display);font-size:17px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";font-family:var(--f-mono);color:var(--muted);transition:transform .2s var(--ease)}
+.faq details[open] summary::after{transform:rotate(45deg)}
+.faq details p{padding:0 0 18px;color:var(--text2);max-width:46em}
+
+footer{margin-top:112px;border-top:1px solid var(--line);padding-block:28px 40px;display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-between;font-size:13px;color:var(--muted)}
+
+/* review notes */
+.notes{margin:48px auto 64px;max-width:1120px;border:1px dashed var(--line2);border-radius:16px;padding:28px;display:flex;flex-direction:column;gap:20px;background:var(--surface)}
+.notes h2{font-size:24px}
+.notes h3{font-size:16px;color:var(--accent);font-weight:500}
+.notes ul,.notes ol{margin:0;padding-left:20px;color:var(--text2);font-size:14.5px;display:flex;flex-direction:column;gap:4px}
+.notes li b{color:var(--text);font-weight:500}
+.notes table{border-collapse:collapse;width:100%;font-size:14px}
+.notes th,.notes td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--line)}
+.notes th{color:var(--muted);font-weight:500;font-size:12.5px}
+.notes .tbl{overflow-x:auto}
+.dir{display:grid;grid-template-columns:120px 1fr;gap:6px 16px;font-size:14.5px}
+.dir dt{color:var(--muted)}.dir dd{margin:0;color:var(--text)}
+
+@media (max-width:880px){
+  .hero{grid-template-columns:1fr;padding-block:56px 48px;gap:36px}
+  .stats{grid-template-columns:1fr 1fr}
+  .stats div:nth-child(3){border-left:0}
+  .stats div:nth-child(n+3){border-top:1px solid var(--line)}
+  .steps,.pk-grid,.limits{grid-template-columns:1fr}
+  .dev-row{grid-template-columns:1fr auto}
+  .dev-row span{grid-column:1/-1;order:3}
+  .links{display:none}
+  .nav-btn{margin-left:auto}
+  section.sec{padding-block:80px 0}
+}
+@media (max-width:480px){ .checks{grid-template-columns:1fr} .dir{grid-template-columns:1fr} }
+</style>
+
+
+<header class="nav">
+  <div class="nav-in">
+    <a class="brand" href="#top"><i>N</i>nakara-oss</a>
+    <nav class="links" aria-label="เมนูหลัก"><a href="#scan">ตรวจก่อนลง</a><a href="#packages">มีอะไรบ้าง</a><a href="#trust">Trust Architecture</a><a href="#limits">ข้อจำกัด</a><a href="#faq">คำถาม</a></nav>
+    <a class="nav-btn" href="https://github.com/aeterna/nakara-oss"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.15-1.11-1.46-1.11-1.46-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>GitHub</a>
+    <a class="lang" href="#top" hreflang="en">EN</a>
+  </div>
+  <div class="progress" aria-hidden="true"></div>
+</header>
+
+<main class="wrap" id="top">
+
+  <section class="hero">
+    <div>
+      <span class="eyebrow"><span class="dot"></span>MIT · open source · จากทีม Nakara City</span>
+      <h1>สคริปต์ FiveM ฟรี ที่<span class="hl">ตรวจได้</span> ก่อนลง server</h1>
+      <p class="lead">ทุก resource บอกไว้ใน <code>oss.json</code> ว่าจะแตะอะไรบ้าง ทุก PR ถูกสแกน ทุก release build ใน CI พร้อมหลักฐานว่ามาจากไหน และคุณรันการตรวจชุดเดียวกันซ้ำเองได้</p>
+      <div class="cta">
+        <a class="btn btn-p" href="#scan">ตรวจสคริปต์ของคุณ <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+        <a class="btn btn-s" href="#trust">ดูว่าตรวจอะไรบ้าง</a>
+      </div>
+      <div class="facts">
+        <span><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h7"/></svg>อ่านโค้ด ไม่รันโค้ด</span>
+        <span><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="12" rx="2"/><path d="M8 21h8"/></svg>รันในเครื่องคุณ</span>
+        <span><svg viewBox="0 0 24 24"><path d="M12 3 4 7v5c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V7l-8-4Z"/></svg>release มี attestation</span>
+      </div>
+    </div>
+    <figure class="term" aria-label="ผลจริงของ fivem-devkit safety บน resource ทดสอบ" style="margin:0">
+      <div class="term-bar"><i></i><i></i><i></i><span>ผลจริง · resource ทดสอบ</span></div>
+<pre><span class="ln c" style="animation-delay:.1s"># สคริปต์ที่โหลดมา ไม่มี oss.json</span>
+<span class="ln" style="animation-delay:.2s"><span class="p">$</span> <span class="s">npx @aeterna_game/fivem-devkit safety</span></span>
+<span class="ln" style="animation-delay:.45s"><span class="x">✗</span> [safety/dynamic-load] server/main.lua:2</span>
+<span class="ln c" style="animation-delay:.55s">    load called — loads code at runtime that nobody reviewed</span>
+<span class="ln" style="animation-delay:.7s"><span class="x">✗</span> [safety/host-exec] server/main.lua:3</span>
+<span class="ln c" style="animation-delay:.8s">    os.execute — runs or changes things on the host machine</span>
+<span class="ln" style="animation-delay:.95s"><span class="x">✗</span> [safety/secret-convar] server/main.lua:4</span>
+<span class="ln c" style="animation-delay:1.05s">    GetConvar('mysql_connection_string') reads a secret convar</span>
+<span class="ln" style="animation-delay:1.25s">&nbsp;</span>
+<span class="ln s" style="animation-delay:1.3s">safety: 3 error(s), 0 warning(s)</span></pre>
+    </figure>
+  </section>
+
+  <div class="stats" aria-label="ตัวเลขของ repo">
+    <div>แพ็กเกจที่มี release <b>2</b></div>
+    <div>fivem-devkit <b>0.1.2</b></div>
+    <div>check ของ devkit <b>9</b></div>
+    <div>ด่านบังคับใน CI <b>4</b></div>
+  </div>
+
+  <section class="sec" id="scan">
+    <p class="kicker">ตรวจก่อนลง</p>
+    <h2>สามขั้น ก่อน <code style="font-size:.8em">ensure</code> สคริปต์ที่โหลดมา</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-h"><span class="num">01</span><h3>บอกว่าไม่มี oss.json</h3></div>
+        <p>สคริปต์จากที่อื่นไม่ได้ประกาศสิทธิ์ ใส่ไฟล์นี้ในโฟลเดอร์ที่จะรันคำสั่ง</p>
+        <div class="snip">// .fivem-devkit.json
+{ "safety": { "requireManifest": false } }</div>
+      </div>
+      <div class="step">
+        <div class="step-h"><span class="num">02</span><h3>สแกน</h3></div>
+        <p>ต้องมี Node.js 22 ขึ้นไป เครื่องมืออ่านไฟล์อย่างเดียว ไม่รันโค้ดของสคริปต์</p>
+        <div class="snip">npx @aeterna_game/fivem-devkit \
+  safety ./ชื่อโฟลเดอร์</div>
+      </div>
+      <div class="step">
+        <div class="step-h"><span class="num">03</span><h3>อ่านทีละจุด</h3></div>
+        <p>แต่ละบรรทัดบอกไฟล์ เลขบรรทัด และเหตุผล เป็นจุดที่ต้องเปิดอ่าน ไม่ใช่คำตัดสิน</p>
+        <div class="snip"><span style="color:var(--bad)">✗</span> [safety/host-exec]
+  server/main.lua:3</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="packages">
+    <p class="kicker">มีอะไรบ้าง</p>
+    <h2>สองชิ้นใช้ได้แล้ว <em>สามชิ้นกำลังทำ</em></h2>
+    <div class="pk-grid">
+      <article class="card">
+        <div class="card-h"><h3><a href="https://github.com/aeterna/nakara-oss/tree/main/packages/devkit">fivem-devkit</a></h3><span class="ver">0.1.2</span></div>
+        <p>หาโค้ดอันตรายและ bug ที่ runtime ไม่เตือน ใน resource ของใครก็ได้ พร้อม busted harness สำหรับเขียนเทสต์ Lua</p>
+        <div class="checks"><span>export-calls</span><span>export-self-param</span><span>export-funcref</span><span>nui-callbacks</span><span>nui-escape</span><span>+ อีก 4 check</span></div>
+        <p class="foot mono">npx @aeterna_game/fivem-devkit check</p>
+      </article>
+      <article class="card">
+        <div class="card-h"><h3><a href="https://github.com/aeterna/nakara-oss/tree/main/packages/cargen-fix">nakara_cargen_fix</a></h3><span class="ver">1.0.0</span></div>
+        <p>กัน crash <code>CNetworkCarGenWorldStateData Pool Full</code> ฝั่ง client และบอกว่าทำไมวิธี <code>GAMECONFIG_FILE</code> ที่แชร์กันใช้ไม่ได้</p>
+        <div class="manifest"><span class="k">oss.json</span> → capabilities
+  http        <span class="e">[]</span>    commands  <span class="e">[]</span>
+  convars     <span class="e">[]</span>    netEvents <span class="e">[]</span>
+  db.tables   <span class="e">[]</span>    files     <span class="e">[]</span></div>
+        <p class="foot">ประกาศว่าไม่แตะอะไรเลย และ CI ตรวจทุก PR ว่าโค้ดเป็นอย่างนั้นจริง</p>
+      </article>
+    </div>
+    <div class="dev">
+      <div class="dev-row"><b>Nakara Tickets</b><span>ticket บน Discord ที่สั่งงานในเกมได้ bridge ไม่เปิด port</span><span class="chip-dev">กำลังพัฒนา</span></div>
+      <div class="dev-row"><b>AETERNA Game Launcher</b><span>launcher ของ server คุณเอง เขียนด้วย Rust</span><span class="chip-dev">กำลังพัฒนา</span></div>
+      <div class="dev-row"><b>Rongroi Server Kit</b><span>ฝั่ง server ของ aeterna-rongroi</span><span class="chip-dev">กำลังพัฒนา</span></div>
+    </div>
+  </section>
+
+  <section class="sec" id="trust">
+    <p class="kicker">🏗️ Trust Architecture</p>
+    <h2>โค้ดหนึ่งชิ้นผ่านอะไรบ้าง <em>กว่าจะถึง server ของคุณ</em></h2>
+    <p class="sub">กล่องสีส้มประกาศสิทธิ์ตรงกับโค้ด จึงผ่านทุกด่านไปถึงเครื่องคุณ กล่องสีเทาเรียก HTTP ที่ไม่ได้ประกาศ เลยถูกหยุดที่ด่านแรก ด่านที่สองและสามเราทำใน CI ด่านสุดท้ายคุณทำซ้ำเองได้</p>
+    <div class="flow-panel">
+      <button class="flow-ctl" type="button" id="flow-toggle" aria-pressed="false"><svg viewBox="0 0 12 12" id="flow-ico"><rect x="2" y="1.5" width="3" height="9" rx="1"/><rect x="7" y="1.5" width="3" height="9" rx="1"/></svg><span id="flow-lab">หยุด</span></button>
+      <div class="flow-scroll">
+      <svg class="flow anim" id="flow" viewBox="0 80 1120 360" role="img" aria-labelledby="flow-t flow-d">
+        <title id="flow-t">Trust Architecture ของ nakara-oss</title>
+        <desc id="flow-d">ภาพเคลื่อนไหว: กล่องที่ประกาศสิทธิ์ใน oss.json ตรงกับโค้ด วิ่งผ่าน PR gate (devkit check และ devkit safety) ผ่านด่าน release ใน CI ได้ตรา attestation และ SHA256SUMS แล้วถึง server ของคุณ ซึ่งตรวจซ้ำสามคำสั่งก่อน ensure ส่วนกล่องที่เรียก HTTP โดยไม่ประกาศ ถูก devkit safety หยุดที่ PR gate และตกลงช่องปฏิเสธ PR ล้ม ไม่มี release</desc>
+        <rect class="road" x="60" y="186" width="1000" height="28" rx="14"/>
+        <line class="road-line" x1="80" y1="200" x2="1040" y2="200"/>
+
+        <!-- station 1: author -->
+        <text class="st-lab" x="150" y="118" text-anchor="middle">ผู้เขียน</text>
+        <text class="st-sub" x="150" y="140" text-anchor="middle">source + oss.json</text>
+        <rect class="chipbox" x="58" y="240" width="190" height="70" rx="9"/>
+        <text class="chip-k" x="72" y="262">oss.json</text>
+        <text class="chip-t" x="72" y="282">http  api.example.com</text>
+        <text class="chip-t" x="72" y="300">netEvents  server ×2</text>
+
+        <!-- gate 2: PR gate -->
+        <g class="g2">
+          <rect class="beam" x="392" y="148" width="76" height="9" rx="3"/>
+          <line class="post" x1="400" y1="157" x2="400" y2="214"/>
+          <line class="post" x1="460" y1="157" x2="460" y2="214"/>
+        </g>
+        <text class="st-lab" x="430" y="104" text-anchor="middle">PR gate · CI</text>
+        <text class="st-sub" x="430" y="126" text-anchor="middle">devkit check · devkit safety</text>
+        <rect class="chipbox" x="330" y="240" width="200" height="34" rx="9"/>
+        <text class="chip-t" x="344" y="262">ใช้เกิน oss.json = PR ล้ม</text>
+        <rect class="chipbox" x="330" y="282" width="200" height="34" rx="9"/>
+        <text class="chip-t" x="344" y="304">oss.json เปลี่ยน → CODEOWNERS</text>
+
+        <g class="tray-g">
+          <rect class="tray" x="330" y="340" width="250" height="72" rx="12"/>
+          <text class="tray-t" x="400" y="370">✗ safety/undeclared-http</text>
+          <text class="tray-s" x="400" y="392">PR ล้ม · ไม่มี release</text>
+        </g>
+
+        <!-- gate 3: release -->
+        <g class="g3">
+          <rect class="beam" x="652" y="148" width="76" height="9" rx="3"/>
+          <line class="post" x1="660" y1="157" x2="660" y2="214"/>
+          <line class="post" x1="720" y1="157" x2="720" y2="214"/>
+        </g>
+        <text class="st-lab" x="690" y="118" text-anchor="middle">Release · CI</text>
+        <text class="st-sub" x="690" y="140" text-anchor="middle">build zip ใน CI เท่านั้น</text>
+        <rect class="chipbox" x="592" y="240" width="196" height="34" rx="9"/>
+        <text class="chip-t" x="606" y="262">provenance attestation</text>
+        <rect class="chipbox" x="592" y="282" width="196" height="34" rx="9"/>
+        <text class="chip-t" x="606" y="304">SHA256SUMS</text>
+
+        <!-- station 4: your server -->
+        <text class="st-lab" x="950" y="118" text-anchor="middle">server ของคุณ</text>
+        <text class="st-sub" x="950" y="140" text-anchor="middle">ตรวจซ้ำด้วยเครื่องมือเดียวกัน</text>
+        <circle class="ck ck1" cx="862" cy="257" r="6"/><text class="ck-t" x="878" y="261">gh attestation verify</text>
+        <circle class="ck ck2" cx="862" cy="287" r="6"/><text class="ck-t" x="878" y="291">sha256sum -c SHA256SUMS</text>
+        <circle class="ck ck3" cx="862" cy="317" r="6"/><text class="ck-t" x="878" y="321">devkit safety ./resource</text>
+        <rect class="ens-box" x="848" y="340" width="204" height="40" rx="10"/>
+        <text class="ens-t" x="950" y="365" text-anchor="middle">ensure resource</text>
+
+        <!-- packets -->
+        <g class="pk pk-b">
+          <rect class="crate" x="-15" y="-15" width="30" height="30" rx="6"/>
+          <line class="band" x1="-15" y1="0" x2="15" y2="0"/>
+          <text class="tag-t" x="0" y="-24" text-anchor="middle">http ?</text>
+        </g>
+        <g class="pk pk-a">
+          <circle class="seal" r="22"/>
+          <rect class="crate" x="-15" y="-15" width="30" height="30" rx="6"/>
+          <line class="band" x1="-15" y1="0" x2="15" y2="0"/>
+          <text class="tag-t" x="0" y="-28" text-anchor="middle">oss.json ✓</text>
+        </g>
+      </svg>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--accent)"></i>ประกาศสิทธิ์ตรงกับโค้ด: ผ่าน PR gate ได้ตรา attestation ใน release ตรวจซ้ำสามคำสั่งแล้ว ensure</span>
+        <span><i style="background:var(--bad)"></i>เรียก HTTP ที่ไม่ได้ประกาศ: devkit safety หยุดไว้ PR ล้ม ไม่มี release</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="limits">
+    <p class="kicker">ข้อจำกัด</p>
+    <h2>สิ่งที่ scanner จับไม่ได้</h2>
+    <p class="sub">scanner บอกได้ว่าโค้ดใช้แค่สิ่งที่ประกาศไว้ แต่บอกไม่ได้ว่าใช้อย่างสุจริตหรือเปล่า</p>
+    <div class="limits">
+      <div><b>logic bomb ใน API ที่ได้รับอนุญาต</b><span>resource ที่ประกาศ <code>db.tables: ["players"]</code> ลบทุกแถวในวันใดวันหนึ่งได้</span></div>
+      <div><b>การเรียก export ของ resource อื่น</b><span><code>exports.some_admin:giveAdmin(src)</code> ดูเหมือนการเรียก export ทั่วไป</span></div>
+      <div><b>server ที่เชื่อ client</b><span>event ที่ให้ของกับใครก็ได้ที่ขอ ประกาศครบ จำกัดอัตราแล้ว ก็ยังเป็นช่องโหว่</span></div>
+      <div><b>ค่าที่ประกอบตอน runtime</b><span>รายงานว่าเจอ แต่ไม่ได้ตามว่าค่าจริงคืออะไร</span></div>
+    </div>
+    <p class="end-line">ยังต้องมีคนอ่านโค้ด</p>
+  </section>
+
+  <section class="sec" id="faq">
+    <p class="kicker">คำถาม</p>
+    <h2>คำถามที่พบบ่อย</h2>
+    <div class="faq">
+      <details><summary>ใช้ฟรีไหม</summary><p>ฟรีทุกตัว ภายใต้สัญญาอนุญาต MIT</p></details>
+      <details><summary>สคริปต์ที่ซื้อมาและไม่มี oss.json ตรวจได้ไหม</summary><p>ได้ ตั้ง <code>requireManifest</code> เป็น <code>false</code> ในไฟล์ <code>.fivem-devkit.json</code> แล้วเครื่องมือจะสแกนหาโค้ดอันตราย เช่น dynamic-load, host-exec, secret-convar โดยไม่ต้องมี oss.json</p></details>
+      <details><summary>ผลสแกนไม่เจออะไร แปลว่าไม่มีปัญหาไหม</summary><p>ไม่ ดูหัวข้อสิ่งที่ scanner จับไม่ได้ เครื่องมือหาแบบแผนที่รู้จัก และไม่แทนการอ่านโค้ด</p></details>
+      <details><summary>ดาวน์โหลด resource ที่ไหน</summary><p>หน้า Releases บน GitHub เท่านั้น ไฟล์ release build ใน CI และมี provenance attestation กับ SHA256SUMS ให้ตรวจ ส่วน ZIP ของ repo มีเทสต์และเครื่องมือที่ server ไม่ต้องใช้</p></details>
+      <details><summary>เจอช่องโหว่ แจ้งที่ไหน</summary><p>ตามขั้นตอนใน SECURITY.md ของ repo ห้ามเปิด issue สาธารณะ</p></details>
+    </div>
+  </section>
+
+  <footer>
+    <span>MIT · สร้างโดยทีม Nakara City</span>
+    <span><a href="https://github.com/aeterna/nakara-oss">GitHub</a> · อัปเดต 2026-11-15</span>
+  </footer>
+</main>
+
+
+<script>
+(function(){
+  var svg=document.getElementById('flow'),btn=document.getElementById('flow-toggle'),lab=document.getElementById('flow-lab'),ico=document.getElementById('flow-ico');
+  if(!svg||!btn)return;
+  var user=false,onScreen=true;
+  function sync(){svg.classList.toggle('paused',user||!onScreen)}
+  btn.addEventListener('click',function(){
+    user=!user;btn.setAttribute('aria-pressed',String(user));lab.textContent=user?'เล่น':'หยุด';
+    ico.innerHTML=user?'<path d="M3 1.5v9l7.5-4.5z"/>':'<rect x="2" y="1.5" width="3" height="9" rx="1"/><rect x="7" y="1.5" width="3" height="9" rx="1"/>';
+    sync();
+  });
+  if('IntersectionObserver' in window){new IntersectionObserver(function(e){onScreen=e[0].isIntersecting;sync()},{threshold:.1}).observe(svg)}
+})();
+</script>
