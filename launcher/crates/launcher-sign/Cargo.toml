@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "launcher-sign"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Release tool that generates ed25519 keys, builds update manifests and signs them (ADR 0002 decision 7)"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "launcher-sign"
+path = "src/main.rs"
+
+[dependencies]
+ed25519-dalek = "=2.1.0"
+getrandom = "=0.3.4"
+semver = { version = "=1.0.28", features = ["serde"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.140"
+sha2 = "=0.10.8"
+time = { version = "=0.3.36", features = ["formatting", "parsing"] }
+
+[dev-dependencies]
+launcher-update = { path = "../launcher-update" }
+tempfile = "=3.27.0"
