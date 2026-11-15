@@ -94,11 +94,19 @@
         </div>
         <p class="section-lead">สำหรับสคริปต์ภายนอกที่ไม่มี oss.json ให้ตั้งค่า <code>requireManifest</code> เป็น <code>false</code> ตามรายละเอียดที่อธิบายไว้ใน <a href="https://github.com/aeterna/nakara-oss/blob/main/packages/devkit/docs/safety.md">safety.md</a></p>
         <div class="code-box">
-          <div class="code-label">ตัวอย่าง</div>
-          <pre><code>[fail] server/main.lua:14 dynamic-load: loadstring() is not permitted
-[fail] server/api.lua:28 os-command: os.execute() is not permitted
-[fail] server/config.lua:3 secret-convar: reading mysql_connection_string is not permitted
-[fail] client/nui.lua:89 obfuscation: detected high entropy hex/escape sequence</code></pre>
+          <div class="code-label">ไฟล์ .fivem-devkit.json ในโฟลเดอร์ที่รันคำสั่ง</div>
+          <pre><code>{"safety": {"requireManifest": false}}</code></pre>
+        </div>
+        <div class="code-box">
+          <div class="code-label">ตัวอย่างผลจริง (resource ทดสอบ)</div>
+          <pre><code>✗ [safety/dynamic-load] resources/some_script/server/main.lua:2
+    load called — loads code at runtime that nobody reviewed
+✗ [safety/host-exec] resources/some_script/server/main.lua:3
+    os.execute — runs or changes things on the host machine
+✗ [safety/secret-convar] resources/some_script/server/main.lua:4
+    GetConvar('mysql_connection_string') reads a secret convar
+
+safety: 3 error(s), 0 warning(s)</code></pre>
         </div>
         <p class="section-lead">ผลลัพธ์จากการสแกนคือรายการจุดในโค้ดที่ต้องเปิดอ่าน ไม่ใช่คำตัดสินว่าโค้ดนั้นทำงานถูกต้องสมบูรณ์หรือไร้ปัญหา</p>
       </div>
@@ -166,7 +174,7 @@
           </li>
           <li class="trust-step">
             <div class="trust-step-num">server ของคุณ</div>
-            <div class="trust-step-body"><code>gh attestation verify &lt;zip&gt; --repo aeterna/nakara-oss</code>, <code>sha256sum -c SHA256SUMS</code>, <code>npx @aeterna_game/fivem-devkit safety ./resource</code>, then ensure</div>
+            <div class="trust-step-body"><code>gh attestation verify &lt;zip&gt; --repo aeterna/nakara-oss</code><br><code>sha256sum -c SHA256SUMS</code><br><code>npx @aeterna_game/fivem-devkit safety ./resource</code> แล้วค่อย ensure</div>
           </li>
         </ol>
         <p class="trust-note">ด่าน 2–3 เราทำใน CI ด่าน 4 คุณทำซ้ำเองได้ด้วยเครื่องมือตัวเดียวกัน</p>
@@ -177,10 +185,10 @@
       <div class="container">
         <h2 class="section-title">สิ่งที่ scanner จับไม่ได้</h2>
         <ul class="limits-list">
-          <li>logic bomb inside APIs a resource is allowed to use (โค้ดที่มีเจตนาร้ายแต่ทำงานอยู่ภายใน API ปกติที่ได้รับสิทธิ์)</li>
-          <li>calls to other resources' exports (การเรียกใช้งาน exports ของ resource อื่น)</li>
-          <li>a server event that trusts the client (server event ที่เชื่อข้อมูลจาก client โดยไม่ตรวจทาน)</li>
-          <li>values built at runtime are reported but not traced (ค่าตัวแปรที่ถูกประกอบขึ้นขณะทำงาน ระบบจะแจ้งเตือนจุดที่พบ แต่ไม่สามารถติดตามค่าจริงได้)</li>
+          <li>logic bomb ที่ซ่อนอยู่ใน API ที่ resource ได้รับอนุญาตให้ใช้</li>
+          <li>การเรียก export ของ resource อื่น</li>
+          <li>server event ที่เชื่อข้อมูลจาก client โดยไม่ตรวจ</li>
+          <li>ค่าที่ประกอบขึ้นตอน runtime: รายงานว่าเจอ แต่ไม่ได้ตามว่าค่าจริงคืออะไร</li>
         </ul>
         <p class="limits-end">ยังต้องมีคนอ่านโค้ด</p>
       </div>
@@ -196,7 +204,7 @@
           </details>
           <details class="faq-item">
             <summary>สคริปต์ที่ซื้อมาและไม่มี oss.json ตรวจได้ไหม</summary>
-            <div class="faq-answer">ได้ โดยกำหนดค่า requireManifest เป็น false ในการเรียก fivem-devkit safety เครื่องมือจะยังคงสแกนหาโค้ดที่มีความเสี่ยง เช่น dynamic-load, os-command หรือ secret-convar ตามปกติ</div>
+            <div class="faq-answer">ได้ ตั้ง requireManifest เป็น false ในไฟล์ .fivem-devkit.json แล้วเครื่องมือจะสแกนหาโค้ดอันตราย (เช่น dynamic-load · host-exec · secret-convar) โดยไม่ต้องมี oss.json</div>
           </details>
           <details class="faq-item">
             <summary>ผลสแกนไม่เจออะไรแปลว่าไม่มีปัญหาไหม</summary>
@@ -204,11 +212,15 @@
           </details>
           <details class="faq-item">
             <summary>ดาวน์โหลด resource ที่ไหน</summary>
-            <div class="faq-answer">ดาวน์โหลดได้จากหน้า Releases บน GitHub ของ repo aeterna/nakara-oss เท่านั้น อย่าใช้ปุ่ม Download ZIP ของโค้ดทั้ง repo เพราะไฟล์ release ผ่านการคอมไพล์และมี provenance attestation กำกับ</div>
+            <div class="faq-answer">ดาวน์โหลดได้จากหน้า Releases บน GitHub ของ repo aeterna/nakara-oss เท่านั้น อย่าใช้ปุ่ม Download ZIP ของโค้ดทั้ง repo เพราะไฟล์ release ถูก build ใน CI และมี provenance attestation กับ SHA256SUMS ให้ตรวจ ส่วน ZIP ของ repo มีเทสต์และเครื่องมือที่ server ไม่ต้องใช้</div>
           </details>
           <details class="faq-item">
             <summary>เจอช่องโหว่แจ้งที่ไหน</summary>
             <div class="faq-answer">กรุณาแจ้งผ่านแนวทางใน SECURITY.md ของ repository เท่านั้น เพื่อให้ทีมงานตรวจสอบเป็นการภายใน ห้ามเปิด issue สาธารณะเพื่อแจ้งช่องโหว่</div>
+          </details>
+          <details class="faq-item">
+            <summary>รันบน Windows ได้ไหม</summary>
+            <div class="faq-answer">ได้ ต้องมี Node.js 22 ขึ้นไป แล้วรันคำสั่ง npx ใน Command Prompt หรือ PowerShell</div>
           </details>
         </div>
       </div>

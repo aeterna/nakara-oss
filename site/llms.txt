@@ -6,7 +6,7 @@ Every resource package declares its capabilities in oss.json (validated against 
 
 ## Released Packages
 
-- fivem-devkit ({{devkit.version}}): AST-based static scanner and busted test harness for FiveM resources. Detects undeclared capabilities and dangerous runtime patterns (such as dynamic code loading or operating system command execution) in any resource directory.
+- fivem-devkit ({{devkit.version}}): static scanner (lexer-based, no code execution) and busted test harness for FiveM resources. Detects undeclared capabilities and dangerous runtime patterns (such as dynamic code loading or operating system command execution) in any resource directory.
   Link: https://github.com/aeterna/nakara-oss/tree/main/packages/devkit
 
 - nakara_cargen_fix ({{cargen.version}}): Client-only crash fix for CNetworkCarGenWorldStateData Pool Full (net.dll+487A2) without framework dependencies.
@@ -15,7 +15,7 @@ Every resource package declares its capabilities in oss.json (validated against 
 ## Packages in Development
 
 - Nakara Tickets: Discord ticket system with in-game actions over a port-less bridge.
-- AETERNA Game Launcher: Dedicated FiveM game server launcher written in Rust.
+- AETERNA Game Launcher: a game launcher, written in Rust, that a FiveM server community gives its players to join that server.
 - Rongroi Server Kit: Server-side kit for aeterna-rongroi.
 
 ## What the Scanner Cannot Catch
@@ -24,7 +24,7 @@ The scanner flags suspicious patterns and points reviewers to specific lines of 
 - Logic bombs or destructive logic within APIs the resource is permitted to use
 - Calls into other resources' runtime exports
 - Server net events that trust client parameters without validation
-- Dynamically evaluated or computed values constructed at runtime (reported as warnings, but cannot be statically traced)
+- Values built at runtime (reported where they occur, but not traced)
 
 Human review of the source code remains indispensable.
 
