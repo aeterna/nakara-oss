@@ -3,35 +3,18 @@
 use crate::text::label;
 use crate::theme;
 use crate::Message;
-use iced::widget::{button, column, container, row, Space};
+use iced::widget::{button, container, row, Space};
 use iced::{Background, Border, Color, Element, Length};
 
-const NAV: [&str; 5] = ["หน้าหลัก", "ข่าว", "เซิร์ฟเวอร์", "ตรวจเครื่อง", "บันทึกแพตช์"];
-
 pub fn view<'a>() -> Element<'a, Message> {
-    let mut buttons: Vec<Element<'a, Message>> = Vec::new();
-    for title in NAV.iter() {
-        if *title == "ตรวจเครื่อง" && !crate::profile::connect_on() {
-            continue;
-        }
-
-        let active = buttons.is_empty();
-        buttons.push(nav_button(title, active));
+    let mut buttons: Vec<Element<'a, Message>> = vec![nav_button("หน้าหลัก", true, Message::Noop)];
+    if crate::profile::connect_on() {
+        buttons.push(nav_button("ตรวจเครื่อง", false, Message::ConnectOpen));
     }
 
     let nav = container(row(buttons).spacing(2))
         .padding(4)
         .style(theme::panel(theme::SURF, 12.0));
-
-    let account = container(
-        column![
-            label("ผู้เล่น", 14.0, theme::T1),
-            label("ยังไม่ได้เข้าสู่ระบบ", 11.0, theme::T3),
-        ]
-        .spacing(0),
-    )
-    .padding([6, 12])
-    .style(theme::panel(theme::SURF, 12.0));
 
     let settings = container(label("⚙", 16.0, theme::T2))
         .width(40)
@@ -40,19 +23,19 @@ pub fn view<'a>() -> Element<'a, Message> {
         .align_y(iced::Center)
         .style(theme::panel(theme::SURF, 12.0));
 
-    row![nav, Space::new().width(Length::Fill), account, settings]
+    row![nav, Space::new().width(Length::Fill), settings]
         .spacing(12)
         .width(Length::Fill)
         .align_y(iced::Center)
         .into()
 }
 
-fn nav_button<'a>(title: &str, active: bool) -> Element<'a, Message> {
+fn nav_button<'a>(title: &str, active: bool, msg: Message) -> Element<'a, Message> {
     let text_color = if active { theme::T1 } else { theme::T2 };
 
     button(label(title, 14.0, text_color))
         .padding([6, 14])
-        .on_press(Message::Noop)
+        .on_press(msg)
         .style(move |_theme, status| {
             let background = match status {
                 button::Status::Hovered if active => theme::HI,

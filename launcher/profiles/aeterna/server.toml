@@ -23,5 +23,5 @@ accent = "#0c7a60"
 
 [features]
 rongroi_connect = true
-# The studio's other games in the sidebar (sample data until the feed lists them).
-studio_games = true
+# The studio's other games in the sidebar stay off until the feed can list them (owner, 2026-11-15).
+studio_games = false
