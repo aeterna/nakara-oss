@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <!-- Social preview for https://aeterna.github.io/nakara-oss/ . pages.yml renders it to og.png (rsvg-convert, Noto fonts).
+       Agent: Claude Code - Claude Opus 5.5 -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#171513"/>
+      <stop offset="1" stop-color="#121110"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- brand -->
+  <rect x="72" y="64" width="40" height="40" rx="10" fill="#f2ede5"/>
+  <text x="92" y="93" text-anchor="middle" font-family="Noto Sans, Helvetica, Arial, sans-serif" font-size="24" font-weight="700" fill="#121110">N</text>
+  <text x="128" y="93" font-family="DejaVu Sans Mono, Menlo, monospace" font-size="24" fill="#f2ede5">nakara-oss</text>
+  <text x="1128" y="93" text-anchor="end" font-family="Noto Sans, Helvetica, Arial, sans-serif" font-size="20" fill="#857b70">MIT · open source</text>
+
+  <!-- headline -->
+  <text x="72" y="190" font-family="Noto Sans Thai, Noto Sans, Thonburi, sans-serif" font-size="68" font-weight="500" fill="#f2ede5">สคริปต์ FiveM ฟรี</text>
+  <text x="72" y="276" font-family="Noto Sans Thai, Noto Sans, Thonburi, sans-serif" font-size="68" font-weight="500" fill="#f2ede5">ที่<tspan fill="#e9a66b">ตรวจได้</tspan> ก่อนลง server</text>
+  <text x="72" y="334" font-family="Noto Sans Thai, Noto Sans, Thonburi, sans-serif" font-size="26" fill="#bdb3a6">ทุก resource ประกาศสิทธิ์ใน oss.json · ทุก PR ถูกสแกน · release มี attestation</text>
+
+  <!-- the lane -->
+  <rect x="72" y="452" width="1056" height="24" rx="12" fill="#1f1c19"/>
+  <line x1="92" y1="464" x2="1108" y2="464" stroke="#f0e4d4" stroke-opacity="0.12" stroke-width="1.5" stroke-dasharray="2 10"/>
+  <g fill="#5a524a">
+    <rect x="392" y="414" width="76" height="9" rx="3"/><rect x="398" y="423" width="4" height="53"/><rect x="458" y="423" width="4" height="53"/>
+    <rect x="652" y="414" width="76" height="9" rx="3"/><rect x="658" y="423" width="4" height="53"/><rect x="718" y="423" width="4" height="53"/>
+  </g>
+  <g font-family="DejaVu Sans Mono, Menlo, monospace" font-size="16" fill="#857b70" text-anchor="middle">
+    <text x="170" y="526">oss.json</text>
+    <text x="430" y="526">PR gate</text>
+    <text x="690" y="526">release</text>
+    <text x="950" y="526">server ของคุณ</text>
+  </g>
+  <!-- passing crate at the server, with attestation ring -->
+  <circle cx="950" cy="464" r="24" fill="none" stroke="#86c493" stroke-width="2.5"/>
+  <rect x="934" y="448" width="32" height="32" rx="7" fill="#e9a66b" stroke="#f6c79c" stroke-width="1.5"/>
+  <line x1="934" y1="464" x2="966" y2="464" stroke="#1d1309" stroke-opacity="0.5" stroke-width="1.5"/>
+  <!-- stopped crate under the PR gate -->
+  <rect x="414" y="548" width="32" height="32" rx="7" fill="#e48471" stroke="#f0a596" stroke-width="1.5"/>
+  <line x1="414" y1="564" x2="446" y2="564" stroke="#2a2622" stroke-opacity="0.6" stroke-width="1.5"/>
+  <text x="462" y="570" font-family="DejaVu Sans Mono, Menlo, monospace" font-size="16" fill="#e48471">✗ undeclared-http · PR ล้ม</text>
+  <text x="1128" y="590" text-anchor="end" font-family="DejaVu Sans Mono, Menlo, monospace" font-size="18" fill="#857b70">aeterna.github.io/nakara-oss</text>
+</svg>
