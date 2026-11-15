@@ -38,8 +38,27 @@ server ไม่ต้องใช้
 npx @aeterna_game/fivem-devkit safety ./some_resource
 ```
 
-สคริปต์ที่ได้มาจากที่อื่นจะไม่มี `oss.json` ให้ตั้ง `requireManifest` เป็น `false`
-([วิธีตั้ง](packages/devkit/docs/safety.md)) ผลที่ได้คือรายการจุดที่ต้องอ่าน ไม่ใช่คำตัดสิน
+สคริปต์ที่ได้มาจากที่อื่นจะไม่มี `oss.json` ให้ใส่ค่านี้ในไฟล์ `.fivem-devkit.json` ในโฟลเดอร์ที่รันคำสั่ง
+([ตัวเลือกทั้งหมด](packages/devkit/docs/safety.md)):
+
+```json
+{ "safety": { "requireManifest": false } }
+```
+
+ผลจริงจาก resource ทดสอบ:
+
+```text
+✗ [safety/dynamic-load] resources/some_script/server/main.lua:2
+    load called — loads code at runtime that nobody reviewed
+✗ [safety/host-exec] resources/some_script/server/main.lua:3
+    os.execute — runs or changes things on the host machine
+✗ [safety/secret-convar] resources/some_script/server/main.lua:4
+    GetConvar('mysql_connection_string') reads a secret convar
+
+safety: 3 error(s), 0 warning(s)
+```
+
+ผลที่ได้คือรายการจุดที่ต้องอ่าน ไม่ใช่คำตัดสิน
 
 ## 🏗️ Trust Architecture
 

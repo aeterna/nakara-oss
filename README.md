@@ -38,8 +38,27 @@ need on a server.
 npx @aeterna_game/fivem-devkit safety ./some_resource
 ```
 
-A script from somewhere else has no `oss.json`. Set `requireManifest` to `false` for it
-([how](packages/devkit/docs/safety.md)). The output is a list of places to read, not a verdict.
+A script from somewhere else has no `oss.json`. Put this in `.fivem-devkit.json` in the folder you
+run from ([all options](packages/devkit/docs/safety.md)):
+
+```json
+{ "safety": { "requireManifest": false } }
+```
+
+Real output on a test resource:
+
+```text
+✗ [safety/dynamic-load] resources/some_script/server/main.lua:2
+    load called — loads code at runtime that nobody reviewed
+✗ [safety/host-exec] resources/some_script/server/main.lua:3
+    os.execute — runs or changes things on the host machine
+✗ [safety/secret-convar] resources/some_script/server/main.lua:4
+    GetConvar('mysql_connection_string') reads a secret convar
+
+safety: 3 error(s), 0 warning(s)
+```
+
+The output is a list of places to read, not a verdict.
 
 ## 🏗️ Trust Architecture
 
