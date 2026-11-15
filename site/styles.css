@@ -229,7 +229,6 @@ footer{margin-top:112px;border-top:1px solid var(--line);padding-block:28px 40px
 
 @media (max-width:880px){
   .hero{grid-template-columns:1fr;padding-block:56px 48px;gap:36px}
-  .article{padding-block:48px 0}
   .stats{grid-template-columns:1fr 1fr}
   .stats div:nth-child(3){border-left:0}
   .stats div:nth-child(n+3){border-top:1px solid var(--line)}
@@ -269,3 +268,5 @@ footer{margin-top:112px;border-top:1px solid var(--line);padding-block:28px 40px
 .st-ok{color:var(--ok);background:var(--ok-soft)}
 .st-warn{color:var(--accent);background:var(--accent-soft)}
 .article .cta{margin-top:40px}
+@media (max-width:880px){ .article{padding-block:48px 0} }
+
