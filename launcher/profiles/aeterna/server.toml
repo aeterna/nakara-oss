@@ -13,6 +13,8 @@ contact_email = "support@nakara-city.com"
 feed = "https://nakara-city.com/api/launcher/v1"
 invite_url = "https://discord.gg/8EVHX5R9CE"
 release_repo = "aeterna/nakara-oss"
+# The ed25519 public key that signs AETERNA launcher updates (owner, 2026-11-15; docs/maintainers/launcher-release.md).
+update_keys = ["fcbcbdd4d1e801c6ea5f79ef2e94c311174d593823b52973cce0e4cf25db8a58"]
 
 [theme]
 template = "dusk"
