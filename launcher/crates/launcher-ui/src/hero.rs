@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 
 use crate::model::Instance;
-use crate::text::{label, t};
+use crate::text::label;
 use crate::theme;
 use crate::Message;
-use iced::widget::{button, column, container, row, text_input, Space};
+use iced::widget::{button, column, container, row, Space};
 use iced::{Background, Border, Color, Element, Length};
 
 pub fn view<'a>(inst: &'a Instance, notice: Option<&str>) -> Element<'a, Message> {
@@ -171,7 +171,6 @@ fn actions<'a>(inst: &Instance) -> Element<'a, Message> {
         bar = bar.push(chrome_button("ตรวจเครื่อง"));
     }
 
-    bar = bar.push(chrome_button("โฟลเดอร์ภาพ"));
     bar = bar.push(Space::new().width(Length::Fill));
     bar = bar
         .spacing(12)
@@ -292,13 +291,7 @@ fn chrome_button<'a>(text: &str) -> Element<'a, Message> {
 }
 
 fn invite<'a>() -> Element<'a, Message> {
-    let code = text_input(&t("วางรหัสเชิญเข้าเมือง"), "")
-        .size(14)
-        .padding(0)
-        .width(Length::Fill)
-        .style(input_style);
-
-    let use_code = button(label("ใช้รหัส", 14.0, theme::T2))
+    button(label("เข้า Discord ของเมือง", 14.0, theme::T2))
         .height(44)
         .padding([0, 14])
         .on_press(Message::OpenInvite)
@@ -310,20 +303,8 @@ fn invite<'a>() -> Element<'a, Message> {
                 ..Border::default()
             },
             ..Default::default()
-        });
-
-    container(
-        row![code, use_code]
-            .spacing(6)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_y(iced::Center),
-    )
-    .width(320)
-    .height(56)
-    .padding([6, 6])
-    .style(bordered(12.0))
-    .into()
+        })
+        .into()
 }
 
 fn bordered(radius: f32) -> impl Fn(&iced::Theme) -> container::Style {
@@ -335,18 +316,5 @@ fn bordered(radius: f32) -> impl Fn(&iced::Theme) -> container::Style {
             radius: radius.into(),
         },
         ..container::Style::default()
-    }
-}
-
-fn input_style(_theme: &iced::Theme, _status: text_input::Status) -> text_input::Style {
-    let accent = crate::profile::accent();
-
-    text_input::Style {
-        background: Background::Color(Color::TRANSPARENT),
-        border: Border::default(),
-        icon: theme::T2,
-        placeholder: theme::T3,
-        value: theme::T1,
-        selection: accent,
     }
 }

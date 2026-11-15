@@ -8,7 +8,7 @@ use iced::widget::{button, column, container, row, Space};
 use iced::{Background, Border, Color, Element, Length, Padding};
 
 pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
-    let board = container(column![tabs(), body(inst)].spacing(12).width(Length::Fill))
+    let board = container(column![tabs(inst), body(inst)].spacing(12).width(Length::Fill))
         .width(Length::Fill)
         .padding(Padding {
             top: 8.0,
@@ -31,16 +31,16 @@ pub fn view<'a>(inst: &'a Instance) -> Element<'a, Message> {
         .into()
 }
 
-fn tabs<'a>() -> Element<'a, Message> {
-    row![
-        tab("ภาพรวม", true),
-        tab("ข่าว 3", false),
-        tab("กิจกรรม", false),
-        tab("ภาพ 12", false),
-        tab("กติกา", false),
-    ]
-    .spacing(2)
-    .into()
+fn tabs<'a>(inst: &'a Instance) -> Element<'a, Message> {
+    let news_title = if inst.news.is_empty() {
+        "ข่าว".to_string()
+    } else {
+        format!("ข่าว {}", inst.news.len())
+    };
+
+    row![tab("ภาพรวม", true), tab(&news_title, false)]
+        .spacing(2)
+        .into()
 }
 
 fn tab<'a>(title: &str, active: bool) -> Element<'a, Message> {
@@ -71,12 +71,7 @@ fn tab<'a>(title: &str, active: bool) -> Element<'a, Message> {
 }
 
 fn body<'a>(inst: &'a Instance) -> Element<'a, Message> {
-    let news_header = row![
-        label("ข่าวล่าสุด", 15.0, theme::T1),
-        Space::new().width(Length::Fill),
-        label("ดูทั้งหมด", 12.0, theme::T3),
-    ]
-    .align_y(iced::Center);
+    let news_header = row![label("ข่าวล่าสุด", 15.0, theme::T1)].align_y(iced::Center);
 
     let news_cards: Element<'a, Message> = if inst.news.is_empty() {
         container(label("ยังไม่มีข่าว", 13.0, theme::T3))
@@ -145,12 +140,7 @@ fn news_card<'a>(index: usize, item: &'a NewsItem) -> Element<'a, Message> {
 }
 
 fn patch<'a>(inst: &'a Instance) -> Element<'a, Message> {
-    let header = row![
-        label("บันทึกแพตช์", 15.0, theme::T1),
-        Space::new().width(Length::Fill),
-        label("ทั้งหมด", 11.0, theme::T3),
-    ]
-    .align_y(iced::Center);
+    let header = row![label("บันทึกแพตช์", 15.0, theme::T1)].align_y(iced::Center);
 
     let mut list = column![header, label(&inst.patch_title, 11.0, theme::T3)]
         .spacing(4)

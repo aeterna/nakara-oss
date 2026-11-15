@@ -3,10 +3,10 @@
 use crate::dusk::glass::{self, INK, INK2, MUTED};
 use crate::dusk::icons::{icon, Icon};
 use crate::model::Instance;
-use crate::text::{label, t};
+use crate::text::label;
 use crate::theme;
 use crate::Message;
-use iced::widget::{button, column, container, row, text_input, Space};
+use iced::widget::{button, column, container, row, Space};
 use iced::{Background, Border, Color, Element, Length, Padding};
 
 pub fn view<'a>(inst: &'a Instance, notice: Option<&str>) -> Element<'a, Message> {
@@ -45,8 +45,6 @@ pub fn view<'a>(inst: &'a Instance, notice: Option<&str>) -> Element<'a, Message
     if crate::profile::connect_on() {
         actions_row = actions_row.push(icon_button(Icon::Shield));
     }
-
-    actions_row = actions_row.push(icon_button(Icon::Folder));
 
     let actions = container(actions_row.spacing(12).align_y(iced::Center)).padding(Padding {
         top: 18.0,
@@ -235,14 +233,8 @@ fn icon_button<'a>(which: Icon) -> Element<'a, Message> {
 }
 
 fn invite<'a>() -> Element<'a, Message> {
-    let code = text_input(&t("วางรหัสเชิญเข้าเมือง"), "")
-        .size(14)
-        .padding(0)
-        .width(Length::Fill)
-        .style(input_style);
-
-    let use_code = button(
-        container(label("ใช้รหัส", 14.0, INK))
+    button(
+        container(label("เข้า Discord ของเมือง", 14.0, INK))
             .height(Length::Fill)
             .align_y(iced::Center),
     )
@@ -255,23 +247,7 @@ fn invite<'a>() -> Element<'a, Message> {
             ..theme::rgb(0xdcf0ea)
         },
         10.0,
-    ));
-
-    container(
-        row![icon(Icon::AddUser, 18.0, MUTED), code, use_code]
-            .spacing(10)
-            .align_y(iced::Center)
-            .height(Length::Fill),
-    )
-    .width(412)
-    .height(54)
-    .padding(Padding {
-        top: 0.0,
-        right: 6.0,
-        bottom: 0.0,
-        left: 14.0,
-    })
-    .style(glass::glass(14.0))
+    ))
     .into()
 }
 
@@ -281,22 +257,5 @@ fn bare_button(_theme: &iced::Theme, _status: button::Status) -> button::Style {
         text_color: INK,
         border: Border::default(),
         ..button::Style::default()
-    }
-}
-
-fn input_style(_theme: &iced::Theme, _status: text_input::Status) -> text_input::Style {
-    text_input::Style {
-        background: Background::Color(Color::TRANSPARENT),
-        border: Border {
-            width: 0.0,
-            ..Border::default()
-        },
-        icon: INK,
-        placeholder: MUTED,
-        value: INK,
-        selection: Color {
-            a: 0.35,
-            ..theme::rgb(0x7fd8c0)
-        },
     }
 }
