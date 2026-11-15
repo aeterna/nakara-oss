@@ -195,7 +195,8 @@ fn actions<'a>(inst: &Instance) -> Element<'a, Message> {
 }
 
 fn play_button<'a>(inst: &Instance) -> Element<'a, Message> {
-    let enabled = inst.play_enabled;
+    let enabled =
+        inst.play_enabled || crate::action::opens_connect(inst, crate::profile::connect_on());
     let text_color = if enabled { Color::WHITE } else { theme::T3 };
     let accent = crate::profile::accent();
 
@@ -267,10 +268,16 @@ fn picker<'a>(inst: &Instance) -> Element<'a, Message> {
 }
 
 fn chrome_button<'a>(text: &str) -> Element<'a, Message> {
+    let msg = if text == "ตรวจเครื่อง" {
+        Message::ConnectOpen
+    } else {
+        Message::Noop
+    };
+
     button(label(text, 14.0, theme::T2))
         .height(56)
         .padding([0, 16])
-        .on_press(Message::Noop)
+        .on_press(msg)
         .style(|_theme, _status| button::Style {
             background: Some(Background::Color(theme::SURF)),
             text_color: theme::T2,

@@ -59,6 +59,9 @@ cosmic-text (iced) only `unicode-linebreak`.
    only, starts Connect with `--from-launcher=\\.\pipe\rongroi-launch-<32 hex>`, checks that the client is the Connect
    process it started, writes the pairing code once, then shows Connect's exit code (Connect ADR 0002, amended
    2026-11-14: the packaged Electron build cannot read stdin). Connect's consent and destination screens are unchanged.
+   The launcher runs the Connect it ships with, `<launcher folder>/rongroi-connect/rongroi-connect.exe`; the release zip
+   carries that folder (owner, 2026-11-15). Downloading Connect from its own release host (decision 5) waits until
+   Connect is public.
 9. **What the Creator PLA requires of every build.** The profile must name an `operator` and a `contact_email`; the
    launcher shows both and the line "<server name> IS NOT APPROVED, SPONSORED, OR ENDORSED BY ROCKSTAR GAMES." in its
    footer (§2.3). No Rockstar, GTA or FiveM marks in the launcher's own name or branding. No ads or sponsor slots

@@ -96,7 +96,9 @@ fn title_tile<'a>(inst: &Instance) -> Element<'a, Message> {
 }
 
 fn play_group<'a>(inst: &Instance) -> Element<'a, Message> {
-    let background = if inst.play_enabled {
+    let enabled =
+        inst.play_enabled || crate::action::opens_connect(inst, crate::profile::connect_on());
+    let background = if enabled {
         crate::profile::accent()
     } else {
         Color {
@@ -121,7 +123,7 @@ fn play_group<'a>(inst: &Instance) -> Element<'a, Message> {
         .padding([0, 28])
         .style(bare_button);
 
-    if inst.play_enabled {
+    if enabled {
         play = play.on_press(Message::Play);
     }
 
@@ -207,6 +209,11 @@ fn picker<'a>(inst: &'a Instance) -> Element<'a, Message> {
 }
 
 fn icon_button<'a>(which: Icon) -> Element<'a, Message> {
+    let msg = match which {
+        Icon::Shield => Message::ConnectOpen,
+        _ => Message::Noop,
+    };
+
     let square = button(
         container(icon(which, 20.0, INK2))
             .width(Length::Fill)
@@ -217,7 +224,7 @@ fn icon_button<'a>(which: Icon) -> Element<'a, Message> {
     .width(Length::Fill)
     .height(Length::Fill)
     .padding(0)
-    .on_press(Message::Noop)
+    .on_press(msg)
     .style(bare_button);
 
     container(square)

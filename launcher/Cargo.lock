@@ -1977,6 +1977,7 @@ version = "0.1.0"
 dependencies = [
  "dirs",
  "iced",
+ "launcher-connect",
  "launcher-core",
  "launcher-games",
  "launcher-http",

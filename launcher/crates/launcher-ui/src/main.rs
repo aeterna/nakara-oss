@@ -4,6 +4,7 @@
 
 mod action;
 mod board;
+mod connect;
 mod dusk;
 mod hero;
 mod model;
@@ -70,6 +71,10 @@ pub struct App {
     state_dir: Option<std::path::PathBuf>,
     show_privacy: bool,
     notice: Option<String>,
+    show_connect: bool,
+    connect_code: String,
+    connect_busy: bool,
+    connect_status: Option<String>,
 }
 
 impl Default for App {
@@ -87,6 +92,10 @@ impl Default for App {
             state_dir,
             show_privacy,
             notice: None,
+            show_connect: false,
+            connect_code: String::new(),
+            connect_busy: false,
+            connect_status: None,
         }
     }
 }
@@ -100,31 +109,45 @@ pub enum Message {
     Play,
     OpenInvite,
     OpenNews(usize),
+    ConnectOpen,
+    ConnectClose,
+    ConnectCode(String),
+    ConnectStart,
+    ConnectDone(String),
 }
 
 impl App {
-    fn update(&mut self, message: Message) {
+    fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Select(index) => self.selected = index,
-            Message::Noop => {}
+            Message::Select(index) => {
+                self.selected = index;
+                Task::none()
+            }
+            Message::Noop => Task::none(),
             Message::PrivacyOk => {
                 self.show_privacy = false;
 
                 if let Some(dir) = &self.state_dir {
                     let _ = launcher_core::first_run::mark_seen(dir);
                 }
+                Task::none()
             }
             Message::FeedLoaded(Ok(feed)) => {
                 self.instances = model::instances(profile::get(), Some(&feed));
                 self.selected = self.selected.min(self.instances.len().saturating_sub(1));
+                Task::none()
             }
             Message::FeedLoaded(Err(err)) => {
                 eprintln!("{err}");
+                Task::none()
             }
             Message::Play => {
                 let index = self.selected.min(self.instances.len().saturating_sub(1));
                 if let Some(inst) = self.instances.get(index) {
-                    if action::can_play(inst) {
+                    if action::opens_connect(inst, profile::connect_on()) {
+                        self.show_connect = true;
+                        self.connect_status = None;
+                    } else if action::can_play(inst) {
                         match launcher_games::join(profile::get(), &launcher_games::SystemOpener) {
                             Ok(_) => {
                                 self.notice = None;
@@ -137,6 +160,7 @@ impl App {
                         }
                     }
                 }
+                Task::none()
             }
             Message::OpenInvite => {
                 if let Some(url) = profile::invite_url() {
@@ -146,6 +170,7 @@ impl App {
                         }
                     }
                 }
+                Task::none()
             }
             Message::OpenNews(index) => {
                 let selected = self.selected.min(self.instances.len().saturating_sub(1));
@@ -161,6 +186,67 @@ impl App {
                         }
                     }
                 }
+                Task::none()
+            }
+            Message::ConnectOpen => {
+                self.show_connect = true;
+                self.connect_status = None;
+                if !self.connect_busy {
+                    self.connect_code.clear();
+                }
+                Task::none()
+            }
+            Message::ConnectClose => {
+                if !self.connect_busy {
+                    self.show_connect = false;
+                    self.connect_code.clear();
+                }
+                Task::none()
+            }
+            Message::ConnectCode(code) => {
+                if !self.connect_busy {
+                    let trimmed = code.trim();
+                    if trimmed.len() <= launcher_connect::MAX_CODE_BYTES {
+                        self.connect_code = trimmed.to_string();
+                    }
+                }
+                Task::none()
+            }
+            Message::ConnectStart => {
+                if self.connect_busy {
+                    return Task::none();
+                }
+                let Some(exe) = connect::connect_exe() else {
+                    self.connect_status = Some(connect::MISSING.to_string());
+                    return Task::none();
+                };
+                self.connect_busy = true;
+                self.connect_status = None;
+                let code = self.connect_code.clone();
+                let (tx, rx) = iced::futures::channel::oneshot::channel();
+                std::thread::spawn(move || {
+                    let text =
+                        match launcher_connect::start_connect(&exe, &code, connect::RUN_TIMEOUT) {
+                            Ok(o) => connect::outcome_text(&o),
+                            Err(e) => connect::error_text(&e),
+                        };
+                    let _ = tx.send(text);
+                });
+                Task::perform(
+                    async move {
+                        match rx.await {
+                            Ok(text) => text,
+                            Err(_) => "เปิด Rongroi Connect ไม่ได้".to_string(),
+                        }
+                    },
+                    Message::ConnectDone,
+                )
+            }
+            Message::ConnectDone(text) => {
+                self.connect_busy = false;
+                self.connect_status = Some(text);
+                self.connect_code.clear();
+                Task::none()
             }
         }
     }
@@ -183,6 +269,18 @@ impl App {
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .into()
+        } else if self.show_connect {
+            container(iced::widget::stack![
+                home,
+                connect::view(
+                    &self.connect_code,
+                    self.connect_busy,
+                    self.connect_status.as_deref(),
+                )
+            ])
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
         } else {
             home
         }
@@ -207,5 +305,112 @@ impl App {
         .height(Length::Fill)
         .style(theme::panel(theme::BG, 0.0))
         .into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn connect_open_and_close_respect_busy_state() {
+        let mut app = App {
+            connect_status: Some("old".to_string()),
+            ..App::default()
+        };
+
+        let _ = app.update(Message::ConnectOpen);
+        assert!(app.show_connect);
+        assert_eq!(app.connect_status, None);
+
+        app.connect_busy = true;
+        let _ = app.update(Message::ConnectClose);
+        assert!(app.show_connect);
+
+        app.connect_busy = false;
+        let _ = app.update(Message::ConnectClose);
+        assert!(!app.show_connect);
+    }
+
+    #[test]
+    fn connect_close_and_reopen_clear_code() {
+        let mut app = App::default();
+        let _ = app.update(Message::ConnectOpen);
+        let _ = app.update(Message::ConnectCode("rr1.abc".to_string()));
+        assert_eq!(app.connect_code, "rr1.abc");
+
+        let _ = app.update(Message::ConnectClose);
+        assert!(!app.show_connect);
+        assert_eq!(app.connect_code, "");
+
+        let _ = app.update(Message::ConnectOpen);
+        assert!(app.show_connect);
+        assert_eq!(app.connect_code, "");
+
+        let _ = app.update(Message::ConnectCode("rr1.stale".to_string()));
+        let _ = app.update(Message::ConnectOpen);
+        assert_eq!(app.connect_code, "");
+    }
+
+    #[test]
+    fn connect_code_trims_start_caps_length_and_ignores_when_busy() {
+        let mut app = App::default();
+        let _ = app.update(Message::ConnectCode("  rr1.abc  \n".to_string()));
+        assert_eq!(app.connect_code, "rr1.abc");
+
+        let max = format!("rr1.{}", "a".repeat(4092));
+        assert_eq!(max.len(), 4096);
+        let _ = app.update(Message::ConnectCode(max.clone()));
+        assert_eq!(app.connect_code, max);
+
+        let too_long = format!("rr1.{}", "b".repeat(4093));
+        assert_eq!(too_long.len(), 4097);
+        let _ = app.update(Message::ConnectCode(too_long));
+        assert_eq!(app.connect_code, max);
+
+        app.connect_busy = true;
+        let _ = app.update(Message::ConnectCode("rr1.other".to_string()));
+        assert_eq!(app.connect_code, max);
+    }
+
+    #[test]
+    fn connect_start_while_busy_leaves_state_unchanged() {
+        let mut app = App {
+            connect_busy: true,
+            connect_code: "rr1.abc".to_string(),
+            connect_status: Some("กำลังทำงาน".to_string()),
+            ..App::default()
+        };
+
+        let _ = app.update(Message::ConnectStart);
+        assert!(app.connect_busy);
+        assert_eq!(app.connect_code, "rr1.abc");
+        assert_eq!(app.connect_status.as_deref(), Some("กำลังทำงาน"));
+    }
+
+    #[test]
+    fn connect_start_without_connect_binary_sets_missing_status() {
+        let mut app = App {
+            connect_code: "rr1.abc".to_string(),
+            ..App::default()
+        };
+
+        let _ = app.update(Message::ConnectStart);
+        assert!(!app.connect_busy);
+        assert_eq!(app.connect_status.as_deref(), Some(connect::MISSING));
+    }
+
+    #[test]
+    fn connect_done_clears_busy_and_code_and_sets_status() {
+        let mut app = App {
+            connect_busy: true,
+            connect_code: "rr1.secret".to_string(),
+            ..App::default()
+        };
+
+        let _ = app.update(Message::ConnectDone("ส่งผลตรวจให้ทีมงานแล้ว".to_string()));
+        assert!(!app.connect_busy);
+        assert_eq!(app.connect_code, "");
+        assert_eq!(app.connect_status.as_deref(), Some("ส่งผลตรวจให้ทีมงานแล้ว"));
     }
 }
