@@ -248,8 +248,13 @@ fn next_hop(
     current: &str,
     location: &str,
 ) -> Result<CheckedUrl, FetchError> {
-    let resolved = resolve_location(current, location)?;
-    let checked = policy.check_url(&resolved)?;
+    if location.is_empty() {
+        return Err(FetchError::Redirect("empty Location header".to_owned()));
+    }
+    let joined = url::Url::parse(current)
+        .and_then(|base| base.join(location))
+        .map_err(|_| FetchError::Redirect("invalid Location".to_owned()))?;
+    let checked = policy.check_url(joined.as_str())?;
     if checked.role != Role::Release {
         return Err(FetchError::Role {
             expected: Role::Release,
@@ -257,65 +262,6 @@ fn next_hop(
         });
     }
     Ok(checked)
-}
-
-fn resolve_location(current: &str, location: &str) -> Result<String, FetchError> {
-    if location.is_empty() {
-        return Err(FetchError::Redirect("empty Location header".to_owned()));
-    }
-    if has_scheme(location) {
-        return Ok(location.to_owned());
-    }
-
-    let Some((scheme, rest)) = current.split_once("://") else {
-        return Err(FetchError::Redirect("invalid base URL".to_owned()));
-    };
-    if location.starts_with("//") {
-        return Ok(format!("{scheme}:{location}"));
-    }
-
-    let auth_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
-    let authority = &rest[..auth_end];
-    if authority.is_empty() {
-        return Err(FetchError::Redirect("invalid base URL".to_owned()));
-    }
-
-    if location.starts_with('/') {
-        return Ok(format!("{scheme}://{authority}{location}"));
-    }
-
-    let path_end = rest.find(['?', '#']).unwrap_or(rest.len());
-    let path = &rest[auth_end..path_end];
-
-    if location.starts_with('?') {
-        let base_path = if path.is_empty() { "/" } else { path };
-        return Ok(format!("{scheme}://{authority}{base_path}{location}"));
-    }
-    if location.starts_with('#') {
-        let base_end = current.find('#').unwrap_or(current.len());
-        return Ok(format!("{}{location}", &current[..base_end]));
-    }
-
-    match path.rfind('/') {
-        Some(slash) => Ok(format!(
-            "{scheme}://{authority}{}{location}",
-            &path[..=slash]
-        )),
-        None => Ok(format!("{scheme}://{authority}/{location}")),
-    }
-}
-
-fn has_scheme(value: &str) -> bool {
-    let prefix_end = value.find(['/', '?', '#']).unwrap_or(value.len());
-    let Some(colon) = value[..prefix_end].find(':') else {
-        return false;
-    };
-    let scheme = value[..colon].as_bytes();
-    !scheme.is_empty()
-        && scheme[0].is_ascii_alphabetic()
-        && scheme[1..]
-            .iter()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'-' | b'.'))
 }
 
 fn format_transport(transport: &ureq::Transport) -> String {
@@ -616,6 +562,46 @@ allow_local_feed = true
         assert_eq!(
             next_hop(&p, current, ""),
             Err(FetchError::Redirect("empty Location header".to_owned())),
+        );
+    }
+
+    #[test]
+    fn next_hop_resolves_dot_segments() {
+        let p = policy(WITH_RELEASE_REPO);
+        let current = "https://github.com/example-rp/releases/v1/manifest.json";
+        assert_eq!(
+            next_hop(&p, current, "../v2/manifest.json"),
+            Ok(CheckedUrl {
+                host: "github.com".to_owned(),
+                role: Role::Release,
+                url: "https://github.com/example-rp/releases/v2/manifest.json".to_owned(),
+            }),
+        );
+    }
+
+    #[test]
+    fn next_hop_resolves_protocol_relative_release_host() {
+        let p = policy(WITH_RELEASE_REPO);
+        let current = "https://github.com/example-rp/releases/manifest.json";
+        assert_eq!(
+            next_hop(&p, current, "//objects.githubusercontent.com/x"),
+            Ok(CheckedUrl {
+                host: "objects.githubusercontent.com".to_owned(),
+                role: Role::Release,
+                url: "https://objects.githubusercontent.com/x".to_owned(),
+            }),
+        );
+    }
+
+    #[test]
+    fn next_hop_refuses_protocol_relative_untrusted_host() {
+        let p = policy(WITH_RELEASE_REPO);
+        let current = "https://github.com/example-rp/releases/manifest.json";
+        assert_eq!(
+            next_hop(&p, current, "//evil.example/x"),
+            Err(FetchError::Policy(NetError::Host(
+                "evil.example".to_owned()
+            ))),
         );
     }
 }

@@ -30,7 +30,7 @@ pub fn check_with(
     current: &Version,
     now: OffsetDateTime,
 ) -> Result<UpdateState, String> {
-    let list_url = format!("https://api.github.com/repos/{repo}/releases?per_page=20");
+    let list_url = format!("https://api.github.com/repos/{repo}/releases?per_page=100");
     let list_bytes = fetch(
         &list_url,
         MAX_RELEASES_BYTES as u64,
@@ -144,7 +144,7 @@ mod tests {
     const REPO: &str = "aeterna/nakara-oss";
     const SEED: [u8; 32] = [19; 32];
     const DIGEST: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-    const LIST_URL: &str = "https://api.github.com/repos/aeterna/nakara-oss/releases?per_page=20";
+    const LIST_URL: &str = "https://api.github.com/repos/aeterna/nakara-oss/releases?per_page=100";
     const MANIFEST_020: &str =
         "https://github.com/aeterna/nakara-oss/releases/download/launcher-v0.2.0/manifest.json";
     const SIG_020: &str =

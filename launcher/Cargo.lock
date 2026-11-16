@@ -1950,6 +1950,7 @@ dependencies = [
  "launcher-net",
  "thiserror 2.0.21",
  "ureq",
+ "url",
 ]
 
 [[package]]
