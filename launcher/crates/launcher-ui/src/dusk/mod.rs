@@ -17,6 +17,7 @@ pub fn view<'a>(
     instances: &'a [Instance],
     selected: usize,
     notice: Option<&str>,
+    update: &'a crate::update::UpdateState,
 ) -> Element<'a, Message> {
     let inst = &instances[selected.min(instances.len() - 1)];
 
@@ -38,7 +39,7 @@ pub fn view<'a>(
     .height(Length::Fill);
 
     let content = container(
-        row![sidebar::view(instances, selected), main]
+        row![sidebar::view(instances, selected, update), main]
             .spacing(32)
             .width(Length::Fill)
             .height(Length::Fill),

@@ -10,7 +10,11 @@ use crate::Message;
 use iced::widget::{button, column, container, row, Space};
 use iced::{Background, Border, Color, Element, Length, Padding};
 
-pub fn view<'a>(instances: &'a [Instance], selected: usize) -> Element<'a, Message> {
+pub fn view<'a>(
+    instances: &'a [Instance],
+    selected: usize,
+    update: &'a crate::update::UpdateState,
+) -> Element<'a, Message> {
     let mut list = column![brand(), section("เกม", 8.0)]
         .spacing(4)
         .width(Length::Fill)
@@ -33,6 +37,9 @@ pub fn view<'a>(instances: &'a [Instance], selected: usize) -> Element<'a, Messa
 
     list = list.push(website());
     list = list.push(version());
+    if let crate::update::UpdateState::Available { version, .. } = update {
+        list = list.push(update_button(version));
+    }
 
     container(list)
         .width(248)
@@ -235,8 +242,25 @@ fn website<'a>() -> Element<'a, Message> {
 }
 
 fn version<'a>() -> Element<'a, Message> {
-    container(label("Launcher 0.1.0", 11.0, glass::FAINT))
-        .padding([0, 8])
+    container(label(
+        &format!("Launcher {}", env!("CARGO_PKG_VERSION")),
+        11.0,
+        glass::FAINT,
+    ))
+    .padding([0, 8])
+    .into()
+}
+
+fn update_button<'a>(version: &semver::Version) -> Element<'a, Message> {
+    button(label(&format!("มีรุ่นใหม่ {version}"), 11.0, glass::LINK))
+        .padding([2, 8])
+        .on_press(Message::OpenUpdate)
+        .style(|_theme, _status| button::Style {
+            background: None,
+            text_color: glass::LINK,
+            border: Border::default(),
+            ..button::Style::default()
+        })
         .into()
 }
 

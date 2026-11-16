@@ -15,6 +15,7 @@ mod sidebar;
 mod text;
 mod theme;
 mod topbar;
+mod update;
 
 use iced::widget::{column, container, row};
 use iced::{Element, Length, Task};
@@ -33,11 +34,32 @@ fn main() -> iced::Result {
 fn boot() -> (App, Task<Message>) {
     let app = App::default();
     let profile = profile::get();
-    let task = match profile.server.feed.as_deref() {
+    let feed_task = match profile.server.feed.as_deref() {
         Some(url) => fetch_feed(profile, url),
         None => Task::none(),
     };
-    (app, task)
+    let update_task = check_update(profile);
+    (app, Task::batch([feed_task, update_task]))
+}
+
+fn check_update(profile: &'static launcher_core::Profile) -> Task<Message> {
+    let (tx, rx) = iced::futures::channel::oneshot::channel();
+    std::thread::spawn(move || {
+        let state = update::check(profile);
+        let _ = tx.send(state);
+    });
+    Task::perform(
+        async move {
+            match rx.await {
+                Ok(state) => state,
+                Err(err) => {
+                    eprintln!("{err}");
+                    update::UpdateState::Failed
+                }
+            }
+        },
+        Message::UpdateChecked,
+    )
 }
 
 fn fetch_feed(profile: &'static launcher_core::Profile, url: &'static str) -> Task<Message> {
@@ -75,6 +97,7 @@ pub struct App {
     connect_code: String,
     connect_busy: bool,
     connect_status: Option<String>,
+    update: update::UpdateState,
 }
 
 impl Default for App {
@@ -96,6 +119,7 @@ impl Default for App {
             connect_code: String::new(),
             connect_busy: false,
             connect_status: None,
+            update: update::UpdateState::Off,
         }
     }
 }
@@ -106,6 +130,8 @@ pub enum Message {
     Noop,
     PrivacyOk,
     FeedLoaded(Result<launcher_net::feed::Feed, String>),
+    UpdateChecked(update::UpdateState),
+    OpenUpdate,
     Play,
     OpenInvite,
     OpenNews(usize),
@@ -139,6 +165,20 @@ impl App {
             }
             Message::FeedLoaded(Err(err)) => {
                 eprintln!("{err}");
+                Task::none()
+            }
+            Message::UpdateChecked(state) => {
+                self.update = state;
+                Task::none()
+            }
+            Message::OpenUpdate => {
+                if let update::UpdateState::Available { page, .. } = &self.update {
+                    if action::safe_link(page) {
+                        if let Err(err) = launcher_games::SystemOpener.open(page) {
+                            eprintln!("{err}");
+                        }
+                    }
+                }
                 Task::none()
             }
             Message::Play => {
@@ -260,7 +300,9 @@ impl App {
         };
 
         let home: Element<'_, Message> = match profile::template() {
-            launcher_core::Template::Dusk => dusk::view(&self.instances, self.selected, notice),
+            launcher_core::Template::Dusk => {
+                dusk::view(&self.instances, self.selected, notice, &self.update)
+            }
             launcher_core::Template::Classic => self.classic(notice),
         };
 
@@ -295,10 +337,13 @@ impl App {
             .height(Length::Fill);
 
         container(
-            row![sidebar::view(&self.instances, self.selected), main]
-                .spacing(16)
-                .width(Length::Fill)
-                .height(Length::Fill),
+            row![
+                sidebar::view(&self.instances, self.selected, &self.update),
+                main
+            ]
+            .spacing(16)
+            .width(Length::Fill)
+            .height(Length::Fill),
         )
         .padding(16)
         .width(Length::Fill)
@@ -412,5 +457,21 @@ mod tests {
         assert!(!app.connect_busy);
         assert_eq!(app.connect_code, "");
         assert_eq!(app.connect_status.as_deref(), Some("ส่งผลตรวจให้ทีมงานแล้ว"));
+    }
+
+    #[test]
+    fn update_checked_stores_state() {
+        let mut app = App::default();
+        assert_eq!(app.update, update::UpdateState::Off);
+
+        let available = update::UpdateState::Available {
+            version: semver::Version::new(0, 2, 0),
+            page: "https://github.com/aeterna/nakara-oss/releases/tag/launcher-v0.2.0".to_string(),
+        };
+        let _ = app.update(Message::UpdateChecked(available.clone()));
+        assert_eq!(app.update, available);
+
+        let _ = app.update(Message::UpdateChecked(update::UpdateState::UpToDate));
+        assert_eq!(app.update, update::UpdateState::UpToDate);
     }
 }
