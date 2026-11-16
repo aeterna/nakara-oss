@@ -11,6 +11,8 @@ use time::OffsetDateTime;
 const PRODUCT: &str = "aeterna-launcher";
 const MAX_SIG_BYTES: u64 = 64;
 
+type Fetch<'a> = dyn Fn(&str, u64, Option<&str>) -> Result<Vec<u8>, String> + 'a;
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum UpdateState {
     #[default]
@@ -24,7 +26,7 @@ pub enum UpdateState {
 }
 
 pub fn check_with(
-    fetch: &dyn Fn(&str, u64, Option<&str>) -> Result<Vec<u8>, String>,
+    fetch: &Fetch<'_>,
     repo: &str,
     keys: &[[u8; 32]],
     current: &Version,
@@ -222,9 +224,9 @@ mod tests {
         bad_sig[0] ^= 0xff;
 
         let fetch = |url: &str, _cap: u64, _accept: Option<&str>| match url {
-            LIST_URL => {
-                Ok(br#"[{"tag_name":"launcher-v0.2.0","draft":false,"prerelease":false}]"#.to_vec())
-            }
+            LIST_URL => Ok(
+                br#"[{"tag_name":"launcher-v0.2.0","draft":false,"prerelease":false}]"#.to_vec(),
+            ),
             MANIFEST_020 => Ok(m020.clone()),
             SIG_020 => Ok(bad_sig.clone()),
             other => Err(format!("unexpected URL: {other}")),
@@ -242,9 +244,9 @@ mod tests {
         let s020 = sign(&m020);
 
         let fetch_only_mismatch = |url: &str, _cap: u64, _accept: Option<&str>| match url {
-            LIST_URL => {
-                Ok(br#"[{"tag_name":"launcher-v0.3.0","draft":false,"prerelease":false}]"#.to_vec())
-            }
+            LIST_URL => Ok(
+                br#"[{"tag_name":"launcher-v0.3.0","draft":false,"prerelease":false}]"#.to_vec(),
+            ),
             MANIFEST_030 => Ok(m030_wrong.clone()),
             SIG_030 => Ok(s030_wrong.clone()),
             other => Err(format!("unexpected URL: {other}")),
@@ -285,9 +287,9 @@ mod tests {
         let s020 = sign(&m020);
 
         let fetch_only_expired = |url: &str, _cap: u64, _accept: Option<&str>| match url {
-            LIST_URL => {
-                Ok(br#"[{"tag_name":"launcher-v0.3.0","draft":false,"prerelease":false}]"#.to_vec())
-            }
+            LIST_URL => Ok(
+                br#"[{"tag_name":"launcher-v0.3.0","draft":false,"prerelease":false}]"#.to_vec(),
+            ),
             MANIFEST_030 => Ok(m030_expired.clone()),
             SIG_030 => Ok(s030_expired.clone()),
             other => Err(format!("unexpected URL: {other}")),
@@ -328,7 +330,9 @@ mod tests {
                 {"tag_name":"launcher-v0.1.0","draft":false,"prerelease":false}
             ]"#
             .to_vec()),
-            other => Err(format!("should not fetch manifest for non-newer tag: {other}")),
+            other => Err(format!(
+                "should not fetch manifest for non-newer tag: {other}"
+            )),
         };
 
         let running = Version::parse("0.2.0").unwrap();

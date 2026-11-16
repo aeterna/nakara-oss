@@ -243,11 +243,7 @@ pub fn read_capped(reader: impl Read, cap: u64) -> Result<Vec<u8>, FetchError> {
     Ok(buf)
 }
 
-fn next_hop(
-    policy: &NetPolicy,
-    current: &str,
-    location: &str,
-) -> Result<CheckedUrl, FetchError> {
+fn next_hop(policy: &NetPolicy, current: &str, location: &str) -> Result<CheckedUrl, FetchError> {
     if location.is_empty() {
         return Err(FetchError::Redirect("empty Location header".to_owned()));
     }
@@ -550,7 +546,11 @@ allow_local_feed = true
         let p = policy(WITH_RELEASE_REPO);
         let current = "https://github.com/example-rp/releases/manifest.json";
         assert_eq!(
-            next_hop(&p, current, "https://objects.githubusercontent.com:8443/asset"),
+            next_hop(
+                &p,
+                current,
+                "https://objects.githubusercontent.com:8443/asset"
+            ),
             Err(FetchError::Policy(NetError::Port(8443))),
         );
     }
