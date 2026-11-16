@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "leases": [
+    {
+      "id": "u1-f8489162",
+      "repo": "nakara-oss",
+      "lane": "u1",
+      "host": "mac",
+      "scope": [
+        "launcher/crates/launcher-http/**,launcher/crates/launcher-update/**,launcher/crates/launcher-ui/**,launcher/Cargo.lock"
+      ],
+      "plan": "launcher",
+      "acquired": "2026-11-16T16:20:01Z",
+      "expires": "2026-11-16T20:20:01Z"
+    }
+  ]
+}
