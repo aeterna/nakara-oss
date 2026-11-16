@@ -4,12 +4,13 @@ use launcher_core::Profile;
 use launcher_net::NetPolicy;
 use launcher_update::check::MAX_RELEASES_BYTES;
 use launcher_update::manifest::MAX_MANIFEST_BYTES;
-use launcher_update::{launcher_tags, verify_manifest, Channel};
+use launcher_update::{is_newer, launcher_tags, verify_manifest, Channel};
 use semver::Version;
 use time::OffsetDateTime;
 
 const PRODUCT: &str = "aeterna-launcher";
 const MAX_SIG_BYTES: u64 = 64;
+const MAX_TRIED_TAGS: usize = 5;
 
 type Fetch<'a> = dyn Fn(&str, u64, Option<&str>) -> Result<Vec<u8>, String> + 'a;
 
@@ -41,24 +42,33 @@ pub fn check_with(
     let tags = launcher_tags(&list_bytes, Channel::Stable).map_err(|err| err.to_string())?;
 
     let mut saw_newer = false;
-    for tag in tags {
-        if !strictly_newer(&tag, current) {
-            continue;
-        }
+    for tag in tags
+        .into_iter()
+        .filter(|tag| is_newer(tag, current))
+        .take(MAX_TRIED_TAGS)
+    {
         saw_newer = true;
 
         let base = format!("https://github.com/{repo}/releases/download/launcher-v{tag}");
-        let Ok(manifest_bytes) = fetch(
+        let manifest_bytes = match fetch(
             &format!("{base}/manifest.json"),
             MAX_MANIFEST_BYTES as u64,
             None,
-        ) else {
-            continue;
+        ) {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                eprintln!("launcher-v{tag}: {err}");
+                continue;
+            }
         };
-        let Ok(sig_bytes) = fetch(&format!("{base}/manifest.json.sig"), MAX_SIG_BYTES, None) else {
-            continue;
+        let sig_bytes = match fetch(&format!("{base}/manifest.json.sig"), MAX_SIG_BYTES, None) {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                eprintln!("launcher-v{tag}: {err}");
+                continue;
+            }
         };
-        let Ok(verified) = verify_manifest(
+        let verified = match verify_manifest(
             &manifest_bytes,
             &sig_bytes,
             keys,
@@ -66,10 +76,18 @@ pub fn check_with(
             current,
             Channel::Stable,
             now,
-        ) else {
-            continue;
+        ) {
+            Ok(verified) => verified,
+            Err(err) => {
+                eprintln!("launcher-v{tag}: {err}");
+                continue;
+            }
         };
         if verified.version != tag {
+            eprintln!(
+                "launcher-v{tag}: manifest version {} != tag {tag}",
+                verified.version
+            );
             continue;
         }
 
@@ -125,16 +143,6 @@ pub fn check(profile: &Profile) -> UpdateState {
             UpdateState::Failed
         }
     }
-}
-
-fn strictly_newer(candidate: &Version, current: &Version) -> bool {
-    candidate
-        .major
-        .cmp(&current.major)
-        .then_with(|| candidate.minor.cmp(&current.minor))
-        .then_with(|| candidate.patch.cmp(&current.patch))
-        .then_with(|| candidate.pre.cmp(&current.pre))
-        .is_gt()
 }
 
 #[cfg(test)]
@@ -361,6 +369,39 @@ mod tests {
 
         let err = check_with(&fetch, REPO, &[pubkey()], &current(), now()).unwrap_err();
         assert_eq!(err, "failed");
+    }
+
+    #[test]
+    fn tries_at_most_five_newer_tags_and_never_fetches_sixth_or_seventh() {
+        let m020 = manifest_json("0.2.0", "2027-02-01T00:00:00Z");
+        let s020 = sign(&m020);
+        let asked = std::cell::RefCell::new(Vec::new());
+
+        let fetch = |url: &str, _cap: u64, _accept: Option<&str>| {
+            asked.borrow_mut().push(url.to_string());
+            match url {
+                LIST_URL => Ok(br#"[
+                    {"tag_name":"launcher-v0.8.0","draft":false,"prerelease":false},
+                    {"tag_name":"launcher-v0.7.0","draft":false,"prerelease":false},
+                    {"tag_name":"launcher-v0.6.0","draft":false,"prerelease":false},
+                    {"tag_name":"launcher-v0.5.0","draft":false,"prerelease":false},
+                    {"tag_name":"launcher-v0.4.0","draft":false,"prerelease":false},
+                    {"tag_name":"launcher-v0.3.0","draft":false,"prerelease":false},
+                    {"tag_name":"launcher-v0.2.0","draft":false,"prerelease":false}
+                ]"#
+                .to_vec()),
+                MANIFEST_020 => Ok(m020.clone()),
+                SIG_020 => Ok(s020.clone()),
+                _ => Err("missing manifest".to_string()),
+            }
+        };
+
+        let state = check_with(&fetch, REPO, &[pubkey()], &current(), now()).unwrap();
+        assert_eq!(state, UpdateState::Failed);
+        let urls = asked.borrow();
+        assert_eq!(urls.len(), 1 + MAX_TRIED_TAGS);
+        assert!(!urls.iter().any(|u| u.contains("launcher-v0.3.0")));
+        assert!(!urls.iter().any(|u| u.contains("launcher-v0.2.0")));
     }
 
     #[test]

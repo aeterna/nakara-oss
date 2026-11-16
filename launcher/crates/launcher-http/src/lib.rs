@@ -110,7 +110,7 @@ impl Client {
         cap: u64,
         accept: Option<&str>,
     ) -> Result<Vec<u8>, FetchError> {
-        let mut checked = self.policy.check_url(url)?;
+        let checked = self.policy.check_url(url)?;
         if checked.role != Role::Release {
             return Err(FetchError::Role {
                 expected: Role::Release,
@@ -118,26 +118,21 @@ impl Client {
             });
         }
 
-        for hop in 0..=MAX_REDIRECTS {
-            let response = self.send_checked(&checked, accept)?;
+        let mut final_response = None;
+        follow_redirects(&self.policy, checked, |hop| {
+            let response = self.send_checked(hop, accept)?;
             let status = response.status();
+            let location = response.header("Location").map(str::to_owned);
             if status == 200 {
-                return read_response(response, cap);
+                final_response = Some(response);
             }
-            if matches!(status, 301 | 302 | 303 | 307 | 308) {
-                if hop == MAX_REDIRECTS {
-                    return Err(FetchError::Redirect("too many redirects".to_owned()));
-                }
-                let Some(location) = response.header("Location") else {
-                    return Err(FetchError::Redirect("missing Location header".to_owned()));
-                };
-                checked = next_hop(&self.policy, &checked.url, location)?;
-                continue;
-            }
-            return Err(FetchError::Status(status));
-        }
+            Ok((status, location))
+        })?;
 
-        Err(FetchError::Redirect("too many redirects".to_owned()))
+        let Some(response) = final_response else {
+            return Err(FetchError::Transport("missing response".to_owned()));
+        };
+        read_response(response, cap)
     }
 
     fn get_checked(
@@ -243,6 +238,32 @@ pub fn read_capped(reader: impl Read, cap: u64) -> Result<Vec<u8>, FetchError> {
     Ok(buf)
 }
 
+fn follow_redirects(
+    policy: &NetPolicy,
+    first: CheckedUrl,
+    mut send: impl FnMut(&CheckedUrl) -> Result<(u16, Option<String>), FetchError>,
+) -> Result<CheckedUrl, FetchError> {
+    let mut checked = first;
+    let mut hops = 0;
+    loop {
+        let (status, location) = send(&checked)?;
+        if status == 200 {
+            return Ok(checked);
+        }
+        if !matches!(status, 301 | 302 | 303 | 307 | 308) {
+            return Err(FetchError::Status(status));
+        }
+        if hops == MAX_REDIRECTS {
+            return Err(FetchError::Redirect("too many redirects".to_owned()));
+        }
+        let Some(location) = location.as_deref() else {
+            return Err(FetchError::Redirect("missing Location header".to_owned()));
+        };
+        checked = next_hop(policy, &checked.url, location)?;
+        hops += 1;
+    }
+}
+
 fn next_hop(policy: &NetPolicy, current: &str, location: &str) -> Result<CheckedUrl, FetchError> {
     if location.is_empty() {
         return Err(FetchError::Redirect("empty Location header".to_owned()));
@@ -282,7 +303,7 @@ mod tests {
     use launcher_core::parse;
     use launcher_net::{CheckedUrl, NetError, NetPolicy, Role};
 
-    use super::{checked_addrs, next_hop, read_capped, Client, FetchError};
+    use super::{checked_addrs, follow_redirects, next_hop, read_capped, Client, FetchError};
 
     const BASE: &str = r##"schema = 1
 
@@ -603,5 +624,140 @@ allow_local_feed = true
                 "evil.example".to_owned()
             ))),
         );
+    }
+
+    fn first_release_url(policy: &NetPolicy) -> CheckedUrl {
+        policy
+            .check_url("https://github.com/example-rp/releases/download/v1/manifest.json")
+            .expect("first release URL should pass policy")
+    }
+
+    #[test]
+    fn follow_redirects_returns_on_first_200() {
+        let p = policy(WITH_RELEASE_REPO);
+        let first = first_release_url(&p);
+        let mut calls = 0;
+        let result = follow_redirects(&p, first.clone(), |checked| {
+            calls += 1;
+            assert_eq!(checked, &first);
+            Ok((200, None))
+        });
+        assert_eq!(result, Ok(first));
+        assert_eq!(calls, 1);
+    }
+
+    #[test]
+    fn follow_redirects_follows_302_to_release_assets_then_200() {
+        let p = policy(WITH_RELEASE_REPO);
+        let first = first_release_url(&p);
+        let asset = "https://release-assets.githubusercontent.com/asset/123?sig=abc";
+        let mut seen = Vec::new();
+        let result = follow_redirects(&p, first, |checked| {
+            seen.push(checked.url.clone());
+            match seen.len() {
+                1 => Ok((302, Some(asset.to_owned()))),
+                2 => Ok((200, None)),
+                n => panic!("unexpected call {n}"),
+            }
+        });
+        assert_eq!(
+            result,
+            Ok(CheckedUrl {
+                host: "release-assets.githubusercontent.com".to_owned(),
+                role: Role::Release,
+                url: asset.to_owned(),
+            }),
+        );
+        assert_eq!(seen.len(), 2);
+    }
+
+    #[test]
+    fn follow_redirects_refuses_302_to_untrusted_host() {
+        let p = policy(WITH_RELEASE_REPO);
+        let first = first_release_url(&p);
+        let mut calls = 0;
+        let result = follow_redirects(&p, first, |_checked| {
+            calls += 1;
+            Ok((302, Some("https://evil.example/payload".to_owned())))
+        });
+        assert_eq!(
+            result,
+            Err(FetchError::Policy(NetError::Host(
+                "evil.example".to_owned()
+            ))),
+        );
+        assert_eq!(calls, 1);
+    }
+
+    #[test]
+    fn follow_redirects_allows_three_redirects_then_200() {
+        let p = policy(WITH_RELEASE_REPO);
+        let first = first_release_url(&p);
+        let mut calls = 0;
+        let result = follow_redirects(&p, first, |_checked| {
+            calls += 1;
+            match calls {
+                1 => Ok((302, Some("https://github.com/hop1".to_owned()))),
+                2 => Ok((
+                    302,
+                    Some("https://objects.githubusercontent.com/hop2".to_owned()),
+                )),
+                3 => Ok((
+                    302,
+                    Some("https://release-assets.githubusercontent.com/hop3".to_owned()),
+                )),
+                4 => Ok((200, None)),
+                n => panic!("unexpected call {n}"),
+            }
+        });
+        assert_eq!(
+            result,
+            Ok(CheckedUrl {
+                host: "release-assets.githubusercontent.com".to_owned(),
+                role: Role::Release,
+                url: "https://release-assets.githubusercontent.com/hop3".to_owned(),
+            }),
+        );
+        assert_eq!(calls, 4);
+    }
+
+    #[test]
+    fn follow_redirects_refuses_fourth_redirect() {
+        let p = policy(WITH_RELEASE_REPO);
+        let first = first_release_url(&p);
+        let mut calls = 0;
+        let result = follow_redirects(&p, first, |_checked| {
+            calls += 1;
+            Ok((
+                302,
+                Some(format!(
+                    "https://release-assets.githubusercontent.com/hop{calls}"
+                )),
+            ))
+        });
+        assert_eq!(
+            result,
+            Err(FetchError::Redirect("too many redirects".to_owned())),
+        );
+        assert_eq!(calls, 4);
+    }
+
+    #[test]
+    fn follow_redirects_refuses_302_without_location() {
+        let p = policy(WITH_RELEASE_REPO);
+        let first = first_release_url(&p);
+        let result = follow_redirects(&p, first, |_checked| Ok((302, None)));
+        assert_eq!(
+            result,
+            Err(FetchError::Redirect("missing Location header".to_owned())),
+        );
+    }
+
+    #[test]
+    fn follow_redirects_returns_status_on_404() {
+        let p = policy(WITH_RELEASE_REPO);
+        let first = first_release_url(&p);
+        let result = follow_redirects(&p, first, |_checked| Ok((404, None)));
+        assert_eq!(result, Err(FetchError::Status(404)));
     }
 }
