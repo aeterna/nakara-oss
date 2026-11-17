@@ -6,6 +6,8 @@ All notable changes to `nakara_rongroi` are documented here. The format follows
 
 ## Unreleased
 
+## [0.1.0] - 2026-11-17
+
 ### Added
 
 - Envelope v1 crypto in `server/js/envelope.js` (X25519, HKDF-SHA256, AES-256-GCM; Node `crypto` only) and
