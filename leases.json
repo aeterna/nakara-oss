@@ -12,6 +12,18 @@
       "plan": "launcher-w2-rest",
       "acquired": "2026-11-17T01:32:49Z",
       "expires": "2026-11-17T05:32:49Z"
+    },
+    {
+      "id": "l8-check-0415a3cf",
+      "repo": "nakara-oss",
+      "lane": "l8-check",
+      "host": "mac",
+      "scope": [
+        "launcher/crates/launcher-core/**,launcher/crates/launcher-profile-check/**,launcher/Cargo.toml"
+      ],
+      "plan": "launcher-w2-rest",
+      "acquired": "2026-11-17T01:32:52Z",
+      "expires": "2026-11-17T05:32:52Z"
     }
   ]
 }
