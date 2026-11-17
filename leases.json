@@ -1,4 +1,17 @@
 {
   "version": 1,
-  "leases": []
+  "leases": [
+    {
+      "id": "db-time-0422c8d0",
+      "repo": "nakara-oss",
+      "lane": "db-time",
+      "host": "mac",
+      "scope": [
+        "launcher/Cargo.lock,launcher/crates/*/Cargo.toml,tickets/package.json,tickets/package-lock.json"
+      ],
+      "plan": "launcher-w2-rest",
+      "acquired": "2026-11-17T01:32:49Z",
+      "expires": "2026-11-17T05:32:49Z"
+    }
+  ]
 }
