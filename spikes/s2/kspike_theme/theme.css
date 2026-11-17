@@ -1,0 +1,16 @@
+:root {
+    --accent: #e8742a;
+    --surface: #1d2024;
+    --text: #eceff2;
+}
+
+@font-face {
+    font-family: 'KspikeFont';
+    src: url('fonts/test.woff2') format('woff2');
+    font-display: block;
+}
+
+.kspike-themed {
+    font-family: 'KspikeFont', monospace;
+    color: var(--accent);
+}
