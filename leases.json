@@ -24,6 +24,18 @@
       "plan": "launcher-w2-rest",
       "acquired": "2026-11-17T01:32:52Z",
       "expires": "2026-11-17T05:32:52Z"
+    },
+    {
+      "id": "docs-w2-b3b557dd",
+      "repo": "nakara-oss",
+      "lane": "docs-w2",
+      "host": "mac",
+      "scope": [
+        "launcher/docs/**,launcher/README.md,docs/handoffs/launcher.md"
+      ],
+      "plan": "launcher-w2-rest",
+      "acquired": "2026-11-17T01:32:55Z",
+      "expires": "2026-11-17T05:32:55Z"
     }
   ]
 }
