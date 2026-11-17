@@ -146,13 +146,11 @@ resource that is off for a while gets its place back.
   "nui": true, "db": { "tables": [], "ddl": false }, "files": { "write": [] } }
 ```
 
-## Decisions for the owner
+## Decided
 
-- **Q-L1 — `aeterna_notify` toasts and the dependency table.** ADR 0004's table gives `aeterna_notify` no edge to
-  `aeterna_layout`, so toasts stay at `Config.toast.position` in v0.1. Because the protocol is local events, an
-  owner needs no hard dependency: notify could fire `aeterna_layout:add` and listen for `apply`, and nothing changes
-  when layout is absent. Recommendation: add the row "`aeterna_notify` → `aeterna_layout` (optional, local events
-  only)" to the table in ADR 0004 before W2, so players can move toasts too.
+- **Q-L1 — `aeterna_notify` toasts are draggable** (owner, 2026-11-17). ADR 0004's table now has the optional edge
+  `aeterna_notify` → `aeterna_layout`, local events only. Notify registers `toasts` and `announce`
+  ([aeterna_notify § Position](aeterna_notify.md#position-and-aeterna_layout)).
 
 ## Tests
 

@@ -74,9 +74,18 @@ not get old announcements.
 
 ## Position and `aeterna_layout`
 
-v0.1 uses `Config.toast.position`. Letting players drag toasts needs an edge to `aeterna_layout`, which ADR 0004's
-table does not have yet. The layout spec (after spike S1) decides whether that edge is added; until then notify does
-not reference `aeterna_layout` at all.
+`Config.toast.position` is the default. When `aeterna_layout` is started, notify registers two elements through
+layout's local events (ADR 0004 table: optional edge, local events only; owner, 2026-11-17):
+
+| `id` | What moves | `hideable` |
+| --- | --- | --- |
+| `toasts` | The toast stack. New toasts grow away from the stack's anchor edge (anchor at the bottom → they stack upward) | `false` |
+| `announce` | The announcement banner | `false` |
+
+`w`/`h` are the stack's width and the height of four toasts at scale 1. Notify fires `aeterna_layout:add` on start and
+on `aeterna_layout:hello`, and applies `aeterna_layout:apply` for its own ids. Without layout nothing changes. Notify
+never lists layout in `dependencies`, never calls its exports and never loads its files. The MOTD card stays centred
+and is not an element.
 
 ## Events
 
@@ -130,6 +139,8 @@ Smoke:
 2. `aeterna_announce` from console and from an admin: banner appears for two clients; a non-admin is refused.
 3. MOTD after first spawn; "Don't show again" survives a reconnect; changing `version` shows it again.
 4. Screenshots in Asphalt for the owner's visual gate; reduced-motion setting removes all movement.
+5. With `aeterna_layout` started: drag the toast stack and the banner, Done, reconnect, both stay; anchor the stack
+   at the bottom and new toasts grow upward. Stop `aeterna_layout`: toasts go back to `Config.toast.position`.
 
 ## Done when
 
