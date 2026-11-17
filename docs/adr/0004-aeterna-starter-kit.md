@@ -74,8 +74,10 @@ A review of the plan against this repo (`1b16577`) found facts that shape the de
 6. **Theme.** Every package ships its own copy of `html/theme.css`; CI checks that all copies are identical, so no
    package loads files across resources. Colours, type and spacing are CSS custom properties with neutral names
    (`--accent`, `--surface-*`, `--text-*`). A server owner overrides the theme with the convar `aeterna_theme`: a
-   `nui://` path in their own resource, which Lua hands to each NUI page. Loading across resources is settled by
-   spike S2 before v0.1's spec is frozen; if it fails, the override is a copy step in the theming guide.
+   `nui://` path in their own resource, which Lua hands to each NUI page. Spike S2 passed in game on 2026-11-17
+   (clean Qbox server, FXServer Enhanced): a page in one resource used a stylesheet and an `@font-face` font served
+   by another resource, both from a static `<link>` and from a `<link>` added at runtime by Lua. Colours, custom
+   properties and the font all applied, and `cssRules` stayed readable. So the override needs no copy step.
    The default theme is **Asphalt** (owner, 2026-11-17, picked from three mockups): solid graphite surfaces, one
    road-sign blue accent used only for the primary action and the health bar, radii 6 / 10 / 14 px, inner padding
    14 px. Starting tokens:
@@ -107,7 +109,14 @@ A review of the plan against this repo (`1b16577`) found facts that shape the de
     server, and checks ACE on the server for anything that reaches other players (announcements).
 12. **Layout across resources is a coordinate protocol.** Each resource reports its movable boxes (id, size, anchor);
     `aeterna_layout` draws stand-ins in its own frame for the player to drag, then sends back
-    `{id, x, y, ax, ay, scale}` for each resource to apply. Spike S1 proves this in game before v0.2's spec.
+    `{id, x, y, ax, ay, scale}` for each resource to apply. Spikes S1 and S3 passed in game on 2026-11-17:
+    - **S1, NUI boxes:** boxes drawn by two other resources followed the drag live (updates at most every
+      100 ms). They stayed after closing the editor and after a reconnect (client KVP), and a reset put them back.
+    - **S3, the game-drawn minimap** is an element of the same protocol. Its owner (`aeterna_hudkit`) maps
+      between screen fractions and the native's aligned offsets with `GetScriptGfxPosition` under `L`/`B`
+      alignment. It moves `minimap`, `minimap_mask` and `minimap_blur` together with `SetMinimapComponentPosition`,
+      then toggles `SetBigmapActive` so the radar re-renders. It re-applies when the resolution or safe zone
+      changes. The stand-in covered the real radar, and drag, reconnect and reset all worked.
 13. **Accessibility.** Text meets WCAG AA contrast on the default theme, motion respects a reduced-motion setting, and
     every panel closes with ESC and a visible button.
 14. **Support scope.** Each package README states the `qbx_core`, `ox_lib` and FXServer versions it was tested on and
