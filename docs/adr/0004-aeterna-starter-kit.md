@@ -1,7 +1,7 @@
 # ADR 0004 — AETERNA Starter Kit (`aeterna_*` packages): generic templates for running your own FiveM server
 
-- Status: proposed — owner accepted the plan's recommendations Q1–Q6 on 2026-11-17; waiting for the owner to accept
-  this ADR and pick the neutral theme (gate G0)
+- Status: proposed — owner accepted the plan's recommendations Q1–Q6, chose one release of seven and picked the
+  Asphalt theme on 2026-11-17; waiting for the owner to accept this ADR by merging it (gate G0)
 - Date: 2026-11-17
 - Related: ADR 0001 (KVP settings, measured spikes before decisions); ADR 0003 decision 10 (a package that names the
   optional resource it calls); this repo's `AGENTS.md` hard rules 3, 4, 5, 7 and 8; plan "nakara-oss — Starter Kit"
@@ -75,6 +75,18 @@ A review of the plan against this repo (`1b16577`) found facts that shape the de
    (`--accent`, `--surface-*`, `--text-*`). A server owner overrides the theme with the convar `aeterna_theme`: a
    `nui://` path in their own resource, which Lua hands to each NUI page. Loading across resources is settled by
    spike S2 before v0.1's spec is frozen; if it fails, the override is a copy step in the theming guide.
+   The default theme is **Asphalt** (owner, 2026-11-17, picked from three mockups): solid graphite surfaces, one
+   road-sign blue accent used only for the primary action and the health bar, radii 6 / 10 / 14 px, inner padding
+   14 px. Starting tokens:
+
+   | Token | Value | Token | Value |
+   | --- | --- | --- | --- |
+   | `--surface` | `#1d2024` | `--accent` | `#2f6feb` |
+   | `--raised` | `#262a2f` | `--on-accent` | `#ffffff` (4.57 : 1) |
+   | `--text` | `#eceff2` | `--good` | `#3fae6e` |
+   | `--text-2` | `#aab1b9` | `--warn` | `#d9a03a` |
+   | `--text-3` | `#8a929b` (5.19 : 1 on surface) | `--bad` | `#e0574f` |
+   | `--line` | `rgba(232,236,240,.09)` | `--track` | `rgba(232,236,240,.12)` |
 7. **Font.** One OFL-licensed Thai and Latin family (default: IBM Plex Sans Thai), `.woff2` only, may live in
    `packages/*/html/fonts/`, at most 1 MB per package, with its `OFL.txt` beside it. A new scanner rule enforces the
    path, the size and the licence file, and refuses `.svg` files; icons are inline SVG inside JavaScript from a named
