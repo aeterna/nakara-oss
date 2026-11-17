@@ -49,7 +49,7 @@ A review of the plan against this repo (`1b16577`) found facts that shape the de
    | Package | May depend on |
    | --- | --- |
    | `aeterna_core` | — (`ox_lib` optional) |
-   | `aeterna_notify` | `aeterna_core` |
+   | `aeterna_notify` | `aeterna_core`; `aeterna_layout` optional, local events only (owner, 2026-11-17: players may drag toasts) |
    | `aeterna_uikit` | `aeterna_core` |
    | `aeterna_layout` | `aeterna_core`, `aeterna_uikit` |
    | `aeterna_hudkit` | `aeterna_core`, `aeterna_uikit`, `aeterna_layout` |
@@ -58,6 +58,8 @@ A review of the plan against this repo (`1b16577`) found facts that shape the de
 
    A new check in `.github/scripts` reads each package's `fxmanifest.lua` `dependencies`, `exports.<resource>`,
    `nui://<resource>/` and `@<resource>/` references and fails on any edge not in this table.
+   An edge marked optional allows only local events of the target (`aeterna_<target>:*`); a `dependencies` entry,
+   an `exports.` call or a `nui://` path for it fails the check, so the package still works when the target is absent.
 3. **One release, built in waves.** All seven packages ship together as v0.1.0 (owner, 2026-11-17: "7 in one
    release"). They are built in dependency order — W1 `aeterna_core`, `aeterna_uikit` and the scanner changes; W2
    `aeterna_layout`, `aeterna_notify`, `aeterna_invkit`; W3 `aeterna_hudkit`, `aeterna_phonekit` — and nothing is
