@@ -91,6 +91,25 @@ fn missing_wordmark_file_is_an_error() {
 }
 
 #[test]
+fn wordmark_directory_is_not_a_regular_file() {
+    let dir = test_dir("wordmark_directory_is_not_a_regular_file");
+    fs::create_dir_all(dir.join("assets/wordmark.png"))
+        .expect("wordmark directory should be created");
+    let text = with_theme_line("wordmark = \"assets/wordmark.png\"");
+
+    let report = check_profile(&text, &dir);
+
+    assert_eq!(
+        report.errors,
+        vec![format!(
+            "theme.wordmark: assets/wordmark.png under {} is not a regular file",
+            dir.display()
+        )]
+    );
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn assets_over_five_megabytes_are_an_error() {
     let dir = test_dir("assets_over_five_megabytes_are_an_error");
     let size = 5 * 1024 * 1024 + 1;
@@ -102,7 +121,7 @@ fn assets_over_five_megabytes_are_an_error() {
     assert_eq!(
         report.errors,
         vec![format!(
-            "theme assets: total size {size} bytes is over the 5 MB limit"
+            "theme assets: total size {size} bytes is over the 5 MiB limit (5242880 bytes)"
         )]
     );
     let _ = fs::remove_dir_all(&dir);

@@ -7,7 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
-use launcher_core::check::check_profile;
+use launcher_core::check::check_parsed;
 
 fn main() {
     std::process::exit(run(std::env::args().skip(1).collect()));
@@ -56,11 +56,20 @@ fn run(args: Vec<String>) -> i32 {
     let root = root.unwrap_or_else(|| {
         Path::new(&path)
             .parent()
+            .filter(|p| !p.as_os_str().is_empty())
             .map(Path::to_path_buf)
             .unwrap_or_else(|| PathBuf::from("."))
     });
 
-    let report = check_profile(&text, &root);
+    let profile = match launcher_core::parse(&text) {
+        Ok(profile) => profile,
+        Err(error) => {
+            eprintln!("error: {error}");
+            return 1;
+        }
+    };
+
+    let report = check_parsed(&profile, &root);
     for error in &report.errors {
         println!("error: {error}");
     }
@@ -72,16 +81,8 @@ fn run(args: Vec<String>) -> i32 {
         return 1;
     }
 
-    match launcher_core::parse(&text) {
-        Ok(profile) => {
-            println!("OK: {} ({})", profile.server.name, profile.server.id);
-            0
-        }
-        Err(error) => {
-            eprintln!("error: {error}");
-            1
-        }
-    }
+    println!("OK: {} ({})", profile.server.name, profile.server.id);
+    0
 }
 
 fn usage_error(message: &str) -> i32 {
