@@ -9,6 +9,10 @@ const EXAMPLE: &str = include_str!("../../../profiles/example/server.toml");
 const FEED: &str = "https://feed.example.com/profile.json";
 const UPDATE_KEY: &str = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
 
+fn example() -> String {
+    EXAMPLE.replace("\r\n", "\n")
+}
+
 fn test_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("launcher-check-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
@@ -22,12 +26,12 @@ fn replace_once(text: &str, from: &str, to: &str) -> String {
 }
 
 fn with_theme_line(line: &str) -> String {
-    replace_once(EXAMPLE, "[theme]\n", &format!("[theme]\n{line}\n"))
+    replace_once(&example(), "[theme]\n", &format!("[theme]\n{line}\n"))
 }
 
 fn with_server_fields(fields: &str) -> String {
     replace_once(
-        EXAMPLE,
+        &example(),
         "contact_email = \"team@example.com\"\n",
         &format!("contact_email = \"team@example.com\"\n{fields}\n"),
     )
@@ -46,7 +50,7 @@ fn write_asset(root: &Path, path: &str, len: u64) {
 fn valid_example_has_no_errors() {
     let dir = test_dir("valid_example_has_no_errors");
 
-    let report = check_profile(EXAMPLE, &dir);
+    let report = check_profile(&example(), &dir);
 
     assert!(
         report.errors.is_empty(),
@@ -59,7 +63,7 @@ fn valid_example_has_no_errors() {
 #[test]
 fn invalid_toml_reports_one_error_and_stops() {
     let dir = test_dir("invalid_toml_reports_one_error_and_stops");
-    let text = replace_once(EXAMPLE, "schema = 1", "schema = [");
+    let text = replace_once(&example(), "schema = 1", "schema = [");
 
     let report = check_profile(&text, &dir);
 
