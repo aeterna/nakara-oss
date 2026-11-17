@@ -13,7 +13,8 @@ A launcher release is a draft GitHub release named `launcher-v<version>` that ho
 
 The launcher installs an update only when the signature verifies against a key listed in its profile's
 `server.update_keys`, the version is newer than its own, and the manifest has not expired (`launcher-update`).
-The launcher's screen does not check for updates yet; that is wired in a later change.
+Since U1 (#52) the launcher checks once at start and, when a newer verified release exists, shows a link to its
+release page. It does not download or install anything yet; the player downloads the zip by hand.
 
 ## Once: create the signing key (owner only)
 
@@ -60,8 +61,7 @@ Environment secret, and nowhere else. No agent ever sees it.
 
 The sign step prints the public key that signs (`signing key (public): …`), and it fails unless that key is in
 `launcher/profiles/aeterna/server.toml` `update_keys`. A wrong or replaced secret therefore stops the release
-instead of producing one that no build accepts. The manifest's product name is `aeterna-launcher`. The update check
-must pass the same name when it is wired.
+instead of producing one that no build accepts. The manifest's product name is `aeterna-launcher`, and the update check in `launcher-ui` passes the same name.
 
 ## Each release (owner)
 
@@ -79,8 +79,19 @@ must pass the same name when it is wired.
 
 ## When something goes wrong
 
-- **Bad release:** do not delete the release, since its tag is protected. Publish a newer version. The launcher
-  installs only a version newer than its own, so the newer release takes over, and the bad manifest expires on its own.
+What the update check does decides every case below (`launcher-ui/src/update.rs`): it lists the releases of
+`release_repo`, skips drafts and (on the stable channel) pre-releases, takes the newest `launcher-v*` tags above
+its own version, and offers the first one whose manifest verifies against `update_keys`, names that same version,
+and has not expired. It tries at most five tags.
+
+- **Bad release, not yet published:** it is still a draft, and the check never sees drafts. Fix and release again.
+- **Bad release, published:** players are being pointed at it. Publish a fixed, newer version as soon as you can;
+  the check always offers the newest version that verifies. If no fix is ready, a short `expires_days` limits the
+  damage: once the bad manifest expires, the check skips it. A published release's assets and tag cannot
+  change (immutable releases are on).
+- **Withdrawing a version without a replacement:** there is no "unpublish" for players who already downloaded it.
+  The release stays (its tag is protected). Post a warning wherever your players read news (the feed can carry it
+  once news is enabled), and release a fixed version when you can. Do not try to delete it: the tag is protected.
 - **Retiring or rotating a key.** The profile, and with it `update_keys`, is compiled into the exe, so a new key
   list reaches players through a release signed with a key they already trust. Do it in this order:
   1. Create the new key (step 1, with a new file name) and keep it out of GitHub for now.
