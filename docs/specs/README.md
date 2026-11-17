@@ -10,7 +10,7 @@ follow it. A change to a released contract is a new major version of that packag
 | [aeterna_uikit](aeterna_uikit.md) | `packages/uikit` | W1 | draft |
 | [aeterna_notify](aeterna_notify.md) | `packages/notify` | W2 | draft |
 | [aeterna_invkit](aeterna_invkit.md) | `packages/invkit` | W2 | draft |
-| `aeterna_layout` | `packages/layout` | W2 | waits for spike S1 |
+| [aeterna_layout](aeterna_layout.md) | `packages/layout` | W2 | draft |
 | `aeterna_hudkit` | `packages/hudkit` | W3 | after layout |
 | `aeterna_phonekit` | `packages/phonekit` | W3 | after uikit and notify |
 
