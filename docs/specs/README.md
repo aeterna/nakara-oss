@@ -11,7 +11,7 @@ follow it. A change to a released contract is a new major version of that packag
 | [aeterna_notify](aeterna_notify.md) | `packages/notify` | W2 | draft |
 | [aeterna_invkit](aeterna_invkit.md) | `packages/invkit` | W2 | draft |
 | [aeterna_layout](aeterna_layout.md) | `packages/layout` | W2 | draft |
-| `aeterna_hudkit` | `packages/hudkit` | W3 | after layout |
+| [aeterna_hudkit](aeterna_hudkit.md) | `packages/hudkit` | W3 | draft |
 | `aeterna_phonekit` | `packages/phonekit` | W3 | after uikit and notify |
 
 ## Conventions every spec follows
