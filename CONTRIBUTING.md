@@ -4,6 +4,8 @@ Thanks for helping. A few rules keep every server that installs these packages s
 
 ## Before you start
 
+- Branch from `dev` and open your PR against `dev` (the default branch). `main` only receives
+  promotions from `dev` when a release is cut.
 - Bugs and small fixes: open a PR directly.
 - New features, new packages, or anything touching `.github/`, `oss.schema.json`, any `oss.json`
   capability, or `packages/devkit/src/safety/`: **open a Proposal issue first**. Changes to CI and
@@ -17,7 +19,7 @@ under MIT ([developercertificate.org](https://developercertificate.org)):
 
 ```bash
 git commit -s -m "fix: …"          # adds Signed-off-by: Your Name <you@example.com>
-git rebase --signoff main          # fix commits you already made
+git rebase --signoff dev           # fix commits you already made
 ```
 
 The name/email must match the commit author. CI checks this.
