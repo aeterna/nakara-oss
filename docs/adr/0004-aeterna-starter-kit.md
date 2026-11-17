@@ -38,7 +38,7 @@ A review of the plan against this repo (`1b16577`) found facts that shape the de
 
 1. **Names.** Starter Kit resources are named `aeterna_<name>`. Existing packages keep `nakara_*`. The schema pattern
    becomes `^(nakara|aeterna)_[a-z0-9_]+$`. The schema, rule 5, `CONTRIBUTING.md`, the engineer contract and the
-   site change with this ADR; the scanner's rate-limit list and `safety.md` change with the scanner work in W1. Names are
+   site change with this ADR; the scanner needs no change for `AeternaCore.rateLimit` (decision 5). Names are
    chosen so they never equal a resource name the team runs privately; the maintainer checks this before a name is
    added, from a list kept outside this repo.
 2. **Rule 5, rewritten.** A package may depend on another package of this repo only along an edge listed in the
@@ -69,7 +69,8 @@ A review of the plan against this repo (`1b16577`) found facts that shape the de
    team's private code works. Specs pass the leak review (decision 9) before they are committed. Code is written
    from the spec and the owner-approved mockups.
 5. **`aeterna_core` owns NUI focus.** Packages ask `aeterna_core` for focus and release it; a package that loses focus
-   cancels its own mode. `aeterna_core` also exports `AeternaCore.rateLimit`, which is added to the scanner's list.
+   cancels its own mode. `aeterna_core` also provides `AeternaCore.rateLimit`, which the scanner already accepts (a call path ending in
+   `.rateLimit` matches its default `rateLimit` entry).
 6. **Theme.** Every package ships its own copy of `html/theme.css`; CI checks that all copies are identical, so no
    package loads files across resources. Colours, type and spacing are CSS custom properties with neutral names
    (`--accent`, `--surface-*`, `--text-*`). A server owner overrides the theme with the convar `aeterna_theme`: a
@@ -100,7 +101,8 @@ A review of the plan against this repo (`1b16577`) found facts that shape the de
    maintainer to run it. Each release is also read in full by a second model before the owner's gate.
 10. **No default keys.** Packages register commands with `RegisterKeyMapping` and no default key, so they never clash
     with `ox_inventory` (TAB, 1–5) or the `qbx`/`ox_lib` menus. Command names are permanent once released, because
-    players' bindings stick to them.
+    players' bindings stick to them. Two inputs work without binding: ESC closes any open panel, and Space answers a
+    skill check while one runs (jumping is disabled during it), because a check nobody can answer is useless.
 11. **Every NUI callback and net event** validates its payload against a schema in the spec, is rate limited on the
     server, and checks ACE on the server for anything that reaches other players (announcements).
 12. **Layout across resources is a coordinate protocol.** Each resource reports its movable boxes (id, size, anchor);
@@ -124,8 +126,8 @@ bundled, `spec/` with busted tests, an entry in `.fivem-devkit.json` `specRoots`
 ## Consequences
 
 - Rule 5, the schema and the release script change once; later `aeterna_*` packages need only a table row.
-- The scanner grows two rules (fonts/assets, dependency edges) and one name (`AeternaCore.rateLimit`). These paths are
-  maintainer-owned (rule 7), so the owner reviews them.
+- The scanner grows two rules (fonts/assets, dependency edges). These paths are maintainer-owned (rule 7), so the
+  owner reviews them.
 - Copies of `theme.css` cost a few KB per package and remove a whole class of cross-origin failures.
 - The private server does not vendor these packages for now; if it does later, its vendoring check must accept the
   `aeterna_` prefix and refuse names that collide with its own resources.
