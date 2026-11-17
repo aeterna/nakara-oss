@@ -58,7 +58,7 @@ ensure aeterna_phonekit
 | Calculator | Four operations, percent, sign, clear; numbers in tabular figures. Pure logic in `shared/logic/calc.lua` | nothing |
 | Notes | Up to 50 notes, title ≤ 60, body ≤ 2000 | KVP `aeterna_phonekit:notes:v1` |
 | Contacts | Up to 100 contacts, name ≤ 40, number ≤ 20 as free text (phonekit has no numbering plan) | KVP `aeterna_phonekit:contacts:v1` |
-| Settings | Text size (normal, large), 24-hour or 12-hour clock, "Edit layout" when layout runs (Q-P1) | KVP `aeterna_phonekit:settings:v1` |
+| Settings | Text size (normal, large), 24-hour or 12-hour clock, "Edit layout" when layout runs | KVP `aeterna_phonekit:settings:v1` |
 
 All data stays on the player's machine (ADR 0004 decision 8). Notes and contacts are refused past 16 KB each with a
 locale message, which is the `AeternaCore.kvp` limit.
@@ -145,11 +145,13 @@ KVP `aeterna_phonekit:notes:v1`, `aeterna_phonekit:contacts:v1`, `aeterna_phonek
   "nui": true, "db": { "tables": [], "ddl": false }, "files": { "write": [] } }
 ```
 
-## Decisions for the owner
+## Position and `aeterna_layout`
 
-- **Q-P1 — move the phone with `aeterna_layout`.** ADR 0004's table gives `aeterna_phonekit` no edge to layout, so
-  the phone sits in a corner from `Config.position`. Recommendation: the same optional, local-events-only edge that
-  notify got (Q-L1), so players can move and scale the phone like the rest of the HUD.
+`Config.position` is the default. When `aeterna_layout` is started, phonekit registers one element, `phone`
+(320 × 640 at scale 1, `scalable = true`, `hideable = false`), through layout's local events and applies its place
+(ADR 0004 table: optional edge, local events only; owner, 2026-11-17). Without layout nothing changes. Phonekit never
+lists layout in `dependencies`, never calls its exports and never loads its files. The Settings app shows "Edit
+layout" only while layout runs.
 
 ## Tests
 
@@ -171,8 +173,10 @@ Smoke (kit-test server, driven from a button menu, not typed commands):
 2. Built-in apps: calculator sums, a note and a contact survive a reconnect.
 3. A test resource adds an app with a list and a form; picks and button values reach the server; back returns home.
 4. `notifyApp` while closed shows a toast and a badge; while open shows a banner.
-5. `Config.ask = true` with a test listener that denies: the phone does not open and the refusal toast shows.
-6. Screenshots in Asphalt (home, an app, a banner, large text) for the owner's visual gate; reduced motion stops all
+5. With `aeterna_layout` started: drag and scale the phone, Done, reconnect, it stays; stop layout and it goes back
+   to `Config.position`.
+6. `Config.ask = true` with a test listener that denies: the phone does not open and the refusal toast shows.
+7. Screenshots in Asphalt (home, an app, a banner, large text) for the owner's visual gate; reduced motion stops all
    movement.
 
 ## Done when

@@ -151,6 +151,8 @@ resource that is off for a while gets its place back.
 - **Q-L1 — `aeterna_notify` toasts are draggable** (owner, 2026-11-17). ADR 0004's table now has the optional edge
   `aeterna_notify` → `aeterna_layout`, local events only. Notify registers `toasts` and `announce`
   ([aeterna_notify § Position](aeterna_notify.md#position-and-aeterna_layout)).
+- **Q-P1 — the phone is draggable** (owner, 2026-11-17). Same optional edge for `aeterna_phonekit`; it registers
+  `phone` ([aeterna_phonekit § Position](aeterna_phonekit.md#position-and-aeterna_layout)).
 
 ## Tests
 
