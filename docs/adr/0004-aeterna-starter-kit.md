@@ -53,7 +53,7 @@ A review of the plan against this repo (`1b16577`) found facts that shape the de
    | `aeterna_uikit` | `aeterna_core` |
    | `aeterna_layout` | `aeterna_core`, `aeterna_uikit` |
    | `aeterna_hudkit` | `aeterna_core`, `aeterna_uikit`, `aeterna_layout` |
-   | `aeterna_phonekit` | `aeterna_core`, `aeterna_uikit`, `aeterna_notify` |
+   | `aeterna_phonekit` | `aeterna_core`, `aeterna_uikit`, `aeterna_notify`; `aeterna_layout` optional, local events only (owner, 2026-11-17: players may drag the phone) |
    | `aeterna_invkit` | `aeterna_core`, `aeterna_uikit` (+ `ox_inventory`, decision 15) |
 
    A new check in `.github/scripts` reads each package's `fxmanifest.lua` `dependencies`, `exports.<resource>`,
