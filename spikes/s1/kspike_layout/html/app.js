@@ -1,12 +1,21 @@
 // spikes/s1/kspike_layout/html/app.js
-// Overlay editor for positioning HUD elements via pointer drag.
+// Test menu and overlay editor for HUD elements.
 
-const container = document.getElementById('boxes-layer');
+const menuContainer = document.getElementById('menu-container');
+const editorContainer = document.getElementById('editor-container');
+const menuStatus = document.getElementById('menu-status');
+const boxesContainer = document.getElementById('boxes-layer');
 const doneBtn = document.getElementById('btn-done');
+
+const btnLayout = document.getElementById('btn-menu-layout');
+const btnReset = document.getElementById('btn-menu-reset');
+const btnRerun = document.getElementById('btn-menu-rerun');
+const btnClose = document.getElementById('btn-menu-close');
 
 let activeDrag = null;
 let lastMovePostTime = 0;
 let registeredElements = [];
+let currentView = 'none';
 
 function postNui(endpoint, data) {
     const resource = window.GetParentResourceName ? window.GetParentResourceName() : 'kspike_layout';
@@ -21,10 +30,67 @@ function clamp(val, min, max) {
     return Math.max(min, Math.min(max, val));
 }
 
+function showMenu(count) {
+    currentView = 'menu';
+    document.body.className = 'active menu-mode';
+    editorContainer.classList.add('hidden');
+    menuContainer.classList.remove('hidden');
+    menuStatus.textContent = 'กล่องที่ลงทะเบียน: ' + (count !== undefined ? count : 0);
+}
+
+function showEditor(elements) {
+    currentView = 'editor';
+    document.body.className = 'active editor-mode';
+    menuContainer.classList.add('hidden');
+    editorContainer.classList.remove('hidden');
+    renderElements(elements || []);
+}
+
+function hideAll() {
+    currentView = 'none';
+    document.body.className = 'hidden';
+    menuContainer.classList.add('hidden');
+    editorContainer.classList.add('hidden');
+}
+
+function closeUI() {
+    hideAll();
+    postNui('close', {});
+}
+
+// Menu button click listeners
+btnLayout.addEventListener('click', () => {
+    postNui('menu_edit', {});
+});
+
+btnReset.addEventListener('click', () => {
+    postNui('menu_reset', {});
+    menuStatus.textContent = 'รีเซ็ตแล้ว';
+});
+
+btnRerun.addEventListener('click', () => {
+    hideAll();
+    postNui('menu_rerun_s2', {});
+});
+
+btnClose.addEventListener('click', () => {
+    closeUI();
+});
+
+doneBtn.addEventListener('click', () => {
+    closeUI();
+});
+
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' || e.key === 'Esc') {
+        closeUI();
+    }
+});
+
 function renderElements(elements) {
     registeredElements = elements || [];
-    while (container.firstChild) {
-        container.removeChild(container.firstChild);
+    while (boxesContainer.firstChild) {
+        boxesContainer.removeChild(boxesContainer.firstChild);
     }
 
     registeredElements.forEach((elem) => {
@@ -69,7 +135,7 @@ function renderElements(elements) {
             lastMovePostTime = Date.now();
         });
 
-        container.appendChild(box);
+        boxesContainer.appendChild(box);
     });
 }
 
@@ -93,7 +159,6 @@ window.addEventListener('pointermove', (e) => {
     activeDrag.lastXFraction = fractionX;
     activeDrag.lastYFraction = fractionY;
 
-    // Update coordinate in cached element list
     const found = registeredElements.find(
         (el) => el.owner === activeDrag.owner && el.id === activeDrag.id
     );
@@ -127,7 +192,6 @@ function finishDrag(e) {
         drag.elem.releasePointerCapture(e.pointerId);
     } catch (_) {}
 
-    // On drop, post final moved callback
     postNui('moved', {
         owner: drag.owner,
         id: drag.id,
@@ -139,35 +203,21 @@ function finishDrag(e) {
 window.addEventListener('pointerup', finishDrag);
 window.addEventListener('pointercancel', finishDrag);
 
-function closeEditor() {
-    document.body.className = 'hidden';
-    postNui('close', {});
-}
-
-doneBtn.addEventListener('click', () => {
-    closeEditor();
-});
-
-window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' || e.key === 'Esc') {
-        closeEditor();
-    }
-});
-
 window.addEventListener('message', (event) => {
     const data = event.data;
     if (!data) return;
 
-    if (data.action === 'open') {
-        document.body.className = 'active';
-        renderElements(data.elements || []);
+    if (data.action === 'menu') {
+        showMenu(data.count);
+    } else if (data.action === 'open') {
+        showEditor(data.elements || []);
     } else if (data.action === 'close') {
-        document.body.className = 'hidden';
+        hideAll();
     }
 });
 
 window.addEventListener('resize', () => {
-    if (document.body.className === 'active' && registeredElements.length > 0) {
+    if (currentView === 'editor' && registeredElements.length > 0) {
         renderElements(registeredElements);
     }
 });

@@ -1,6 +1,8 @@
 (function() {
     'use strict';
 
+    var runCounter = 1;
+
     function getResourceName() {
         if (typeof GetParentResourceName === 'function') {
             return GetParentResourceName();
@@ -8,14 +10,28 @@
         return 'kspike_c';
     }
 
-    function postResult(testName, data) {
-        var payload = Object.assign({ test: testName }, data, { origin: location.origin });
+    function updateStatusPanel(testName, payload) {
+        var runEl = document.getElementById('run-counter');
+        if (runEl) {
+            runEl.textContent = 'Run: ' + runCounter;
+        }
 
-        // Show results in status line using textContent (never innerHTML)
         var statusEl = document.getElementById('status');
         if (statusEl) {
-            statusEl.textContent = 'Test ' + testName + ':\n' + JSON.stringify(payload, null, 2);
+            if (testName && payload) {
+                statusEl.textContent = 'Run ' + runCounter + ' - Test ' + testName + ':\n' + JSON.stringify(payload, null, 2);
+            } else {
+                statusEl.textContent = 'Run ' + runCounter + ': running checks...';
+            }
         }
+    }
+
+    function postResult(testName, data, runNum) {
+        var currentRun = runNum || runCounter;
+        var payload = Object.assign({ test: testName, run: currentRun }, data, { origin: location.origin });
+
+        // Show results in status line using textContent (never innerHTML)
+        updateStatusPanel(testName, payload);
 
         if (typeof GetParentResourceName === 'function') {
             fetch('https://' + getResourceName() + '/result', {
@@ -28,7 +44,7 @@
         }
     }
 
-    async function runChecks(testName, linkEl, sheetHref) {
+    async function runChecks(testName, linkEl, sheetHref, runNum) {
         var result = {
             href: sheetHref,
             linkLoaded: false,
@@ -43,7 +59,7 @@
         };
 
         if (!linkEl) {
-            postResult(testName, result);
+            postResult(testName, result, runNum);
             return;
         }
 
@@ -136,11 +152,40 @@
         }
         result.fontFaces = faces;
 
-        postResult(testName, result);
+        postResult(testName, result, runNum);
     }
 
-    // On load, notify ready and schedule Test A
+    function scheduleTestA(targetRun) {
+        var staticLink = document.getElementById('static-link');
+        setTimeout(function() {
+            runChecks('A', staticLink, 'kspike_theme/theme.css', targetRun);
+        }, 3000);
+
+        setTimeout(function() {
+            runChecks('A-10s', staticLink, 'kspike_theme/theme.css', targetRun);
+        }, 10000);
+    }
+
+    function scheduleTestB(href, targetRun) {
+        var dynLink = document.createElement('link');
+        dynLink.rel = 'stylesheet';
+        dynLink.id = 'dyn';
+        dynLink.href = href;
+        document.head.appendChild(dynLink);
+
+        setTimeout(function() {
+            runChecks('B', dynLink, href, targetRun);
+        }, 3000);
+
+        setTimeout(function() {
+            runChecks('B-10s', dynLink, href, targetRun);
+        }, 10000);
+    }
+
+    // On load, notify ready and schedule initial Test A
     window.addEventListener('DOMContentLoaded', function() {
+        updateStatusPanel();
+
         if (typeof GetParentResourceName === 'function') {
             fetch('https://' + getResourceName() + '/ready', {
                 method: 'POST',
@@ -149,35 +194,33 @@
             }).catch(function() {});
         }
 
-        var staticLink = document.getElementById('static-link');
-
-        // Run checks 3s after link loads, and again at 10s
-        setTimeout(function() {
-            runChecks('A', staticLink, 'kspike_theme/theme.css');
-        }, 3000);
-
-        setTimeout(function() {
-            runChecks('A-10s', staticLink, 'kspike_theme/theme.css');
-        }, 10000);
+        scheduleTestA(runCounter);
     });
 
-    // Listen for Test B (dynamic link message from Lua)
+    // Listen for messages from Lua
     window.addEventListener('message', function(event) {
         var data = event.data;
-        if (data && data.type === 'theme' && data.href) {
-            var dynLink = document.createElement('link');
-            dynLink.rel = 'stylesheet';
-            dynLink.id = 'dyn';
-            dynLink.href = data.href;
-            document.head.appendChild(dynLink);
+        if (!data) return;
 
-            setTimeout(function() {
-                runChecks('B', dynLink, data.href);
-            }, 3000);
+        if (data.type === 'theme' && data.href) {
+            // Initial dynamic theme link
+            scheduleTestB(data.href, runCounter);
+        } else if (data.type === 'rerun') {
+            runCounter++;
+            updateStatusPanel();
 
-            setTimeout(function() {
-                runChecks('B-10s', dynLink, data.href);
-            }, 10000);
+            // Remove existing link with id 'dyn' if any
+            var existingDyn = document.getElementById('dyn');
+            if (existingDyn && existingDyn.parentNode) {
+                existingDyn.parentNode.removeChild(existingDyn);
+            }
+
+            // Run Test A checks again on static link
+            scheduleTestA(runCounter);
+
+            // Run Test B again with a fresh dyn link
+            var href = data.href || 'nui://kspike_theme/theme.css';
+            scheduleTestB(href, runCounter);
         }
     });
 })();

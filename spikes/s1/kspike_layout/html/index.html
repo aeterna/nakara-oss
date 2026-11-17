@@ -7,7 +7,34 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="hidden">
-    <div id="editor-container">
+    <!-- Test menu panel -->
+    <div id="menu-container" class="hidden">
+        <div id="menu-panel">
+            <h1 id="menu-title">kspike ทดสอบ</h1>
+            <div id="menu-buttons">
+                <button type="button" class="menu-btn" id="btn-menu-layout">
+                    <span class="btn-label">จัดตำแหน่งกล่อง (S1)</span>
+                    <span class="btn-hint">ลากกรอบ A/B แล้วกด Done</span>
+                </button>
+                <button type="button" class="menu-btn" id="btn-menu-reset">
+                    <span class="btn-label">รีเซ็ตตำแหน่งกล่อง</span>
+                    <span class="btn-hint">กลับตำแหน่งเริ่มต้น</span>
+                </button>
+                <button type="button" class="menu-btn" id="btn-menu-rerun">
+                    <span class="btn-label">ทดสอบธีมอีกครั้ง (S2)</span>
+                    <span class="btn-hint">ดูผลที่มุมขวาบน</span>
+                </button>
+                <button type="button" class="menu-btn" id="btn-menu-close">
+                    <span class="btn-label">ปิด</span>
+                    <span class="btn-hint">ปิดเมนู</span>
+                </button>
+            </div>
+            <div id="menu-status"></div>
+        </div>
+    </div>
+
+    <!-- HUD Layout editor overlay -->
+    <div id="editor-container" class="hidden">
         <div id="header-bar">
             <span id="header-title">Layout Editor</span>
             <span id="header-hint">Drag dashed boxes to move elements. Press ESC or click Done when finished.</span>

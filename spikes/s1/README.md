@@ -4,10 +4,17 @@ A FiveM experimental spike exploring whether one resource (`kspike_layout`) can 
 
 ## Resources Overview
 
-1. **`kspike_layout`** (Editor & Coordinator):
+1. **`kspike_layout`** (Editor, Coordinator & Test Menu):
    - Maintains an in-memory element registry and saves element positions to client KVP (`kspike_layout:pos`).
    - Dispatches `kspike:layout:hello` on start so active element owners can re-register.
-   - Provides `/kspike_edit` command to toggle edit mode (`SetNuiFocus(true, true)`).
+   - Provides an on-screen test menu mapped to `F7` (`RegisterKeyMapping('kspike_menu', 'kspike test menu', 'keyboard', 'F7')`, also accessible via `/kspike_menu` command).
+   - Menu buttons:
+     - **"จัดตำแหน่งกล่อง (S1)"** — hint "ลากกรอบ A/B แล้วกด Done": Closes the menu and opens the drag editor overlay.
+     - **"รีเซ็ตตำแหน่งกล่อง"** — hint "กลับตำแหน่งเริ่มต้น": Clears `savedPositions`, deletes KVP (`kspike_layout:pos`), restores default x/y coordinates for every registered element, triggers `kspike:layout:apply`, and reports reset to server (`TriggerServerEvent('kspike:report', 'layout', 'reset positions to defaults')`). Menu stays open and status displays "รีเซ็ตแล้ว".
+     - **"ทดสอบธีมอีกครั้ง (S2)"** — hint "ดูผลที่มุมขวาบน": Dispatches local client event `kspike:s2:rerun` and closes the menu.
+     - **"ปิด"** — hint "ปิดเมนู": Closes the menu.
+   - Pressing `ESC` closes the menu (and closes edit mode).
+   - Provides `/kspike_edit` command to directly toggle edit mode (`SetNuiFocus(true, true)`).
    - In edit mode, presents a transparent full-screen overlay drawing dashed outline boxes over each registered element.
    - Supports pointer dragging with throttled (100 ms) and on-drop NUI callbacks, broadcasting `kspike:layout:apply` client events.
    - Handles exit via `ESC` key or a visible "Done" button, returning focus and hiding the overlay.
@@ -41,8 +48,11 @@ ensure kspike_b
 Follow these steps to verify functionality:
 
 1. **Join Server**: Connect to the server. Confirm that both boxes ("A" in blue and "B" in green) are visible at their default positions (left side: A at ~30% height, B at ~45% height).
-2. **Open Editor**: Type `/kspike_edit` in chat/console. The screen cursor should appear along with a top toolbar and two dashed outline boxes overlaid directly on top of boxes A and B, labeled `kspike_a/box` and `kspike_b/box`.
-3. **Drag Element**: Click and drag outline box A to the right. Notice that box A in `kspike_a` follows along smoothly in real time while dragging (updating every 100 ms at most) and snaps to the final drop position.
-4. **Close Editor**: Click the "Done" button or press the `ESC` key. NUI input focus returns to the game, the dashed outlines disappear, clicks pass through normally to the game, and both boxes remain at their current positions.
-5. **Reconnect**: Disconnect and rejoin the server (or restart the resources). Verify that the custom dragged position for box A is restored from KVP persistence rather than reverting to the default.
-6. **Resolution / Window Resize**: Resize the game window or change screen resolution. Confirm that both boxes scale their pixel positions to maintain their relative fractional positions on screen.
+2. **Open Test Menu**: Press `F7` (or type `/kspike_menu` in chat/console). The key can be rebound in GTA settings > Key Bindings > FiveM under "kspike test menu". A centered dark panel titled "kspike ทดสอบ" appears displaying the registered box count ("กล่องที่ลงทะเบียน: 2") and 4 buttons.
+3. **Open Editor from Menu**: Click "จัดตำแหน่งกล่อง (S1)". The menu closes and the editor overlay opens with screen cursor and dashed outline boxes over boxes A and B. (The `/kspike_edit` command also remains available to open the editor directly).
+4. **Drag Element**: Click and drag outline box A to the right. Notice that box A in `kspike_a` follows along smoothly in real time while dragging (updating every 100 ms at most) and snaps to the final drop position.
+5. **Close Editor**: Click the "Done" button or press `ESC`. NUI focus returns to the game and the dashed outlines disappear.
+6. **Reset Positions**: Press `F7` to open the test menu again. Click "รีเซ็ตตำแหน่งกล่อง". Notice that box A immediately snaps back to its initial default position (`x = 0.05`, `y = 0.30`), the KVP is cleared, the menu remains open, and its status line updates to "รีเซ็ตแล้ว".
+7. **Close Menu**: Click "ปิด" or press `ESC` to close the test menu.
+8. **Reconnect**: Rejoin the server or restart resources. Verify persistence and clean reset states across sessions.
+9. **Resolution / Window Resize**: Resize the game window or change screen resolution. Confirm that both boxes scale their pixel positions to maintain their relative fractional positions on screen.
