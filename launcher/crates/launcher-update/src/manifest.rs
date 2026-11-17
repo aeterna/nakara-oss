@@ -138,7 +138,7 @@ pub fn verify_manifest(
     if expires <= now {
         return Err(UpdateError::Expired(expires));
     }
-    if !strictly_newer(&raw.version, current) {
+    if !is_newer(&raw.version, current) {
         return Err(UpdateError::NotNewer(raw.version));
     }
     check_files(&raw.files)?;
@@ -225,7 +225,7 @@ fn reserved_stem(stem: &str) -> bool {
 
 /// Whether `candidate` is strictly newer by major, minor, patch and
 /// pre-release, ignoring build metadata.
-fn strictly_newer(candidate: &semver::Version, current: &semver::Version) -> bool {
+pub fn is_newer(candidate: &semver::Version, current: &semver::Version) -> bool {
     candidate
         .major
         .cmp(&current.major)

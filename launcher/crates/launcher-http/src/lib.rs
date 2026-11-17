@@ -22,6 +22,7 @@ use thiserror::Error;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_REDIRECTS: usize = 3;
 
 /// Why an HTTP request or feed fetch failed.
 #[derive(Debug, Clone, PartialEq, Error)]
@@ -42,6 +43,10 @@ pub enum FetchError {
     /// The server returned an HTTP status other than 200 OK.
     #[error("unexpected HTTP status {0}")]
     Status(u16),
+
+    /// A redirect hop was missing, invalid or exceeded the hop limit.
+    #[error("redirect refused: {0}")]
+    Redirect(String),
 
     /// The response body or `Content-Length` header exceeded the byte cap.
     #[error("response body exceeds the {0}-byte limit")]
@@ -98,12 +103,57 @@ impl Client {
         parse_feed(&bytes).map_err(FetchError::Feed)
     }
 
+    /// GET a [`Role::Release`] URL, following at most 3 policy-checked redirects, body capped at `cap` bytes.
+    pub fn get_release(
+        &self,
+        url: &str,
+        cap: u64,
+        accept: Option<&str>,
+    ) -> Result<Vec<u8>, FetchError> {
+        let checked = self.policy.check_url(url)?;
+        if checked.role != Role::Release {
+            return Err(FetchError::Role {
+                expected: Role::Release,
+                got: checked.role,
+            });
+        }
+
+        let mut final_response = None;
+        follow_redirects(&self.policy, checked, |hop| {
+            let response = self.send_checked(hop, accept)?;
+            let status = response.status();
+            let location = response.header("Location").map(str::to_owned);
+            if status == 200 {
+                final_response = Some(response);
+            }
+            Ok((status, location))
+        })?;
+
+        let Some(response) = final_response else {
+            return Err(FetchError::Transport("missing response".to_owned()));
+        };
+        read_response(response, cap)
+    }
+
     fn get_checked(
         &self,
         checked: &CheckedUrl,
         cap: u64,
         accept: Option<&str>,
     ) -> Result<Vec<u8>, FetchError> {
+        let response = self.send_checked(checked, accept)?;
+        let status = response.status();
+        if status != 200 {
+            return Err(FetchError::Status(status));
+        }
+        read_response(response, cap)
+    }
+
+    fn send_checked(
+        &self,
+        checked: &CheckedUrl,
+        accept: Option<&str>,
+    ) -> Result<ureq::Response, FetchError> {
         // Proxies from the environment are refused so ADR 0002 decision 5 does not depend on Cargo features.
         let agent = ureq::AgentBuilder::new()
             .try_proxy_from_env(false)
@@ -123,29 +173,25 @@ impl Client {
             request = request.set("Accept", accept_value);
         }
 
-        let response = match request.call() {
-            Ok(resp) => resp,
-            Err(ureq::Error::Status(code, _)) => return Err(FetchError::Status(code)),
+        match request.call() {
+            Ok(resp) | Err(ureq::Error::Status(_, resp)) => Ok(resp),
             Err(ureq::Error::Transport(transport)) => {
-                return Err(FetchError::Transport(format_transport(&transport)));
-            }
-        };
-
-        let status = response.status();
-        if status != 200 {
-            return Err(FetchError::Status(status));
-        }
-
-        if let Some(raw_len) = response.header("Content-Length") {
-            if let Ok(content_len) = raw_len.trim().parse::<u64>() {
-                if content_len > cap {
-                    return Err(FetchError::TooLarge(cap));
-                }
+                Err(FetchError::Transport(format_transport(&transport)))
             }
         }
-
-        read_capped(response.into_reader(), cap)
     }
+}
+
+fn read_response(response: ureq::Response, cap: u64) -> Result<Vec<u8>, FetchError> {
+    if let Some(raw_len) = response.header("Content-Length") {
+        if let Ok(content_len) = raw_len.trim().parse::<u64>() {
+            if content_len > cap {
+                return Err(FetchError::TooLarge(cap));
+            }
+        }
+    }
+
+    read_capped(response.into_reader(), cap)
 }
 
 struct PolicyResolver {
@@ -192,6 +238,49 @@ pub fn read_capped(reader: impl Read, cap: u64) -> Result<Vec<u8>, FetchError> {
     Ok(buf)
 }
 
+fn follow_redirects(
+    policy: &NetPolicy,
+    first: CheckedUrl,
+    mut send: impl FnMut(&CheckedUrl) -> Result<(u16, Option<String>), FetchError>,
+) -> Result<CheckedUrl, FetchError> {
+    let mut checked = first;
+    let mut hops = 0;
+    loop {
+        let (status, location) = send(&checked)?;
+        if status == 200 {
+            return Ok(checked);
+        }
+        if !matches!(status, 301 | 302 | 303 | 307 | 308) {
+            return Err(FetchError::Status(status));
+        }
+        if hops == MAX_REDIRECTS {
+            return Err(FetchError::Redirect("too many redirects".to_owned()));
+        }
+        let Some(location) = location.as_deref() else {
+            return Err(FetchError::Redirect("missing Location header".to_owned()));
+        };
+        checked = next_hop(policy, &checked.url, location)?;
+        hops += 1;
+    }
+}
+
+fn next_hop(policy: &NetPolicy, current: &str, location: &str) -> Result<CheckedUrl, FetchError> {
+    if location.is_empty() {
+        return Err(FetchError::Redirect("empty Location header".to_owned()));
+    }
+    let joined = url::Url::parse(current)
+        .and_then(|base| base.join(location))
+        .map_err(|_| FetchError::Redirect("invalid Location".to_owned()))?;
+    let checked = policy.check_url(joined.as_str())?;
+    if checked.role != Role::Release {
+        return Err(FetchError::Role {
+            expected: Role::Release,
+            got: checked.role,
+        });
+    }
+    Ok(checked)
+}
+
 fn format_transport(transport: &ureq::Transport) -> String {
     let mut message = transport.to_string();
     let mut source = std::error::Error::source(transport);
@@ -212,9 +301,9 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
     use launcher_core::parse;
-    use launcher_net::{NetError, NetPolicy, Role};
+    use launcher_net::{CheckedUrl, NetError, NetPolicy, Role};
 
-    use super::{checked_addrs, read_capped, Client, FetchError};
+    use super::{checked_addrs, follow_redirects, next_hop, read_capped, Client, FetchError};
 
     const BASE: &str = r##"schema = 1
 
@@ -387,5 +476,288 @@ allow_local_feed = true
                 got: Role::Release,
             }),
         );
+    }
+
+    #[test]
+    fn get_release_refuses_non_release_role_without_network() {
+        let client = Client::new(policy(WITH_RELEASE_REPO), "aeterna-launcher/0.1.0");
+        assert_eq!(
+            client.get_release("https://feed.example.com/api/launcher/v1", 1024, None),
+            Err(FetchError::Role {
+                expected: Role::Release,
+                got: Role::Feed,
+            }),
+        );
+    }
+
+    #[test]
+    fn next_hop_accepts_relative_path_on_release_host() {
+        let p = policy(WITH_RELEASE_REPO);
+        let current = "https://github.com/example-rp/releases/manifest.json";
+        assert_eq!(
+            next_hop(&p, current, "/login/redirect/asset.json"),
+            Ok(CheckedUrl {
+                host: "github.com".to_owned(),
+                role: Role::Release,
+                url: "https://github.com/login/redirect/asset.json".to_owned(),
+            }),
+        );
+        assert_eq!(
+            next_hop(&p, current, "manifest.json.sig"),
+            Ok(CheckedUrl {
+                host: "github.com".to_owned(),
+                role: Role::Release,
+                url: "https://github.com/example-rp/releases/manifest.json.sig".to_owned(),
+            }),
+        );
+    }
+
+    #[test]
+    fn next_hop_accepts_absolute_release_host() {
+        let p = policy(WITH_RELEASE_REPO);
+        let current = "https://github.com/example-rp/releases/manifest.json";
+        let target = "https://objects.githubusercontent.com/release-asset/123?expires=300";
+        assert_eq!(
+            next_hop(&p, current, target),
+            Ok(CheckedUrl {
+                host: "objects.githubusercontent.com".to_owned(),
+                role: Role::Release,
+                url: target.to_owned(),
+            }),
+        );
+    }
+
+    #[test]
+    fn next_hop_refuses_http_scheme() {
+        let p = policy(WITH_RELEASE_REPO);
+        let current = "https://github.com/example-rp/releases/manifest.json";
+        assert_eq!(
+            next_hop(&p, current, "http://objects.githubusercontent.com/asset"),
+            Err(FetchError::Policy(NetError::NotHttps("http".to_owned()))),
+        );
+    }
+
+    #[test]
+    fn next_hop_refuses_non_release_host() {
+        let p = policy(WITH_RELEASE_REPO);
+        let current = "https://github.com/example-rp/releases/manifest.json";
+        assert_eq!(
+            next_hop(&p, current, "https://untrusted.example.org/asset"),
+            Err(FetchError::Policy(NetError::Host(
+                "untrusted.example.org".to_owned()
+            ))),
+        );
+    }
+
+    #[test]
+    fn next_hop_refuses_feed_host() {
+        let p = policy(WITH_RELEASE_REPO);
+        let current = "https://github.com/example-rp/releases/manifest.json";
+        assert_eq!(
+            next_hop(&p, current, "https://feed.example.com/api/launcher/v1"),
+            Err(FetchError::Role {
+                expected: Role::Release,
+                got: Role::Feed,
+            }),
+        );
+    }
+
+    #[test]
+    fn next_hop_refuses_port() {
+        let p = policy(WITH_RELEASE_REPO);
+        let current = "https://github.com/example-rp/releases/manifest.json";
+        assert_eq!(
+            next_hop(
+                &p,
+                current,
+                "https://objects.githubusercontent.com:8443/asset"
+            ),
+            Err(FetchError::Policy(NetError::Port(8443))),
+        );
+    }
+
+    #[test]
+    fn next_hop_refuses_empty_location() {
+        let p = policy(WITH_RELEASE_REPO);
+        let current = "https://github.com/example-rp/releases/manifest.json";
+        assert_eq!(
+            next_hop(&p, current, ""),
+            Err(FetchError::Redirect("empty Location header".to_owned())),
+        );
+    }
+
+    #[test]
+    fn next_hop_resolves_dot_segments() {
+        let p = policy(WITH_RELEASE_REPO);
+        let current = "https://github.com/example-rp/releases/v1/manifest.json";
+        assert_eq!(
+            next_hop(&p, current, "../v2/manifest.json"),
+            Ok(CheckedUrl {
+                host: "github.com".to_owned(),
+                role: Role::Release,
+                url: "https://github.com/example-rp/releases/v2/manifest.json".to_owned(),
+            }),
+        );
+    }
+
+    #[test]
+    fn next_hop_resolves_protocol_relative_release_host() {
+        let p = policy(WITH_RELEASE_REPO);
+        let current = "https://github.com/example-rp/releases/manifest.json";
+        assert_eq!(
+            next_hop(&p, current, "//objects.githubusercontent.com/x"),
+            Ok(CheckedUrl {
+                host: "objects.githubusercontent.com".to_owned(),
+                role: Role::Release,
+                url: "https://objects.githubusercontent.com/x".to_owned(),
+            }),
+        );
+    }
+
+    #[test]
+    fn next_hop_refuses_protocol_relative_untrusted_host() {
+        let p = policy(WITH_RELEASE_REPO);
+        let current = "https://github.com/example-rp/releases/manifest.json";
+        assert_eq!(
+            next_hop(&p, current, "//evil.example/x"),
+            Err(FetchError::Policy(NetError::Host(
+                "evil.example".to_owned()
+            ))),
+        );
+    }
+
+    fn first_release_url(policy: &NetPolicy) -> CheckedUrl {
+        policy
+            .check_url("https://github.com/example-rp/releases/download/v1/manifest.json")
+            .expect("first release URL should pass policy")
+    }
+
+    #[test]
+    fn follow_redirects_returns_on_first_200() {
+        let p = policy(WITH_RELEASE_REPO);
+        let first = first_release_url(&p);
+        let mut calls = 0;
+        let result = follow_redirects(&p, first.clone(), |checked| {
+            calls += 1;
+            assert_eq!(checked, &first);
+            Ok((200, None))
+        });
+        assert_eq!(result, Ok(first));
+        assert_eq!(calls, 1);
+    }
+
+    #[test]
+    fn follow_redirects_follows_302_to_release_assets_then_200() {
+        let p = policy(WITH_RELEASE_REPO);
+        let first = first_release_url(&p);
+        let asset = "https://release-assets.githubusercontent.com/asset/123?sig=abc";
+        let mut seen = Vec::new();
+        let result = follow_redirects(&p, first, |checked| {
+            seen.push(checked.url.clone());
+            match seen.len() {
+                1 => Ok((302, Some(asset.to_owned()))),
+                2 => Ok((200, None)),
+                n => panic!("unexpected call {n}"),
+            }
+        });
+        assert_eq!(
+            result,
+            Ok(CheckedUrl {
+                host: "release-assets.githubusercontent.com".to_owned(),
+                role: Role::Release,
+                url: asset.to_owned(),
+            }),
+        );
+        assert_eq!(seen.len(), 2);
+    }
+
+    #[test]
+    fn follow_redirects_refuses_302_to_untrusted_host() {
+        let p = policy(WITH_RELEASE_REPO);
+        let first = first_release_url(&p);
+        let mut calls = 0;
+        let result = follow_redirects(&p, first, |_checked| {
+            calls += 1;
+            Ok((302, Some("https://evil.example/payload".to_owned())))
+        });
+        assert_eq!(
+            result,
+            Err(FetchError::Policy(NetError::Host(
+                "evil.example".to_owned()
+            ))),
+        );
+        assert_eq!(calls, 1);
+    }
+
+    #[test]
+    fn follow_redirects_allows_three_redirects_then_200() {
+        let p = policy(WITH_RELEASE_REPO);
+        let first = first_release_url(&p);
+        let mut calls = 0;
+        let result = follow_redirects(&p, first, |_checked| {
+            calls += 1;
+            match calls {
+                1 => Ok((302, Some("https://github.com/hop1".to_owned()))),
+                2 => Ok((
+                    302,
+                    Some("https://objects.githubusercontent.com/hop2".to_owned()),
+                )),
+                3 => Ok((
+                    302,
+                    Some("https://release-assets.githubusercontent.com/hop3".to_owned()),
+                )),
+                4 => Ok((200, None)),
+                n => panic!("unexpected call {n}"),
+            }
+        });
+        assert_eq!(
+            result,
+            Ok(CheckedUrl {
+                host: "release-assets.githubusercontent.com".to_owned(),
+                role: Role::Release,
+                url: "https://release-assets.githubusercontent.com/hop3".to_owned(),
+            }),
+        );
+        assert_eq!(calls, 4);
+    }
+
+    #[test]
+    fn follow_redirects_refuses_fourth_redirect() {
+        let p = policy(WITH_RELEASE_REPO);
+        let first = first_release_url(&p);
+        let mut calls = 0;
+        let result = follow_redirects(&p, first, |_checked| {
+            calls += 1;
+            Ok((
+                302,
+                Some(format!(
+                    "https://release-assets.githubusercontent.com/hop{calls}"
+                )),
+            ))
+        });
+        assert_eq!(
+            result,
+            Err(FetchError::Redirect("too many redirects".to_owned())),
+        );
+        assert_eq!(calls, 4);
+    }
+
+    #[test]
+    fn follow_redirects_refuses_302_without_location() {
+        let p = policy(WITH_RELEASE_REPO);
+        let first = first_release_url(&p);
+        let result = follow_redirects(&p, first, |_checked| Ok((302, None)));
+        assert_eq!(
+            result,
+            Err(FetchError::Redirect("missing Location header".to_owned())),
+        );
+    }
+
+    #[test]
+    fn follow_redirects_returns_status_on_404() {
+        let p = policy(WITH_RELEASE_REPO);
+        let first = first_release_url(&p);
+        let result = follow_redirects(&p, first, |_checked| Ok((404, None)));
+        assert_eq!(result, Err(FetchError::Status(404)));
     }
 }

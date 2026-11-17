@@ -10,12 +10,14 @@
 //! [`swap_exe`] replaces the running exe by rename while keeping the previous
 //! one for [`rollback`].
 
+pub mod check;
 pub mod error;
 pub mod file;
 pub mod manifest;
 pub mod swap;
 
+pub use check::launcher_tags;
 pub use error::UpdateError;
 pub use file::verify_file;
-pub use manifest::{verify_manifest, Channel, FileEntry, Verified};
+pub use manifest::{is_newer, verify_manifest, Channel, FileEntry, Verified};
 pub use swap::{old_path, rollback, swap_exe};

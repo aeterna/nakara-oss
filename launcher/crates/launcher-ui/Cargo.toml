@@ -20,6 +20,12 @@ launcher-games = { path = "../launcher-games" }
 launcher-http = { path = "../launcher-http" }
 launcher-net = { path = "../launcher-net" }
 launcher-thai = { path = "../launcher-thai" }
+launcher-update = { path = "../launcher-update" }
+semver = "=1.0.28"
+time = "=0.3.36"
+
+[dev-dependencies]
+ed25519-dalek = "=2.1.0"
 
 [build-dependencies]
 launcher-core = { path = "../launcher-core" }

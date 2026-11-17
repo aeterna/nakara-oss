@@ -7,7 +7,11 @@ use crate::Message;
 use iced::widget::{button, column, container, row, Space};
 use iced::{Background, Border, Color, Element, Length};
 
-pub fn view<'a>(instances: &'a [Instance], selected: usize) -> Element<'a, Message> {
+pub fn view<'a>(
+    instances: &'a [Instance],
+    selected: usize,
+    update: &'a crate::update::UpdateState,
+) -> Element<'a, Message> {
     let mut list = column![brand(), section("เกม")]
         .spacing(4)
         .width(Length::Fill)
@@ -36,6 +40,9 @@ pub fn view<'a>(instances: &'a [Instance], selected: usize) -> Element<'a, Messa
         )])
         .padding([4, 8]),
     );
+    if let crate::update::UpdateState::Available { version, .. } = update {
+        list = list.push(update_button(version));
+    }
 
     container(list)
         .width(248)
@@ -159,6 +166,21 @@ fn discord_button<'a>() -> Element<'a, Message> {
                 },
                 ..Default::default()
             }
+        })
+        .into()
+}
+
+fn update_button<'a>(version: &semver::Version) -> Element<'a, Message> {
+    let accent = crate::profile::accent();
+
+    button(label(&format!("มีรุ่นใหม่ {version}"), 11.0, accent))
+        .padding([2, 8])
+        .on_press(Message::OpenUpdate)
+        .style(move |_theme, _status| button::Style {
+            background: None,
+            text_color: accent,
+            border: Border::default(),
+            ..Default::default()
         })
         .into()
 }
