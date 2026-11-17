@@ -37,7 +37,8 @@ A review of the plan against this repo (`1b16577`) found facts that shape the de
 ## Decision
 
 1. **Names.** Starter Kit resources are named `aeterna_<name>`. Existing packages keep `nakara_*`. The schema pattern
-   becomes `^(nakara|aeterna)_[a-z0-9_]+$`, and every place listed above is updated in the same change. Names are
+   becomes `^(nakara|aeterna)_[a-z0-9_]+$`. The schema, rule 5, `CONTRIBUTING.md`, the engineer contract and the
+   site change with this ADR; the scanner's rate-limit list and `safety.md` change with the scanner work in W1. Names are
    chosen so they never equal a resource name the team runs privately; the maintainer checks this before a name is
    added, from a list kept outside this repo.
 2. **Rule 5, rewritten.** A package may depend on another package of this repo only along an edge listed in the
@@ -53,14 +54,16 @@ A review of the plan against this repo (`1b16577`) found facts that shape the de
    | `aeterna_layout` | `aeterna_core`, `aeterna_uikit` |
    | `aeterna_hudkit` | `aeterna_core`, `aeterna_uikit`, `aeterna_layout` |
    | `aeterna_phonekit` | `aeterna_core`, `aeterna_uikit`, `aeterna_notify` |
-   | `aeterna_invkit` | `aeterna_core`, `aeterna_uikit` (+ `ox_inventory`, by its own ADR) |
+   | `aeterna_invkit` | `aeterna_core`, `aeterna_uikit` (+ `ox_inventory`, decision 15) |
 
    A new check in `.github/scripts` reads each package's `fxmanifest.lua` `dependencies`, `exports.<resource>`,
    `nui://<resource>/` and `@<resource>/` references and fails on any edge not in this table.
-3. **Three releases.** v0.1 = `aeterna_core` + `aeterna_notify`, which is enough to prove the whole path: names,
-   the font rule, the theme, the leak scan, the dependency check, the attested release and a smoke test. v0.2 =
-   `aeterna_uikit` + `aeterna_layout`. v0.3 = `aeterna_hudkit` + `aeterna_phonekit` + `aeterna_invkit`. Each package
-   is released on its own tag; there is no combined zip until a release workflow change is accepted.
+3. **One release, built in waves.** All seven packages ship together as v0.1.0 (owner, 2026-11-17: "7 in one
+   release"). They are built in dependency order — W1 `aeterna_core`, `aeterna_uikit` and the scanner changes; W2
+   `aeterna_layout`, `aeterna_notify`, `aeterna_invkit`; W3 `aeterna_hudkit`, `aeterna_phonekit` — and nothing is
+   tagged until all seven pass the smoke test and the owner's gate. Each package gets its own tag
+   (`aeterna_core@0.1.0` …) through the existing release workflow; a combined zip needs a release workflow change
+   and is added only if the owner accepts that change.
 4. **Contracts, not ports.** Each package starts with a spec in `docs/specs/<package>.md`: exports, events, payload
    schemas, KVP keys, and test cases. A spec describes behaviour a server owner can see. It never retells how the
    team's private code works. Specs pass the leak review (decision 9) before they are committed. Code is written
@@ -95,6 +98,10 @@ A review of the plan against this repo (`1b16577`) found facts that shape the de
     every panel closes with ESC and a visible button.
 14. **Support scope.** Each package README states the `qbx_core`, `ox_lib` and FXServer versions it was tested on and
     what the team does and does not support.
+15. **`aeterna_invkit` and `ox_inventory`.** `aeterna_invkit` may call `ox_inventory` exports (stashes, item use)
+    under rule 5's conditions: only when `GetResourceState` says it is started, never listed as a dependency. It ships
+    no hotbar (ox_inventory has one) and no file copied or adapted from ox_inventory, which is GPL-3.0; its theming
+    guide for ox_inventory is prose and CSS selectors only.
 
 ## Per-package checklist
 

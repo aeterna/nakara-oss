@@ -1,6 +1,6 @@
 # nakara-oss
 
-nakara-oss is the public, MIT-licensed monorepo of FiveM resources (nakara_*) and developer tooling (@aeterna_game/fivem-devkit) maintained by the Nakara City dev team.
+nakara-oss is the public, MIT-licensed monorepo of FiveM resources (nakara_*, and the aeterna_* Starter Kit) and developer tooling (@aeterna_game/fivem-devkit) maintained by the Nakara City dev team.
 
 Every resource package declares its capabilities in oss.json (validated against oss.schema.json), every PR is scanned by fivem-devkit safety, and every release archive is built in CI with a cryptographic provenance attestation and SHA256SUMS.
 
