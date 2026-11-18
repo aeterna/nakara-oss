@@ -148,6 +148,43 @@ local function getMinimapMetrics()
     return p0, p1, pxW, pxH, defaultSx, defaultSy, screenW, screenH
 end
 
+local lastMinimapPositions = nil
+
+local function positionsEqual(a, b)
+    if not a or not b then return false end
+    for name, pos in pairs(b) do
+        local apos = a[name]
+        if not apos then return false end
+        if math.abs(apos.x - pos.x) > 1e-6 or
+           math.abs(apos.y - pos.y) > 1e-6 or
+           math.abs(apos.w - pos.w) > 1e-6 or
+           math.abs(apos.h - pos.h) > 1e-6 then
+            return false
+        end
+    end
+    return true
+end
+
+local function hideBaseHealthArmour()
+    if not (Config and Config.hideBaseBars) then return end
+    if type(RequestScaleformMovie) ~= 'function' then return end
+    local minimap = RequestScaleformMovie('minimap')
+    if type(HasScaleformMovieLoaded) == 'function' and HasScaleformMovieLoaded(minimap) then
+        if type(BeginScaleformMovieMethod) == 'function' then
+            BeginScaleformMovieMethod(minimap, 'SETUP_HEALTH_ARMOUR')
+            if type(ScaleformMovieMethodAddParamInt) == 'function' then
+                ScaleformMovieMethodAddParamInt(3)
+            end
+            if type(EndScaleformMovieMethod) == 'function' then
+                EndScaleformMovieMethod()
+            end
+        end
+    end
+    if type(SetScaleformMovieAsNoLongerNeeded) == 'function' then
+        SetScaleformMovieAsNoLongerNeeded(minimap)
+    end
+end
+
 local function applyMinimapPlace(place)
     if not place then return end
     appliedPlaces['minimap'] = place
@@ -169,6 +206,11 @@ local function applyMinimapPlace(place)
 
     local positions = M.computePositions(deltaOx, deltaOy, scale)
 
+    if positionsEqual(lastMinimapPositions, positions) then
+        return
+    end
+    lastMinimapPositions = positions
+
     if type(SetMinimapComponentPosition) == 'function' then
         for name, pos in pairs(positions) do
             SetMinimapComponentPosition(name, 'L', 'B', pos.x, pos.y, pos.w, pos.h)
@@ -180,6 +222,8 @@ local function applyMinimapPlace(place)
         Wait(0)
         SetBigmapActive(false, false)
     end
+
+    hideBaseHealthArmour()
 end
 
 local function registerLayoutElements()
@@ -247,32 +291,32 @@ local function registerLayoutElements()
     })
 end
 
-local function hideBaseHealthArmour()
-    if not (Config and Config.hideBaseBars) then return end
-    if type(RequestScaleformMovie) ~= 'function' then return end
-    local minimap = RequestScaleformMovie('minimap')
-    if type(HasScaleformMovieLoaded) == 'function' and HasScaleformMovieLoaded(minimap) then
-        if type(BeginScaleformMovieMethod) == 'function' then
-            BeginScaleformMovieMethod(minimap, 'SETUP_HEALTH_ARMOUR')
-            if type(ScaleformMovieMethodAddParamInt) == 'function' then
-                ScaleformMovieMethodAddParamInt(3)
-            end
-            if type(EndScaleformMovieMethod) == 'function' then
-                EndScaleformMovieMethod()
-            end
-        end
-    end
-end
+local lastRadarVisible = nil
+local lastRadarMode = nil
+local lastRadarInVeh = nil
 
-local function updateMinimapVisibility(inVeh)
+local function updateMinimapVisibility(inVeh, force)
     if type(DisplayRadar) ~= 'function' then return end
     local mode = settings.minimapMode
+    local inVehBool = (inVeh == true)
+    if not force and mode == lastRadarMode and inVehBool == lastRadarInVeh then
+        return
+    end
+    lastRadarMode = mode
+    lastRadarInVeh = inVehBool
+
+    local shouldShow = false
     if mode == 'always' then
-        DisplayRadar(true)
+        shouldShow = true
     elseif mode == 'vehicle' then
-        DisplayRadar(inVeh == true)
+        shouldShow = inVehBool
     elseif mode == 'never' then
-        DisplayRadar(false)
+        shouldShow = false
+    end
+
+    if force or shouldShow ~= lastRadarVisible then
+        lastRadarVisible = shouldShow
+        DisplayRadar(shouldShow)
     end
 end
 
@@ -295,6 +339,7 @@ local function openSettings()
     sendUi({
         type = 'settings:open',
         settings = settings,
+        low = Config and Config.low or 20,
     })
 end
 
@@ -320,6 +365,7 @@ AddEventHandler('aeterna_layout:apply', function(owner, id, place)
     if not id or type(place) ~= 'table' then return end
 
     if id == 'status' or id == 'vehicle' or id == 'street' then
+        appliedPlaces[id] = place
         sendUi({
             type = 'hud:place',
             id = id,
@@ -402,7 +448,54 @@ RegisterNUICallback('ready', function(data, cb)
         end
     end
     registerLayoutElements()
+
+    -- Reset change-detection state
+    lastValues = nil
+    lastVehicleVisible = nil
+    localeReady = false
+
     syncThemeAndLocale()
+
+    -- Resend settings with low threshold (without opening the card)
+    sendUi({
+        type = 'settings:apply',
+        settings = settings,
+        low = Config and Config.low or 20,
+    })
+
+    -- Resend extra bars
+    sendUi({
+        type = 'hud:bars',
+        bars = extraBarsRegistry.getSortedBars(false),
+    })
+
+    -- Resend part positions and hidden states from layout
+    for id, place in pairs(appliedPlaces) do
+        if id == 'status' or id == 'vehicle' or id == 'street' then
+            sendUi({
+                type = 'hud:place',
+                id = id,
+                x = place.x,
+                y = place.y,
+                ax = place.ax,
+                ay = place.ay,
+                scale = place.scale,
+                hidden = place.hidden,
+            })
+        end
+    end
+
+    -- Resend vehicle runtime visibility
+    local ped = type(PlayerPedId) == 'function' and PlayerPedId() or 0
+    local inVeh = (ped ~= 0 and type(IsPedInAnyVehicle) == 'function') and IsPedInAnyVehicle(ped, false) or false
+    local veh = inVeh and (type(GetVehiclePedIsIn) == 'function' and GetVehiclePedIsIn(ped, false) or 0) or 0
+    local isDriver = inVeh and (type(GetPedInVehicleSeat) == 'function' and GetPedInVehicleSeat(veh, -1) == ped or false)
+    sendUi({
+        type = 'hud:visible',
+        id = 'vehicle',
+        visible = isDriver,
+    })
+    lastVehicleVisible = isDriver
 end)
 
 RegisterNUICallback('settings', function(data, cb)
@@ -559,14 +652,17 @@ CreateThread(function()
             local camRotZ = 0.0
             if type(GetGameplayCamRot) == 'function' then
                 local rot = GetGameplayCamRot(2)
-                if rot and rot.z then camRotZ = rot.z end
+                if rot and rot.z then
+                    camRotZ = (360.0 - rot.z) % 360.0
+                end
             end
-            local headingCode = H.headingSector(camRotZ)
+            local _, headingKey = H.headingSector(camRotZ)
+            local headingText = translate(headingKey)
 
             local streetValues = {
                 street = streetName,
                 zone = zoneName,
-                heading = headingCode,
+                heading = headingText,
             }
 
             local currentSnapshot = {
@@ -606,9 +702,6 @@ CreateThread(function()
         if curW ~= lastResW or curH ~= lastResH or curSafe ~= lastSafezone then
             lastResW, lastResH, lastSafezone = curW, curH, curSafe
             registerLayoutElements()
-            if appliedPlaces['minimap'] then
-                applyMinimapPlace(appliedPlaces['minimap'])
-            end
         end
 
         hideBaseHealthArmour()

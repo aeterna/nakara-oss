@@ -44,18 +44,21 @@ function MinimapLogic.clampScale(scale)
 end
 
 --- Computes moved component positions given a delta offset and scale.
---- All three components (minimap, minimap_mask, minimap_blur) move by the same delta,
---- preserving their relative offsets.
+--- When scaling, mask and blur offsets relative to the minimap component are scaled as well as sizes,
+--- then the delta is applied so they stay centred.
 function MinimapLogic.computePositions(deltaX, deltaY, scale, defaults)
     local defs = defaults or MinimapLogic.DEFAULT_COMPONENTS
     local s = MinimapLogic.clampScale(scale)
     local dx = tonumber(deltaX) or 0.0
     local dy = tonumber(deltaY) or 0.0
+    local base = defs.minimap or { x = 0.0, y = 0.0, w = 0.0, h = 0.0 }
     local positions = {}
     for name, def in pairs(defs) do
+        local relX = def.x - base.x
+        local relY = def.y - base.y
         positions[name] = {
-            x = def.x + dx,
-            y = def.y + dy,
+            x = base.x + relX * s + dx,
+            y = base.y + relY * s + dy,
             w = def.w * s,
             h = def.h * s,
         }

@@ -60,6 +60,14 @@ function HudLogic.headingSector(camRotZ)
     return code, LOCALE_DIRS[code]
 end
 
+local RESERVED_BAR_IDS = {
+    health = true,
+    armour = true,
+    hunger = true,
+    thirst = true,
+    stress = true,
+}
+
 --- Extra bars registry
 function HudLogic.createBarsRegistry(options)
     local opts = options or {}
@@ -77,6 +85,10 @@ function HudLogic.createBarsRegistry(options)
         local id = def.id
         if type(id) ~= 'string' or #id < 1 or #id > 32 or not id:match('^[%w_%-]+$') then
             warn('aeterna_hudkit: extra bar invalid id', { owner = owner, id = id })
+            return false
+        end
+        if RESERVED_BAR_IDS[id] then
+            warn('aeterna_hudkit: extra bar reserved id', { owner = owner, id = id })
             return false
         end
         local label = def.label
@@ -98,7 +110,12 @@ function HudLogic.createBarsRegistry(options)
         end
         local order = tonumber(def.order) or 100
 
-        if not bars[id] then
+        if bars[id] then
+            if bars[id].owner and bars[id].owner ~= owner then
+                warn('aeterna_hudkit: extra bar id already owned by another resource', { owner = owner, id = id, currentOwner = bars[id].owner })
+                return false
+            end
+        else
             local count = 0
             for _ in pairs(bars) do count = count + 1 end
             if count >= maxBars then
@@ -170,6 +187,22 @@ function HudLogic.createBarsRegistry(options)
     return M
 end
 
+--- Sentinel / JSON null support
+local NULL_VALUE = (json and json.null ~= nil) and json.null
+if NULL_VALUE == nil then
+    local ok, dk = pcall(require, 'dkjson')
+    if ok and type(dk) == 'table' and dk.null ~= nil then
+        NULL_VALUE = dk.null
+    end
+end
+if NULL_VALUE == nil then
+    NULL_VALUE = setmetatable({}, { __tostring = function() return 'null' end })
+end
+if json and json.null == nil then
+    json.null = NULL_VALUE
+end
+HudLogic.NULL = NULL_VALUE
+
 --- Change detection / diffing
 function HudLogic.diffValues(previous, current)
     if not previous then
@@ -191,6 +224,15 @@ function HudLogic.diffValues(previous, current)
                     anyChanged = true
                 end
             end
+            if prevSection and type(prevSection) == 'table' then
+                for k in pairs(prevSection) do
+                    if sectionVal[k] == nil then
+                        sectionDiff = sectionDiff or {}
+                        sectionDiff[k] = HudLogic.NULL
+                        anyChanged = true
+                    end
+                end
+            end
             if sectionDiff then
                 changed[sectionKey] = sectionDiff
             end
@@ -199,6 +241,12 @@ function HudLogic.diffValues(previous, current)
                 changed[sectionKey] = sectionVal
                 anyChanged = true
             end
+        end
+    end
+    for sectionKey, prevVal in pairs(previous) do
+        if current[sectionKey] == nil and prevVal ~= nil then
+            changed[sectionKey] = HudLogic.NULL
+            anyChanged = true
         end
     end
     return anyChanged, (anyChanged and changed or nil)

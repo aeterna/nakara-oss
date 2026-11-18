@@ -42,6 +42,9 @@
     const builtInBars = ['health', 'armour', 'hunger', 'thirst', 'stress'];
     const barElements = {}; // barId -> { row, fill, value, icon }
     let extraBarsList = [];
+    let vehicleVisible = false;
+    let vehiclePlacedHidden = false;
+    let lastReportedSizes = null;
 
     function post(endpoint, data) {
         return fetch(`https://${RESOURCE_NAME}/${endpoint}`, {
@@ -92,18 +95,109 @@
         return { row, fill, value: val, iconWrap };
     }
 
+    function reorderBars() {
+        const builtInOrder = ['health', 'armour', 'hunger', 'thirst', 'stress'];
+        for (let i = 0; i < builtInOrder.length; i++) {
+            const id = builtInOrder[i];
+            if (barElements[id] && barElements[id].row.parentNode === statusContainer) {
+                statusContainer.appendChild(barElements[id].row);
+            }
+        }
+        const sortedExtras = extraBarsList.slice().sort((a, b) => {
+            const orderA = typeof a.order === 'number' ? a.order : 100;
+            const orderB = typeof b.order === 'number' ? b.order : 100;
+            if (orderA !== orderB) return orderA - orderB;
+            return (a.id || '').localeCompare(b.id || '');
+        });
+        for (let i = 0; i < sortedExtras.length; i++) {
+            const id = sortedExtras[i].id;
+            if (barElements[id] && barElements[id].row.parentNode === statusContainer) {
+                statusContainer.appendChild(barElements[id].row);
+            }
+        }
+    }
+
+    function measurePart(el) {
+        if (!el) return { w: 0, h: 0 };
+        const wasHidden = el.classList.contains('hud-hidden');
+        const prevVisibility = el.style.visibility;
+        if (wasHidden) {
+            el.style.visibility = 'hidden';
+            el.classList.remove('hud-hidden');
+        }
+        const rect = el.getBoundingClientRect();
+        if (wasHidden) {
+            el.classList.add('hud-hidden');
+            el.style.visibility = prevVisibility;
+        }
+        return {
+            w: Math.max(8, Math.round(rect.width)),
+            h: Math.max(8, Math.round(rect.height)),
+        };
+    }
+
+    function reportSizes() {
+        const sizes = {
+            status: measurePart(partStatus),
+            vehicle: measurePart(partVehicle),
+            street: measurePart(partStreet),
+        };
+
+        if (
+            !lastReportedSizes ||
+            lastReportedSizes.status.w !== sizes.status.w ||
+            lastReportedSizes.status.h !== sizes.status.h ||
+            lastReportedSizes.vehicle.w !== sizes.vehicle.w ||
+            lastReportedSizes.vehicle.h !== sizes.vehicle.h ||
+            lastReportedSizes.street.w !== sizes.street.w ||
+            lastReportedSizes.street.h !== sizes.street.h
+        ) {
+            lastReportedSizes = sizes;
+            post('ready', { sizes });
+        }
+    }
+
+    function updateAllLowStatus() {
+        for (const id in barElements) {
+            if (id !== 'health') {
+                const bar = barElements[id];
+                const currentVal = parseFloat(bar.value.textContent);
+                if (!isNaN(currentVal)) {
+                    if (currentVal <= lowThreshold) {
+                        bar.row.classList.add('is-low');
+                    } else {
+                        bar.row.classList.remove('is-low');
+                    }
+                }
+            }
+        }
+        const currentFuel = parseFloat(fuelBarFillEl.style.width) || 0;
+        if (currentFuel <= lowThreshold) {
+            fuelClusterEl.classList.add('is-low');
+        } else {
+            fuelClusterEl.classList.remove('is-low');
+        }
+    }
+
     function ensureBar(id, iconName) {
         if (barElements[id]) return barElements[id];
         const barObj = createBarRow(id, iconName);
         barElements[id] = barObj;
         statusContainer.appendChild(barObj.row);
+        reorderBars();
+        reportSizes();
         return barObj;
     }
 
     function updateBarValue(id, val, iconName) {
         if (val === null || val === undefined) {
             if (barElements[id]) {
-                barElements[id].row.classList.add('hud-hidden');
+                if (barElements[id].row.parentNode) {
+                    barElements[id].row.parentNode.removeChild(barElements[id].row);
+                }
+                delete barElements[id];
+                reorderBars();
+                reportSizes();
             }
             return;
         }
@@ -121,17 +215,20 @@
                 bar.row.classList.remove('is-low');
             }
         }
+        reorderBars();
     }
 
     function renderExtraBars() {
         // Remove old extra bars not in list
         const activeIds = new Set(extraBarsList.map(b => b.id));
+        let changed = false;
         for (const id in barElements) {
             if (!builtInBars.includes(id) && !activeIds.has(id)) {
                 if (barElements[id].row.parentNode) {
                     barElements[id].row.parentNode.removeChild(barElements[id].row);
                 }
                 delete barElements[id];
+                changed = true;
             }
         }
 
@@ -139,11 +236,20 @@
             const def = extraBarsList[i];
             if (def.value === null || def.value === undefined) {
                 if (barElements[def.id]) {
-                    barElements[def.id].row.classList.add('hud-hidden');
+                    if (barElements[def.id].row.parentNode) {
+                        barElements[def.id].row.parentNode.removeChild(barElements[def.id].row);
+                    }
+                    delete barElements[def.id];
+                    changed = true;
                 }
             } else {
                 updateBarValue(def.id, def.value, def.icon);
+                changed = true;
             }
+        }
+        reorderBars();
+        if (changed) {
+            reportSizes();
         }
     }
 
@@ -165,12 +271,21 @@
         el.style.left = left + 'px';
         el.style.top = top + 'px';
         el.style.transform = `scale(${scale})`;
-        el.style.transformOrigin = `${place.ax * 100}% ${place.ay * 100}%`;
+        el.style.transformOrigin = '0 0';
 
-        if (place.hidden) {
-            el.classList.add('hud-hidden');
-        } else if (id !== 'vehicle' || !partVehicle.dataset.hideOverride) {
-            el.classList.remove('hud-hidden');
+        if (id === 'vehicle') {
+            vehiclePlacedHidden = !!place.hidden;
+            if (vehiclePlacedHidden || !vehicleVisible) {
+                el.classList.add('hud-hidden');
+            } else {
+                el.classList.remove('hud-hidden');
+            }
+        } else {
+            if (place.hidden) {
+                el.classList.add('hud-hidden');
+            } else {
+                el.classList.remove('hud-hidden');
+            }
         }
     }
 
@@ -265,7 +380,7 @@
                 }
             }
             if (item.street) {
-                if (item.street.heading !== undefined) compassBadgeEl.textContent = item.street.heading;
+                if (item.street.heading !== undefined) compassBadgeEl.textContent = translate(item.street.heading, item.street.heading);
                 if (item.street.street !== undefined) streetNameEl.textContent = item.street.street;
                 if (item.street.zone !== undefined) zoneNameEl.textContent = item.street.zone;
             }
@@ -278,16 +393,25 @@
             applyPlace(item.id, item);
         } else if (item.type === 'hud:visible') {
             if (item.id === 'vehicle') {
-                if (item.visible) {
-                    partVehicle.dataset.hideOverride = '';
+                vehicleVisible = !!item.visible;
+                if (vehicleVisible && !vehiclePlacedHidden) {
                     partVehicle.classList.remove('hud-hidden');
                 } else {
-                    partVehicle.dataset.hideOverride = 'true';
                     partVehicle.classList.add('hud-hidden');
                 }
             }
-        } else if (item.type === 'settings:open') {
+        } else if (item.type === 'settings:apply') {
+            if (typeof item.low === 'number') {
+                lowThreshold = item.low;
+            }
             setSettingsState(item.settings);
+            updateAllLowStatus();
+        } else if (item.type === 'settings:open') {
+            if (typeof item.low === 'number') {
+                lowThreshold = item.low;
+            }
+            setSettingsState(item.settings);
+            updateAllLowStatus();
             settingsCard.classList.remove('hud-hidden');
         } else if (item.type === 'settings:close') {
             settingsCard.classList.add('hud-hidden');
@@ -364,26 +488,6 @@
 
     // Measure parts and report ready to client Lua
     window.addEventListener('DOMContentLoaded', () => {
-        // Measure sizes
-        const statusRect = partStatus.getBoundingClientRect();
-        const vehicleRect = partVehicle.getBoundingClientRect();
-        const streetRect = partStreet.getBoundingClientRect();
-
-        post('ready', {
-            sizes: {
-                status: {
-                    w: Math.max(180, Math.round(statusRect.width || 200)),
-                    h: Math.max(40, Math.round(statusRect.height || 64)),
-                },
-                vehicle: {
-                    w: Math.max(140, Math.round(vehicleRect.width || 160)),
-                    h: Math.max(50, Math.round(vehicleRect.height || 68)),
-                },
-                street: {
-                    w: Math.max(180, Math.round(streetRect.width || 200)),
-                    h: Math.max(36, Math.round(streetRect.height || 48)),
-                },
-            },
-        });
+        reportSizes();
     });
 })();

@@ -194,10 +194,10 @@ describe('aeterna_hudkit', function()
             local newRelBlurX = pos.minimap.x - pos.minimap_blur.x
             local newRelBlurY = pos.minimap.y - pos.minimap_blur.y
 
-            assert.is_true(math.abs(newRelMaskX - origRelMaskX) < 1e-9)
-            assert.is_true(math.abs(newRelMaskY - origRelMaskY) < 1e-9)
-            assert.is_true(math.abs(newRelBlurX - origRelBlurX) < 1e-9)
-            assert.is_true(math.abs(newRelBlurY - origRelBlurY) < 1e-9)
+            assert.is_true(math.abs(newRelMaskX - origRelMaskX * scale) < 1e-9)
+            assert.is_true(math.abs(newRelMaskY - origRelMaskY * scale) < 1e-9)
+            assert.is_true(math.abs(newRelBlurX - origRelBlurX * scale) < 1e-9)
+            assert.is_true(math.abs(newRelBlurY - origRelBlurY * scale) < 1e-9)
 
             -- Scales applied
             assert.are.equal(defaults.minimap.w * scale, pos.minimap.w)
@@ -240,6 +240,16 @@ describe('aeterna_hudkit', function()
             assert.are.equal(1, #visibleBars)
             assert.are.equal('stamina', visibleBars[1].id)
 
+            -- Reserved bar ids are refused
+            assert.is_false(reg.add('res_a', { id = 'health', label = 'Health', icon = 'heart', value = 50 }))
+            assert.is_false(reg.add('res_a', { id = 'armour', label = 'Armour', icon = 'shield', value = 50 }))
+            assert.is_false(reg.add('res_a', { id = 'hunger', label = 'Hunger', icon = 'utensils', value = 50 }))
+            assert.is_false(reg.add('res_a', { id = 'thirst', label = 'Thirst', icon = 'droplet', value = 50 }))
+            assert.is_false(reg.add('res_a', { id = 'stress', label = 'Stress', icon = 'alert-triangle', value = 50 }))
+
+            -- Refuse id already held by another owner
+            assert.is_false(reg.add('res_b', { id = 'stamina', label = 'Stamina 2', icon = 'activity', value = 40 }))
+
             -- Fill up to 8 bars
             for i = 3, 8 do
                 local id = 'bar_' .. tostring(i)
@@ -251,7 +261,7 @@ describe('aeterna_hudkit', function()
             local ok9 = reg.add('res_c', { id = 'bar_9', label = 'Bar 9', icon = 'sliders', value = 50, order = 50 })
             assert.is_false(ok9)
             assert.are.equal(8, reg.count())
-            assert.are.equal(1, #warnings)
+            assert.is_true(#warnings >= 1)
 
             -- Owner stop removes only its bars
             local removedA = reg.removeByOwner('res_a')
@@ -262,10 +272,14 @@ describe('aeterna_hudkit', function()
             -- res_b bars remain
             assert.is_not_nil(reg.get('bar_3'))
 
+            -- Clear res_b bars so slots are available for sorting test
+            reg.removeByOwner('res_b')
+            assert.are.equal(0, reg.count())
+
             -- Sorting by order then id
-            reg.add('res_x', { id = 'bravo', label = 'B', icon = 'check', value = 10, order = 5 })
-            reg.add('res_x', { id = 'alpha', label = 'A', icon = 'check', value = 10, order = 5 })
-            reg.add('res_x', { id = 'zulu', label = 'Z', icon = 'check', value = 10, order = 1 })
+            assert.is_true(reg.add('res_x', { id = 'bravo', label = 'B', icon = 'check', value = 10, order = 5 }))
+            assert.is_true(reg.add('res_x', { id = 'alpha', label = 'A', icon = 'check', value = 10, order = 5 }))
+            assert.is_true(reg.add('res_x', { id = 'zulu', label = 'Z', icon = 'check', value = 10, order = 1 }))
 
             local sorted = reg.getSortedBars(false)
             -- First should be order 1 ('zulu')
@@ -316,6 +330,23 @@ describe('aeterna_hudkit', function()
             assert.are.equal(25, diff.vehicle.speed)
             assert.is_nil(diff.status)
             assert.is_nil(diff.street)
+        end)
+
+        it('need disappearing emits null in diff for removed keys', function()
+            local vWithNeed = {
+                status = { health = 100, armour = 50, hunger = 80 },
+                vehicle = { speed = 0, gear = 'N' },
+                street = { street = 'Grove St', zone = 'Davis', heading = 'N' },
+            }
+            local vWithoutNeed = {
+                status = { health = 100, armour = 50 },
+                vehicle = { speed = 0, gear = 'N' },
+                street = { street = 'Grove St', zone = 'Davis', heading = 'N' },
+            }
+            local changed, diff = H.diffValues(vWithNeed, vWithoutNeed)
+            assert.is_true(changed)
+            assert.is_not_nil(diff.status)
+            assert.are.equal(H.NULL, diff.status.hunger)
         end)
     end)
 
@@ -402,6 +433,7 @@ describe('aeterna_hudkit', function()
 
         it('loads client scripts and registers commands and key mappings', function()
             natives.reset({ side = 'client', resource = 'aeterna_hudkit' })
+            natives.spy('RegisterNUICallback')
             resClient = resource.load_resource(DIR, 'client')
             assert.is_not_nil(resClient)
 
@@ -410,6 +442,46 @@ describe('aeterna_hudkit', function()
             assert.is_not_nil(commands['aeterna_hudkit_settings'])
             assert.is_not_nil(commands['+aeterna_hudkit_settings'])
             assert.is_not_nil(commands['-aeterna_hudkit_settings'])
+        end)
+
+        it('ready callback resets change-detection state, resends settings, bars, and part visibility', function()
+            natives.reset({ side = 'client', resource = 'aeterna_hudkit' })
+            local callbacks = {}
+            natives.spy('RegisterNUICallback', function(name, fn)
+                callbacks[name] = fn
+            end)
+            local uiMessages = natives.spy('SendNUIMessage')
+            resClient = resource.load_resource(DIR, 'client')
+            assert.is_function(callbacks['ready'])
+
+            callbacks['ready']({
+                sizes = {
+                    status = { w = 220, h = 64 },
+                    vehicle = { w = 180, h = 72 },
+                    street = { w = 240, h = 48 },
+                },
+            }, function() end)
+
+            local foundSettingsApply = false
+            local foundBars = false
+            local foundVisible = false
+            for _, call in ipairs(uiMessages) do
+                local msg = call[1]
+                if type(msg) == 'table' then
+                    if msg.type == 'settings:apply' then
+                        foundSettingsApply = true
+                        assert.is_table(msg.settings)
+                        assert.are.equal(20, msg.low)
+                    elseif msg.type == 'hud:bars' then
+                        foundBars = true
+                    elseif msg.type == 'hud:visible' and msg.id == 'vehicle' then
+                        foundVisible = true
+                    end
+                end
+            end
+            assert.is_true(foundSettingsApply, 'expected settings:apply to be sent on ready')
+            assert.is_true(foundBars, 'expected hud:bars to be sent on ready')
+            assert.is_true(foundVisible, 'expected hud:visible to be sent on ready')
         end)
     end)
 end)
