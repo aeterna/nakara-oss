@@ -36,18 +36,6 @@
       "plan": "starter-kit",
       "acquired": "2026-11-18T11:51:13Z",
       "expires": "2026-11-18T15:51:13Z"
-    },
-    {
-      "id": "kit-uikit-cf022cf5",
-      "repo": "nakara-oss",
-      "lane": "kit-uikit",
-      "host": "win",
-      "scope": [
-        "packages/uikit/fxmanifest.lua"
-      ],
-      "plan": "starter-kit",
-      "acquired": "2026-11-18T11:51:30Z",
-      "expires": "2026-11-18T15:51:30Z"
     }
   ]
 }
