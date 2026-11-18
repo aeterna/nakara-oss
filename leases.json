@@ -12,6 +12,18 @@
       "plan": "starter-kit",
       "acquired": "2026-11-18T13:09:30Z",
       "expires": "2026-11-18T17:09:30Z"
+    },
+    {
+      "id": "kit-fix-hudkit-7389f224",
+      "repo": "nakara-oss",
+      "lane": "kit-fix-hudkit",
+      "host": "win",
+      "scope": [
+        "packages/hudkit/**"
+      ],
+      "plan": "starter-kit",
+      "acquired": "2026-11-18T13:14:06Z",
+      "expires": "2026-11-18T17:14:06Z"
     }
   ]
 }
