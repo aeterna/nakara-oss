@@ -1,0 +1,28 @@
+/* AETERNA Starter Kit default theme: Asphalt (ADR 0004 decision 6).
+   Every package ships this file unchanged as html/theme.css. Override it with the convar aeterna_theme. */
+:root {
+    --surface: #1d2024;
+    --raised: #262a2f;
+    --text: #eceff2;
+    --text-2: #aab1b9;
+    --text-3: #8a929b;
+    --line: rgba(232, 236, 240, .09);
+    --track: rgba(232, 236, 240, .12);
+    --accent: #2f6feb;
+    --on-accent: #ffffff;
+    --good: #3fae6e;
+    --warn: #d9a03a;
+    --bad: #e0574f;
+    --radius-s: 6px;
+    --radius-m: 10px;
+    --radius-l: 14px;
+    --pad: 14px;
+    --ease: cubic-bezier(.3, .8, .4, 1);
+    --fast: 140ms;
+    --enter: 200ms;
+    --font: 'IBM Plex Sans Thai', 'Noto Sans Thai', system-ui, sans-serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root { --fast: 0ms; --enter: 0ms; }
+}

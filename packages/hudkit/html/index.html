@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>aeterna_hudkit</title>
+    <link rel="stylesheet" href="theme.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="hud-container">
+        <!-- Status bars part -->
+        <div id="part-status" class="hud-part" data-part="status">
+            <div id="status-bars" class="bars-container">
+                <!-- Built-in bars will be populated by JS -->
+            </div>
+        </div>
+
+        <!-- Vehicle panel part -->
+        <div id="part-vehicle" class="hud-part hud-hidden" data-part="vehicle">
+            <div class="vehicle-panel">
+                <div class="speed-cluster">
+                    <span id="speed-value" class="speed-value">0</span>
+                    <span id="speed-unit" class="speed-unit">km/h</span>
+                </div>
+                <div class="vehicle-sub">
+                    <div id="gear-indicator" class="gear-badge">N</div>
+                    <div class="fuel-cluster">
+                        <span id="fuel-icon" class="fuel-icon"></span>
+                        <div class="fuel-bar-track">
+                            <div id="fuel-bar-fill" class="fuel-bar-fill" style="width: 100%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Street and compass part -->
+        <div id="part-street" class="hud-part" data-part="street">
+            <div class="street-panel">
+                <div id="compass-badge" class="compass-badge">N</div>
+                <div class="street-names">
+                    <div id="street-name" class="street-primary"></div>
+                    <div id="zone-name" class="street-secondary"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings modal card -->
+        <div id="settings-card" class="settings-modal hud-hidden">
+            <div class="settings-header">
+                <div class="settings-title-group">
+                    <span id="settings-icon" class="settings-header-icon"></span>
+                    <span id="txt-settings-title" class="settings-title">HUD settings</span>
+                </div>
+                <button type="button" id="btn-settings-close" class="btn-icon" aria-label="Close">
+                    <span id="close-icon"></span>
+                </button>
+            </div>
+            <div class="settings-body">
+                <div class="setting-row">
+                    <label id="lbl-numbers" for="opt-numbers" class="setting-label">Show numbers on bars</label>
+                    <input type="checkbox" id="opt-numbers" class="setting-toggle">
+                </div>
+                <div class="setting-row">
+                    <span id="lbl-speed-unit" class="setting-label">Speed unit</span>
+                    <div class="segmented-control" role="group" aria-label="Speed unit">
+                        <button type="button" id="unit-kmh" class="segment-btn active" data-unit="kmh">km/h</button>
+                        <button type="button" id="unit-mph" class="segment-btn" data-unit="mph">mph</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <span id="lbl-minimap-mode" class="setting-label">Minimap</span>
+                    <div class="segmented-control" role="group" aria-label="Minimap mode">
+                        <button type="button" id="mode-always" class="segment-btn active" data-mode="always">Always</button>
+                        <button type="button" id="mode-vehicle" class="segment-btn" data-mode="vehicle">In vehicle</button>
+                        <button type="button" id="mode-never" class="segment-btn" data-mode="never">Never</button>
+                    </div>
+                </div>
+                <div class="settings-actions">
+                    <button type="button" id="btn-edit-layout" class="btn-primary">
+                        <span id="layout-icon"></span>
+                        <span id="txt-edit-layout">Edit layout</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="icons.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
