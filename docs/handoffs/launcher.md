@@ -1,6 +1,6 @@
 # Handoff · AETERNA Game Launcher (`launcher/`) and Rongroi Connect
 
-Written by: Claude Code - Claude Opus 5.5 · 2026-11-15 · updated 2026-11-18 (0.1.0 released; only the template repository is left)
+Written by: Claude Code - Claude Opus 5.5 · 2026-11-15 · closed 2026-11-18 (0.1.0 released; the template repository is the one open item)
 Decision record: [ADR 0002](../adr/0002-aeterna-game-launcher.md) · Connect: aeterna/aeterna-rongroi-connect ADR 0001 + 0002
 Plan and live status table (owner's doc): https://claude.ai/artifact/RFJoHRcP1JQGxqYDSXUuJ3
 
@@ -31,6 +31,7 @@ Plan and live status table (owner's doc): https://claude.ai/artifact/RFJoHRcP1JQ
 | Connect 0.1.1: the opened "See what will be sent" stays open across the countdown redraw (owner re-tested) | released, pre-release | Connect #19 `79875e6` · run 44061304358 |
 | Kit `nakara_rongroi@0.1.0` | released | #60 `11770ea` · #62 `6a67f15` on `dev` · run 44095977445 |
 | Launcher `launcher-v0.1.0`, bundles Connect v0.1.1; assets, attestations and manifest signature checked | released | run 44095983570 |
+| Player install guide (`launcher/docs/install.md`), this handoff closed | merged into `dev`; reaches `main` at the next promotion | #64 `b09e950` |
 | Test files on the Windows PC | removed, except the old Kit copy (owner decides) | `C:\rongroi-w2-enh\nakara_rongroi.moved-20261117-104302` |
 | Owner template repository (L8) | not created | draft on the maintainer's external drive |
 
@@ -59,6 +60,10 @@ Plan and live status table (owner's doc): https://claude.ai/artifact/RFJoHRcP1JQ
 ## Next, in order
 
 1. Create the template repository (needs the external drive mounted and item 2 above).
+2. Promote `dev` → `main` so the install guide and the README status reach `main`.
+3. The public site (`site/`) still lists the launcher and the Rongroi Server Kit as in development: owner decides the new text.
+
+The test server `rongroi-w2-enh` is stopped (exit 137, cause not looked at; it was not needed any more).
 
 ## Rollback
 
@@ -80,3 +85,4 @@ Plan and live status table (owner's doc): https://claude.ai/artifact/RFJoHRcP1JQ
 - 2026-11-17: W2 merged (#55 #56 #57 #59, org-standards#150); W3 e2e passed; Connect details fix + 0.1.1 (Connect #19);
   Kit 0.1.0 (#60, back on `dev` by #62).
 - 2026-11-18: released Connect v0.1.1, Kit `nakara_rongroi@0.1.0`, `launcher-v0.1.0`; test files removed from the PC.
+- 2026-11-18: install guide and closeout (#64); README status updated; session closed.
