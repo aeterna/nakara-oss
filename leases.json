@@ -1,17 +1,4 @@
 {
   "version": 1,
-  "leases": [
-    {
-      "id": "kit-fix-focus-2b002cbf",
-      "repo": "nakara-oss",
-      "lane": "kit-fix-focus",
-      "host": "win",
-      "scope": [
-        "packages/core/**,packages/uikit/client/main.lua,packages/uikit/spec/**,packages/layout/client/main.lua,packages/layout/spec/**,packages/notify/client/main.lua,packages/notify/spec/**,packages/hudkit/client/main.lua,packages/hudkit/spec/**,packages/phonekit/client/main.lua,packages/phonekit/spec/**"
-      ],
-      "plan": "starter-kit",
-      "acquired": "2026-11-18T14:16:32Z",
-      "expires": "2026-11-18T18:16:32Z"
-    }
-  ]
+  "leases": []
 }
