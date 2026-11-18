@@ -1,5 +1,5 @@
 // Turns files on disk into what rules read:
-//   entry (every file):  { file, rel, ext, text, binary, bytecode, minified }
+//   entry (every file):  { file, rel, ext, size, text, binary, bytecode, minified }
 //   model (Lua/JS/HTML): entry + { lang, side, isServer, isClient, isNui, refs, strings, ... }
 // Side comes from the resource's fxmanifest.lua lists. A Lua file in no list is 'unlisted' and
 // counts as both server and client (conservative: it might be loaded some other way); a JS/HTML
@@ -43,7 +43,7 @@ export function buildEntry(file, resDir) {
   const buf = readFileSync(file);
   const ext = path.extname(file).toLowerCase();
   const rel = path.relative(resDir, file).split(path.sep).join('/');
-  const entry = { file, rel, ext, text: '', binary: false, bytecode: false, minified: null };
+  const entry = { file, rel, ext, size: buf.length, text: '', binary: false, bytecode: false, minified: null };
   if (!TEXT_EXTS.has(ext) && !UNSUPPORTED_EXTS.includes(ext)) return entry;
   if (buf.length >= 4 && buf[0] === 0x1b && buf.toString('latin1', 1, 4) === 'Lua') { entry.bytecode = true; return entry; }
   if (buf.subarray(0, 8192).includes(0)) { entry.binary = true; return entry; }

@@ -19,6 +19,7 @@ import codeEval from './code-eval.js';
 import commandInjection from './command-injection.js';
 import dynamicLoad from './dynamic-load.js';
 import envTamper from './env-tamper.js';
+import fontAssets from './font-assets.js';
 import hostAccess from './host-access.js';
 import hostExec from './host-exec.js';
 import invokeNative from './invoke-native.js';
@@ -43,7 +44,7 @@ import undeclaredRegisteredCommand from './undeclared-registered-command.js';
 // order matters only for over-declared, which reads what the others marked as used
 export const safetyRules = [
   dynamicLoad, hostExec, hostAccess, codeEval, envTamper, invokeNative, secretConvar, aceCommand,
-  commandInjection, obfuscation, opaqueFile,
+  commandInjection, obfuscation, opaqueFile, fontAssets,
   missingManifest, undeclaredHttp, undeclaredHttpHandler, undeclaredCommand, undeclaredRegisteredCommand,
   undeclaredConvar, undeclaredNetEvent, undeclaredNui, undeclaredFileWrite, undeclaredDb,
   netEventRateLimit, nuiHtmlInjection,

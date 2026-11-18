@@ -32,7 +32,7 @@ Exit code 1 when there is at least one error. Warnings never fail the run.
 | Credential theft: `rcon_password`, `sv_licenseKey`, `steam_webApiKey`, `mysql_connection_string`, `*token*`, `*secret*`, `*password*`, `*apikey*`, `*webhook*`; environment variables | `secret-convar`, `host-access` |
 | Running host commands or touching host files: `os.execute`, `io.popen`, `io.open(…, 'w')`, `child_process`, `vm`, `fs` | `host-exec`, `host-access` |
 | Calling a native by hash to dodge name-based rules (`Citizen.InvokeNative`, `_in`) on the server | `invoke-native` |
-| Shipping what nobody can review: DLLs, archives, Lua bytecode, minified bundles, streamed assets | `opaque-file` |
+| Shipping what nobody can review: DLLs, archives, Lua bytecode, minified bundles, streamed assets, unlicensed/oversized fonts or standalone SVGs | `opaque-file`, `font-assets` |
 | Quietly widening what a package does: new HTTP destinations, HTTP handlers, commands, net events, convars, tables, file writes, NUI | `undeclared-*`, `over-declared`, `capabilityDiff` |
 | Exploit surface: net events with no rate limit; player text rendered as HTML in NUI | `net-event-rate-limit`, `nui-html-injection` |
 
@@ -99,6 +99,7 @@ Every finding has `check: "safety/<rule-id>"`. Errors fail the run; warnings do 
 | `command-injection` | error | Server-side `ExecuteCommand` with a literal command name but runtime arguments | The console splits on `;`: `'say ' .. msg` with `msg = "hi; add_ace …"` runs a second command. Validate the value and allow the file with a reason, or avoid `ExecuteCommand`. |
 | `obfuscation` | error | A run of ≥ 8 consecutive `\xNN` / `\ddd` / `\u{…}` escapes in one string; a base64-looking literal ≥ 200 chars; `string.char`/`utf8.char`/`String.fromCharCode` with ≥ 8 numeric arguments, `unpack(...)`, a spread or `.apply`; a table of ≥ 32 numbers in a file that calls `string.char`; any line > 1000 chars in `.lua`/`.js` | Obfuscation exists to get code past a reviewer. Honest code can always spell its strings out. |
 | `opaque-file` | error | `.dll .exe .so .dylib .zip .rar .7z .jar .luac .bin .node .wasm .gz .tar .tgz`; Lua bytecode under any name; binary content in a source file; `*.min.js` or JS with average line length > 300; streamed assets `.ycd .ytd .yft .ydr .ydd .ybn .ymap .ytyp .rpf` unless `safety.allowAssets` | A reviewer can only approve what they can read. Bundles are built in CI from reviewed source. Minified files are not scanned further. |
+| `font-assets` | error | Under `packages/*`, any `.svg` file, any `.ttf .otf .woff .eot` font file, any `.woff2` outside `packages/<pkg>/html/fonts/`, `.woff2` in `html/fonts/` without `OFL.txt` in that same folder, or > 1 MB of fonts in a package (`launcher/assets/**` is exempt) | Keeps package fonts to OFL-licensed `.woff2` files in `html/fonts/` with `OFL.txt` beside them and at most 1 MB per package, and refuses standalone `.svg` files (icons are inline SVG in JS and listed in `NOTICE`). |
 
 **Why exactly two rules cannot be allowlisted.** `secret-convar` and `ace-command` are the two
 capabilities that hand *someone else's* server to the code's author: one leaks the keys, the other
