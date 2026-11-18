@@ -12,6 +12,18 @@
       "plan": "starter-kit",
       "acquired": "2026-11-18T11:50:59Z",
       "expires": "2026-11-18T15:50:59Z"
+    },
+    {
+      "id": "kit-notify-27ed019b",
+      "repo": "nakara-oss",
+      "lane": "kit-notify",
+      "host": "win",
+      "scope": [
+        "packages/notify/**"
+      ],
+      "plan": "starter-kit",
+      "acquired": "2026-11-18T11:51:04Z",
+      "expires": "2026-11-18T15:51:04Z"
     }
   ]
 }
