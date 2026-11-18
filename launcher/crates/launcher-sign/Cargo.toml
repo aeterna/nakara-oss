@@ -22,7 +22,7 @@ semver = { version = "=1.0.28", features = ["serde"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.140"
 sha2 = "=0.10.8"
-time = { version = "=0.3.36", features = ["formatting", "parsing"] }
+time = { version = "=0.3.47", features = ["formatting", "parsing"] }
 
 [dev-dependencies]
 launcher-update = { path = "../launcher-update" }
