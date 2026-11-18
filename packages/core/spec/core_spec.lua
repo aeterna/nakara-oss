@@ -375,16 +375,54 @@ describe('aeterna_core', function()
             AeternaCore.emit('ping', 99)
             assert.are.equal(42, received)
 
-            -- Focus exports
+            -- Focus exports decide ownership only (no native calls)
             local tok = exports.aeterna_core:requestFocus({ cursor = true, keyboard = false, keepGameInput = true })
             assert.is_string(tok)
             assert.are.equal('aeterna_core', exports.aeterna_core:focusOwner())
-            assert.are.equal(1, #focusCalls)
-            assert.are.same({ n = 2, false, true }, focusCalls[1])
-            assert.are.same({ n = 1, true }, keepCalls[1])
+            assert.are.equal(0, #focusCalls)
+            assert.are.equal(0, #keepCalls)
 
             assert.is_true(exports.aeterna_core:releaseFocus(tok))
             assert.is_nil(exports.aeterna_core:focusOwner())
+            assert.are.equal(0, #focusCalls)
+            assert.are.equal(0, #keepCalls)
+
+            -- Focus helpers in AeternaCore call natives
+            local helperTok = AeternaCore.requestFocus({ cursor = true, keyboard = false, keepGameInput = true })
+            assert.is_string(helperTok)
+            assert.are.equal('aeterna_core', exports.aeterna_core:focusOwner())
+            assert.are.equal(1, #focusCalls)
+            assert.are.same({ n = 2, false, true }, focusCalls[1])
+            assert.are.equal(1, #keepCalls)
+            assert.are.same({ n = 1, true }, keepCalls[1])
+
+            -- AeternaCore.releaseFocus clears both natives
+            assert.is_true(AeternaCore.releaseFocus(helperTok))
+            assert.is_nil(exports.aeterna_core:focusOwner())
+            assert.are.equal(2, #focusCalls)
+            assert.are.same({ n = 2, false, false }, focusCalls[2])
+            assert.are.equal(2, #keepCalls)
+            assert.are.same({ n = 1, false }, keepCalls[2])
+
+            -- Re-acquire focus to test focusLost
+            local lostTok = AeternaCore.requestFocus({ cursor = true, keyboard = true, keepGameInput = false })
+            assert.is_string(lostTok)
+            assert.are.equal(3, #focusCalls)
+            assert.are.same({ n = 2, true, true }, focusCalls[3])
+            assert.are.equal(3, #keepCalls)
+            assert.are.same({ n = 1, false }, keepCalls[3])
+
+            -- focusLost for another resource does NOT clear natives for aeterna_core
+            natives.fire('aeterna_core:focusLost', 'other_resource', lostTok, 'preempted')
+            assert.are.equal(3, #focusCalls)
+            assert.are.equal(3, #keepCalls)
+
+            -- focusLost for own resource clears both natives
+            natives.fire('aeterna_core:focusLost', 'aeterna_core', lostTok, 'preempted')
+            assert.are.equal(4, #focusCalls)
+            assert.are.same({ n = 2, false, false }, focusCalls[4])
+            assert.are.equal(4, #keepCalls)
+            assert.are.same({ n = 1, false }, keepCalls[4])
 
             -- Key mapping requires +aeterna_ prefix
             AeternaCore.key('bad_command', 'core.month.1')
@@ -450,6 +488,10 @@ describe('aeterna_core', function()
 
         it('standalone import.lua works when loaded directly by another resource', function()
             natives.reset({ resource = 'aeterna_uikit', side = 'client' })
+            local focusCalls = natives.spy('SetNuiFocus')
+            local keepCalls = natives.spy('SetNuiFocusKeepInput')
+            natives.stub_export('aeterna_core', 'requestFocus', function(opts) return 'tok_uikit' end)
+            natives.stub_export('aeterna_core', 'releaseFocus', function(tok) return tok == 'tok_uikit' end)
             assert(loadfile(DIR .. '/import.lua'))()
 
             assert.are.equal(4, AeternaCore.text.len('สวัสดี'))
@@ -461,6 +503,35 @@ describe('aeterna_core', function()
             assert.is_true(ok)
             assert.is_nil(err)
             assert.are.same({ id = 'btn_1' }, clean)
+
+            -- Test AeternaCore.requestFocus / releaseFocus / focusLost in another resource
+            local tok = AeternaCore.requestFocus({ cursor = true, keyboard = false, keepGameInput = true })
+            assert.are.equal('tok_uikit', tok)
+            assert.are.equal(1, #focusCalls)
+            assert.are.same({ n = 2, false, true }, focusCalls[1])
+            assert.are.equal(1, #keepCalls)
+            assert.are.same({ n = 1, true }, keepCalls[1])
+
+            assert.is_true(AeternaCore.releaseFocus(tok))
+            assert.are.equal(2, #focusCalls)
+            assert.are.same({ n = 2, false, false }, focusCalls[2])
+            assert.are.equal(2, #keepCalls)
+            assert.are.same({ n = 1, false }, keepCalls[2])
+
+            -- Re-acquire and test focusLost only clears for own resource ('aeterna_uikit')
+            tok = AeternaCore.requestFocus({ cursor = true, keyboard = true, keepGameInput = false })
+            assert.are.equal(3, #focusCalls)
+            assert.are.same({ n = 2, true, true }, focusCalls[3])
+
+            natives.fire('aeterna_core:focusLost', 'some_other_res', tok, 'preempted')
+            assert.are.equal(3, #focusCalls)
+            assert.are.equal(3, #keepCalls)
+
+            natives.fire('aeterna_core:focusLost', 'aeterna_uikit', tok, 'preempted')
+            assert.are.equal(4, #focusCalls)
+            assert.are.same({ n = 2, false, false }, focusCalls[4])
+            assert.are.equal(4, #keepCalls)
+            assert.are.same({ n = 1, false }, keepCalls[4])
         end)
     end)
 end)

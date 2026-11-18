@@ -449,6 +449,8 @@ describe('aeterna_notify', function()
 
         it('runs client toasts, MOTD KVP persistence, and aeterna_layout protocol', function()
             natives.reset({ resource = 'aeterna_notify', side = 'client' })
+            natives.spy('SetNuiFocus')
+            natives.spy('SetNuiFocusKeepInput')
             local nuiCallbacks = {}
             local nuiMessages = natives.spy('SendNUIMessage')
             natives.spy('RegisterNUICallback', function(name, fn)
@@ -484,6 +486,23 @@ describe('aeterna_notify', function()
                         natives.set_kvp('aeterna_notify:' .. name .. ':v' .. version, json.encode(val))
                     end,
                 },
+                requestFocus = function(opts)
+                    local ok, tok = pcall(function() return exports.aeterna_core:requestFocus(opts) end)
+                    if not ok or not tok then return nil end
+                    local normalized = type(opts) == 'table' and opts or {}
+                    SetNuiFocus(normalized.keyboard ~= false, normalized.cursor ~= false)
+                    SetNuiFocusKeepInput(normalized.keepGameInput == true)
+                    return tok
+                end,
+                releaseFocus = function(tok)
+                    local ok, res = pcall(function() return exports.aeterna_core:releaseFocus(tok) end)
+                    if ok and res == true then
+                        SetNuiFocusKeepInput(false)
+                        SetNuiFocus(false, false)
+                        return true
+                    end
+                    return false
+                end,
             })
             natives.stub_export('aeterna_core', 'requestFocus', function() return 'motd_tok' end)
             natives.stub_export('aeterna_core', 'releaseFocus', function() return true end)
@@ -533,6 +552,8 @@ describe('aeterna_notify', function()
 
         it('does not open the MOTD when aeterna_core refuses focus', function()
             natives.reset({ resource = 'aeterna_notify', side = 'client' })
+            natives.spy('SetNuiFocus')
+            natives.spy('SetNuiFocusKeepInput')
             local nuiMessages = natives.spy('SendNUIMessage')
             natives.spy('RegisterNUICallback', function() end)
             natives.spy('LoadResourceFile', function(_, path)
@@ -557,6 +578,23 @@ describe('aeterna_notify', function()
                     get = function(_, _, default) return default end,
                     set = function() end,
                 },
+                requestFocus = function(opts)
+                    local ok, tok = pcall(function() return exports.aeterna_core:requestFocus(opts) end)
+                    if not ok or not tok then return nil end
+                    local normalized = type(opts) == 'table' and opts or {}
+                    SetNuiFocus(normalized.keyboard ~= false, normalized.cursor ~= false)
+                    SetNuiFocusKeepInput(normalized.keepGameInput == true)
+                    return tok
+                end,
+                releaseFocus = function(tok)
+                    local ok, res = pcall(function() return exports.aeterna_core:releaseFocus(tok) end)
+                    if ok and res == true then
+                        SetNuiFocusKeepInput(false)
+                        SetNuiFocus(false, false)
+                        return true
+                    end
+                    return false
+                end,
             })
             natives.stub_export('aeterna_core', 'requestFocus', function() error('focus unavailable') end)
             natives.stub_export('aeterna_core', 'releaseFocus', function() return true end)

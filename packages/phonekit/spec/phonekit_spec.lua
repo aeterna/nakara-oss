@@ -647,6 +647,8 @@ describe('aeterna_phonekit', function()
 
         it('runs client commands, focus coordination, layout and NUI callbacks', function()
             natives.reset({ resource = 'aeterna_phonekit', side = 'client' })
+            natives.spy('SetNuiFocus')
+            natives.spy('SetNuiFocusKeepInput')
             local nuiMessages = natives.spy('SendNUIMessage')
             local nuiCallbacks = {}
             natives.spy('RegisterNUICallback', function(name, fn)
@@ -669,6 +671,23 @@ describe('aeterna_phonekit', function()
                 },
                 key = function(cmd, desc)
                     RegisterKeyMapping(cmd, (Locales and Locales.en and Locales.en[desc]) or desc, 'keyboard', '')
+                end,
+                requestFocus = function(opts)
+                    local ok, tok = pcall(function() return exports.aeterna_core:requestFocus(opts) end)
+                    if not ok or not tok then return nil end
+                    local normalized = type(opts) == 'table' and opts or {}
+                    SetNuiFocus(normalized.keyboard ~= false, normalized.cursor ~= false)
+                    SetNuiFocusKeepInput(normalized.keepGameInput == true)
+                    return tok
+                end,
+                releaseFocus = function(tok)
+                    local ok, res = pcall(function() return exports.aeterna_core:releaseFocus(tok) end)
+                    if ok and res == true then
+                        SetNuiFocusKeepInput(false)
+                        SetNuiFocus(false, false)
+                        return true
+                    end
+                    return false
                 end,
             })
             local focusRequested = false

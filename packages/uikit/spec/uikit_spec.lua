@@ -564,6 +564,8 @@ describe('aeterna_uikit', function()
                 if hash == (0x23456789 | 0x80000000) then return 't_F' end
                 return 'b_-1'
             end)
+            natives.spy('SetNuiFocus')
+            natives.spy('SetNuiFocusKeepInput')
             natives.stub('Locales', {
                 en = { ['core.month.1'] = 'January' },
                 th = { ['core.month.1'] = 'มกราคม' },
@@ -573,6 +575,23 @@ describe('aeterna_uikit', function()
                 t = function(k) return (Locales and Locales.en and Locales.en[k]) or k end,
                 lang = function() return 'en' end,
                 key = function() end,
+                requestFocus = function(opts)
+                    local ok, tok = pcall(function() return exports.aeterna_core:requestFocus(opts) end)
+                    if not ok or not tok then return nil end
+                    local normalized = type(opts) == 'table' and opts or {}
+                    SetNuiFocus(normalized.keyboard ~= false, normalized.cursor ~= false)
+                    SetNuiFocusKeepInput(normalized.keepGameInput == true)
+                    return tok
+                end,
+                releaseFocus = function(tok)
+                    local ok, res = pcall(function() return exports.aeterna_core:releaseFocus(tok) end)
+                    if ok and res == true then
+                        SetNuiFocusKeepInput(false)
+                        SetNuiFocus(false, false)
+                        return true
+                    end
+                    return false
+                end,
             })
             natives.stub_export('aeterna_core', 'requestFocus', function() return 'tok_1' end)
             natives.stub_export('aeterna_core', 'releaseFocus', function() return true end)

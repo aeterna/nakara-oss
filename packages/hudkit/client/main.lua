@@ -323,7 +323,7 @@ end
 local function openSettings()
     if settingsOpen then return end
     local ok, tok = pcall(function()
-        return exports.aeterna_core:requestFocus({
+        return AeternaCore.requestFocus({
             cursor = true,
             keyboard = true,
             keepGameInput = false,
@@ -351,7 +351,7 @@ local function closeSettings(releaseFocus)
         local tok = focusToken
         focusToken = nil
         pcall(function()
-            exports.aeterna_core:releaseFocus(tok)
+            AeternaCore.releaseFocus(tok)
         end)
     else
         focusToken = nil

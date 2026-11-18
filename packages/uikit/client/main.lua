@@ -66,7 +66,7 @@ end
 
 local function acquireFocus(opts)
     local ok, tok = pcall(function()
-        return exports.aeterna_core:requestFocus(opts)
+        return AeternaCore.requestFocus(opts)
     end)
     if ok and type(tok) == 'string' then
         focusToken = tok
@@ -81,7 +81,7 @@ local function dropFocus()
     local tok = focusToken
     focusToken = nil
     pcall(function()
-        exports.aeterna_core:releaseFocus(tok)
+        AeternaCore.releaseFocus(tok)
     end)
 end
 

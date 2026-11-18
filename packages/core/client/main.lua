@@ -5,10 +5,6 @@ AeternaCore = AeternaCore or {}
 
 local focusLogic = AeternaCoreLogic.focus
 local focusManager = focusLogic.new({
-    onApply = function(keyboard, cursor, keepGameInput)
-        SetNuiFocus(keyboard, cursor)
-        SetNuiFocusKeepInput(keepGameInput)
-    end,
     onLost = function(owner, token, reason)
         TriggerEvent('aeterna_core:focusLost', owner, token, reason)
     end,

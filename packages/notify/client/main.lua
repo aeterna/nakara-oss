@@ -81,7 +81,7 @@ end
 
 local function acquireFocus()
     local ok, tok = pcall(function()
-        return exports.aeterna_core:requestFocus({
+        return AeternaCore.requestFocus({
             cursor = true,
             keyboard = true,
             keepGameInput = false,
@@ -100,7 +100,7 @@ local function dropFocus()
     local tok = focusToken
     focusToken = nil
     pcall(function()
-        exports.aeterna_core:releaseFocus(tok)
+        AeternaCore.releaseFocus(tok)
     end)
 end
 

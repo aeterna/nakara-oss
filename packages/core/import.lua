@@ -748,4 +748,43 @@ function AeternaCore.key(command, description)
     return nil
 end
 
+if not IsDuplicityVersion() then
+    function AeternaCore.requestFocus(opts)
+        local ok, token = pcall(function()
+            return exports.aeterna_core:requestFocus(opts)
+        end)
+        if not ok or not token then
+            return nil
+        end
+        local normalized = type(opts) == 'table' and opts or {}
+        local cursor = normalized.cursor ~= false
+        local keyboard = normalized.keyboard ~= false
+        local keepGameInput = normalized.keepGameInput == true
+        SetNuiFocus(keyboard, cursor)
+        SetNuiFocusKeepInput(keepGameInput)
+        return token
+    end
+
+    function AeternaCore.releaseFocus(token)
+        local ok, released = pcall(function()
+            return exports.aeterna_core:releaseFocus(token)
+        end)
+        if ok and released == true then
+            SetNuiFocusKeepInput(false)
+            SetNuiFocus(false, false)
+            return true
+        end
+        return false
+    end
+
+    if not AeternaCore._focusLostHandler then
+        AeternaCore._focusLostHandler = AddEventHandler('aeterna_core:focusLost', function(owner, token, reason)
+            if owner == GetCurrentResourceName() then
+                SetNuiFocusKeepInput(false)
+                SetNuiFocus(false, false)
+            end
+        end)
+    end
+end
+
 return AeternaCore

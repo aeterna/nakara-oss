@@ -411,6 +411,8 @@ describe('aeterna_hudkit', function()
         local resServer, resClient
         before_each(function()
             natives.reset({ side = 'client', resource = 'aeterna_hudkit' })
+            natives.spy('SetNuiFocus')
+            natives.spy('SetNuiFocusKeepInput')
             natives.spy('RegisterCommand')
             natives.spy('RegisterKeyMapping')
             natives.spy('RegisterNUICallback')
@@ -444,6 +446,8 @@ describe('aeterna_hudkit', function()
 
         it('loads client scripts and registers commands and key mappings', function()
             natives.reset({ side = 'client', resource = 'aeterna_hudkit' })
+            natives.spy('SetNuiFocus')
+            natives.spy('SetNuiFocusKeepInput')
             natives.spy('RegisterCommand')
             natives.spy('RegisterKeyMapping')
             natives.spy('RegisterNUICallback')
@@ -459,6 +463,8 @@ describe('aeterna_hudkit', function()
 
         it('ready callback resets change-detection state, resends settings, bars, and part visibility', function()
             natives.reset({ side = 'client', resource = 'aeterna_hudkit' })
+            natives.spy('SetNuiFocus')
+            natives.spy('SetNuiFocusKeepInput')
             natives.spy('RegisterCommand')
             natives.spy('RegisterKeyMapping')
             local callbacks = {}
@@ -497,6 +503,65 @@ describe('aeterna_hudkit', function()
             assert.is_true(foundSettingsApply, 'expected settings:apply to be sent on ready')
             assert.is_true(foundBars, 'expected hud:bars to be sent on ready')
             assert.is_true(foundVisible, 'expected hud:visible to be sent on ready')
+        end)
+
+        it('opens and closes settings with focus coordination via AeternaCore', function()
+            natives.reset({ side = 'client', resource = 'aeterna_hudkit' })
+            local focusCalls = natives.spy('SetNuiFocus')
+            local keepCalls = natives.spy('SetNuiFocusKeepInput')
+            natives.spy('RegisterCommand')
+            natives.spy('RegisterKeyMapping')
+            local callbacks = {}
+            natives.spy('RegisterNUICallback', function(name, fn)
+                callbacks[name] = fn
+            end)
+            natives.stub('AeternaCore', {
+                log = { debug = function() end, info = function() end, warn = function() end, error = function() end },
+                t = function(k) return (Locales and Locales.en and Locales.en[k]) or k end,
+                lang = function() return 'en' end,
+                kvp = {
+                    get = function(_, _, default) return default end,
+                    set = function() end,
+                },
+                key = function() end,
+                requestFocus = function(opts)
+                    local ok, tok = pcall(function() return exports.aeterna_core:requestFocus(opts) end)
+                    if not ok or not tok then return nil end
+                    local normalized = type(opts) == 'table' and opts or {}
+                    SetNuiFocus(normalized.keyboard ~= false, normalized.cursor ~= false)
+                    SetNuiFocusKeepInput(normalized.keepGameInput == true)
+                    return tok
+                end,
+                releaseFocus = function(tok)
+                    local ok, res = pcall(function() return exports.aeterna_core:releaseFocus(tok) end)
+                    if ok and res == true then
+                        SetNuiFocusKeepInput(false)
+                        SetNuiFocus(false, false)
+                        return true
+                    end
+                    return false
+                end,
+            })
+            natives.stub_export('aeterna_core', 'requestFocus', function() return 'hud_tok' end)
+            natives.stub_export('aeterna_core', 'releaseFocus', function() return true end)
+            natives.stub_export('aeterna_core', 'themeHref', function() return nil end)
+
+            resClient = resource.load_resource(DIR, 'client')
+
+            -- Trigger settings open
+            natives.fire('aeterna_hudkit:cl:settings')
+            assert.are.equal(1, #focusCalls)
+            assert.are.same({ n = 2, true, true }, focusCalls[1])
+            assert.are.equal(1, #keepCalls)
+            assert.are.same({ n = 1, false }, keepCalls[1])
+
+            -- Close settings via NUI callback
+            assert.is_function(callbacks['close'])
+            callbacks['close']({}, function() end)
+            assert.are.equal(2, #focusCalls)
+            assert.are.same({ n = 2, false, false }, focusCalls[2])
+            assert.are.equal(2, #keepCalls)
+            assert.are.same({ n = 1, false }, keepCalls[2])
         end)
     end)
 end)
