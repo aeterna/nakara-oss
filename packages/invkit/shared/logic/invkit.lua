@@ -10,6 +10,7 @@ L.ASK_TIMEOUT_MS = 1000
 L.DURATION_MIN_MS = 300
 L.DURATION_MAX_MS = 60000
 L.DONE_GRACE_MS = 250
+L.USE_EXPIRE_MS = 5000
 
 local function utf8SeqLen(b1)
     if not b1 then return 0 end
@@ -321,24 +322,43 @@ L.buildStashId = L.stashId
 -- 2. Distance check for stash points
 --------------------------------------------------------------------------------
 
-local function isCoordsTable(c)
-    return type(c) == 'table'
-        and type(c.x) == 'number' and c.x == c.x
-        and type(c.y) == 'number' and c.y == c.y
-        and type(c.z) == 'number' and c.z == c.z
+local function isVec3Type(v, typeFn)
+    local t = (typeFn or type)(v)
+    return t == 'table' or t == 'vector3' or t == 'userdata'
 end
 
-local function extractPointCoords(pt)
-    if isCoordsTable(pt.coords) then
-        return pt.coords
+function L.readVec3(v, typeFn)
+    if v == nil or not isVec3Type(v, typeFn) then
+        return nil
     end
-    if isCoordsTable(pt) then
-        return pt
+    local x = v.x
+    local y = v.y
+    local z = v.z
+    if type(v) == 'table' then
+        if x == nil then x = v[1] end
+        if y == nil then y = v[2] end
+        if z == nil then z = v[3] end
     end
-    return nil
+    if type(x) ~= 'number' or x ~= x
+        or type(y) ~= 'number' or y ~= y
+        or type(z) ~= 'number' or z ~= z then
+        return nil
+    end
+    return { x = x, y = y, z = z }
 end
 
-function L.canOpenAt(playerCoords, pointsOrConfig, anywhereArg)
+local function extractPointCoords(pt, typeFn)
+    if type(pt) ~= 'table' then
+        return nil
+    end
+    local coords = L.readVec3(pt.coords, typeFn)
+    if coords then
+        return coords
+    end
+    return L.readVec3(pt, typeFn)
+end
+
+function L.canOpenAt(playerCoords, pointsOrConfig, anywhereArg, typeFn)
     local points = pointsOrConfig
     local anywhere = anywhereArg == true
 
@@ -357,19 +377,20 @@ function L.canOpenAt(playerCoords, pointsOrConfig, anywhereArg)
         return false, 'invkit.stash.far'
     end
 
-    if not isCoordsTable(playerCoords) then
+    local player = L.readVec3(playerCoords, typeFn)
+    if not player then
         return false, 'invkit.stash.far'
     end
 
     for i = 1, #points do
         local pt = points[i]
         if type(pt) == 'table' then
-            local c = extractPointCoords(pt)
+            local c = extractPointCoords(pt, typeFn)
             local radius = tonumber(pt.radius) or 2.0
             if c and radius > 0 then
-                local dx = playerCoords.x - c.x
-                local dy = playerCoords.y - c.y
-                local dz = playerCoords.z - c.z
+                local dx = player.x - c.x
+                local dy = player.y - c.y
+                local dz = player.z - c.z
                 local distSq = dx * dx + dy * dy + dz * dz
                 if distSq <= (radius * radius) then
                     return true, nil, i, math.sqrt(distSq)
@@ -383,8 +404,9 @@ end
 
 L.checkDistance = L.canOpenAt
 
-function L.nearestPoint(playerCoords, points)
-    if not isCoordsTable(playerCoords) or type(points) ~= 'table' or #points == 0 then
+function L.nearestPoint(playerCoords, points, typeFn)
+    local player = L.readVec3(playerCoords, typeFn)
+    if not player or type(points) ~= 'table' or #points == 0 then
         return false, nil, nil
     end
     local bestIdx = nil
@@ -392,12 +414,12 @@ function L.nearestPoint(playerCoords, points)
     for i = 1, #points do
         local pt = points[i]
         if type(pt) == 'table' then
-            local c = extractPointCoords(pt)
+            local c = extractPointCoords(pt, typeFn)
             local radius = tonumber(pt.radius) or 2.0
             if c and radius > 0 then
-                local dx = playerCoords.x - c.x
-                local dy = playerCoords.y - c.y
-                local dz = playerCoords.z - c.z
+                local dx = player.x - c.x
+                local dy = player.y - c.y
+                local dz = player.z - c.z
                 local distSq = dx * dx + dy * dy + dz * dz
                 if distSq <= (radius * radius) and (bestDistSq == nil or distSq < bestDistSq) then
                     bestIdx = i
@@ -437,23 +459,18 @@ function L.containsFunction(val, seen)
     return false
 end
 
-local function normalizeVec3(v, path)
+function L.normalizeVec3(v, path, typeFn)
     if v == nil then
         return true, nil, { x = 0.0, y = 0.0, z = 0.0 }
     end
-    if type(v) ~= 'table' then
+    if not isVec3Type(v, typeFn) then
         return false, path .. ': type', nil
     end
-    local x = v.x
-    if x == nil then x = v[1] end
-    local y = v.y
-    if y == nil then y = v[2] end
-    local z = v.z
-    if z == nil then z = v[3] end
-    if type(x) ~= 'number' or x ~= x or type(y) ~= 'number' or y ~= y or type(z) ~= 'number' or z ~= z then
+    local coords = L.readVec3(v, typeFn)
+    if not coords then
         return false, path .. ': coords', nil
     end
-    return true, nil, { x = x, y = y, z = z }
+    return true, nil, coords
 end
 
 function L.validateUsableDef(item, def)
@@ -568,9 +585,9 @@ function L.validateUsableDef(item, def)
         if type(bone) ~= 'number' or bone ~= bone or math.floor(bone) ~= bone then
             return false, 'prop.bone: integer', nil
         end
-        local okPos, errPos, pos = normalizeVec3(def.prop.pos, 'prop.pos')
+        local okPos, errPos, pos = L.normalizeVec3(def.prop.pos, 'prop.pos')
         if not okPos then return false, errPos, nil end
-        local okRot, errRot, rot = normalizeVec3(def.prop.rot, 'prop.rot')
+        local okRot, errRot, rot = L.normalizeVec3(def.prop.rot, 'prop.rot')
         if not okRot then return false, errRot, nil end
         cleanProp = {
             model = model,
@@ -781,19 +798,36 @@ function L.createUseManager(opts)
         return true, p, refusedPayload
     end
 
+    function mgr:expireRunning(useId)
+        local p = pendingByUseId[useId]
+        if not p or p.state ~= 'running' or p.startedAt == nil then
+            return false
+        end
+        clearPending(p)
+        return true, p
+    end
+
     function mgr:checkTimeouts()
         local now = nowFn()
         local toExpire = {}
+        local toExpireRunning = {}
         for useId, p in pairs(pendingByUseId) do
             if p.state == 'asking' and (now - p.askedAt) >= L.ASK_TIMEOUT_MS then
                 toExpire[#toExpire + 1] = useId
+            elseif p.state == 'running' and p.startedAt ~= nil
+                and (now - p.startedAt) >= (p.def.duration + L.USE_EXPIRE_MS) then
+                toExpireRunning[#toExpireRunning + 1] = useId
             end
         end
         table.sort(toExpire)
+        table.sort(toExpireRunning)
         for i = 1, #toExpire do
             self:expireAsk(toExpire[i])
         end
-        return #toExpire
+        for i = 1, #toExpireRunning do
+            self:expireRunning(toExpireRunning[i])
+        end
+        return #toExpire + #toExpireRunning
     end
 
     function mgr:allowUse(useId, callerOwner)
@@ -905,9 +939,6 @@ function L.createUseManager(opts)
         end
         if useId ~= nil and p.useId ~= useId then
             return false, 'useId: mismatch'
-        end
-        if p.def.cancelable == false then
-            return false, 'use: not cancelable'
         end
         clearPending(p)
         return true

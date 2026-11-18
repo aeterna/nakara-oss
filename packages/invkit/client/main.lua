@@ -28,6 +28,18 @@ local function translate(key)
     return key
 end
 
+local function showRefusalFeed(reason)
+    if type(BeginTextCommandThefeedPost) ~= 'function'
+        or type(AddTextComponentSubstringPlayerName) ~= 'function'
+        or type(EndTextCommandThefeedPostTicker) ~= 'function' then
+        return false
+    end
+    BeginTextCommandThefeedPost('STRING')
+    AddTextComponentSubstringPlayerName(reason)
+    EndTextCommandThefeedPostTicker(false, false)
+    return true
+end
+
 local function showStashHint()
     if showingHint then return end
     showingHint = true
@@ -223,6 +235,7 @@ RegisterNetEvent('aeterna_invkit:cl:refused', function(data)
         return
     end
     logDebug('item or stash action refused', { item = clean.item, reason = clean.reason })
+    showRefusalFeed(translate(clean.reason))
     if AeternaCore and type(AeternaCore.emit) == 'function' then
         AeternaCore.emit('invkit:refused', clean)
     end

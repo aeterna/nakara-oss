@@ -6,6 +6,12 @@ local A = InvkitOxAdapter
 
 local registeredStashes = {}
 
+local function clearRegisteredStashes()
+    for id in pairs(registeredStashes) do
+        registeredStashes[id] = nil
+    end
+end
+
 local function logWarn(msg, fields)
     if AeternaCore and AeternaCore.log and type(AeternaCore.log.warn) == 'function' then
         AeternaCore.log.warn(msg, fields)
@@ -59,6 +65,13 @@ useManager = L.createUseManager({
     end,
     onStartClient = function(src, payload)
         TriggerClientEvent('aeterna_invkit:cl:use', src, payload)
+        if type(SetTimeout) == 'function' then
+            local useId = payload.useId
+            local duration = tonumber(payload.duration) or 0
+            SetTimeout(duration + L.USE_EXPIRE_MS, function()
+                useManager:expireRunning(useId)
+            end)
+        end
     end,
     onRefused = function(src, payload)
         TriggerClientEvent('aeterna_invkit:cl:refused', src, payload)
@@ -257,8 +270,20 @@ RegisterNetEvent('aeterna_invkit:sv:cancel', function(payload)
     useManager:cancel(src, clean.useId)
 end)
 
+AddEventHandler('onResourceStart', function(resName)
+    if type(resName) ~= 'string' or resName ~= 'ox_inventory' then return end
+    clearRegisteredStashes()
+    A.clearHookState()
+    syncOxHook()
+end)
+
 AddEventHandler('onResourceStop', function(resName)
     if type(resName) ~= 'string' then return end
+    if resName == 'ox_inventory' then
+        clearRegisteredStashes()
+        A.clearHookState()
+        return
+    end
     if type(GetCurrentResourceName) == 'function' and resName == GetCurrentResourceName() then
         return
     end

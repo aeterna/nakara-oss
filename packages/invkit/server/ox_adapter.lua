@@ -43,9 +43,13 @@ function A.ensureOxStarted()
     return false
 end
 
+function A.clearHookState()
+    currentHookId = nil
+end
+
 function A.resetWarnState()
     warnedNoOx = false
-    currentHookId = nil
+    A.clearHookState()
 end
 
 function A.getPlayerIdentifiers(src)
@@ -114,36 +118,23 @@ function A.forceOpenStash(src, id)
     local ok, res = pcall(function()
         return exports.ox_inventory:forceOpenInventory(src, 'stash', id)
     end)
-    if not ok or res == false then
+    if not ok or not res then
         logWarn('ox_inventory:forceOpenInventory failed', { src = tostring(src), id = tostring(id) })
         return false
     end
     return true
 end
 
-function A.parseUsingItemPayload(payload, arg2, arg3)
-    if type(payload) == 'table' then
-        local src = tonumber(payload.source or payload.src)
-        local itemField = payload.item
-        local itemName = nil
-        local slot = payload.slot or payload.fromSlot
-        if type(itemField) == 'table' then
-            itemName = itemField.name
-            if slot == nil then
-                slot = itemField.slot
-            end
-        elseif type(itemField) == 'string' then
-            itemName = itemField
-        elseif type(payload.name) == 'string' then
-            itemName = payload.name
-        end
-        return src, itemName, tonumber(slot) or slot
-    elseif type(payload) == 'number' then
-        local itemName = type(arg2) == 'table' and arg2.name or arg2
-        local slot = arg3 or (type(arg2) == 'table' and arg2.slot or nil)
-        return payload, itemName, tonumber(slot) or slot
+function A.parseUsingItemPayload(payload)
+    if type(payload) ~= 'table' then
+        return nil, nil, nil
     end
-    return nil, nil, nil
+    local src = tonumber(payload.source)
+    local itemField = payload.item
+    if type(itemField) ~= 'table' then
+        return src, nil, nil
+    end
+    return src, itemField.name, tonumber(itemField.slot)
 end
 
 function A.syncUsingItemHook(onUsingItemFn, itemFilter, filterCount)
@@ -160,8 +151,8 @@ function A.syncUsingItemHook(onUsingItemFn, itemFilter, filterCount)
         return true
     end
     local ok, hookId = pcall(function()
-        return exports.ox_inventory:registerHook('usingItem', function(payload, a2, a3)
-            local src, itemName, slot = A.parseUsingItemPayload(payload, a2, a3)
+        return exports.ox_inventory:registerHook('usingItem', function(payload)
+            local src, itemName, slot = A.parseUsingItemPayload(payload)
             if not src or type(itemName) ~= 'string' then
                 return
             end

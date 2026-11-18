@@ -101,6 +101,25 @@ describe('aeterna_invkit', function()
             assert.is_true(okAnywhere)
             assert.is_nil(errAnywhere)
         end)
+
+        it('2d. reads vector3 values through an injectable type function', function()
+            local fake = { x = 100.0, y = 200.0, z = 30.0 }
+            local typeFn = function(v)
+                if v == fake then return 'vector3' end
+                return type(v)
+            end
+
+            assert.are.same({ x = 100.0, y = 200.0, z = 30.0 }, L.readVec3(fake, typeFn))
+
+            local ok, err = L.canOpenAt(fake, points, false, typeFn)
+            assert.is_true(ok)
+            assert.is_nil(err)
+
+            local okNorm, errNorm, normalized = L.normalizeVec3(fake, 'prop.pos', typeFn)
+            assert.is_true(okNorm)
+            assert.is_nil(errNorm)
+            assert.are.same({ x = 100.0, y = 200.0, z = 30.0 }, normalized)
+        end)
     end)
 
     describe('3. use state machine (shared/logic/invkit.lua)', function()
@@ -205,6 +224,42 @@ describe('aeterna_invkit', function()
             assert.is_false(sm:done(1, useId))
             assert.is_false(sm:startUse(1, 'water', 1))
             assert.is_true(sm:startUse(1, 'sandwich', 1))
+        end)
+
+        it('3e. server cancel clears a pending use even when it is not cancelable', function()
+            assert(sm:registerUsable('needs_res', 'locked', {
+                label = 'Locked item',
+                duration = 2000,
+                cancelable = false,
+            }))
+            local okStart, useId = sm:startUse(1, 'locked', 1)
+            assert.is_true(okStart)
+
+            assert.is_true(sm:cancel(1, useId))
+            assert.is_nil(sm:getPending(1))
+
+            clock = 4000
+            assert.is_false(sm:done(1, useId))
+            assert.are.equal(0, #usedEvents)
+            assert.is_true(sm:startUse(1, 'water', 1))
+        end)
+
+        it('3f. expires a running use at duration + 5000 ms so the player is not stuck busy', function()
+            local okStart, useId = sm:startUse(1, 'water', 1)
+            assert.is_true(okStart)
+
+            -- Started at 1000 ms with duration 2000 ms: expires at 8000 ms.
+            clock = 7999
+            sm:checkTimeouts()
+            assert.is_not_nil(sm:getPending(1))
+
+            clock = 8000
+            sm:checkTimeouts()
+            assert.is_nil(sm:getPending(1))
+
+            clock = 8001
+            assert.is_false(sm:done(1, useId))
+            assert.is_true(sm:startUse(1, 'water', 1))
         end)
     end)
 
@@ -389,6 +444,8 @@ describe('aeterna_invkit', function()
                 rateLimit = function() return true end,
             })
 
+            natives.spy('RegisterCommand')
+
             local res = resource.load_resource(DIR, 'server')
             assert.are.equal(1, #warns)
 
@@ -410,9 +467,16 @@ describe('aeterna_invkit', function()
             local removedItems = {}
             local itemCounts = { [1] = { water = 2, medkit = 1 } }
             local hookFn = nil
+            local oxStarted = true
+            local forceOpenResult = true
+            local hookRegistrations = 0
+            local removeHooksCalls = 0
 
             natives.stub('GetResourceState', function(name)
-                if name == 'ox_inventory' or name == 'qbx_core' then
+                if name == 'ox_inventory' then
+                    return oxStarted and 'started' or 'missing'
+                end
+                if name == 'qbx_core' then
                     return 'started'
                 end
                 return 'missing'
@@ -433,14 +497,19 @@ describe('aeterna_invkit', function()
             end)
             natives.stub_export('ox_inventory', 'forceOpenInventory', function(src, invType, id)
                 forcedOpens[#forcedOpens + 1] = { src = src, invType = invType, id = id }
+                if forceOpenResult then return id end
+                return nil
             end)
             natives.stub_export('ox_inventory', 'registerHook', function(eventName, fn, opts)
                 if eventName == 'usingItem' then
                     hookFn = fn
+                    hookRegistrations = hookRegistrations + 1
                 end
-                return 1
+                return hookRegistrations
             end)
-            natives.stub_export('ox_inventory', 'removeHooks', function() end)
+            natives.stub_export('ox_inventory', 'removeHooks', function()
+                removeHooksCalls = removeHooksCalls + 1
+            end)
             natives.stub_export('ox_inventory', 'GetItemCount', function(src, item)
                 return (itemCounts[tonumber(src)] and itemCounts[tonumber(src)][item]) or 0
             end)
@@ -490,7 +559,18 @@ describe('aeterna_invkit', function()
             }))
             assert.is_function(hookFn)
 
-            local hookRes = hookFn({ source = 1, item = { name = 'water', slot = 2 }, slot = 2 })
+            -- The positional hook shape is not part of the ox_inventory contract and is ignored.
+            local clUseCount = #natives.emitted('client', 'aeterna_invkit:cl:use')
+            local oldShapeRes = hookFn(2, { name = 'water', slot = 9 }, 9)
+            assert.is_nil(oldShapeRes)
+            assert.are.equal(clUseCount, #natives.emitted('client', 'aeterna_invkit:cl:use'))
+
+            local hookRes = hookFn({
+                source = 1,
+                inventoryId = 'player',
+                item = { name = 'water', slot = 2, metadata = nil },
+                consume = 1,
+            })
             assert.is_false(hookRes)
 
             local clUse = natives.last_emitted('client', 'aeterna_invkit:cl:use')
@@ -518,7 +598,12 @@ describe('aeterna_invkit', function()
                 consume = 1,
                 ask = true,
             }))
-            hookFn({ source = 1, item = { name = 'medkit', slot = 3 }, slot = 3 })
+            hookFn({
+                source = 1,
+                inventoryId = 'player',
+                item = { name = 'medkit', slot = 3, metadata = nil },
+                consume = 1,
+            })
             local askEv = natives.last_emitted('local', 'aeterna_invkit:asking')
             assert.is_truthy(askEv)
             local askUseId = askEv.args[2].useId
@@ -527,6 +612,57 @@ describe('aeterna_invkit', function()
             assert.is_truthy(timeoutRef)
             assert.are.equal('medkit', timeoutRef.args[1].item)
             assert.is_false(api.allowUse(askUseId))
+
+            -- A running use expires after duration + 5000 ms, freeing the player.
+            assert.is_true(api.registerUsable('quick', {
+                label = 'Quick item',
+                duration = 300,
+                consume = 1,
+                ask = false,
+            }))
+            hookFn({
+                source = 1,
+                inventoryId = 'player',
+                item = { name = 'quick', slot = 5, metadata = nil },
+                consume = 1,
+            })
+            local quickUse = natives.last_emitted('client', 'aeterna_invkit:cl:use')
+            assert.is_truthy(quickUse)
+            local quickUseId = quickUse.args[1].useId
+            local quickStarts = #natives.emitted('client', 'aeterna_invkit:cl:use')
+
+            natives.advance(5300)
+
+            hookFn({
+                source = 1,
+                inventoryId = 'player',
+                item = { name = 'quick', slot = 5, metadata = nil },
+                consume = 1,
+            })
+            assert.are.equal(quickStarts + 1, #natives.emitted('client', 'aeterna_invkit:cl:use'))
+            assert.are.not_equal(quickUseId, natives.last_emitted('client', 'aeterna_invkit:cl:use').args[1].useId)
+
+            -- Only a truthy forceOpenInventory result counts as success.
+            forceOpenResult = false
+            assert.is_false(api.openStash(1))
+            forceOpenResult = true
+            assert.is_true(api.openStash(1))
+
+            -- ox_inventory stop clears the stash cache and hook state.
+            local hookRegsBeforeRestart = hookRegistrations
+            local removeCallsBeforeRestart = removeHooksCalls
+            oxStarted = false
+            natives.fire('onResourceStop', 'ox_inventory')
+            oxStarted = true
+            assert.is_true(api.openStash(1))
+            assert.are.equal(2, #registeredStashes)
+
+            -- ox_inventory start clears both again and resyncs the hook.
+            natives.fire('onResourceStart', 'ox_inventory')
+            assert.are.equal(hookRegsBeforeRestart + 1, hookRegistrations)
+            assert.are.equal(removeCallsBeforeRestart, removeHooksCalls)
+            assert.is_true(api.openStash(1))
+            assert.are.equal(3, #registeredStashes)
         end)
 
         it('6c. client: shows keyHints near point and runs uikit progress on cl:use', function()
@@ -541,6 +677,9 @@ describe('aeterna_invkit', function()
 
             natives.spy('RegisterCommand')
             natives.spy('RegisterKeyMapping')
+            natives.spy('BeginTextCommandThefeedPost')
+            natives.spy('AddTextComponentSubstringPlayerName')
+            natives.spy('EndTextCommandThefeedPostTicker')
             natives.stub_export('aeterna_uikit', 'keyHints', function(list)
                 hintsShown[#hintsShown + 1] = list
             end)
@@ -588,6 +727,22 @@ describe('aeterna_invkit', function()
             local cancelEv = natives.last_emitted('server', 'aeterna_invkit:sv:cancel')
             assert.is_truthy(cancelEv)
             assert.are.equal('u2', cancelEv.args[1].useId)
+
+            -- cl:refused shows the translated reason through the base game feed.
+            natives.fire_net('aeterna_invkit:cl:refused', 1, {
+                item = 'water',
+                reason = 'invkit.use.busy',
+            })
+            local beginCalls = natives.calls('BeginTextCommandThefeedPost')
+            assert.are.equal(1, #beginCalls)
+            assert.are.equal('STRING', beginCalls[1][1])
+            local textCalls = natives.calls('AddTextComponentSubstringPlayerName')
+            assert.are.equal(1, #textCalls)
+            assert.are.equal('Already using an item', textCalls[1][1])
+            local endCalls = natives.calls('EndTextCommandThefeedPostTicker')
+            assert.are.equal(1, #endCalls)
+            assert.are.equal(false, endCalls[1][1])
+            assert.are.equal(false, endCalls[1][2])
         end)
     end)
 end)
