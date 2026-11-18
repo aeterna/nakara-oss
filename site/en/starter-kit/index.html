@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AETERNA Starter Kit: free base resources for a FiveM server | nakara-oss</title>
+  <meta name="description" content="Seven MIT-licensed FiveM resources: UI kit, notifications, draggable HUD, phone and inventory helpers for Qbox servers.">
+  <link rel="canonical" href="https://aeterna.github.io/nakara-oss/en/starter-kit/">
+  <link rel="alternate" hreflang="th" href="https://aeterna.github.io/nakara-oss/starter-kit/">
+  <link rel="alternate" hreflang="en" href="https://aeterna.github.io/nakara-oss/en/starter-kit/">
+  <link rel="alternate" hreflang="x-default" href="https://aeterna.github.io/nakara-oss/en/starter-kit/">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="AETERNA Starter Kit: free base resources for a FiveM server | nakara-oss">
+  <meta property="og:description" content="Seven MIT-licensed FiveM resources: UI kit, notifications, draggable HUD, phone and inventory helpers for Qbox servers.">
+  <meta property="og:url" content="https://aeterna.github.io/nakara-oss/en/starter-kit/">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="th_TH">
+  <meta property="og:image" content="https://aeterna.github.io/nakara-oss/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="AETERNA Starter Kit">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="AETERNA Starter Kit: free base resources for a FiveM server | nakara-oss">
+  <meta name="twitter:description" content="Seven MIT-licensed FiveM resources: UI kit, notifications, draggable HUD, phone and inventory helpers for Qbox servers.">
+  <meta name="twitter:image" content="https://aeterna.github.io/nakara-oss/og.png">
+  <meta name="theme-color" content="#121110">
+  <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="../../styles.css">
+</head>
+<body>
+<header class="nav">
+  <div class="nav-in">
+    <a class="brand" href="../#top"><i>N</i>nakara-oss</a>
+    <nav class="links" aria-label="Main navigation"><a href="../#scan">Scan</a><a href="../#packages">Packages</a><a href="../#trust">Trust Architecture</a><a href="../#limits">Limits</a><a href="../#faq">FAQ</a></nav>
+    <a class="nav-btn" href="https://github.com/aeterna/nakara-oss"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.15-1.11-1.46-1.11-1.46-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>GitHub</a>
+    <a class="lang" href="../../starter-kit/" hreflang="th">ไทย</a>
+  </div>
+  <div class="progress" aria-hidden="true"></div>
+</header>
+
+<main class="wrap">
+  <article class="article">
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="../">Home</a> <span aria-hidden="true">›</span> <span>AETERNA Starter Kit</span></nav>
+    <p class="kicker">MIT · Qbox · ox_lib</p>
+    <h1>AETERNA Starter Kit</h1>
+    <p class="lede">Seven base resources for running your own FiveM server. Use one, or all of them.</p>
+    <div class="prose">
+      <h2>What is in it</h2>
+      <ul>
+        <li><strong>aeterna_core:</strong> shared focus handling, locale, time and client storage.</li>
+        <li><strong>aeterna_uikit:</strong> panels, confirm, input, progress, skill check and a menu.</li>
+        <li><strong>aeterna_notify:</strong> toasts, announcements and a message of the day.</li>
+        <li><strong>aeterna_layout:</strong> each player can move and scale HUD parts, including the game minimap.</li>
+        <li><strong>aeterna_hudkit:</strong> status bars, vehicle panel, street name and minimap.</li>
+        <li><strong>aeterna_phonekit:</strong> a phone with four built-in apps and an API for your own.</li>
+        <li><strong>aeterna_invkit:</strong> a personal stash and timed item use on top of ox_inventory.</li>
+      </ul>
+      <h2>Install</h2>
+      <p>Download the zips, unpack them into <code>resources/[aeterna_kit]/</code>, then add this after your framework:</p>
+      <pre><code># server.cfg
+setr aeterna_locale "en"
+ensure aeterna_core
+ensure aeterna_uikit
+ensure aeterna_notify
+ensure aeterna_layout
+ensure aeterna_hudkit
+ensure aeterna_phonekit
+ensure aeterna_invkit</code></pre>
+      <p>No package sets a default key. Players bind keys in Settings → Key Bindings → FiveM.</p>
+      <h2>Tested with</h2>
+      <p>FXServer Enhanced, game build 3788, with qbx_core 1.23.0, ox_lib 3.30.6, oxmysql 2.14.3 and ox_inventory 2.44.0. Other versions are not tested.</p>
+      <h2>Your server, your look</h2>
+      <p>The default theme is plain on purpose. Point the <code>aeterna_theme</code> convar at your own stylesheet to change colours, radius and font across every screen. Every release is built in CI and carries a provenance attestation you can verify before installing.</p>
+      <div class="cta"><a class="btn btn-p" href="https://github.com/aeterna/nakara-oss/releases?q=aeterna_">Download</a><a class="btn btn-s" href="https://github.com/aeterna/nakara-oss/blob/main/docs/guides/starter-kit.en.md">Full guide</a></div>
+    </div>
+  </article>
+
+  <footer>
+    <span>MIT · Built by the Nakara City team</span>
+    <span><a href="https://github.com/aeterna/nakara-oss">GitHub</a> · Updated {{site.date}}</span>
+  </footer>
+</main>
+</body>
+</html>

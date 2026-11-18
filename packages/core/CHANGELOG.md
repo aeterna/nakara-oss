@@ -6,6 +6,8 @@ All notable changes to `aeterna_core` are documented here. The format follows
 
 ## Unreleased
 
+## [0.1.0] - 2026-11-18
+
 ### Added
 
 - Shared `@aeterna_core/import.lua` API (`log`, `on`/`off`/`emit`, Thai-aware `text`, `t`/`lang`, `time`, `validate`, `rateLimit`, `can`, `kvp`, and `key`).

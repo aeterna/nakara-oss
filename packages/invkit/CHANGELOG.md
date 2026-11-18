@@ -6,6 +6,8 @@ All notable changes to `aeterna_invkit` are documented here. The format follows
 
 ## Unreleased
 
+## [0.1.0] - 2026-11-18
+
 ### Added
 
 - Initial `aeterna_invkit` package for the AETERNA Starter Kit (ADR 0004).
