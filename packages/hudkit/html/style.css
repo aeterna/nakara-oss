@@ -1,0 +1,418 @@
+/* html/style.css -- Layout and styling for aeterna_hudkit NUI.
+   Uses only variables declared in theme.css (no literal color values). */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: transparent;
+    font-family: var(--font);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+#hud-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+}
+
+.hud-part {
+    position: absolute;
+    display: block;
+    pointer-events: auto;
+    transition: opacity var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+
+.hud-hidden {
+    display: none !important;
+}
+
+/* ==========================================================================
+   Status Bars
+   ========================================================================== */
+
+.bars-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    padding: 8px 12px;
+    min-width: 180px;
+}
+
+.bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 18px;
+}
+
+.bar-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    color: var(--text-2);
+    flex-shrink: 0;
+}
+
+.bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--track);
+    border-radius: var(--radius-s);
+    overflow: hidden;
+    position: relative;
+}
+
+.bar-fill {
+    height: 100%;
+    border-radius: var(--radius-s);
+    background: var(--text-2);
+    transition: width var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+
+/* Health uses --accent */
+.bar-row[data-bar="health"] .bar-icon {
+    color: var(--accent);
+}
+
+.bar-row[data-bar="health"] .bar-fill {
+    background: var(--accent);
+}
+
+/* Low status turns --bad */
+.bar-row.is-low .bar-icon {
+    color: var(--bad);
+}
+
+.bar-row.is-low .bar-fill {
+    background: var(--bad);
+}
+
+.bar-value {
+    width: 32px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+    color: var(--text-3);
+    font-weight: 500;
+}
+
+.bar-value.hidden-numbers {
+    display: none;
+}
+
+/* ==========================================================================
+   Vehicle Panel
+   ========================================================================== */
+
+.vehicle-panel {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    padding: 10px 14px;
+    min-width: 150px;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.speed-cluster {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+}
+
+.speed-value {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
+.speed-unit {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+}
+
+.vehicle-sub {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    justify-content: flex-end;
+}
+
+.gear-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 4px;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+}
+
+.fuel-cluster {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 80px;
+}
+
+.fuel-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    color: var(--text-2);
+}
+
+.fuel-cluster.is-low .fuel-icon {
+    color: var(--bad);
+}
+
+.fuel-cluster.is-low .fuel-bar-fill {
+    background: var(--bad);
+}
+
+.fuel-bar-track {
+    flex: 1;
+    height: 5px;
+    background: var(--track);
+    border-radius: var(--radius-s);
+    overflow: hidden;
+}
+
+.fuel-bar-fill {
+    height: 100%;
+    background: var(--text-2);
+    border-radius: var(--radius-s);
+    transition: width var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+
+/* ==========================================================================
+   Street and Compass
+   ========================================================================== */
+
+.street-panel {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    padding: 8px 14px;
+    min-width: 180px;
+}
+
+.compass-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+.street-names {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.street-primary {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.street-secondary {
+    font-size: 11px;
+    color: var(--text-3);
+    white-space: nowrap;
+}
+
+/* ==========================================================================
+   Settings Modal Card
+   ========================================================================== */
+
+.settings-modal {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 320px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-l);
+    padding: var(--pad);
+    box-shadow: 0 8px 24px var(--line);
+    pointer-events: auto;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.settings-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.settings-header-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+}
+
+.settings-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-s);
+    color: var(--text-2);
+    cursor: pointer;
+    transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.btn-icon:hover {
+    background: var(--raised);
+    color: var(--text);
+}
+
+.settings-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.setting-label {
+    font-size: 13px;
+    color: var(--text-2);
+}
+
+.setting-toggle {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.segmented-control {
+    display: inline-flex;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    padding: 2px;
+    gap: 2px;
+}
+
+.segment-btn {
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-s);
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-3);
+    cursor: pointer;
+    transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+    font-family: var(--font);
+}
+
+.segment-btn:hover {
+    color: var(--text);
+}
+
+.segment-btn.active {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 1px 3px var(--line);
+}
+
+.settings-actions {
+    margin-top: 4px;
+    display: flex;
+    flex-direction: column;
+}
+
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 36px;
+    background: var(--accent);
+    color: var(--on-accent);
+    border: none;
+    border-radius: var(--radius-m);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity var(--fast) var(--ease);
+    font-family: var(--font);
+}
+
+.btn-primary:hover {
+    opacity: 0.9;
+}

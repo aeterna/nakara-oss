@@ -1,0 +1,327 @@
+/* aeterna_notify stylesheet — uses only tokens from html/theme.css (ADR 0004 decision 6). */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;
+    font-family: var(--font);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.45;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.notify-root {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+}
+
+/* Toast stack (width 320px, height of 4 toasts 280px at scale 1) */
+.toast-stack {
+    position: fixed;
+    width: 320px;
+    height: 280px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.toast-stack.pos-top-left {
+    top: 24px;
+    left: 24px;
+    flex-direction: column;
+}
+
+.toast-stack.pos-top-right {
+    top: 24px;
+    right: 24px;
+    flex-direction: column;
+}
+
+.toast-stack.pos-bottom-left {
+    bottom: 24px;
+    left: 24px;
+    flex-direction: column-reverse;
+}
+
+.toast-stack.pos-bottom-right {
+    bottom: 24px;
+    right: 24px;
+    flex-direction: column-reverse;
+}
+
+.toast-stack.stack-up {
+    flex-direction: column-reverse;
+}
+
+.toast-card {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-m);
+    padding: 10px 12px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    pointer-events: none;
+    transition: opacity var(--enter) var(--ease), transform var(--enter) var(--ease);
+}
+
+.toast-card.toast-info {
+    border-left-color: var(--accent);
+}
+
+.toast-card.toast-success {
+    border-left-color: var(--good);
+}
+
+.toast-card.toast-warning {
+    border-left-color: var(--warn);
+}
+
+.toast-card.toast-error {
+    border-left-color: var(--bad);
+}
+
+.toast-icon {
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+    color: var(--accent);
+}
+
+.toast-card.toast-info .toast-icon {
+    color: var(--accent);
+}
+
+.toast-card.toast-success .toast-icon {
+    color: var(--good);
+}
+
+.toast-card.toast-warning .toast-icon {
+    color: var(--warn);
+}
+
+.toast-card.toast-error .toast-icon {
+    color: var(--bad);
+}
+
+.toast-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.toast-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    word-break: break-word;
+}
+
+.toast-description {
+    font-size: 13px;
+    color: var(--text-2);
+    word-break: break-word;
+}
+
+/* Announcement banner (top centre by default, 480px wide) */
+.announce-box {
+    position: fixed;
+    width: 480px;
+    min-height: 88px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--accent);
+    border-radius: var(--radius-l);
+    padding: var(--pad);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    pointer-events: none;
+    transition: opacity var(--enter) var(--ease), transform var(--enter) var(--ease);
+}
+
+.announce-box.pos-announce-default {
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.announce-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.announce-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    word-break: break-word;
+}
+
+.announce-by {
+    font-size: 12px;
+    color: var(--text-3);
+    flex-shrink: 0;
+}
+
+.announce-body {
+    font-size: 14px;
+    color: var(--text-2);
+    word-break: break-word;
+}
+
+/* MOTD modal card (always centred) */
+.motd-layer {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    pointer-events: auto;
+}
+
+.motd-card {
+    width: 480px;
+    max-width: 100%;
+    max-height: calc(100vh - 64px);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-l);
+    padding: var(--pad);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    pointer-events: auto;
+    transition: opacity var(--enter) var(--ease), transform var(--enter) var(--ease);
+}
+
+.motd-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+}
+
+.motd-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.motd-eyebrow {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-3);
+    word-break: break-word;
+}
+
+.motd-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+    word-break: break-word;
+}
+
+.close-btn {
+    appearance: none;
+    background: var(--raised);
+    color: var(--text-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.close-btn:hover {
+    color: var(--text);
+}
+
+.motd-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+}
+
+.motd-line {
+    font-size: 14px;
+    color: var(--text-2);
+    word-break: break-word;
+}
+
+.motd-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 4px;
+}
+
+.btn {
+    appearance: none;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    padding: 8px 14px;
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: opacity var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: var(--on-accent);
+    border-color: var(--accent);
+}
+
+.btn-secondary {
+    background: var(--raised);
+    color: var(--text);
+}
+
+/* Keyboard accessibility focus ring (ADR 0004 decision 13) */
+button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}

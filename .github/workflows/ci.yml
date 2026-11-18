@@ -40,6 +40,8 @@ jobs:
         run: node packages/devkit/bin/fivem-devkit.js check
       - name: safety scan (every package + template)
         run: node packages/devkit/bin/fivem-devkit.js safety
+      - name: Starter Kit package edges and theme copies
+        run: node .github/scripts/check-kit-graph.mjs
       - name: oss.json valid + capability diff vs base
         if: github.event_name == 'pull_request'
         env:

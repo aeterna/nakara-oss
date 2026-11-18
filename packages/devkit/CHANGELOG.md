@@ -3,6 +3,7 @@
 ## Unreleased
 
 - `safety`: add the optional `capabilities.httpHandlers` field and the `undeclared-http-handler` rule for `SetHttpHandler`; unused entries are reported as `over-declared`.
+- `safety`: add the `font-assets` rule enforcing that fonts under `packages/*` live only as `.woff2` in `packages/<pkg>/html/fonts/` with `OFL.txt` in the same folder and at most 1 MB of fonts per package, and rejecting `.ttf`/`.otf`/`.woff`/`.eot` and `.svg` files (`launcher/assets/**` stays exempt).
 
 ## 0.1.2
 

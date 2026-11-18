@@ -1,0 +1,820 @@
+/* aeterna_phonekit UI styles.
+   Colours, spacing, radii and transitions use theme.css variables only. */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: transparent;
+    font-family: var(--font);
+    color: var(--text);
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.phonekit-root {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+/* Base phone frame (320 × 640 px at scale 1) */
+.phone-frame {
+    position: fixed;
+    width: 320px;
+    height: 640px;
+    background-color: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-l);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--line);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    pointer-events: auto;
+    transition: transform var(--enter) var(--ease), opacity var(--enter) var(--ease);
+    opacity: 1;
+}
+
+/* Default placements (24 px screen inset) */
+.pos-bottom-right {
+    right: 24px;
+    bottom: 24px;
+}
+
+.pos-bottom-left {
+    left: 24px;
+    bottom: 24px;
+}
+
+/* Text Size setting override */
+.phone-large-text {
+    font-size: 16px;
+}
+
+/* In-phone Banner */
+.phone-banner {
+    position: absolute;
+    top: 8px;
+    left: 12px;
+    right: 12px;
+    background-color: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    z-index: 100;
+    animation: banner-enter var(--enter) var(--ease);
+    cursor: pointer;
+}
+
+@keyframes banner-enter {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.phone-banner-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-s);
+    background-color: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.phone-banner-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.phone-banner-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.phone-banner-body {
+    font-size: 11px;
+    color: var(--text-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Status Bar */
+.phone-status {
+    height: 32px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    flex-shrink: 0;
+}
+
+.phone-time {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Main Content Area */
+.phone-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.phone-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.phone-content::-webkit-scrollbar-thumb {
+    background-color: var(--line);
+    border-radius: var(--radius-s);
+}
+
+/* Bottom Bar / Home Button */
+.phone-bottom-bar {
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: transparent;
+}
+
+.phone-home-btn {
+    width: 100px;
+    height: 4px;
+    background-color: var(--text-3);
+    border: none;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background-color var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+
+.phone-home-btn:hover {
+    background-color: var(--text-2);
+    transform: scaleY(1.5);
+}
+
+.phone-home-btn:active {
+    background-color: var(--text);
+}
+
+/* -------------------------------------------------------------
+   Home Screen: App Tiles Grid
+------------------------------------------------------------- */
+.home-screen {
+    flex: 1;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: max-content;
+    gap: 16px 12px;
+    align-content: start;
+}
+
+.app-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    outline: none;
+    padding: 4px;
+    border-radius: var(--radius-m);
+    transition: transform var(--fast) var(--ease);
+}
+
+.app-tile:hover {
+    transform: translateY(-2px);
+}
+
+.app-tile:active {
+    transform: translateY(0);
+}
+
+.app-tile:focus-visible {
+    box-shadow: 0 0 0 2px var(--accent);
+}
+
+.app-icon-box {
+    position: relative;
+    width: 52px;
+    height: 52px;
+    background-color: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text);
+    transition: background-color var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+
+.app-tile:hover .app-icon-box {
+    background-color: var(--surface);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.app-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    background-color: var(--bad);
+    color: var(--on-accent);
+    border-radius: 9px;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.app-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-2);
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 60px;
+}
+
+.app-tile:hover .app-label {
+    color: var(--text);
+}
+
+/* -------------------------------------------------------------
+   Standard App Screen Header
+------------------------------------------------------------- */
+.app-screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.app-header {
+    height: 44px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+}
+
+.app-header-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-s);
+    color: var(--text-2);
+    cursor: pointer;
+    transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.app-header-btn:hover {
+    background-color: var(--raised);
+    color: var(--text);
+}
+
+.app-header-titles {
+    flex: 1;
+    min-width: 0;
+}
+
+.app-header-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.app-header-sub {
+    font-size: 11px;
+    color: var(--text-3);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.app-header-action {
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: var(--radius-s);
+}
+
+.app-header-action:hover {
+    background-color: var(--raised);
+}
+
+.app-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* -------------------------------------------------------------
+   Calculator App
+------------------------------------------------------------- */
+.calc-screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    gap: 12px;
+}
+
+.calc-display {
+    flex: 1;
+    min-height: 80px;
+    background-color: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    padding: 16px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    font-size: 32px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    overflow-x: auto;
+    overflow-y: hidden;
+    word-break: break-all;
+    white-space: nowrap;
+}
+
+.calc-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+.calc-btn {
+    height: 52px;
+    background-color: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    color: var(--text);
+    font-size: 18px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+
+.calc-btn:hover {
+    background-color: var(--surface);
+    border-color: var(--text-3);
+}
+
+.calc-btn:active {
+    background-color: var(--line);
+}
+
+.calc-btn-fn {
+    color: var(--text-2);
+}
+
+.calc-btn-op {
+    background-color: var(--accent);
+    color: var(--on-accent);
+    border-color: var(--accent);
+}
+
+.calc-btn-op:hover {
+    background-color: var(--accent);
+    filter: brightness(1.1);
+}
+
+.calc-btn-span2 {
+    grid-column: span 2;
+}
+
+/* -------------------------------------------------------------
+   Notes & Contacts App Shared Lists & Forms
+------------------------------------------------------------- */
+.list-empty {
+    padding: 32px 16px;
+    text-align: center;
+    color: var(--text-3);
+    font-size: 13px;
+}
+
+.items-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.note-item, .contact-item {
+    background-color: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    cursor: pointer;
+    transition: border-color var(--fast) var(--ease), background-color var(--fast) var(--ease);
+}
+
+.note-item:hover, .contact-item:hover {
+    border-color: var(--accent);
+}
+
+.note-item-title, .contact-item-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.note-item-body {
+    font-size: 12px;
+    color: var(--text-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.contact-item-number {
+    font-size: 12px;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+}
+
+.editor-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1;
+}
+
+.input-field, .textarea-field {
+    width: 100%;
+    background-color: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    color: var(--text);
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    transition: border-color var(--fast) var(--ease);
+}
+
+.input-field:focus, .textarea-field:focus {
+    border-color: var(--accent);
+}
+
+.textarea-field {
+    flex: 1;
+    min-height: 200px;
+    resize: none;
+}
+
+.btn-danger-outline {
+    background: transparent;
+    border: 1px solid var(--bad);
+    color: var(--bad);
+    border-radius: var(--radius-s);
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: auto;
+    transition: background-color var(--fast) var(--ease);
+}
+
+.btn-danger-outline:hover {
+    background-color: var(--bad);
+    color: var(--on-accent);
+}
+
+/* -------------------------------------------------------------
+   Settings App
+------------------------------------------------------------- */
+.settings-section {
+    background-color: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.settings-label {
+    font-size: 13px;
+    color: var(--text);
+    font-weight: 500;
+}
+
+.segment-control {
+    display: flex;
+    background-color: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    padding: 2px;
+    gap: 2px;
+}
+
+.segment-btn {
+    padding: 4px 10px;
+    font-size: 11px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    color: var(--text-2);
+    cursor: pointer;
+    font-weight: 600;
+    transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.segment-btn.active {
+    background-color: var(--accent);
+    color: var(--on-accent);
+}
+
+.btn-settings-action {
+    width: 100%;
+    padding: 10px 14px;
+    background-color: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: border-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.btn-settings-action:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* -------------------------------------------------------------
+   uikit Panel Blocks (Inside Custom App Screens)
+------------------------------------------------------------- */
+.block-text {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-2);
+}
+
+.block-divider {
+    height: 1px;
+    background-color: var(--line);
+    margin: 4px 0;
+}
+
+.block-progress-box {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.block-progress-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-2);
+}
+
+.block-progress-track {
+    height: 8px;
+    background-color: var(--track);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.block-progress-fill {
+    height: 100%;
+    background-color: var(--accent);
+    border-radius: 4px;
+    transition: width var(--fast) var(--ease);
+}
+
+.block-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.block-field-label {
+    font-size: 12px;
+    color: var(--text-2);
+    font-weight: 500;
+}
+
+.block-buttons-row {
+    display: flex;
+    gap: 8px;
+}
+
+.uikit-btn {
+    flex: 1;
+    padding: 10px 12px;
+    border-radius: var(--radius-s);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: filter var(--fast) var(--ease), opacity var(--fast) var(--ease);
+}
+
+.uikit-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.uikit-btn-primary {
+    background-color: var(--accent);
+    color: var(--on-accent);
+}
+
+.uikit-btn-primary:hover:not(:disabled) {
+    filter: brightness(1.1);
+}
+
+.uikit-btn-secondary {
+    background-color: var(--raised);
+    border-color: var(--line);
+    color: var(--text);
+}
+
+.uikit-btn-secondary:hover:not(:disabled) {
+    background-color: var(--line);
+}
+
+.uikit-btn-danger {
+    background-color: var(--bad);
+    color: var(--on-accent);
+}
+
+.uikit-btn-danger:hover:not(:disabled) {
+    filter: brightness(1.1);
+}
+
+.uikit-list-box {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.uikit-list-item {
+    background-color: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color var(--fast) var(--ease);
+}
+
+.uikit-list-item:hover:not(.disabled) {
+    border-color: var(--accent);
+}
+
+.uikit-list-item.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.uikit-list-item-label {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.uikit-list-item-meta {
+    font-size: 11px;
+    color: var(--text-3);
+}
+
+.toggle-switch {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    cursor: pointer;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    inset: 0;
+    background-color: var(--track);
+    border-radius: 12px;
+    transition: background-color var(--fast) var(--ease);
+}
+
+.toggle-slider::before {
+    position: absolute;
+    content: '';
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: var(--text);
+    border-radius: 50%;
+    transition: transform var(--fast) var(--ease);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: var(--accent);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(20px);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0ms !important;
+        transition-duration: 0ms !important;
+    }
+}

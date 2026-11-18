@@ -1,0 +1,11 @@
+{
+  "version": "2026-11-17",
+  "eyebrow": "Message of the day",
+  "title": "Welcome",
+  "lines": [
+    "Bind your phone key in Settings → Key Bindings → FiveM"
+  ],
+  "buttons": {
+    "dismiss": true
+  }
+}

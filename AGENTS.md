@@ -5,7 +5,7 @@ When working inside the AETERNA workspace (`freelance/aeterna/fivem/nakara-oss`)
 
 ## What this project is
 
-`aeterna/nakara-oss` is the public, MIT-licensed monorepo of FiveM resources (`nakara_*`) and developer tooling (`@aeterna_game/fivem-devkit`) maintained by the **Nakara City** dev team.
+`aeterna/nakara-oss` is the public, MIT-licensed monorepo of FiveM resources (`nakara_*`, and the `aeterna_*` Starter Kit) and developer tooling (`@aeterna_game/fivem-devkit`) maintained by the **Nakara City** dev team.
 
 Every resource declares its capabilities in `oss.json` (validated against [`oss.schema.json`](oss.schema.json)), every PR is scanned for dangerous code and undeclared capabilities by `fivem-devkit safety`, and every release is built in CI with a provenance attestation.
 
@@ -25,8 +25,8 @@ Read before changing code: [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`packages/de
    - One exception: `launcher/assets/**` may hold fonts and images the launcher embeds (`.ttf`, `.otf`, `.png`, `.webp`, `.jpg`), at most 5 MB in total, each with its license file beside it (owner, 2026-11-13; `docs/adr/0002-aeterna-game-launcher.md` decision 11).
    - Server net-event handlers should call a recognized rate-limit helper (`NakaraCore.rateLimit`, `lib.callback`, `rateLimit`). NUI code must use `textContent`, never non-static `innerHTML`/`outerHTML`.
 5. **Package boundaries & naming.**
-   - Resource names use the `nakara_` prefix (`nakara_cargen_fix`, `nakara_core`, …).
-   - Resource packages may depend only on the shared core package (`nakara_core` when present) and optional `ox_lib`/`qbx_core` defaults — **never** on each other, and **never** on any private `aeterna_*` resource or identifier.
+   - Resource names use the `nakara_` prefix (`nakara_cargen_fix`, `nakara_core`, …), or `aeterna_` for the Starter Kit (`aeterna_core`, `aeterna_notify`, …; `docs/adr/0004-aeterna-starter-kit.md` decision 1). A new name never equals a resource the team runs privately.
+   - Resource packages may depend only on the shared core package (`nakara_core` when present) and optional `ox_lib`/`qbx_core` defaults — **never** on each other, and **never** on any resource or identifier that is not published in this repository. Exception: `aeterna_*` packages may depend on each other along the edges listed in ADR 0004 decision 2, and on nothing else (owner, 2026-11-17).
    - Optional framework resources `qb-core` and `es_extended` (read only: names and identifiers) and `oxmysql` (a package's own storage) may be touched only when `GetResourceState` says they are started, never listed as a dependency, and only by a package whose ADR names them (owner, 2026-11-01; `docs/adr/0001-rongroi-server-kit.md` §11).
    - `nakara_tickets` may also call `qbx_medical` (revive) and `ox_inventory` (add item), under the same conditions and only for an action the server owner enabled in its config (owner, 2026-11-14; `docs/adr/0003-nakara-tickets.md` decision 10).
 6. **Upstream-first.** This repository is the single upstream source for all `[oss]/` packages vendored into `nakara-city`. Never hand-edit vendored copies downstream; land the change here via PR, release with CI attestation, and bump downstream via `oss-vendor.mjs`.

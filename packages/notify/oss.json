@@ -1,0 +1,32 @@
+{
+  "$schema": "../../oss.schema.json",
+  "name": "notify",
+  "resource": "aeterna_notify",
+  "capabilities": {
+    "http": [],
+    "commands": [],
+    "registeredCommands": [
+      "aeterna_announce"
+    ],
+    "convars": {
+      "read": [],
+      "write": []
+    },
+    "netEvents": {
+      "server": [],
+      "client": [
+        "aeterna_notify:cl:toast",
+        "aeterna_notify:cl:announce",
+        "QBCore:Client:OnPlayerLoaded"
+      ]
+    },
+    "nui": true,
+    "db": {
+      "tables": [],
+      "ddl": false
+    },
+    "files": {
+      "write": []
+    }
+  }
+}

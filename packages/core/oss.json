@@ -1,0 +1,26 @@
+{
+  "$schema": "../../oss.schema.json",
+  "name": "core",
+  "resource": "aeterna_core",
+  "capabilities": {
+    "http": [],
+    "commands": [],
+    "registeredCommands": ["aeterna_core_selftest"],
+    "convars": {
+      "read": ["aeterna_locale", "aeterna_timezone", "aeterna_theme", "aeterna_core_log_level"],
+      "write": []
+    },
+    "netEvents": {
+      "server": [],
+      "client": []
+    },
+    "nui": true,
+    "db": {
+      "tables": [],
+      "ddl": false
+    },
+    "files": {
+      "write": []
+    }
+  }
+}
