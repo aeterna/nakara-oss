@@ -14,18 +14,6 @@
       "expires": "2026-11-18T16:12:37Z"
     },
     {
-      "id": "kit-fix-layout-b9a1f5e4",
-      "repo": "nakara-oss",
-      "lane": "kit-fix-layout",
-      "host": "win",
-      "scope": [
-        "packages/layout/**"
-      ],
-      "plan": "starter-kit",
-      "acquired": "2026-11-18T12:20:53Z",
-      "expires": "2026-11-18T16:20:53Z"
-    },
-    {
       "id": "kit-fix-invkit-c57493e9",
       "repo": "nakara-oss",
       "lane": "kit-fix-invkit",
