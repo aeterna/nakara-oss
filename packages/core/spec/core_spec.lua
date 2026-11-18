@@ -416,9 +416,9 @@ describe('aeterna_core', function()
                 assert.is_true(AeternaCore.rateLimit(7, 'test', 3, 1000))
             end
             assert.is_false(AeternaCore.rateLimit(7, 'test', 3, 1000))
-            source = 7
+            rawset(_G, 'source', 7)
             natives.fire('playerDropped', 'quit')
-            source = nil
+            rawset(_G, 'source', nil)
             assert.is_true(AeternaCore.rateLimit(7, 'test', 3, 1000))
 
             exports.aeterna_core:addSelftest('sample')

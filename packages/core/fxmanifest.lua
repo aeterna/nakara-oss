@@ -3,7 +3,7 @@ game 'gta5'
 lua54 'yes'
 
 name 'aeterna_core'
-author 'Nakara City dev team'
+author 'AETERNA'
 description 'Shared foundation for the AETERNA Starter Kit: logging, event bus, Thai-aware text, locales, time, schema validation, rate limiting, ACE checks, versioned KVP, key mappings, NUI focus lock, theme path and self-tests.'
 version '0.1.0'
 repository 'https://github.com/aeterna/nakara-oss'
