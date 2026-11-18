@@ -2,18 +2,6 @@
   "version": 1,
   "leases": [
     {
-      "id": "kit-core-ed16956e",
-      "repo": "nakara-oss",
-      "lane": "kit-core",
-      "host": "win",
-      "scope": [
-        "packages/core/**"
-      ],
-      "plan": "starter-kit",
-      "acquired": "2026-11-18T11:25:30Z",
-      "expires": "2026-11-18T15:25:30Z"
-    },
-    {
       "id": "kit-uikit-e17daaec",
       "repo": "nakara-oss",
       "lane": "kit-uikit",
