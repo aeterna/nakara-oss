@@ -22,7 +22,8 @@ window with no gates.
    ```
    `release-tags` blocks moving or deleting any tag (GitHub refuses the Actions app as a ruleset
    bypass actor, so tag *creation* cannot be limited to the workflow; only people with write access —
-   the owner — can create tags, and immutable releases lock a released tag). `main-gates` has no bypass (CI must pass for everyone, owner included). `main-review` lets the
+   the owner — can create tags, and immutable releases lock a released tag). `dev-gates` and `main-gates` have no bypass (CI must pass for everyone, owner included); `dev` takes
+   squash merges with linear history, `main` takes only merge-commit promotions from `dev`. `owner-review` (on both) lets the
    owner merge their own PRs without a second reviewer (there is no second maintainer yet) —
    every outside PR still needs owner approval of the latest push.
 6. Settings → Code security: **Secret scanning + push protection** on · **Private vulnerability reporting** on ·

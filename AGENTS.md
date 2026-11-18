@@ -33,6 +33,10 @@ Read before changing code: [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`packages/de
 7. **Protected paths require a Proposal issue from external contributors.** Changes touching `.github/`, `oss.schema.json`, any `oss.json` capability, or `packages/devkit/src/safety/` are maintainer-controlled (`CODEOWNERS`).
 8. **Workflow hygiene.** Every GitHub Action in `.github/workflows/*.yml` must be pinned to a full commit SHA, use `persist-credentials: false` on `actions/checkout`, keep default `permissions: contents: read`, and pass `actionlint` + `zizmor`.
 
+## Branches
+
+`dev` is the default branch and the base of every work branch and PR (squash merge, linear history). `main` is what is released: it moves only by a promotion PR from `dev` (merge commit, so the two keep the same history), and releases, the launcher release and the Pages site run from `main` only. Both are protected by `.github/rulesets/` (`dev-gates`, `main-gates`, `owner-review`); edit a ruleset file and apply it with `gh api` in the same PR.
+
 ## Commands (run locally before pushing)
 
 ```bash
@@ -42,6 +46,6 @@ npm test --workspace packages/devkit              # devkit unit + safety scanner
 npm run test:lua                                  # Lua specs via busted (--config-file=.busted)
 node packages/devkit/bin/fivem-devkit.js check    # static checks (dogfood)
 node packages/devkit/bin/fivem-devkit.js safety   # safety + oss.json capability verification
-node .github/scripts/capability-report.mjs origin/main
-node .github/scripts/check-dco.mjs origin/main HEAD
+node .github/scripts/capability-report.mjs origin/dev
+node .github/scripts/check-dco.mjs origin/dev HEAD
 ```
