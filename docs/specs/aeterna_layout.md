@@ -1,6 +1,6 @@
 # aeterna_layout
 
-- Package: `packages/layout` · resource `aeterna_layout` · wave W2 · status draft
+- Package: `packages/layout` · resource `aeterna_layout` · wave W2 · status released in 0.1.0
 - Depends on: `aeterna_core` (focus, KVP, locale, keys) and `aeterna_uikit` (menu entry)
 - Proven by spikes S1 and S3 (ADR 0004 decision 12, 2026-11-17)
 
