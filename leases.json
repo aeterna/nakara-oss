@@ -38,18 +38,6 @@
       "expires": "2026-11-18T16:25:19Z"
     },
     {
-      "id": "kit-phonekit-7b9c5d51",
-      "repo": "nakara-oss",
-      "lane": "kit-phonekit",
-      "host": "win",
-      "scope": [
-        "packages/phonekit/**"
-      ],
-      "plan": "starter-kit",
-      "acquired": "2026-11-18T12:25:28Z",
-      "expires": "2026-11-18T16:25:28Z"
-    },
-    {
       "id": "kit-fix-invkit-710a6f4b",
       "repo": "nakara-oss",
       "lane": "kit-fix-invkit",
