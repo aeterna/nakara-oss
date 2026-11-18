@@ -1,4 +1,17 @@
 {
   "version": 1,
-  "leases": []
+  "leases": [
+    {
+      "id": "kit-layout-8e00a9fd",
+      "repo": "nakara-oss",
+      "lane": "kit-layout",
+      "host": "win",
+      "scope": [
+        "packages/layout/**"
+      ],
+      "plan": "starter-kit",
+      "acquired": "2026-11-18T11:50:59Z",
+      "expires": "2026-11-18T15:50:59Z"
+    }
+  ]
 }
