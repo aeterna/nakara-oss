@@ -14,9 +14,9 @@ Nothing is on `dev` yet. Plan and status table: the owner's plan doc "nakara-oss
 
 ## Open
 
-- Owner's visual pass and hand checks: dragging in the layout editor, typing in panels and the phone, real item use.
-  The F7 menu and FULL TEST live in `aeterna_kit_demo`, outside the repo in `.claude/kit-test-server`.
-- Not verified in game: `SETUP_HEALTH_ARMOUR` and the minimap scale range. Verified by the run: layout owner detection
+- The owner passed the visual and hand checks on 2026-11-18. Next is the owner's merge of PR #69, which also carries #54 and #58.
+- The F7 menu and FULL TEST live in `aeterna_kit_demo`, outside the repo in `.claude/kit-test-server`.
+- Verified by the run: layout owner detection
   with every kit part, the phone animation on Enhanced, and opening a stash through `forceOpenInventory`.
 - Not done: CI brand scan through the GitHub App, `kits/starter`, site and guides, release tags (wave W4).
 
