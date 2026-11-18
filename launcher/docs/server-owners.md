@@ -4,8 +4,9 @@ ADR 0002. The launcher is MIT licensed. You can ship it for your own FiveM or Ro
 `server.toml`. A profile is data only: it cannot run code on a player's PC, and the launcher refuses any host your
 profile does not name.
 
-A template repository for owners who only edit the profile is planned. Until it exists, fork this repository and
-work in `launcher/`.
+If you only want to edit the profile, start from the [template repository](https://github.com/aeterna/aeterna-launcher-template): choose **Use this template**, edit
+`server.toml`, and GitHub builds your Windows exe. To change the launcher itself, fork this repository and work in
+`launcher/`.
 
 ## 1. Write your profile
 

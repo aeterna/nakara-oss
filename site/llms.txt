@@ -12,11 +12,16 @@ Every resource package declares its capabilities in oss.json (validated against 
 - nakara_cargen_fix ({{cargen.version}}): Client-only crash fix for CNetworkCarGenWorldStateData Pool Full (net.dll+487A2) without framework dependencies.
   Link: https://github.com/aeterna/nakara-oss/tree/main/packages/cargen-fix
 
+- AETERNA Game Launcher: a game launcher, written in Rust, that a FiveM server community gives its players to join that server.
+  Link: https://github.com/aeterna/nakara-oss/releases?q=launcher-v
+  Template for server owners: https://github.com/aeterna/aeterna-launcher-template
+
+- nakara_rongroi (Rongroi Server Kit): Server-side kit for aeterna-rongroi.
+  Link: https://github.com/aeterna/nakara-oss/releases?q=nakara_rongroi
+
 ## Packages in Development
 
 - Nakara Tickets: Discord ticket system with in-game actions over a port-less bridge.
-- AETERNA Game Launcher: a game launcher, written in Rust, that a FiveM server community gives its players to join that server.
-- Rongroi Server Kit: Server-side kit for aeterna-rongroi.
 
 ## What the Scanner Cannot Catch
 
