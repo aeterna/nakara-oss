@@ -44,6 +44,19 @@ end
 local function openMenuForPlayer(src)
     local target = tonumber(src)
     if not target or target <= 0 then return false end
+    local ok, closed = panels:close(target, nil, 'closed')
+    if ok and closed then
+        TriggerClientEvent('aeterna_uikit:cl:close', target, {
+            panelId = closed.panelId,
+            reason = 'closed',
+        })
+        TriggerEvent('aeterna_uikit:action', target, {
+            owner = closed.owner,
+            panelId = closed.panelId,
+            action = '__close',
+            values = {},
+        })
+    end
     local rawTitle = GetConvar('aeterna_uikit_menu_title', '')
     local title
     if type(rawTitle) == 'string' and L.stripControlAndTrim(rawTitle) ~= '' then

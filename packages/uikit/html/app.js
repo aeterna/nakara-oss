@@ -76,9 +76,11 @@ function collectPanelValues() {
     for (const [id, st] of blockState.entries()) {
         if (st.type === 'field') {
             if (st.input === 'number') {
-                const n = Number(st.control.value);
-                if (!Number.isNaN(n)) {
-                    out[id] = n;
+                if (st.control.value !== '') {
+                    const n = Number(st.control.value);
+                    if (!Number.isNaN(n)) {
+                        out[id] = n;
+                    }
                 }
             } else {
                 out[id] = String(st.control.value || '');
@@ -584,7 +586,12 @@ function openInputPrompt(prompt) {
         for (let i = 0; i < controls.length; i++) {
             const c = controls[i];
             if (c.inputKind === 'number') {
-                values[c.id] = Number(c.el.value);
+                if (c.el.value !== '') {
+                    const n = Number(c.el.value);
+                    if (!Number.isNaN(n)) {
+                        values[c.id] = n;
+                    }
+                }
             } else {
                 values[c.id] = String(c.el.value || '');
             }
@@ -825,12 +832,6 @@ window.addEventListener('message', (event) => {
 window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
         event.preventDefault();
-        clearChildren(promptLayer);
-        promptLayer.classList.add('hidden');
-        closePanel();
         postCallback('escape', {});
-    } else if (event.code === 'Space' && skillState) {
-        event.preventDefault();
-        skillState.hit();
     }
 });

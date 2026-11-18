@@ -709,9 +709,27 @@ function L.validatePatch(spec, patch)
     end
 
     local blockMap = {}
+    local seenIds = {}
     for i = 1, #spec.blocks do
         local b = spec.blocks[i]
         blockMap[b.id] = b
+        seenIds[b.id] = true
+        local pb = patch.blocks[b.id]
+        local replacingItems = (b.type == 'list' or b.type == 'buttons') and type(pb) == 'table' and pb.items ~= nil
+        if not replacingItems and type(b.items) == 'table' then
+            for j = 1, #b.items do
+                if b.items[j] and b.items[j].id then
+                    seenIds[b.items[j].id] = true
+                end
+            end
+        end
+        if type(b.options) == 'table' then
+            for j = 1, #b.options do
+                if b.options[j] and b.options[j].id then
+                    seenIds[b.options[j].id] = true
+                end
+            end
+        end
     end
 
     local hasAny = false
@@ -755,7 +773,6 @@ function L.validatePatch(spec, patch)
         end
 
         if partial.items ~= nil then
-            local seenIds = {}
             if btype == 'list' then
                 local okIt, errIt, ci = validateListItems(partial.items, ('blocks.%s.items'):format(blockId), seenIds)
                 if not okIt then return false, errIt end

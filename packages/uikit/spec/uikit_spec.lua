@@ -357,6 +357,68 @@ describe('aeterna_uikit', function()
                 },
             }))
         end)
+
+        it('refuses item ids already used by other blocks or their items', function()
+            local okDupBtn, errDupBtn = L.validatePatch(pm:getOpen(1).spec, {
+                blocks = {
+                    pick = {
+                        items = {
+                            { id = 'ok', label = 'Collides with button' },
+                        },
+                    },
+                },
+            })
+            assert.is_false(okDupBtn)
+            assert.is_truthy(errDupBtn and errDupBtn:match('%.id: duplicate$'))
+
+            local okDupBlock, errDupBlock = L.validatePatch(pm:getOpen(1).spec, {
+                blocks = {
+                    pick = {
+                        items = {
+                            { id = 'intro', label = 'Collides with block' },
+                        },
+                    },
+                },
+            })
+            assert.is_false(okDupBlock)
+            assert.is_truthy(errDupBlock and errDupBlock:match('%.id: duplicate$'))
+
+            local okDupList, errDupList = L.validatePatch(pm:getOpen(1).spec, {
+                blocks = {
+                    act = {
+                        items = {
+                            { id = 'sedan', label = 'Buy', variant = 'primary' },
+                        },
+                    },
+                },
+            })
+            assert.is_false(okDupList)
+            assert.is_truthy(errDupList and errDupList:match('%.id: duplicate$'))
+
+            local okDupOpt, errDupOpt = L.validatePatch(pm:getOpen(1).spec, {
+                blocks = {
+                    pick = {
+                        items = {
+                            { id = 'cash', label = 'Collides with select option' },
+                        },
+                    },
+                },
+            })
+            assert.is_false(okDupOpt)
+            assert.is_truthy(errDupOpt and errDupOpt:match('%.id: duplicate$'))
+
+            -- Reusing an item id from the same block being replaced is allowed
+            local okSameBlock = pm:update(1, panelId, {
+                blocks = {
+                    pick = {
+                        items = {
+                            { id = 'sedan', label = 'Updated Sedan', icon = 'car' },
+                        },
+                    },
+                },
+            })
+            assert.is_true(okSameBlock)
+        end)
     end)
 
     describe('5. menu registry (shared/logic/uikit.lua)', function()
@@ -463,6 +525,23 @@ describe('aeterna_uikit', function()
             local menuEv = natives.last_emitted('local', 'aeterna_uikit:menu')
             assert.is_truthy(menuEv)
             assert.are.same({ owner = 'shop_res', id = 'vip' }, menuEv.args[2])
+
+            -- Opening the menu while a panel is open closes that panel first (owner gets __close)
+            assert.are.equal(secondPid, api.isOpen(1))
+            natives.fire_net('aeterna_uikit:sv:showMenu', 1)
+            assert.is_nil(api.isOpen(1))
+            local lastClose = natives.last_emitted('client', 'aeterna_uikit:cl:close')
+            assert.is_truthy(lastClose)
+            assert.are.equal(secondPid, lastClose.args[1].panelId)
+            local closeActEv = natives.last_emitted('local', 'aeterna_uikit:action')
+            assert.is_truthy(closeActEv)
+            assert.are.equal(1, closeActEv.args[1])
+            assert.are.equal('shop_res', closeActEv.args[2].owner)
+            assert.are.equal(secondPid, closeActEv.args[2].panelId)
+            assert.are.equal('__close', closeActEv.args[2].action)
+            local openMenuEv = natives.last_emitted('client', 'aeterna_uikit:cl:open')
+            assert.is_truthy(openMenuEv)
+            assert.are.equal('__menu', openMenuEv.args[1].panelId)
         end)
 
         it('runs client panels, focus preemption (__close), prompts and keyHints', function()
@@ -473,10 +552,22 @@ describe('aeterna_uikit', function()
                 nuiCallbacks[name] = fn
             end)
             natives.spy('RegisterCommand')
+            local cmdHashes = {
+                ['+aeterna_invkit_open'] = 0x12345678,
+                ['+aeterna_uikit_skill'] = 0x23456789,
+            }
+            natives.spy('GetHashKey', function(s)
+                return cmdHashes[s] or 0x00000001
+            end)
             natives.spy('GetControlInstructionalButton', function(_, hash)
-                if hash == '+aeterna_invkit_open' then return 't_E' end
+                if hash == (0x12345678 | 0x80000000) then return 't_E' end
+                if hash == (0x23456789 | 0x80000000) then return 't_F' end
                 return 'b_-1'
             end)
+            natives.stub('Locales', {
+                en = { ['core.month.1'] = 'January' },
+                th = { ['core.month.1'] = 'มกราคม' },
+            })
             natives.stub('AeternaCore', {
                 log = { debug = function() end, info = function() end, warn = function() end, error = function() end },
                 t = function(k) return (Locales and Locales.en and Locales.en[k]) or k end,
@@ -489,6 +580,12 @@ describe('aeterna_uikit', function()
 
             local res = resource.load_resource(DIR, 'client')
             local api = res.exports
+
+            -- Locales preserve keys pre-populated by @aeterna_core/import.lua
+            assert.are.equal('January', Locales.en['core.month.1'])
+            assert.are.equal('Menu', Locales.en['uikit.menu.title'])
+            assert.are.equal('มกราคม', Locales.th['core.month.1'])
+            assert.are.equal('เมนู', Locales.th['uikit.menu.title'])
 
             -- Open panel from server, then lose focus -> sends __close to server
             natives.fire_net('aeterna_uikit:cl:open', 1, {
@@ -503,7 +600,7 @@ describe('aeterna_uikit', function()
             assert.are.equal('p1', closeAction.args[1].panelId)
             assert.are.equal('__close', closeAction.args[1].action)
 
-            -- keyHints resolves bound and unbound keys
+            -- keyHints resolves bound and unbound keys with the 0x80000000 mapping flag
             api.keyHints({
                 { key = '+aeterna_invkit_open', label = 'Open Stash' },
                 { key = '+aeterna_unbound_cmd', label = 'Action' },
@@ -522,6 +619,47 @@ describe('aeterna_uikit', function()
             nuiCallbacks.promptResult({ kind = 'confirm', value = true }, function() end)
             natives.advance(20)
             assert.is_true(confirmed)
+
+            -- Escape closes only the top layer: first the prompt (__prompt), then the panel
+            natives.fire_net('aeterna_uikit:cl:open', 1, {
+                panelId = 'p2',
+                title = 'Layered Panel',
+                size = 'md',
+                blocks = {},
+            })
+            local escConfirmed = nil
+            CreateThread(function()
+                escConfirmed = api.confirm({ title = 'Cancel me?' })
+            end)
+            natives.advance(0)
+            nuiCallbacks.escape({}, function() end)
+            natives.advance(20)
+            assert.is_false(escConfirmed)
+            local promptCloseMsg = nuiMessages[#nuiMessages][1]
+            assert.are.equal('panel:close', promptCloseMsg.type)
+            assert.are.equal('__prompt', promptCloseMsg.panelId)
+            assert.are.equal('escape', promptCloseMsg.reason)
+            assert.are.equal('p1', natives.last_emitted('server', 'aeterna_uikit:sv:action').args[1].panelId)
+
+            nuiCallbacks.escape({}, function() end)
+            local panelCloseMsg = nuiMessages[#nuiMessages][1]
+            assert.are.equal('panel:close', panelCloseMsg.type)
+            assert.are.equal('p2', panelCloseMsg.panelId)
+            assert.are.equal('escape', panelCloseMsg.reason)
+            assert.are.equal('p2', natives.last_emitted('server', 'aeterna_uikit:sv:action').args[1].panelId)
+
+            -- skillCheck resolves command key with 0x80000000 mapping flag
+            local skillPassed = nil
+            CreateThread(function()
+                skillPassed = api.skillCheck({ difficulty = 'easy', rounds = 1 })
+            end)
+            natives.advance(0)
+            local skillOpenMsg = nuiMessages[#nuiMessages][1]
+            assert.are.equal('prompt:skill', skillOpenMsg.type)
+            assert.are.equal('F', skillOpenMsg.prompt.bind)
+            nuiCallbacks.promptResult({ kind = 'skill', value = true }, function() end)
+            natives.advance(10)
+            assert.is_true(skillPassed)
         end)
     end)
 end)

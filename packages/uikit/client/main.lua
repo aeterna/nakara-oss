@@ -93,7 +93,7 @@ end
 
 local function resolveCommandKey(cmd, fallback)
     if type(GetControlInstructionalButton) == 'function' and type(GetHashKey) == 'function' then
-        local raw = GetControlInstructionalButton(2, GetHashKey(cmd), true)
+        local raw = GetControlInstructionalButton(2, GetHashKey(cmd) | 0x80000000, true)
         local formatted = L.formatKeyBinding(raw, '')
         if formatted ~= '' then
             return formatted
@@ -287,6 +287,7 @@ RegisterNUICallback('escape', function(data, cb)
             activePrompt.result = false
         end
         activePrompt.done = true
+        sendUi({ type = 'panel:close', panelId = '__prompt', reason = 'escape' })
         return
     end
 
@@ -491,7 +492,7 @@ exports('keyHints', function(list)
         local row = clean[i]
         local raw = nil
         if type(GetControlInstructionalButton) == 'function' and type(GetHashKey) == 'function' then
-            raw = GetControlInstructionalButton(2, GetHashKey(row.key), true)
+            raw = GetControlInstructionalButton(2, GetHashKey(row.key) | 0x80000000, true)
         end
         resolved[i] = {
             key = row.key,
