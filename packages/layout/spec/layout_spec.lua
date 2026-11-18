@@ -386,6 +386,165 @@ describe('aeterna_layout', function()
                 hidden = true,
             }, savedStore['unregistered_res/old_widget'])
         end)
+
+        it('keeps Reset all in the session, writes only on Done, and Cancel restores the opening places', function()
+            local savedStore = {
+                ['res_a/hud'] = {
+                    x = 0.4,
+                    y = 0.4,
+                    ax = 0.5,
+                    ay = 0.5,
+                    scale = 1.5,
+                    hidden = false,
+                },
+                ['unregistered_res/old_widget'] = {
+                    x = 0.85,
+                    y = 0.15,
+                    ax = 1,
+                    ay = 0,
+                    scale = 1.25,
+                    hidden = true,
+                },
+            }
+            local writeCalls = 0
+            local reg = L.createRegistry({
+                initialPlaces = savedStore,
+                savePlaces = function(newStore)
+                    writeCalls = writeCalls + 1
+                    savedStore = newStore
+                end,
+            })
+
+            assert.is_true(reg:add('res_a', validDef({
+                id = 'hud',
+                x = 0.1,
+                y = 0.9,
+                ax = 0,
+                ay = 1,
+            })))
+
+            reg:beginSession()
+            assert.is_true(reg:reset({}))
+            assert.are.equal(0, writeCalls)
+            assert.are.equal(0.1, reg:get('res_a', 'hud').place.x)
+            assert.are.equal(1.0, reg:get('res_a', 'hud').place.scale)
+
+            reg:cancelSession()
+            assert.are.equal(0, writeCalls)
+            assert.are.equal(0.4, reg:get('res_a', 'hud').place.x)
+            assert.are.equal(1.5, reg:get('res_a', 'hud').place.scale)
+
+            reg:beginSession()
+            assert.is_true(reg:reset({}))
+            reg:commitSession()
+            assert.are.equal(1, writeCalls)
+            assert.is_nil(savedStore['res_a/hud'])
+            assert.are.same({
+                x = 0.85,
+                y = 0.15,
+                ax = 1,
+                ay = 0,
+                scale = 1.25,
+                hidden = true,
+            }, savedStore['unregistered_res/old_widget'])
+        end)
+
+        it('saves only elements moved from their def default and removes saved keys that match', function()
+            local savedStore = {
+                ['res_a/at_default'] = {
+                    x = 0.2,
+                    y = 0.2,
+                    ax = 0,
+                    ay = 0,
+                    scale = 1.0,
+                    hidden = false,
+                },
+                ['unregistered_res/old_widget'] = {
+                    x = 0.85,
+                    y = 0.15,
+                    ax = 1,
+                    ay = 0,
+                    scale = 1.25,
+                    hidden = true,
+                },
+            }
+            local writeCalls = 0
+            local reg = L.createRegistry({
+                initialPlaces = savedStore,
+                savePlaces = function(newStore)
+                    writeCalls = writeCalls + 1
+                    savedStore = newStore
+                end,
+            })
+
+            assert.is_true(reg:add('res_a', validDef({
+                id = 'at_default',
+                x = 0.2,
+                y = 0.2,
+                ax = 0,
+                ay = 0,
+            })))
+            reg:beginSession()
+            reg:commitSession()
+
+            assert.are.equal(1, writeCalls)
+            assert.is_nil(savedStore['res_a/at_default'])
+            assert.are.same({
+                x = 0.85,
+                y = 0.15,
+                ax = 1,
+                ay = 0,
+                scale = 1.25,
+                hidden = true,
+            }, savedStore['unregistered_res/old_widget'])
+        end)
+
+        it('keeps the in-session place and snapshot when an existing element is re-added during a session', function()
+            local reg = L.createRegistry({
+                initialPlaces = {
+                    ['res_a/hud'] = {
+                        x = 0.6,
+                        y = 0.6,
+                        ax = 1,
+                        ay = 1,
+                        scale = 1.25,
+                        hidden = false,
+                    },
+                },
+            })
+            assert.is_true(reg:add('res_a', validDef({
+                id = 'hud',
+                x = 0.1,
+                y = 0.9,
+                ax = 0,
+                ay = 1,
+            })))
+            reg:beginSession()
+            assert.is_true(reg:move({
+                owner = 'res_a',
+                id = 'hud',
+                x = 0.4,
+                y = 0.4,
+                ax = 0.5,
+                ay = 0.5,
+                scale = 1.5,
+            }))
+
+            assert.is_true(reg:add('res_a', validDef({
+                id = 'hud',
+                x = 0.1,
+                y = 0.9,
+                ax = 0,
+                ay = 1,
+            })))
+            local current = reg:get('res_a', 'hud')
+            assert.are.equal(0.4, current.place.x)
+            assert.are.equal(1.5, current.place.scale)
+
+            reg:cancelSession()
+            assert.are.equal(0.6, reg:get('res_a', 'hud').place.x)
+            assert.are.equal(1.25, reg:get('res_a', 'hud').place.scale)
+        end)
     end)
 
     describe('8. resource scripts under harness', function()
@@ -504,6 +663,59 @@ describe('aeterna_layout', function()
             local decoded = json.decode(rawKvp)
             assert.are.equal(0.7, decoded['aeterna_hudkit/status'].x)
             assert.are.equal(1.5, decoded['aeterna_hudkit/status'].scale)
+        end)
+    end)
+
+    describe('9. locales (locales/*.lua)', function()
+        it('adds layout keys without replacing the core locale tables', function()
+            local previous = rawget(_G, 'Locales')
+            rawset(_G, 'Locales', {
+                en = { ['core.month.1'] = 'January' },
+                th = { ['core.month.1'] = 'มกราคม' },
+            })
+            local ok, err = pcall(function()
+                assert(loadfile(DIR .. '/locales/en.lua'))()
+                assert(loadfile(DIR .. '/locales/th.lua'))()
+            end)
+            local loaded = rawget(_G, 'Locales')
+            local enCore = loaded.en['core.month.1']
+            local thCore = loaded.th['core.month.1']
+            local enEntry = loaded.en['layout.menu.entry']
+            local thEntry = loaded.th['layout.menu.entry']
+            rawset(_G, 'Locales', previous)
+
+            assert.is_true(ok, tostring(err))
+            assert.are.equal('January', enCore)
+            assert.are.equal('มกราคม', thCore)
+            assert.are.equal('Edit HUD layout', enEntry)
+            assert.are.equal('จัดวางหน้าจอ HUD', thEntry)
+        end)
+    end)
+
+    describe('10. editor focus guard (client/main.lua)', function()
+        it('does not open the editor when aeterna_core refuses focus', function()
+            natives.reset({ resource = 'aeterna_layout', side = 'client' })
+            local nuiMessages = natives.spy('SendNUIMessage')
+            natives.spy('RegisterNUICallback', function() end)
+            natives.spy('RegisterCommand')
+            natives.spy('RegisterKeyMapping')
+            natives.spy('GetResourceState', function() return 'started' end)
+            natives.stub_export('aeterna_core', 'requestFocus', function() return nil end)
+            natives.stub_export('aeterna_core', 'releaseFocus', function() return true end)
+            natives.stub_export('aeterna_core', 'themeHref', function() return nil end)
+
+            resource.load_resource(DIR, 'client', {
+                externals = { ['@aeterna_core/import.lua'] = DIR .. '/../core/import.lua' },
+            })
+
+            rawset(_G, 'source', 1)
+            natives.fire_net('aeterna_layout:cl:open', 1)
+
+            for i = 1, #nuiMessages do
+                local msg = nuiMessages[i][1]
+                assert.are_not.equal('editor:open', type(msg) == 'table' and msg.type or nil)
+            end
+            assert.is_nil(natives.get_kvp('aeterna_layout:places:v1'))
         end)
     end)
 end)

@@ -758,6 +758,15 @@ local function copyPlacesMap(map)
     return out
 end
 
+local function placesMatch(a, b)
+    return a.x == b.x
+        and a.y == b.y
+        and a.ax == b.ax
+        and a.ay == b.ay
+        and a.scale == b.scale
+        and (a.hidden == true) == (b.hidden == true)
+end
+
 local function sanitizeSavedPlace(saved, cleanDef, scaleCfg)
     if type(saved) ~= 'table' then return nil end
     if not isFiniteNumber(saved.x) or saved.x < 0 or saved.x > 1 then return nil end
@@ -859,7 +868,12 @@ function L.createRegistry(opts)
             scale = cleanDef.scale or 1.0,
             hidden = false,
         }
-        local place = sanitizeSavedPlace(self.savedPlaces[key], cleanDef, scaleCfg) or defaultPlace
+        local place
+        if existing and self.session then
+            place = copyPlace(existing.place)
+        else
+            place = sanitizeSavedPlace(self.savedPlaces[key], cleanDef, scaleCfg) or defaultPlace
+        end
 
         if not existing then
             self.count = self.count + 1
@@ -1047,7 +1061,7 @@ function L.createRegistry(opts)
             return true, nil, copyPlace(applied)
         end
 
-        -- Reset all registered elements and persist to KVP (preserving unregistered elements)
+        -- Reset all registered elements inside the editor session; Done persists the result.
         for i = 1, #self.order do
             local key = self.order[i]
             local el = self.elements[key]
@@ -1060,11 +1074,9 @@ function L.createRegistry(opts)
                     scale = el.def.scale or 1.0,
                     hidden = false,
                 }
-                self.savedPlaces[key] = copyPlace(el.place)
                 onApply(el.owner, el.id, copyPlace(el.place))
             end
         end
-        savePlacesFn(copyPlacesMap(self.savedPlaces))
         return true, nil, copyPlacesMap(self.savedPlaces)
     end
 
@@ -1073,7 +1085,19 @@ function L.createRegistry(opts)
             local key = self.order[i]
             local el = self.elements[key]
             if el then
-                self.savedPlaces[key] = copyPlace(el.place)
+                local defaultPlace = {
+                    x = el.def.x,
+                    y = el.def.y,
+                    ax = el.def.ax,
+                    ay = el.def.ay,
+                    scale = el.def.scale or 1.0,
+                    hidden = false,
+                }
+                if placesMatch(el.place, defaultPlace) then
+                    self.savedPlaces[key] = nil
+                else
+                    self.savedPlaces[key] = copyPlace(el.place)
+                end
             end
         end
         self.session = nil

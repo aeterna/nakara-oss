@@ -23,6 +23,7 @@ let locale = {
     'layout.editor.scale': 'Scale',
     'layout.editor.cancel': 'Cancel',
     'layout.editor.done': 'Done',
+    'layout.editor.doneHint': 'Press Enter to confirm',
     'layout.editor.empty': 'No movable HUD elements registered',
 };
 
@@ -360,6 +361,7 @@ function renderToolbar() {
     const doneBtn = document.createElement('button');
     doneBtn.type = 'button';
     doneBtn.className = 'btn btn-primary';
+    doneBtn.title = String(locale['layout.editor.doneHint'] || 'Press Enter to confirm');
     const checkIcon = window.AeternaLayoutIcons.create('check', 15);
     if (checkIcon) doneBtn.appendChild(checkIcon);
     const doneSpan = document.createElement('span');
@@ -505,6 +507,16 @@ window.addEventListener('keydown', (ev) => {
     }
 
     if (confirmOpen) return;
+
+    if (ev.key === 'Enter') {
+        const focused = document.activeElement;
+        const toolbarButtonFocused = !!(focused && focused.tagName === 'BUTTON' && toolbarPanel.contains(focused));
+        if (!toolbarButtonFocused) {
+            ev.preventDefault();
+            postCallback('done', {});
+            return;
+        }
+    }
 
     if (ev.key === 'Tab' && elements.length > 0) {
         ev.preventDefault();

@@ -10,7 +10,7 @@ Coordinate-based HUD layout editor and client-side layout persistence for the AE
 
 - **Cross-resource coordinate protocol (โปรโตคอลพิกัดข้ามทรัพยากร):** Every FiveM NUI page runs in its own frame, so resources cannot drag each other's DOM directly. Owner resources describe their movable boxes (`id`, `w`, `h`, default `x`, `y`, `ax`, `ay`); `aeterna_layout` draws dashed stand-in boxes in its own frame while the editor is open and emits `aeterna_layout:apply` with `{ x, y, ax, ay, scale, hidden }` so each owner moves its own NUI or game-drawn element.
 - **Resolution-independent anchoring (การยึดตำแหน่งตามสัดส่วนหน้าจอ):** Positions are stored as screen fractions (`0–1`) relative to an anchor (`0`, `0.5`, `1` chosen from the nearest screen third on drop), clamped so the whole scaled element stays on screen across resolution changes.
-- **Client KVP persistence (บันทึกในเครื่องผู้เล่น):** Saved under `aeterna_layout:places:v1` via `AeternaCore.kvp` on **Done** and **Reset all**. Places of temporarily stopped resources are preserved.
+- **Client KVP persistence (บันทึกในเครื่องผู้เล่น):** Saved under `aeterna_layout:places:v1` via `AeternaCore.kvp` on **Done**, and only for elements moved from their default. Places of temporarily stopped resources are preserved.
 - **Deliberate limits (ขอบเขตที่จำกัดไว้):** No element rotation, no separate width/height stretching, no server-side database or cross-machine sync, and no moving of base-game HUD components other than those managed by an owner resource (such as the minimap in `aeterna_hudkit`).
 
 ## Install / การติดตั้ง
@@ -83,6 +83,7 @@ All key mappings ship with **no default key** (ADR 0004 decision 10). Players bi
 Inside the editor:
 - **Mouse drag** moves an element live (updates sent at most every 100 ms and on drop); hold **Shift** to bypass grid snapping.
 - **Tab / Shift+Tab** cycles between elements; **Arrow keys** nudge by 1 px (**Shift + Arrow** by 10 px); **`+` / `-`** adjusts scale.
+- **Enter** confirms **Done** when no toolbar button has focus.
 - **ESC** or **Cancel** restores all elements to where they were when the editor opened.
 
 ## Support scope / ขอบเขตการรองรับ

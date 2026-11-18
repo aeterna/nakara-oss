@@ -19,6 +19,7 @@ local LOCALE_KEYS = {
     'layout.editor.scale',
     'layout.editor.cancel',
     'layout.editor.done',
+    'layout.editor.doneHint',
     'layout.editor.empty',
 }
 
@@ -108,8 +109,7 @@ local function acquireFocus()
         focusToken = tok
         return tok
     end
-    focusToken = 'local_focus'
-    return focusToken
+    return nil
 end
 
 local function dropFocus()
@@ -131,12 +131,15 @@ local function sendEditorOpen()
 end
 
 local function openEditor()
-    syncThemeAndLocale()
     if not editorOpen then
+        if not acquireFocus() then
+            logWarn('aeterna_layout: editor open refused', { err = 'focus: unavailable' })
+            return
+        end
         editorOpen = true
         registry:beginSession()
-        acquireFocus()
     end
+    syncThemeAndLocale()
     sendEditorOpen()
 end
 
