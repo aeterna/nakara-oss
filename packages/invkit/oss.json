@@ -1,0 +1,37 @@
+{
+  "$schema": "../../oss.schema.json",
+  "name": "invkit",
+  "resource": "aeterna_invkit",
+  "capabilities": {
+    "http": [],
+    "commands": [],
+    "registeredCommands": [
+      "+aeterna_invkit_open",
+      "-aeterna_invkit_open",
+      "aeterna_stash"
+    ],
+    "convars": {
+      "read": [],
+      "write": []
+    },
+    "netEvents": {
+      "server": [
+        "aeterna_invkit:sv:open",
+        "aeterna_invkit:sv:done",
+        "aeterna_invkit:sv:cancel"
+      ],
+      "client": [
+        "aeterna_invkit:cl:use",
+        "aeterna_invkit:cl:refused"
+      ]
+    },
+    "nui": false,
+    "db": {
+      "tables": [],
+      "ddl": false
+    },
+    "files": {
+      "write": []
+    }
+  }
+}
