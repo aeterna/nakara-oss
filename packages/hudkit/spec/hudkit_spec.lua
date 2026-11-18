@@ -3,6 +3,14 @@
 local natives = require('helpers.natives')
 local resource = require('helpers.resource')
 
+natives.registered_commands = natives.registered_commands or function()
+    local cmds = {}
+    for _, call in ipairs(natives.calls('RegisterCommand')) do
+        cmds[call[1]] = call[2] or true
+    end
+    return cmds
+end
+
 local HERE = debug.getinfo(1, 'S').source:match('^@(.*)/[^/]*$') or '.'
 local DIR = HERE .. '/..'
 
@@ -402,7 +410,10 @@ describe('aeterna_hudkit', function()
     describe('8. resource script integration (loaded through fxmanifest.lua)', function()
         local resServer, resClient
         before_each(function()
-            natives.reset()
+            natives.reset({ side = 'client', resource = 'aeterna_hudkit' })
+            natives.spy('RegisterCommand')
+            natives.spy('RegisterKeyMapping')
+            natives.spy('RegisterNUICallback')
         end)
 
         it('loads server scripts and responds to aeterna_uikit:menu event', function()
@@ -433,6 +444,8 @@ describe('aeterna_hudkit', function()
 
         it('loads client scripts and registers commands and key mappings', function()
             natives.reset({ side = 'client', resource = 'aeterna_hudkit' })
+            natives.spy('RegisterCommand')
+            natives.spy('RegisterKeyMapping')
             natives.spy('RegisterNUICallback')
             resClient = resource.load_resource(DIR, 'client')
             assert.is_not_nil(resClient)
@@ -446,6 +459,8 @@ describe('aeterna_hudkit', function()
 
         it('ready callback resets change-detection state, resends settings, bars, and part visibility', function()
             natives.reset({ side = 'client', resource = 'aeterna_hudkit' })
+            natives.spy('RegisterCommand')
+            natives.spy('RegisterKeyMapping')
             local callbacks = {}
             natives.spy('RegisterNUICallback', function(name, fn)
                 callbacks[name] = fn
