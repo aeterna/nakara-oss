@@ -262,13 +262,10 @@ end
 --------------------------------------------------------------------------------
 
 local function currentUnixSeconds()
-    if type(os) == 'table' and os.time then
-        return os.time()
-    end
     if GetCloudTimeAsInt then
         return GetCloudTimeAsInt()
     end
-    return 0
+    return os.time()
 end
 
 local function defaultEncodeJson(tbl)
