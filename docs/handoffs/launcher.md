@@ -32,7 +32,7 @@ Plan and live status table (owner's doc): https://claude.ai/artifact/RFJoHRcP1JQ
 | Kit `nakara_rongroi@0.1.0` | released | #60 `11770ea` · #62 `6a67f15` on `dev` · run 44095977445 |
 | Launcher `launcher-v0.1.0`, bundles Connect v0.1.1; assets, attestations and manifest signature checked | released | run 44095983570 |
 | Player install guide (`launcher/docs/install.md`), this handoff closed | merged into `dev`; reaches `main` at the next promotion | #64 `b09e950` |
-| Test files on the Windows PC | removed, except the old Kit copy (owner decides) | `C:\rongroi-w2-enh\nakara_rongroi.moved-20261117-104302` |
+| Test files on the Windows PC, including the old Kit copy | removed | owner ordered, 2026-11-18 |
 | Owner template repository (L8), pinned to `launcher-v0.1.0` | public | [aeterna/aeterna-launcher-template](https://github.com/aeterna/aeterna-launcher-template) |
 
 ## Short rules for other sessions
@@ -54,7 +54,7 @@ Plan and live status table (owner's doc): https://claude.ai/artifact/RFJoHRcP1JQ
 
 ## Owner's queue
 
-1. Decide whether to keep the old Kit copy on the Windows PC (`C:\rongroi-w2-enh\nakara_rongroi.moved-20261117-104302`).
+Nothing open.
 
 ## Rollback
 

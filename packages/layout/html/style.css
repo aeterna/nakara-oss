@@ -1,0 +1,282 @@
+/* aeterna_layout stylesheet — uses only tokens from html/theme.css (ADR 0004 decision 6). */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;
+    font-family: var(--font);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.45;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.layout-root {
+    position: fixed;
+    inset: 0;
+    background: transparent;
+    pointer-events: auto;
+}
+
+.canvas-layer {
+    position: fixed;
+    inset: 0;
+    pointer-events: auto;
+}
+
+.standin-box {
+    position: absolute;
+    background: var(--surface);
+    border: 2px dashed var(--text-3);
+    border-radius: var(--radius-m);
+    padding: 6px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: grab;
+    opacity: 0.86;
+    overflow: hidden;
+    transition: border-color var(--fast) var(--ease), opacity var(--fast) var(--ease);
+}
+
+.standin-box:hover {
+    border-color: var(--text);
+    opacity: 0.94;
+}
+
+.standin-box.selected {
+    border-color: var(--accent);
+    border-style: dashed;
+    opacity: 0.96;
+}
+
+.standin-box.dragging {
+    cursor: grabbing;
+    border-color: var(--accent);
+}
+
+.standin-box.is-hidden {
+    opacity: 0.45;
+    border-color: var(--warn);
+}
+
+.standin-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    text-align: center;
+    word-break: break-word;
+    pointer-events: none;
+}
+
+.standin-meta {
+    font-size: 11px;
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+}
+
+.empty-banner {
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    padding: 10px var(--pad);
+    color: var(--text-2);
+    font-size: 13px;
+    pointer-events: none;
+}
+
+.inspector-panel {
+    position: fixed;
+    bottom: 84px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    padding: 10px var(--pad);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    pointer-events: auto;
+    transition: opacity var(--enter) var(--ease), transform var(--enter) var(--ease);
+}
+
+.inspector-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    padding-right: 8px;
+    border-right: 1px solid var(--line);
+}
+
+.scale-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.scale-label {
+    font-size: 12px;
+    color: var(--text-2);
+}
+
+.scale-value {
+    min-width: 44px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
+.toolbar-panel {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-l);
+    padding: 10px var(--pad);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    pointer-events: auto;
+}
+
+.toolbar-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    padding-right: 12px;
+    border-right: 1px solid var(--line);
+}
+
+.toolbar-title-icon {
+    color: var(--text-2);
+    display: inline-flex;
+    align-items: center;
+}
+
+.toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn {
+    appearance: none;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    padding: 7px 12px;
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--raised);
+    color: var(--text);
+    transition: opacity var(--fast) var(--ease), border-color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+
+.btn:hover:not(:disabled) {
+    border-color: var(--text-2);
+}
+
+.btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.btn-icon {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: var(--on-accent);
+    border-color: var(--accent);
+}
+
+.btn-primary:hover:not(:disabled) {
+    border-color: var(--on-accent);
+}
+
+.btn-danger {
+    background: var(--bad);
+    color: var(--on-accent);
+    border-color: var(--bad);
+}
+
+.btn-toggle[aria-pressed="true"] {
+    border-color: var(--accent);
+    color: var(--text);
+}
+
+.confirm-layer {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    pointer-events: auto;
+}
+
+.confirm-card {
+    width: 360px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-l);
+    padding: var(--pad);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.confirm-text {
+    font-size: 14px;
+    color: var(--text);
+    word-break: break-word;
+}
+
+.confirm-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* Keyboard accessibility focus ring (ADR 0004 decision 13) */
+button:focus-visible,
+.standin-box:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}

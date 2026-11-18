@@ -48,8 +48,9 @@ Full list and reasons: [packages/devkit/docs/safety.md](packages/devkit/docs/saf
 
 New packages start from [`templates/resource`](templates/resource). Each package has
 `fxmanifest.lua`, `oss.json`, `README.md`, `CHANGELOG.md` and `spec/`. Resource names use the
-`nakara_` prefix. Packages may depend only on the shared core package (when it exists), never on
-each other.
+`nakara_` prefix, or `aeterna_` for Starter Kit packages. Packages may depend only on the shared
+core package (when it exists), never on each other, except the Starter Kit edges listed in
+[ADR 0004](docs/adr/0004-aeterna-starter-kit.md) decision 2.
 
 ## Changelog
 

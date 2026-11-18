@@ -1,0 +1,44 @@
+{
+  "$schema": "../../oss.schema.json",
+  "name": "phonekit",
+  "resource": "aeterna_phonekit",
+  "capabilities": {
+    "http": [],
+    "commands": [
+      "aeterna_layout"
+    ],
+    "registeredCommands": [
+      "aeterna_phonekit_open",
+      "+aeterna_phonekit_open",
+      "-aeterna_phonekit_open"
+    ],
+    "convars": {
+      "read": [],
+      "write": []
+    },
+    "netEvents": {
+      "server": [
+        "aeterna_phonekit:sv:open",
+        "aeterna_phonekit:sv:close",
+        "aeterna_phonekit:sv:tap",
+        "aeterna_phonekit:sv:action"
+      ],
+      "client": [
+        "aeterna_phonekit:cl:open",
+        "aeterna_phonekit:cl:screen",
+        "aeterna_phonekit:cl:update",
+        "aeterna_phonekit:cl:badge",
+        "aeterna_phonekit:cl:banner",
+        "aeterna_phonekit:cl:refused"
+      ]
+    },
+    "nui": true,
+    "db": {
+      "tables": [],
+      "ddl": false
+    },
+    "files": {
+      "write": []
+    }
+  }
+}

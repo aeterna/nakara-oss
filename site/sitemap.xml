@@ -43,4 +43,18 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://aeterna.github.io/nakara-oss/en/safety-scanner/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://aeterna.github.io/nakara-oss/en/safety-scanner/"/>
   </url>
+  <url>
+    <loc>https://aeterna.github.io/nakara-oss/starter-kit/</loc>
+    <lastmod>{{site.date}}</lastmod>
+    <xhtml:link rel="alternate" hreflang="th" href="https://aeterna.github.io/nakara-oss/starter-kit/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://aeterna.github.io/nakara-oss/en/starter-kit/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://aeterna.github.io/nakara-oss/en/starter-kit/"/>
+  </url>
+  <url>
+    <loc>https://aeterna.github.io/nakara-oss/en/starter-kit/</loc>
+    <lastmod>{{site.date}}</lastmod>
+    <xhtml:link rel="alternate" hreflang="th" href="https://aeterna.github.io/nakara-oss/starter-kit/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://aeterna.github.io/nakara-oss/en/starter-kit/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://aeterna.github.io/nakara-oss/en/starter-kit/"/>
+  </url>
 </urlset>

@@ -17,6 +17,7 @@
     "test:lua": "busted --config-file=.busted",
     "check": "node packages/devkit/bin/fivem-devkit.js check",
     "safety": "node packages/devkit/bin/fivem-devkit.js safety",
-    "ci": "npm test && npm run check && npm run safety"
+    "check:kit": "node .github/scripts/check-kit-graph.mjs",
+    "ci": "npm test && npm run check && npm run check:kit && npm run safety"
   }
 }

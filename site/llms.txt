@@ -1,6 +1,6 @@
 # nakara-oss
 
-nakara-oss is the public, MIT-licensed monorepo of FiveM resources (nakara_*) and developer tooling (@aeterna_game/fivem-devkit) maintained by the Nakara City dev team.
+nakara-oss is the public, MIT-licensed monorepo of FiveM resources (nakara_*, and the aeterna_* Starter Kit) and developer tooling (@aeterna_game/fivem-devkit) maintained by the Nakara City dev team.
 
 Every resource package declares its capabilities in oss.json (validated against oss.schema.json), every PR is scanned by fivem-devkit safety, and every release archive is built in CI with a cryptographic provenance attestation and SHA256SUMS.
 
@@ -18,6 +18,9 @@ Every resource package declares its capabilities in oss.json (validated against 
 
 - nakara_rongroi (Rongroi Server Kit): Server-side kit for aeterna-rongroi.
   Link: https://github.com/aeterna/nakara-oss/releases?q=nakara_rongroi
+
+- AETERNA Starter Kit (aeterna_core, aeterna_uikit, aeterna_notify, aeterna_layout, aeterna_hudkit, aeterna_phonekit, aeterna_invkit): MIT base resources for Qbox servers.
+  Link: https://aeterna.github.io/nakara-oss/en/starter-kit/
 
 ## Packages in Development
 

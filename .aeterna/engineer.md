@@ -18,14 +18,15 @@ line you write is published and runs on servers that install these packages. Sou
 
 ## Resource packages (`packages/<name>/`, `templates/resource/`)
 - Every resource ships `fxmanifest.lua`, `oss.json` (valid against `oss.schema.json`), `README.md`, `CHANGELOG.md`
-  and `spec/`. Resource names use the `nakara_` prefix.
+  and `spec/`. Resource names use the `nakara_` prefix, or `aeterna_` for Starter Kit packages (ADR 0004).
 - **Every capability is declared in `oss.json` — no more, no less.** HTTP hosts, `ExecuteCommand` commands,
   `RegisterCommand`/`lib.addCommand`, convar reads/writes, server/client net events, NUI, DB tables/DDL and
   `SaveResourceFile` writes not in `oss.json` fail `fivem-devkit safety`; a declaration the code never uses is
   `over-declared`. If the task needs a capability that `oss.json` lacks, say so in your report — changing a
   capability is a protected change that the task must name explicitly.
 - A package depends only on the shared core (`nakara_core`, when present) and optional `ox_lib` / `qbx_core`. Never on
-  another `nakara_*` package, and never on any private `aeterna_*` resource, export, event or identifier.
+  another `nakara_*` package, and never on any resource, export, event or identifier that is not published in this
+  repository. Starter Kit (`aeterna_*`) packages may depend on each other only along the edges in ADR 0004 decision 2.
 - Keep pure logic in natives-free modules (like `packages/cargen-fix/client/logic.lua`) so stock Lua can test it.
 - Server net-event handlers call a recognised rate limit (`NakaraCore.rateLimit`, `lib.callback`, `rateLimit`).
 - NUI code writes text with `textContent`; never assign a non-static string to `innerHTML`/`outerHTML`.

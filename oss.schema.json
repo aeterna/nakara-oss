@@ -9,7 +9,7 @@
   "properties": {
     "$schema": { "type": "string" },
     "name": { "type": "string", "description": "package folder name, e.g. cargen-fix" },
-    "resource": { "type": "string", "pattern": "^nakara_[a-z0-9_]+$", "description": "FiveM resource name (folder name after install)" },
+    "resource": { "type": "string", "pattern": "^(nakara|aeterna)_[a-z0-9_]+$", "description": "FiveM resource name (folder name after install)" },
     "capabilities": {
       "type": "object",
       "additionalProperties": false,
