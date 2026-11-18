@@ -10,7 +10,9 @@
     "packages/uikit/spec",
     "packages/layout/spec",
     "packages/notify/spec",
-    "packages/invkit/spec"
+    "packages/invkit/spec",
+    "packages/hudkit/spec",
+    "packages/phonekit/spec"
   ],
   "ignorePaths": [
     "node_modules",
