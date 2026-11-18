@@ -82,7 +82,11 @@ functions crossing resources):
 2. A button press or list pick inside the app fires `aeterna_phonekit:action` →
    `(src, { owner, id, screenId, action, values })`, checked against the spec on screen exactly like
    `aeterna_uikit:action` (unknown action dropped, values re-checked and cleaned).
-3. Back from the app's first screen returns to home and fires `aeterna_phonekit:action` with `action = '__close'`.
+3. Back returns to the app's previous screen (the server keeps up to 8 per player). Back from the first screen returns
+   home and fires `aeterna_phonekit:action` with `action = '__close'`; so does closing the phone with an app on screen.
+
+`showApp` and `updateApp` work only for the resource that registered the app, for a player whose phone is open and who
+passes the app's `ace`.
 
 ## Opening check (`Config.ask = true`)
 
@@ -97,6 +101,7 @@ slow answer). A denial sends `aeterna_phonekit:cl:refused` with the reason key, 
 | Event | Direction | Schema | Rate limit |
 | --- | --- | --- | --- |
 | `aeterna_phonekit:sv:open` | client → server | none | 2 / 1000 ms |
+| `aeterna_phonekit:sv:close` | client → server | none | 5 / 1000 ms |
 | `aeterna_phonekit:sv:tap` | client → server | `{ id: string ≤ 32, owner: string ≤ 64 }` | 5 / 1000 ms |
 | `aeterna_phonekit:sv:action` | client → server | `{ screenId: string ≤ 24, action: string ≤ 32, values: table ≤ 40 keys }` | 10 / 1000 ms |
 | `aeterna_phonekit:cl:open` | server → client | `{ apps }` (the tiles this player may see) | — |
@@ -136,10 +141,11 @@ KVP `aeterna_phonekit:notes:v1`, `aeterna_phonekit:contacts:v1`, `aeterna_phonek
 ## `oss.json` capabilities
 
 ```json
-{ "http": [], "commands": [],
+{ "http": [], "commands": ["aeterna_layout"],
   "registeredCommands": ["aeterna_phonekit_open", "+aeterna_phonekit_open", "-aeterna_phonekit_open"],
   "convars": { "read": [], "write": [] },
-  "netEvents": { "server": ["aeterna_phonekit:sv:open", "aeterna_phonekit:sv:tap", "aeterna_phonekit:sv:action"],
+  "netEvents": { "server": ["aeterna_phonekit:sv:open", "aeterna_phonekit:sv:close", "aeterna_phonekit:sv:tap",
+                            "aeterna_phonekit:sv:action"],
                  "client": ["aeterna_phonekit:cl:open", "aeterna_phonekit:cl:screen", "aeterna_phonekit:cl:update",
                             "aeterna_phonekit:cl:badge", "aeterna_phonekit:cl:banner", "aeterna_phonekit:cl:refused"] },
   "nui": true, "db": { "tables": [], "ddl": false }, "files": { "write": [] } }
