@@ -5,7 +5,9 @@
   ],
   "specRoots": [
     "packages/cargen-fix/spec",
-    "packages/devkit/busted/spec_example"
+    "packages/devkit/busted/spec_example",
+    "packages/core/spec",
+    "packages/uikit/spec"
   ],
   "ignorePaths": [
     "node_modules",
