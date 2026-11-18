@@ -127,8 +127,9 @@ through `AeternaCore.key` with no default key.
 ## Storage
 
 KVP `aeterna_layout:places:v1` = `{ ["<owner>/<id>"] = { x, y, ax, ay, scale, hidden } }`, written through
-`AeternaCore.kvp` on Done and on Reset all. Places of elements that are not registered right now are kept, so a
-resource that is off for a while gets its place back.
+`AeternaCore.kvp` on Done only, and only for elements moved from their default, so a later change to a default still
+reaches players. Reset all takes effect on Done; Cancel undoes it. Places of elements that are not registered right
+now are kept, so a resource that is off for a while gets its place back.
 
 ## Locale keys
 
