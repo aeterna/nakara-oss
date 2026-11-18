@@ -2,18 +2,6 @@
   "version": 1,
   "leases": [
     {
-      "id": "kit-hudkit-b8f3eac7",
-      "repo": "nakara-oss",
-      "lane": "kit-hudkit",
-      "host": "win",
-      "scope": [
-        "packages/hudkit/**"
-      ],
-      "plan": "starter-kit",
-      "acquired": "2026-11-18T12:12:37Z",
-      "expires": "2026-11-18T16:12:37Z"
-    },
-    {
       "id": "kit-fix-invkit-c57493e9",
       "repo": "nakara-oss",
       "lane": "kit-fix-invkit",
