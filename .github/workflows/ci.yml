@@ -125,7 +125,7 @@ jobs:
           repository: aeterna/org-standards
           token: ${{ steps.app.outputs.token }}
           path: .org-standards
-          sparse-checkout: brand
+          sparse-checkout: docs/brand-deny
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: steps.creds.outputs.ok == 'true'
@@ -133,7 +133,7 @@ jobs:
           node-version: 22
       - name: scan kit files
         if: steps.creds.outputs.ok == 'true'
-        run: node .github/scripts/brand-scan.mjs .org-standards/brand/nakara-oss-kit.sha256 .
+        run: node .github/scripts/brand-scan.mjs .org-standards/docs/brand-deny/nakara-oss-kit.sha256 .
 
   # AETERNA delegated delivery (T2): every commit of a team PR carries `Agent:`, product code carries
   # `Delegated-Run:`, the rest `Exempt:` — one trailer block with `Signed-off-by:` (the DCO job above reads the
