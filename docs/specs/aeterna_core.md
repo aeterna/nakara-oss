@@ -1,6 +1,6 @@
 # aeterna_core
 
-- Package: `packages/core` · resource `aeterna_core` · wave W1 · status draft
+- Package: `packages/core` · resource `aeterna_core` · wave W1 · status released in 0.1.0
 - Depends on: nothing (`ox_lib` optional, never required)
 - Used by: every other `aeterna_*` package ([ADR 0004](../adr/0004-aeterna-starter-kit.md) decision 2)
 

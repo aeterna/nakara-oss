@@ -1,7 +1,6 @@
 # ADR 0004 — AETERNA Starter Kit (`aeterna_*` packages): generic templates for running your own FiveM server
 
-- Status: proposed — owner accepted the plan's recommendations Q1–Q6, chose one release of seven and picked the
-  Asphalt theme on 2026-11-17; waiting for the owner to accept this ADR by merging it (gate G0)
+- Status: accepted — the owner merged it with PR #69 on 2026-11-18; all seven packages were released as 0.1.0 the same day
 - Date: 2026-11-17
 - Related: ADR 0001 (KVP settings, measured spikes before decisions); ADR 0003 decision 10 (a package that names the
   optional resource it calls); this repo's `AGENTS.md` hard rules 3, 4, 5, 7 and 8; plan "nakara-oss — Starter Kit"
