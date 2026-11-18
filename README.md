@@ -26,8 +26,8 @@ built in CI with a provenance attestation, so you can re-check all of it yoursel
 | [`devkit`](packages/devkit) · npm `@aeterna_game/fivem-devkit` | Finds dangerous code and silent bugs in anyone's FiveM Lua/JS, plus a busted test harness | ✅ released · `npx @aeterna_game/fivem-devkit check` |
 | [`cargen-fix`](packages/cargen-fix) · resource `nakara_cargen_fix` | Guards against the `CNetworkCarGenWorldStateData Pool Full` client crash, and explains why the popular `GAMECONFIG_FILE` fix does nothing ([what is verified](packages/cargen-fix/README.md#what-we-have-verified)) | ✅ released · [Releases](https://github.com/aeterna/nakara-oss/releases?q=nakara_cargen_fix) |
 | [`tickets`](packages/tickets) · resource `nakara_tickets` | Self-hosted Discord ticket system with an in-game bridge (outbound only, no open port) | 🚧 in development · no release yet |
-| [`launcher`](docs/adr/0002-aeterna-game-launcher.md) | Your server's own game launcher, written in Rust | 🚧 in development · no release yet |
-| [`rongroi`](packages/rongroi) · resource `nakara_rongroi` | Server side of [aeterna-rongroi](https://github.com/aeterna/aeterna-rongroi) | 🚧 in development · no release yet |
+| [`launcher`](docs/adr/0002-aeterna-game-launcher.md) | Your server's own game launcher, written in Rust · [install](launcher/docs/install.md) · [for server owners](launcher/docs/server-owners.md) | ✅ released · [`launcher-v0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/launcher-v0.1.0) |
+| [`rongroi`](packages/rongroi) · resource `nakara_rongroi` | Server side of [aeterna-rongroi](https://github.com/aeterna/aeterna-rongroi) | ✅ released · [`nakara_rongroi@0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/nakara_rongroi%400.1.0) |
 
 Download a **release asset**, not the repository ZIP: the repo contains tests and tooling you do not
 need on a server.
