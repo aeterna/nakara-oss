@@ -1,17 +1,4 @@
 {
   "version": 1,
-  "leases": [
-    {
-      "id": "kit-devkit-bb31ab75",
-      "repo": "nakara-oss",
-      "lane": "kit-devkit",
-      "host": "win",
-      "scope": [
-        "packages/devkit/src/**,packages/devkit/test/**,packages/devkit/docs/**,packages/devkit/CHANGELOG.md"
-      ],
-      "plan": "starter-kit",
-      "acquired": "2026-11-18T11:24:17Z",
-      "expires": "2026-11-18T15:24:17Z"
-    }
-  ]
+  "leases": []
 }
