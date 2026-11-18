@@ -1,6 +1,6 @@
 # Handoff · AETERNA Game Launcher (`launcher/`) and Rongroi Connect
 
-Written by: Claude Code - Claude Opus 5.5 · 2026-11-15 · updated 2026-11-18 (0.1.0 released; only the template repository is left)
+Written by: Claude Code - Claude Opus 5.5 · 2026-11-15 · closed 2026-11-18 (0.1.0 released)
 Decision record: [ADR 0002](../adr/0002-aeterna-game-launcher.md) · Connect: aeterna/aeterna-rongroi-connect ADR 0001 + 0002
 Plan and live status table (owner's doc): https://claude.ai/artifact/RFJoHRcP1JQGxqYDSXUuJ3
 
@@ -31,8 +31,9 @@ Plan and live status table (owner's doc): https://claude.ai/artifact/RFJoHRcP1JQ
 | Connect 0.1.1: the opened "See what will be sent" stays open across the countdown redraw (owner re-tested) | released, pre-release | Connect #19 `79875e6` · run 44061304358 |
 | Kit `nakara_rongroi@0.1.0` | released | #60 `11770ea` · #62 `6a67f15` on `dev` · run 44095977445 |
 | Launcher `launcher-v0.1.0`, bundles Connect v0.1.1; assets, attestations and manifest signature checked | released | run 44095983570 |
-| Test files on the Windows PC | removed, except the old Kit copy (owner decides) | `C:\rongroi-w2-enh\nakara_rongroi.moved-20261117-104302` |
-| Owner template repository (L8) | not created | draft on the maintainer's external drive |
+| Player install guide (`launcher/docs/install.md`), this handoff closed | merged into `dev`; reaches `main` at the next promotion | #64 `b09e950` |
+| Test files on the Windows PC, including the old Kit copy | removed | owner ordered, 2026-11-18 |
+| Owner template repository (L8), pinned to `launcher-v0.1.0` | public | [aeterna/aeterna-launcher-template](https://github.com/aeterna/aeterna-launcher-template) |
 
 ## Short rules for other sessions
 
@@ -53,12 +54,7 @@ Plan and live status table (owner's doc): https://claude.ai/artifact/RFJoHRcP1JQ
 
 ## Owner's queue
 
-1. Decide whether to keep `C:\rongroi-w2-enh\nakara_rongroi.moved-20261117-104302` on the Windows PC.
-2. Go-ahead to create the public owner template repository from the draft, pinned to `launcher-v0.1.0`.
-
-## Next, in order
-
-1. Create the template repository (needs the external drive mounted and item 2 above).
+Nothing open.
 
 ## Rollback
 
@@ -80,3 +76,5 @@ Plan and live status table (owner's doc): https://claude.ai/artifact/RFJoHRcP1JQ
 - 2026-11-17: W2 merged (#55 #56 #57 #59, org-standards#150); W3 e2e passed; Connect details fix + 0.1.1 (Connect #19);
   Kit 0.1.0 (#60, back on `dev` by #62).
 - 2026-11-18: released Connect v0.1.1, Kit `nakara_rongroi@0.1.0`, `launcher-v0.1.0`; test files removed from the PC.
+- 2026-11-18: install guide and closeout (#64); README status updated; session closed.
+- 2026-11-18: template repository public; site and owner guide updated; `dev` promoted to `main`.
