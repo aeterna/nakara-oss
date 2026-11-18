@@ -1,17 +1,4 @@
 {
   "version": 1,
-  "leases": [
-    {
-      "id": "kit-fix-phonekit3-6fa8ec51",
-      "repo": "nakara-oss",
-      "lane": "kit-fix-phonekit3",
-      "host": "win",
-      "scope": [
-        "packages/phonekit/spec/phonekit_spec.lua"
-      ],
-      "plan": "starter-kit",
-      "acquired": "2026-11-18T13:44:28Z",
-      "expires": "2026-11-18T17:44:28Z"
-    }
-  ]
+  "leases": []
 }
