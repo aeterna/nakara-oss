@@ -175,6 +175,43 @@ describe('aeterna_phonekit', function()
             assert.is_nil(store:get('n1'))
             assert.is_truthy(store:get('n2'))
         end)
+
+        it('saves notes when global os is nil using GetCloudTimeAsInt', function()
+            local store = L.createNotesStore()
+
+            local realOs = os
+            local oldGetCloudTime = rawget(_G, 'GetCloudTimeAsInt')
+            finally(function()
+                rawset(_G, 'os', realOs)
+                rawset(_G, 'GetCloudTimeAsInt', oldGetCloudTime)
+            end)
+
+            local ok, err = pcall(function()
+                rawset(_G, 'os', nil)
+                rawset(_G, 'GetCloudTimeAsInt', function() return 1700000000 end)
+
+                local okVal, _, cleanNote = L.validateNote({ id = 'n_direct', title = 'Direct Note' })
+                assert.is_true(okVal)
+                assert.are.equal(1700000000, cleanNote.updatedAt)
+
+                local okSave, errSave, clean = store:save({ title = 'Client Note', body = 'Works without os' })
+                assert.is_true(okSave)
+                assert.is_nil(errSave)
+                assert.are.equal('n1', clean.id)
+                assert.are.equal(1700000000, clean.updatedAt)
+
+                local note = store:get('n1')
+                assert.is_truthy(note)
+                assert.are.equal('Client Note', note.title)
+                assert.are.equal('Works without os', note.body)
+                assert.are.equal(1700000000, note.updatedAt)
+            end)
+            rawset(_G, 'os', realOs)
+            rawset(_G, 'GetCloudTimeAsInt', oldGetCloudTime)
+            if not ok then
+                error(err)
+            end
+        end)
     end)
 
     describe('3. app registry (shared/logic/phone.lua)', function()

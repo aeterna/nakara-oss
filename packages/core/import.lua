@@ -429,16 +429,26 @@ local function currentTimezone()
     return '+00:00'
 end
 
+local function currentUnixSeconds()
+    if type(os) == 'table' and os.time then
+        return os.time()
+    end
+    if GetCloudTimeAsInt then
+        return GetCloudTimeAsInt()
+    end
+    return 0
+end
+
 AeternaCore.time = {
     now = function()
-        return os.time()
+        return currentUnixSeconds()
     end,
     parts = function(ts)
-        local targetTs = ts ~= nil and ts or os.time()
+        local targetTs = ts ~= nil and ts or currentUnixSeconds()
         return timeMod.parts(targetTs, currentTimezone())
     end,
     format = function(ts, pattern)
-        local targetTs = ts ~= nil and ts or os.time()
+        local targetTs = ts ~= nil and ts or currentUnixSeconds()
         return timeMod.format(targetTs, pattern, currentTimezone(), AeternaCore.t)
     end,
 }

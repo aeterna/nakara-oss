@@ -261,6 +261,16 @@ end
 -- 1. Notes & Contacts Storage and Validation (Client KVP)
 --------------------------------------------------------------------------------
 
+local function currentUnixSeconds()
+    if type(os) == 'table' and os.time then
+        return os.time()
+    end
+    if GetCloudTimeAsInt then
+        return GetCloudTimeAsInt()
+    end
+    return 0
+end
+
 local function defaultEncodeJson(tbl)
     if type(json) == 'table' and type(json.encode) == 'function' then
         return json.encode(tbl)
@@ -300,7 +310,7 @@ function L.validateNote(note)
         id = id,
         title = cleanTitle,
         body = cleanBody,
-        updatedAt = tonumber(note.updatedAt) or (os.time and os.time() or 0),
+        updatedAt = tonumber(note.updatedAt) or currentUnixSeconds(),
     }
 end
 

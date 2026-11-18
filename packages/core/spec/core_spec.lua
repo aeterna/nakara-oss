@@ -533,5 +533,40 @@ describe('aeterna_core', function()
             assert.are.equal(4, #keepCalls)
             assert.are.same({ n = 1, false }, keepCalls[4])
         end)
+
+        it('time: works without global os on client using GetCloudTimeAsInt', function()
+            natives.reset({ resource = 'aeterna_core', side = 'client', convars = { aeterna_timezone = '+07:00' } })
+            assert(loadfile(DIR .. '/import.lua'))()
+
+            local realOs = os
+            local oldGetCloudTime = rawget(_G, 'GetCloudTimeAsInt')
+            finally(function()
+                rawset(_G, 'os', realOs)
+                rawset(_G, 'GetCloudTimeAsInt', oldGetCloudTime)
+            end)
+
+            local ok, err = pcall(function()
+                rawset(_G, 'os', nil)
+                rawset(_G, 'GetCloudTimeAsInt', function() return 1700000000 end)
+
+                assert.are.equal(1700000000, AeternaCore.time.now())
+                local p = AeternaCore.time.parts()
+                assert.are.same({
+                    year = 2023,
+                    month = 11,
+                    day = 15,
+                    hour = 5,
+                    min = 13,
+                    sec = 20,
+                    wday = 4,
+                }, p)
+                assert.are.equal('2023-11-15 05:13:20', AeternaCore.time.format())
+            end)
+            rawset(_G, 'os', realOs)
+            rawset(_G, 'GetCloudTimeAsInt', oldGetCloudTime)
+            if not ok then
+                error(err)
+            end
+        end)
     end)
 end)
