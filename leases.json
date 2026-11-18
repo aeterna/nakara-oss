@@ -1,4 +1,17 @@
 {
   "version": 1,
-  "leases": []
+  "leases": [
+    {
+      "id": "kit-fix-time-76b36be7",
+      "repo": "nakara-oss",
+      "lane": "kit-fix-time",
+      "host": "win",
+      "scope": [
+        "packages/core/import.lua,packages/core/spec/core_spec.lua,packages/phonekit/shared/logic/phone.lua,packages/phonekit/spec/phonekit_spec.lua"
+      ],
+      "plan": "starter-kit",
+      "acquired": "2026-11-18T14:59:00Z",
+      "expires": "2026-11-18T18:59:00Z"
+    }
+  ]
 }
