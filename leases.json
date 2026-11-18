@@ -36,6 +36,18 @@
       "plan": "starter-kit",
       "acquired": "2026-11-18T11:51:13Z",
       "expires": "2026-11-18T15:51:13Z"
+    },
+    {
+      "id": "kit-uikit3-ba11795f",
+      "repo": "nakara-oss",
+      "lane": "kit-uikit3",
+      "host": "win",
+      "scope": [
+        "packages/uikit/**"
+      ],
+      "plan": "starter-kit",
+      "acquired": "2026-11-18T11:55:17Z",
+      "expires": "2026-11-18T15:55:17Z"
     }
   ]
 }
