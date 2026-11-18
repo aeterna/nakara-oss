@@ -22,3 +22,7 @@ Third-Party Notices for aeterna_layout
    WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
    OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
    CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+IBM Plex Sans Thai (https://github.com/IBM/plex)
+   Bundled in `html/fonts/` as `.woff2` subsets from @fontsource/ibm-plex-sans-thai 5.3.0.
+   Copyright 2019 IBM Corp. SIL Open Font License 1.1, see `html/fonts/OFL.txt`.

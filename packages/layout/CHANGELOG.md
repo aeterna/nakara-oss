@@ -6,6 +6,7 @@ All notable changes to `aeterna_layout` are documented here. The format follows
 
 ## Unreleased
 
+- Bundle the IBM Plex Sans Thai font (OFL-1.1).
 ### Added
 
 - Initial `aeterna_layout` package for the AETERNA Starter Kit (ADR 0004).

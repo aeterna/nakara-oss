@@ -6,6 +6,7 @@ All notable changes to `aeterna_notify` are documented here. The format follows
 
 ## Unreleased
 
+- Bundle the IBM Plex Sans Thai font (OFL-1.1).
 ### Added
 
 - Initial `aeterna_notify` package for the AETERNA Starter Kit (ADR 0004).

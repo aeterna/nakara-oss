@@ -32,6 +32,8 @@ ui_page 'html/index.html'
 files {
     'html/index.html',
     'html/theme.css',
+    'html/fonts/*.woff2',
+    'html/fonts/OFL.txt',
     'html/style.css',
     'html/icons.js',
     'html/app.js',

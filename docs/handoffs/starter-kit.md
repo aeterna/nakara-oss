@@ -16,7 +16,6 @@ Nothing is on `dev` yet. Plan and status table: the owner's plan doc "nakara-oss
 - In-game smoke of every spec, from the F7 test menu (`aeterna_kit_demo`, kept outside the repo in `.claude/kit-test-server`).
 - Not verified in game: `GetInvokingResource` for local events, `SETUP_HEALTH_ARMOUR`, minimap scale range, phone anim
   and prop names, opening an owner stash through `forceOpenInventory`.
-- The IBM Plex Sans Thai font is not added yet. Until then the theme falls back to the system font.
 - Not done: CI brand scan through the GitHub App, `kits/starter`, site and guides, release tags (wave W4).
 
 ## Way back
