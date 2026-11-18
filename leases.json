@@ -36,6 +36,18 @@
       "plan": "starter-kit",
       "acquired": "2026-11-18T12:24:44Z",
       "expires": "2026-11-18T16:24:44Z"
+    },
+    {
+      "id": "kit-fix-layout-2f59faaa",
+      "repo": "nakara-oss",
+      "lane": "kit-fix-layout",
+      "host": "win",
+      "scope": [
+        "packages/layout/**"
+      ],
+      "plan": "starter-kit",
+      "acquired": "2026-11-18T12:25:01Z",
+      "expires": "2026-11-18T16:25:01Z"
     }
   ]
 }
