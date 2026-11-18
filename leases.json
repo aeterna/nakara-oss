@@ -48,6 +48,18 @@
       "plan": "starter-kit",
       "acquired": "2026-11-18T12:21:00Z",
       "expires": "2026-11-18T16:21:00Z"
+    },
+    {
+      "id": "kit-fix-invkit-c57493e9",
+      "repo": "nakara-oss",
+      "lane": "kit-fix-invkit",
+      "host": "win",
+      "scope": [
+        "packages/invkit/**"
+      ],
+      "plan": "starter-kit",
+      "acquired": "2026-11-18T12:21:08Z",
+      "expires": "2026-11-18T16:21:08Z"
     }
   ]
 }
