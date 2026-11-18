@@ -2,18 +2,6 @@
   "version": 1,
   "leases": [
     {
-      "id": "kit-fix-layout-2f59faaa",
-      "repo": "nakara-oss",
-      "lane": "kit-fix-layout",
-      "host": "win",
-      "scope": [
-        "packages/layout/**"
-      ],
-      "plan": "starter-kit",
-      "acquired": "2026-11-18T12:25:01Z",
-      "expires": "2026-11-18T16:25:01Z"
-    },
-    {
       "id": "kit-fix-invkit-710a6f4b",
       "repo": "nakara-oss",
       "lane": "kit-fix-invkit",
