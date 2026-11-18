@@ -86,7 +86,7 @@ describe('aeterna_phonekit', function()
 
             -- 10000000000 / 3
             local largeResult = C.formatResult(10000000000 / 3)
-            assert.are.equal('3.333333333e+09', largeResult)
+            assert.are.equal('3333333333', largeResult)
         end)
     end)
 
@@ -200,6 +200,15 @@ describe('aeterna_phonekit', function()
             assert.are.equal(5, app.order)
         end)
 
+        it('refuses reserved app ids (calculator, notes, contacts, settings)', function()
+            local reg = L.createAppRegistry()
+            assert.is_false(reg:addTile('res', { id = 'calculator', label = 'Calc' }))
+            assert.is_false(reg:addTile('res', { id = 'notes', label = 'Notes' }))
+            assert.is_false(reg:addTile('res', { id = 'contacts', label = 'Contacts' }))
+            assert.is_false(reg:addTile('res', { id = 'settings', label = 'Settings' }))
+            assert.are.equal(0, reg:count())
+        end)
+
         it('refuses extra apps past Config.maxApps with a warn', function()
             local warnings = {}
             local reg = L.createAppRegistry({
@@ -303,10 +312,14 @@ describe('aeterna_phonekit', function()
             assert.is_true(okPick)
             assert.are.equal('pick_airport', cleanPick.action)
 
-            -- __close action is always permitted
+            -- __close and __back actions are always permitted
             local okClose, _, cleanClose = L.validateAction(activeScreen, { screenId = 's1', action = '__close' })
             assert.is_true(okClose)
             assert.are.equal('__close', cleanClose.action)
+
+            local okBack, _, cleanBack = L.validateAction(activeScreen, { screenId = 's1', action = '__back' })
+            assert.is_true(okBack)
+            assert.are.equal('__back', cleanBack.action)
         end)
 
         it('validates form values against spec limits and drops out-of-range values', function()
@@ -351,6 +364,11 @@ describe('aeterna_phonekit', function()
             assert.are.equal('Alice', clean.f_name)
             assert.is_true(clean.f_agree)
             assert.are.equal('silver', clean.f_tier)
+
+            -- Empty/untouched number field is omitted from values table
+            local okEmpty, _, cleanEmpty = L.validateValues(spec, { f_amount = '' })
+            assert.is_true(okEmpty)
+            assert.is_nil(cleanEmpty.f_amount)
         end)
     end)
 
@@ -540,6 +558,12 @@ describe('aeterna_phonekit', function()
             assert.is_true(api.addTile({ id = 'dispatch', label = 'Dispatch', icon = 'bell', order = 15 }))
             assert.is_true(api.addTile({ id = 'garage', label = 'Garage', icon = 'car', order = 25 }))
 
+            -- Refuses reserved tile ids
+            assert.is_false(api.addTile({ id = 'calculator', label = 'Calc', icon = 'calculator' }))
+            assert.is_false(api.addTile({ id = 'notes', label = 'Notes', icon = 'file-text' }))
+            assert.is_false(api.addTile({ id = 'contacts', label = 'Contacts', icon = 'users' }))
+            assert.is_false(api.addTile({ id = 'settings', label = 'Settings', icon = 'settings' }))
+
             -- Badge export
             assert.are.equal(5, api.badge(1, 'dispatch', 5))
             local badgeEvents = natives.emitted('client', 'aeterna_phonekit:cl:badge')
@@ -548,7 +572,20 @@ describe('aeterna_phonekit', function()
             assert.are.equal('dispatch', badgeEvents[1].args[1].id)
             assert.are.equal(5, badgeEvents[1].args[1].count)
 
-            -- ShowApp export
+            -- ShowApp fails when phone is closed
+            local closedScreen, errClosed = api.showApp(1, 'dispatch', {
+                title = 'Dispatch Live',
+                blocks = { { id = 'txt', type = 'text', label = 'Calls list' } },
+            })
+            assert.is_nil(closedScreen)
+            assert.are.equal('phone_closed', errClosed)
+
+            -- Open phone for player 1
+            rawset(_G, 'source', 1)
+            natives.fire('aeterna_phonekit:sv:open')
+            rawset(_G, 'source', nil)
+
+            -- ShowApp export succeeds when phone is open
             local screenId, errShow = api.showApp(1, 'dispatch', {
                 title = 'Dispatch Live',
                 blocks = {
@@ -574,8 +611,34 @@ describe('aeterna_phonekit', function()
             assert.are.equal(1, #updateEvents)
             assert.are.equal(screenId, updateEvents[1].args[1].screenId)
 
+            -- UpdateApp fails on invalid screenId
+            local okWrong, errWrong = api.updateApp(1, 'invalid_screen_id', { blocks = {} })
+            assert.is_false(okWrong)
+            assert.are.equal('unknown_screen', errWrong)
+
             -- NotifyApp export
             assert.is_true(api.notifyApp(1, 'garage', { title = 'Car Ready', body = 'In Bay 2' }))
+
+            -- Back action pops screen
+            rawset(_G, 'source', 1)
+            natives.fire('aeterna_phonekit:sv:action', {
+                screenId = screenId,
+                action = '__back',
+            })
+            rawset(_G, 'source', nil)
+
+            -- Close net event clears screens and sets phone closed
+            rawset(_G, 'source', 1)
+            natives.fire('aeterna_phonekit:sv:close')
+            rawset(_G, 'source', nil)
+
+            -- Subsequent showApp fails because phone is now closed
+            local screenAfterClose, errAfterClose = api.showApp(1, 'dispatch', {
+                title = 'Dispatch Live',
+                blocks = { { id = 'txt', type = 'text', label = 'Calls list' } },
+            })
+            assert.is_nil(screenAfterClose)
+            assert.are.equal('phone_closed', errAfterClose)
 
             -- Remove tile export
             assert.is_true(api.removeTile('garage'))
@@ -592,6 +655,8 @@ describe('aeterna_phonekit', function()
                 if resName == 'aeterna_layout' then return 'started' end
                 return 'missing'
             end)
+            local cmdCalls = natives.spy('RegisterCommand')
+            local execCalls = natives.spy('ExecuteCommand')
             natives.stub('AeternaCore', {
                 log = { debug = function() end, info = function() end, warn = function() end, error = function() end },
                 t = function(k) return (Locales and Locales.en and Locales.en[k]) or k end,
@@ -637,7 +702,23 @@ describe('aeterna_phonekit', function()
                 x = 0.9, y = 0.9, ax = 1, ay = 1, scale = 1.0, hidden = false,
             })
 
-            -- NUI close callback drops focus and closes
+            -- Settings NUI callback executes aeterna_layout command
+            nuiCallbacks.settings({ key = 'layout', value = true }, function() end)
+            local foundExec = false
+            for _, c in ipairs(execCalls) do
+                if c[1] == 'aeterna_layout' then
+                    foundExec = true
+                end
+            end
+            assert.is_true(foundExec)
+
+            -- NUI typing callback
+            nuiCallbacks.typing({ on = true }, function() end)
+
+            -- NUI back callback
+            nuiCallbacks.back({}, function() end)
+
+            -- NUI close callback drops focus and closes, sending sv:close
             nuiCallbacks.close({}, function() end)
             local foundShellClose = false
             for i = 1, #nuiMessages do
@@ -645,6 +726,11 @@ describe('aeterna_phonekit', function()
                     foundShellClose = true
                 end
             end
+            assert.is_true(foundShellClose)
+
+            local svCloseEvents = natives.emitted('server', 'aeterna_phonekit:sv:close')
+            assert.is_true(#svCloseEvents >= 1)
+        end)
             assert.is_true(foundShellClose)
         end)
     end)

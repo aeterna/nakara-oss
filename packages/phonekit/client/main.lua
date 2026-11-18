@@ -8,6 +8,7 @@ local activeScreenId = nil
 local currentAppId = nil
 local localeReady = false
 local isHovering = false
+local isTyping = false
 
 local layoutPlace = nil
 
@@ -22,10 +23,14 @@ local LOCALE_KEYS = {
     'phonekit.notes.new',
     'phonekit.notes.empty',
     'phonekit.notes.full',
+    'phonekit.notes.delete',
     'phonekit.contacts.new',
     'phonekit.contacts.empty',
     'phonekit.contacts.full',
+    'phonekit.contacts.delete',
     'phonekit.settings.textSize',
+    'phonekit.settings.normal',
+    'phonekit.settings.large',
     'phonekit.settings.clock24',
     'phonekit.settings.layout',
     'phonekit.refused.default',
@@ -177,6 +182,7 @@ local function closePhone()
     activeScreenId = nil
     currentAppId = nil
     isHovering = false
+    isTyping = false
 
     dropFocus()
 
@@ -184,6 +190,7 @@ local function closePhone()
         PhoneAnim.stop()
     end
 
+    TriggerServerEvent('aeterna_phonekit:sv:close')
     sendUi({ type = 'shell:close' })
 end
 
@@ -198,7 +205,31 @@ end
 
 -- Server -> Client Net Events
 RegisterNetEvent('aeterna_phonekit:cl:open', function(data)
-    if isOpen then return end
+    local apps = (data and type(data.apps) == 'table') and data.apps or {}
+    local initialTime = nil
+    if AeternaCore and AeternaCore.time and type(AeternaCore.time.parts) == 'function' then
+        local p = AeternaCore.time.parts()
+        if p then
+            initialTime = { hour = p.hour, min = p.min, sec = p.sec }
+        end
+    end
+
+    local settings = getSavedSettings()
+    local hasLayout = type(GetResourceState) == 'function' and GetResourceState('aeterna_layout') == 'started'
+    settings.hasLayout = hasLayout
+
+    if isOpen then
+        sendUi({
+            type = 'shell:open',
+            apps = apps,
+            settings = settings,
+            position = currentPosition(),
+            place = layoutPlace,
+            builtins = Config.apps or {},
+            time = initialTime,
+        })
+        return
+    end
 
     syncThemeAndLocale()
 
@@ -211,16 +242,12 @@ RegisterNetEvent('aeterna_phonekit:cl:open', function(data)
     isOpen = true
     activeScreenId = nil
     currentAppId = nil
+    isTyping = false
 
     if Config and Config.animation and PhoneAnim and type(PhoneAnim.start) == 'function' then
         PhoneAnim.start()
     end
 
-    local settings = getSavedSettings()
-    local hasLayout = type(GetResourceState) == 'function' and GetResourceState('aeterna_layout') == 'started'
-    settings.hasLayout = hasLayout
-
-    local apps = (data and type(data.apps) == 'table') and data.apps or {}
     sendUi({
         type = 'shell:open',
         apps = apps,
@@ -228,6 +255,7 @@ RegisterNetEvent('aeterna_phonekit:cl:open', function(data)
         position = currentPosition(),
         place = layoutPlace,
         builtins = Config.apps or {},
+        time = initialTime,
     })
 
     -- Send initial notes and contacts data to NUI
@@ -299,7 +327,11 @@ AddEventHandler('aeterna_core:focusLost', function(owner, token)
     closePhone()
 end)
 
--- Ped State & Ragdoll Watcher
+local DISABLED_PHONE_CONTROLS = {
+    24, 25, 257, 68, 69, 70, 92, 14, 15, 16, 17, 199, 200,
+}
+
+-- Ped State & Control Watcher
 if type(CreateThread) == 'function' then
     CreateThread(function()
         while true do
@@ -312,10 +344,18 @@ if type(CreateThread) == 'function' then
                     closePhone()
                 end
             end
+            if isOpen and type(DisableControlAction) == 'function' then
+                for i = 1, #DISABLED_PHONE_CONTROLS do
+                    DisableControlAction(0, DISABLED_PHONE_CONTROLS[i], true)
+                end
+            end
             if isOpen and isHovering and type(DisableControlAction) == 'function' then
                 -- Disable mouse look controls while cursor is over the phone frame
                 DisableControlAction(0, 1, true) -- LookLeftRight
                 DisableControlAction(0, 2, true) -- LookUpDown
+            end
+            if isOpen and isTyping and type(DisableAllControlActions) == 'function' then
+                DisableAllControlActions(0)
             end
             Wait(isOpen and 0 or 250)
         end
@@ -416,14 +456,20 @@ RegisterNUICallback('back', function(data, cb)
     if activeScreenId then
         local sId = activeScreenId
         activeScreenId = nil
-        currentAppId = nil
         TriggerServerEvent('aeterna_phonekit:sv:action', {
             screenId = sId,
-            action = '__close',
+            action = '__back',
             values = {},
         })
     else
         currentAppId = nil
+    end
+end)
+
+RegisterNUICallback('typing', function(data, cb)
+    if type(cb) == 'function' then cb({ ok = true }) end
+    if type(data) == 'table' and type(data.on) == 'boolean' then
+        isTyping = data.on
     end
 end)
 
@@ -486,9 +532,7 @@ RegisterNUICallback('settings', function(data, cb)
     if type(data) ~= 'table' or type(data.key) ~= 'string' then return end
 
     if data.key == 'layout' then
-        if type(ExecuteCommand) == 'function' then
-            ExecuteCommand('aeterna_layout')
-        end
+        ExecuteCommand('aeterna_layout')
     else
         saveSetting(data.key, data.value)
     end

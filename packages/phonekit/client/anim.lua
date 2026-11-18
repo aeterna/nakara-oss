@@ -13,6 +13,7 @@ PhoneAnim.PROP_ROTATION = vector3(0.0, 0.0, 0.0)
 
 local currentProp = nil
 local isPlaying = false
+local generation = 0
 
 function PhoneAnim.isActive()
     return isPlaying
@@ -27,6 +28,8 @@ function PhoneAnim.start()
         return
     end
 
+    generation = generation + 1
+    local gen = generation
     isPlaying = true
 
     -- Request animation dictionary
@@ -35,11 +38,30 @@ function PhoneAnim.start()
         local timeout = 50
         while not HasAnimDictLoaded(PhoneAnim.ANIM_DICT) and timeout > 0 do
             if type(Wait) == 'function' then Wait(10) end
+            if generation ~= gen then
+                if type(RemoveAnimDict) == 'function' then
+                    RemoveAnimDict(PhoneAnim.ANIM_DICT)
+                end
+                return
+            end
             timeout = timeout - 1
         end
+
+        if generation ~= gen then
+            if type(RemoveAnimDict) == 'function' then
+                RemoveAnimDict(PhoneAnim.ANIM_DICT)
+            end
+            return
+        end
+
         if type(TaskPlayAnim) == 'function' and HasAnimDictLoaded(PhoneAnim.ANIM_DICT) then
             TaskPlayAnim(ped, PhoneAnim.ANIM_DICT, PhoneAnim.ANIM_NAME, 3.0, 3.0, -1, 50, 0, false, false, false)
         end
+    end
+
+    if generation ~= gen then
+        PhoneAnim.stop()
+        return
     end
 
     -- Create and attach prop
@@ -49,12 +71,40 @@ function PhoneAnim.start()
         local timeout = 50
         while not HasModelLoaded(modelHash) and timeout > 0 do
             if type(Wait) == 'function' then Wait(10) end
+            if generation ~= gen then
+                if type(SetModelAsNoLongerNeeded) == 'function' then
+                    SetModelAsNoLongerNeeded(modelHash)
+                end
+                return
+            end
             timeout = timeout - 1
+        end
+
+        if generation ~= gen then
+            if type(SetModelAsNoLongerNeeded) == 'function' then
+                SetModelAsNoLongerNeeded(modelHash)
+            end
+            return
         end
 
         if HasModelLoaded(modelHash) and type(GetEntityCoords) == 'function' then
             local coords = GetEntityCoords(ped)
-            local prop = CreateObject(modelHash, coords.x, coords.y, coords.z, true, true, false)
+            -- Prop created with isNetwork = false
+            local prop = CreateObject(modelHash, coords.x, coords.y, coords.z, false, false, false)
+            if generation ~= gen then
+                if prop and prop ~= 0 then
+                    if type(DeleteObject) == 'function' then
+                        DeleteObject(prop)
+                    elseif type(DeleteEntity) == 'function' then
+                        DeleteEntity(prop)
+                    end
+                end
+                if type(SetModelAsNoLongerNeeded) == 'function' then
+                    SetModelAsNoLongerNeeded(modelHash)
+                end
+                return
+            end
+
             if prop and prop ~= 0 then
                 currentProp = prop
                 if type(GetPedBoneIndex) == 'function' and type(AttachEntityToEntity) == 'function' then
@@ -72,7 +122,8 @@ function PhoneAnim.start()
 end
 
 function PhoneAnim.stop()
-    if not isPlaying then return end
+    generation = generation + 1
+    if not isPlaying and not currentProp then return end
     isPlaying = false
 
     if type(PlayerPedId) == 'function' then

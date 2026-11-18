@@ -74,6 +74,25 @@ function L.formatScreenId(counter)
     return id
 end
 
+local screenCounterPerPlayer = {}
+
+function L.generateScreenId(src)
+    local s = tostring(src or 1)
+    local count = (screenCounterPerPlayer[s] or 0) + 1
+    screenCounterPerPlayer[s] = count
+    local chars = '0123456789abcdefghijklmnopqrstuvwxyz'
+    local rand = {}
+    for i = 1, 8 do
+        local r = math.random(1, #chars)
+        rand[i] = chars:sub(r, r)
+    end
+    local id = 's' .. s .. '_' .. tostring(count) .. '_' .. table.concat(rand)
+    if #id > 24 then
+        id = id:sub(1, 24)
+    end
+    return id
+end
+
 -- UTF-8 helpers (portable across Lua 5.1 - 5.4; Thai combining marks count as 0 visible chars)
 local function isThaiCombining(b1, b2, b3)
     if b1 ~= 224 then return false end
@@ -267,9 +286,12 @@ function L.validateNote(note)
     if not L.isValidId(id, 32) then
         return false, 'note.id: pattern'
     end
-    local okTitle, errTitle, cleanTitle = checkCleanString(note.title, 1, 60, 'note.title')
-    if not okTitle then
-        return false, errTitle
+    if type(note.title) ~= 'string' then
+        return false, 'note.title: type'
+    end
+    local cleanTitle = L.textClean(note.title, 60)
+    if L.textLen(cleanTitle) < 1 then
+        return false, 'note.title: minLen 1'
     end
     local bodyStr = type(note.body) == 'string' and note.body or ''
     local cleanBody = L.textClean(bodyStr, 2000)
@@ -400,9 +422,12 @@ function L.validateContact(contact)
     if not L.isValidId(id, 32) then
         return false, 'contact.id: pattern'
     end
-    local okName, errName, cleanName = checkCleanString(contact.name, 1, 40, 'contact.name')
-    if not okName then
-        return false, errName
+    if type(contact.name) ~= 'string' then
+        return false, 'contact.name: type'
+    end
+    local cleanName = L.textClean(contact.name, 40)
+    if L.textLen(cleanName) < 1 then
+        return false, 'contact.name: minLen 1'
     end
     local numStr = type(contact.number) == 'string' and contact.number or ''
     local cleanNum = L.textClean(numStr, 20)
@@ -560,6 +585,9 @@ function L.createAppRegistry(config)
         end
         if not L.isValidId(app.id, 32) then
             return false, 'id: pattern'
+        end
+        if app.id == 'calculator' or app.id == 'notes' or app.id == 'contacts' or app.id == 'settings' then
+            return false, 'id: reserved'
         end
         local okLbl, errLbl, cleanLbl = checkCleanString(app.label, 1, 24, 'label')
         if not okLbl then
@@ -1021,16 +1049,18 @@ function L.validateValues(spec, values)
 
         if b.type == 'field' then
             if b.input == 'number' then
-                if type(v) ~= 'number' or v ~= v then
-                    return false, ('values.%s: type'):format(k)
+                if v ~= nil and v ~= '' then
+                    if type(v) ~= 'number' or v ~= v then
+                        return false, ('values.%s: type'):format(k)
+                    end
+                    if b.min ~= nil and v < b.min then
+                        return false, ('values.%s: min %s'):format(k, tostring(b.min))
+                    end
+                    if b.max ~= nil and v > b.max then
+                        return false, ('values.%s: max %s'):format(k, tostring(b.max))
+                    end
+                    cleanValues[k] = v
                 end
-                if b.min ~= nil and v < b.min then
-                    return false, ('values.%s: min %s'):format(k, tostring(b.min))
-                end
-                if b.max ~= nil and v > b.max then
-                    return false, ('values.%s: max %s'):format(k, tostring(b.max))
-                end
-                cleanValues[k] = v
             else
                 local maxLen = b.maxLen or 60
                 local okStr, errStr, cleanStr = checkCleanString(v, 0, maxLen, 'values.' .. k)
@@ -1070,7 +1100,7 @@ function L.validateValues(spec, values)
 end
 
 local function isActionInSpec(spec, action)
-    if action == '__close' then return true end
+    if action == '__close' or action == '__back' then return true end
     if not L.isValidId(action, 32) then return false end
     for i = 1, #spec.blocks do
         local b = spec.blocks[i]
@@ -1323,7 +1353,10 @@ function L.createOpeningCheckManager(options)
         end
         self.pendingChecks[checkId] = nil
 
-        local reason = (type(reasonKey) == 'string' and reasonKey ~= '') and reasonKey or 'phonekit.refused.default'
+        local reason = 'phonekit.refused.default'
+        if type(reasonKey) == 'string' and reasonKey ~= '' then
+            reason = L.textClean(reasonKey, 64)
+        end
         if type(check.onResolve) == 'function' then
             check.onResolve(check.src, false, reason)
         end
@@ -1383,6 +1416,11 @@ function L.createBadgeManager()
         return mgr.players[s]
     end
 
+    function mgr:isPhoneOpen(src)
+        local p = getPlayer(src)
+        return p.phoneOpen == true
+    end
+
     function mgr:setPhoneOpen(src, isOpen)
         local p = getPlayer(src)
         p.phoneOpen = isOpen == true
@@ -1396,26 +1434,61 @@ function L.createBadgeManager()
         p.currentApp = appId
     end
 
-    function mgr:setBadge(src, id, count)
+    function mgr:setBadge(src, owner, id, count)
+        if count == nil and type(id) == 'number' then
+            count = id
+            id = owner
+            owner = ''
+        end
         local p = getPlayer(src)
         local clamped = L.clampBadge(count)
-        p.badges[tostring(id)] = clamped
+        local ownerStr = tostring(owner or '')
+        local idStr = tostring(id)
+        local key = (ownerStr ~= '') and (ownerStr .. ':' .. idStr) or idStr
+        p.badges[key] = clamped
         return clamped
     end
 
-    function mgr:getBadge(src, id)
+    function mgr:getBadge(src, owner, id)
         local p = getPlayer(src)
-        return p.badges[tostring(id)] or 0
+        if id == nil then
+            id = owner
+            owner = nil
+        end
+        local idStr = tostring(id)
+        if owner ~= nil and owner ~= '' then
+            local key = tostring(owner) .. ':' .. idStr
+            return p.badges[key] or 0
+        end
+        if p.badges[idStr] ~= nil then
+            return p.badges[idStr]
+        end
+        for k, v in pairs(p.badges) do
+            if k:match(':' .. idStr .. '$') then
+                return v
+            end
+        end
+        return 0
     end
 
-    function mgr:notifyApp(src, id, opts, appInfo, notifyFn, bannerFn)
+    function mgr:notifyApp(src, owner, id, opts, appInfo, notifyFn, bannerFn)
+        if type(opts) ~= 'table' and type(id) == 'table' then
+            bannerFn = notifyFn
+            notifyFn = appInfo
+            appInfo = opts
+            opts = id
+            id = owner
+            owner = (appInfo and appInfo.owner) or ''
+        end
         local p = getPlayer(src)
+        local ownerStr = tostring(owner or '')
         local strId = tostring(id)
+        local key = (ownerStr ~= '') and (ownerStr .. ':' .. strId) or strId
         local isOnScreen = (p.phoneOpen and p.currentApp == strId)
 
         if not isOnScreen then
-            local current = p.badges[strId] or 0
-            p.badges[strId] = L.clampBadge(current + 1)
+            local current = p.badges[key] or (ownerStr ~= '' and p.badges[strId]) or 0
+            p.badges[key] = L.clampBadge(current + 1)
         end
 
         local titleClean = L.textClean(opts and opts.title or '', 60)
@@ -1440,7 +1513,19 @@ function L.createBadgeManager()
             end
         end
 
-        return p.badges[strId] or 0
+        return p.badges[key] or 0
+    end
+
+    function mgr:removeOwner(owner)
+        if type(owner) ~= 'string' or owner == '' then return end
+        local prefix = owner .. ':'
+        for _, p in pairs(mgr.players) do
+            for k in pairs(p.badges) do
+                if k:sub(1, #prefix) == prefix then
+                    p.badges[k] = nil
+                end
+            end
+        end
     end
 
     function mgr:removePlayer(src)

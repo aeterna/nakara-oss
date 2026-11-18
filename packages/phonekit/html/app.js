@@ -33,6 +33,136 @@
     let activeCustomValues = {};
     let activeEditingNote = null;
     let activeEditingContact = null;
+    let activeNoteInputs = null;
+    let activeContactInputs = null;
+
+    function saveCurrentNote() {
+        if (!activeNoteInputs || !activeEditingNote) return;
+        const note = activeEditingNote;
+        const isNew = !note.id;
+        const cleanTitle = activeNoteInputs.title.value.trim().substring(0, 60);
+        const cleanBody = activeNoteInputs.body.value.trim().substring(0, 2000);
+
+        activeEditingNote = null;
+        activeNoteInputs = null;
+
+        if (!cleanTitle && !cleanBody) {
+            if (!isNew) {
+                const candidate = notesData.filter((n) => n.id !== note.id);
+                postNui('builtin:save', { app: 'notes', data: candidate }).then((resp) => {
+                    if (resp && resp.ok && resp.list) {
+                        notesData = resp.list;
+                    } else if (resp && resp.err) {
+                        showBanner({ title: resp.err });
+                    }
+                    if (currentView === 'notes') renderNotesList();
+                });
+            }
+            return;
+        }
+
+        const updatedNote = {
+            id: note.id || ('n' + Date.now().toString(36)),
+            title: cleanTitle || 'Untitled',
+            body: cleanBody,
+            updatedAt: Math.floor(Date.now() / 1000),
+        };
+
+        let updatedList = [];
+        let found = false;
+        for (let i = 0; i < notesData.length; i++) {
+            if (notesData[i].id === updatedNote.id) {
+                updatedList.push(updatedNote);
+                found = true;
+            } else {
+                updatedList.push(notesData[i]);
+            }
+        }
+        if (!found) {
+            updatedList.unshift(updatedNote);
+        }
+
+        postNui('builtin:save', { app: 'notes', data: updatedList }).then((resp) => {
+            if (resp && resp.ok && resp.list) {
+                notesData = resp.list;
+            } else if (resp && resp.err) {
+                showBanner({ title: resp.err });
+            }
+            if (currentView === 'notes') renderNotesList();
+        });
+    }
+
+    function saveCurrentContact() {
+        if (!activeContactInputs || !activeEditingContact) return;
+        const contact = activeEditingContact;
+        const isNew = !contact.id;
+        const cleanName = activeContactInputs.name.value.trim().substring(0, 40);
+        const cleanNum = activeContactInputs.number.value.trim().substring(0, 20);
+
+        activeEditingContact = null;
+        activeContactInputs = null;
+
+        if (!cleanName && !cleanNum) {
+            if (!isNew) {
+                const candidate = contactsData.filter((c) => c.id !== contact.id);
+                postNui('builtin:save', { app: 'contacts', data: candidate }).then((resp) => {
+                    if (resp && resp.ok && resp.list) {
+                        contactsData = resp.list;
+                    } else if (resp && resp.err) {
+                        showBanner({ title: resp.err });
+                    }
+                    if (currentView === 'contacts') renderContactsList();
+                });
+            }
+            return;
+        }
+
+        const updatedContact = {
+            id: contact.id || ('c' + Date.now().toString(36)),
+            name: cleanName || 'Unnamed',
+            number: cleanNum,
+        };
+
+        let updatedList = [];
+        let found = false;
+        for (let i = 0; i < contactsData.length; i++) {
+            if (contactsData[i].id === updatedContact.id) {
+                updatedList.push(updatedContact);
+                found = true;
+            } else {
+                updatedList.push(contactsData[i]);
+            }
+        }
+        if (!found) {
+            updatedList.push(updatedContact);
+        }
+
+        postNui('builtin:save', { app: 'contacts', data: updatedList }).then((resp) => {
+            if (resp && resp.ok && resp.list) {
+                contactsData = resp.list;
+            } else if (resp && resp.err) {
+                showBanner({ title: resp.err });
+            }
+            if (currentView === 'contacts') renderContactsList();
+        });
+    }
+
+    function goBack() {
+        if (currentView === 'note_edit') {
+            saveCurrentNote();
+            renderNotesList();
+        } else if (currentView === 'contact_edit') {
+            saveCurrentContact();
+            renderContactsList();
+        } else if (currentView === 'custom_app') {
+            postNui('back', {});
+            renderHomeScreen();
+        } else if (currentView === 'calculator' || currentView === 'notes' || currentView === 'contacts' || currentView === 'settings') {
+            renderHomeScreen();
+        } else if (currentView === 'home') {
+            postNui('close', {});
+        }
+    }
 
     let bannerTimeout = null;
     let clockInterval = null;
@@ -52,27 +182,51 @@
         return locales[key] || key;
     }
 
+    let baseServerSeconds = null;
+    let baseTimestamp = null;
+
+    function setServerTime(timeData) {
+        if (timeData && typeof timeData.hour === 'number') {
+            const h = Number(timeData.hour) || 0;
+            const m = Number(timeData.min !== undefined ? timeData.min : timeData.minute) || 0;
+            const s = Number(timeData.sec !== undefined ? timeData.sec : timeData.second) || 0;
+            baseServerSeconds = ((h * 3600 + m * 60 + s) % 86400 + 86400) % 86400;
+            baseTimestamp = Date.now();
+        }
+    }
+
     // Update Clock in status bar
     function updateClock() {
         if (!timeEl) return;
-        const now = new Date();
-        let hours = now.getHours();
-        const minutes = String(now.getMinutes()).padStart(2, '0');
+        let hours = 0;
+        let minutes = 0;
 
+        if (baseServerSeconds !== null && baseTimestamp !== null) {
+            const elapsed = Math.floor((Date.now() - baseTimestamp) / 1000);
+            const totalSec = ((baseServerSeconds + elapsed) % 86400 + 86400) % 86400;
+            hours = Math.floor(totalSec / 3600);
+            minutes = Math.floor((totalSec % 3600) / 60);
+        } else {
+            const now = new Date();
+            hours = now.getHours();
+            minutes = now.getMinutes();
+        }
+
+        const minStr = String(minutes).padStart(2, '0');
         if (currentSettings.clock24) {
-            timeEl.textContent = `${String(hours).padStart(2, '0')}:${minutes}`;
+            timeEl.textContent = `${String(hours).padStart(2, '0')}:${minStr}`;
         } else {
             const ampm = hours >= 12 ? 'PM' : 'AM';
-            hours = hours % 12;
-            hours = hours ? hours : 12;
-            timeEl.textContent = `${hours}:${minutes} ${ampm}`;
+            let h12 = hours % 12;
+            if (h12 === 0) h12 = 12;
+            timeEl.textContent = `${h12}:${minStr} ${ampm}`;
         }
     }
 
     function startClock() {
         updateClock();
         if (clockInterval) clearInterval(clockInterval);
-        clockInterval = setInterval(updateClock, 10000);
+        clockInterval = setInterval(updateClock, 1000);
     }
 
     // Apply layout coordinates or default classes
@@ -285,7 +439,7 @@
         const screen = document.createElement('div');
         screen.className = 'app-screen';
 
-        const header = createHeader(t('phonekit.app.calculator'), null, () => renderHomeScreen());
+        const header = createHeader(t('phonekit.app.calculator'), null, () => goBack());
         screen.appendChild(header);
 
         const calcBody = document.createElement('div');
@@ -451,7 +605,7 @@
         const screen = document.createElement('div');
         screen.className = 'app-screen';
 
-        const header = createHeader(t('phonekit.app.notes'), null, () => renderHomeScreen());
+        const header = createHeader(t('phonekit.app.notes'), null, () => goBack());
         const newBtn = document.createElement('button');
         newBtn.type = 'button';
         newBtn.className = 'app-header-action';
@@ -518,8 +672,7 @@
         screen.className = 'app-screen';
 
         const header = createHeader(isNew ? t('phonekit.notes.new') : t('phonekit.app.notes'), null, () => {
-            saveCurrentNote();
-            renderNotesList();
+            goBack();
         });
         screen.appendChild(header);
 
@@ -542,60 +695,28 @@
         bodyInput.maxLength = 2000;
         bodyInput.value = note.body || '';
 
+        activeNoteInputs = { title: titleInput, body: bodyInput };
+
         form.appendChild(titleInput);
         form.appendChild(bodyInput);
-
-        function saveCurrentNote() {
-            const cleanTitle = titleInput.value.trim().substring(0, 60);
-            const cleanBody = bodyInput.value.trim().substring(0, 2000);
-
-            if (!cleanTitle && !cleanBody) {
-                if (!isNew) {
-                    notesData = notesData.filter((n) => n.id !== note.id);
-                    postNui('builtin:save', { app: 'notes', data: notesData });
-                }
-                return;
-            }
-
-            const updatedNote = {
-                id: note.id || ('n' + Date.now().toString(36)),
-                title: cleanTitle || 'Untitled',
-                body: cleanBody,
-                updatedAt: Math.floor(Date.now() / 1000),
-            };
-
-            let updatedList = [];
-            let found = false;
-            for (let i = 0; i < notesData.length; i++) {
-                if (notesData[i].id === updatedNote.id) {
-                    updatedList.push(updatedNote);
-                    found = true;
-                } else {
-                    updatedList.push(notesData[i]);
-                }
-            }
-            if (!found) {
-                updatedList.unshift(updatedNote);
-            }
-
-            postNui('builtin:save', { app: 'notes', data: updatedList }).then((resp) => {
-                if (resp && resp.ok && resp.list) {
-                    notesData = resp.list;
-                } else if (resp && resp.err) {
-                    showBanner({ title: resp.err });
-                }
-            });
-            notesData = updatedList;
-        }
 
         if (!isNew) {
             const deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';
             deleteBtn.className = 'btn-danger-outline';
-            deleteBtn.textContent = 'Delete note';
+            deleteBtn.textContent = t('phonekit.notes.delete');
             deleteBtn.addEventListener('click', () => {
-                notesData = notesData.filter((n) => n.id !== note.id);
-                postNui('builtin:save', { app: 'notes', data: notesData });
+                activeEditingNote = null;
+                activeNoteInputs = null;
+                const candidate = notesData.filter((n) => n.id !== note.id);
+                postNui('builtin:save', { app: 'notes', data: candidate }).then((resp) => {
+                    if (resp && resp.ok && resp.list) {
+                        notesData = resp.list;
+                    } else if (resp && resp.err) {
+                        showBanner({ title: resp.err });
+                    }
+                    if (currentView === 'notes') renderNotesList();
+                });
                 renderNotesList();
             });
             form.appendChild(deleteBtn);
@@ -618,7 +739,7 @@
         const screen = document.createElement('div');
         screen.className = 'app-screen';
 
-        const header = createHeader(t('phonekit.app.contacts'), null, () => renderHomeScreen());
+        const header = createHeader(t('phonekit.app.contacts'), null, () => goBack());
         const newBtn = document.createElement('button');
         newBtn.type = 'button';
         newBtn.className = 'app-header-action';
@@ -687,8 +808,7 @@
         screen.className = 'app-screen';
 
         const header = createHeader(isNew ? t('phonekit.contacts.new') : t('phonekit.app.contacts'), null, () => {
-            saveCurrentContact();
-            renderContactsList();
+            goBack();
         });
         screen.appendChild(header);
 
@@ -712,59 +832,28 @@
         numInput.maxLength = 20;
         numInput.value = contact.number || '';
 
+        activeContactInputs = { name: nameInput, number: numInput };
+
         form.appendChild(nameInput);
         form.appendChild(numInput);
-
-        function saveCurrentContact() {
-            const cleanName = nameInput.value.trim().substring(0, 40);
-            const cleanNum = numInput.value.trim().substring(0, 20);
-
-            if (!cleanName && !cleanNum) {
-                if (!isNew) {
-                    contactsData = contactsData.filter((c) => c.id !== contact.id);
-                    postNui('builtin:save', { app: 'contacts', data: contactsData });
-                }
-                return;
-            }
-
-            const updatedContact = {
-                id: contact.id || ('c' + Date.now().toString(36)),
-                name: cleanName || 'Unnamed',
-                number: cleanNum,
-            };
-
-            let updatedList = [];
-            let found = false;
-            for (let i = 0; i < contactsData.length; i++) {
-                if (contactsData[i].id === updatedContact.id) {
-                    updatedList.push(updatedContact);
-                    found = true;
-                } else {
-                    updatedList.push(contactsData[i]);
-                }
-            }
-            if (!found) {
-                updatedList.push(updatedContact);
-            }
-
-            postNui('builtin:save', { app: 'contacts', data: updatedList }).then((resp) => {
-                if (resp && resp.ok && resp.list) {
-                    contactsData = resp.list;
-                } else if (resp && resp.err) {
-                    showBanner({ title: resp.err });
-                }
-            });
-            contactsData = updatedList;
-        }
 
         if (!isNew) {
             const deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';
             deleteBtn.className = 'btn-danger-outline';
-            deleteBtn.textContent = 'Delete contact';
+            deleteBtn.textContent = t('phonekit.contacts.delete');
             deleteBtn.addEventListener('click', () => {
-                contactsData = contactsData.filter((c) => c.id !== contact.id);
-                postNui('builtin:save', { app: 'contacts', data: contactsData });
+                activeEditingContact = null;
+                activeContactInputs = null;
+                const candidate = contactsData.filter((c) => c.id !== contact.id);
+                postNui('builtin:save', { app: 'contacts', data: candidate }).then((resp) => {
+                    if (resp && resp.ok && resp.list) {
+                        contactsData = resp.list;
+                    } else if (resp && resp.err) {
+                        showBanner({ title: resp.err });
+                    }
+                    if (currentView === 'contacts') renderContactsList();
+                });
                 renderContactsList();
             });
             form.appendChild(deleteBtn);
@@ -786,7 +875,7 @@
         const screen = document.createElement('div');
         screen.className = 'app-screen';
 
-        const header = createHeader(t('phonekit.app.settings'), null, () => renderHomeScreen());
+        const header = createHeader(t('phonekit.app.settings'), null, () => goBack());
         screen.appendChild(header);
 
         const body = document.createElement('div');
@@ -809,7 +898,7 @@
         const normBtn = document.createElement('button');
         normBtn.type = 'button';
         normBtn.className = 'segment-btn' + (currentSettings.textSize === 'normal' ? ' active' : '');
-        normBtn.textContent = 'Normal';
+        normBtn.textContent = t('phonekit.settings.normal');
         normBtn.addEventListener('click', () => {
             currentSettings.textSize = 'normal';
             normBtn.classList.add('active');
@@ -821,7 +910,7 @@
         const largeBtn = document.createElement('button');
         largeBtn.type = 'button';
         largeBtn.className = 'segment-btn' + (currentSettings.textSize === 'large' ? ' active' : '');
-        largeBtn.textContent = 'Large';
+        largeBtn.textContent = t('phonekit.settings.large');
         largeBtn.addEventListener('click', () => {
             currentSettings.textSize = 'large';
             largeBtn.classList.add('active');
@@ -900,12 +989,14 @@
     // -------------------------------------------------------------
     // View: Custom App Spec (from server showApp)
     // -------------------------------------------------------------
-    function renderCustomApp(screenId, appId, title, subtitle, blocks) {
+    function renderCustomApp(screenId, appId, title, subtitle, blocks, isUpdate) {
         currentView = 'custom_app';
         activeCustomScreenId = screenId;
         currentAppId = appId;
         activeCustomSpec = { title, subtitle, blocks };
-        activeCustomValues = {};
+        if (!isUpdate) {
+            activeCustomValues = {};
+        }
 
         clearContent();
 
@@ -913,8 +1004,7 @@
         screen.className = 'app-screen';
 
         const header = createHeader(title, subtitle, () => {
-            postNui('back', {});
-            renderHomeScreen();
+            goBack();
         });
         screen.appendChild(header);
 
@@ -986,12 +1076,32 @@
             inp.className = 'input-field';
             if (b.placeholder) inp.placeholder = b.placeholder;
             if (b.disabled) inp.disabled = true;
-            if (b.value !== undefined && b.value !== null) inp.value = b.value;
 
-            activeCustomValues[b.id] = b.input === 'number' ? Number(inp.value) || 0 : inp.value;
+            const existingVal = activeCustomValues[b.id] !== undefined ? activeCustomValues[b.id] : b.value;
+            if (existingVal !== undefined && existingVal !== null) {
+                inp.value = existingVal;
+            }
+
+            if (b.input === 'number') {
+                if (inp.value.trim() !== '' && !isNaN(Number(inp.value))) {
+                    activeCustomValues[b.id] = Number(inp.value);
+                } else {
+                    delete activeCustomValues[b.id];
+                }
+            } else {
+                activeCustomValues[b.id] = inp.value;
+            }
 
             inp.addEventListener('input', () => {
-                activeCustomValues[b.id] = b.input === 'number' ? Number(inp.value) || 0 : inp.value;
+                if (b.input === 'number') {
+                    if (inp.value.trim() !== '' && !isNaN(Number(inp.value))) {
+                        activeCustomValues[b.id] = Number(inp.value);
+                    } else {
+                        delete activeCustomValues[b.id];
+                    }
+                } else {
+                    activeCustomValues[b.id] = inp.value;
+                }
             });
 
             box.appendChild(inp);
@@ -1012,7 +1122,8 @@
 
             const switchInput = document.createElement('input');
             switchInput.type = 'checkbox';
-            switchInput.checked = b.value === true;
+            const existingVal = activeCustomValues[b.id] !== undefined ? activeCustomValues[b.id] : b.value;
+            switchInput.checked = existingVal === true;
             if (b.disabled) switchInput.disabled = true;
 
             activeCustomValues[b.id] = switchInput.checked;
@@ -1043,12 +1154,13 @@
             select.className = 'input-field';
             if (b.disabled) select.disabled = true;
 
+            const existingVal = activeCustomValues[b.id] !== undefined ? activeCustomValues[b.id] : b.value;
             const opts = b.options || [];
             for (let j = 0; j < opts.length; j++) {
                 const optEl = document.createElement('option');
                 optEl.value = opts[j].id;
                 optEl.textContent = opts[j].label;
-                if (opts[j].id === b.value) optEl.selected = true;
+                if (opts[j].id === existingVal) optEl.selected = true;
                 select.appendChild(optEl);
             }
 
@@ -1187,18 +1299,7 @@
     // Bottom home button action
     if (homeBtn) {
         homeBtn.addEventListener('click', () => {
-            if (currentView === 'home') {
-                postNui('close', {});
-            } else if (currentView === 'custom_app') {
-                postNui('back', {});
-                renderHomeScreen();
-            } else if (currentView === 'note_edit') {
-                renderNotesList();
-            } else if (currentView === 'contact_edit') {
-                renderContactsList();
-            } else {
-                renderHomeScreen();
-            }
+            goBack();
         });
     }
 
@@ -1226,12 +1327,20 @@
             if (data.builtins) {
                 enabledBuiltins = Object.assign(enabledBuiltins, data.builtins);
             }
+            if (data.time) {
+                setServerTime(data.time);
+            }
             currentApps = data.apps || [];
             applyPlacement(data.place, data.position);
             applySettings(currentSettings);
             startClock();
             renderHomeScreen();
         } else if (data.type === 'shell:close') {
+            if (currentView === 'note_edit') {
+                saveCurrentNote();
+            } else if (currentView === 'contact_edit') {
+                saveCurrentContact();
+            }
             rootEl.classList.add('hidden');
             if (bannerTimeout) {
                 clearTimeout(bannerTimeout);
@@ -1240,11 +1349,14 @@
             bannerEl.classList.add('hidden');
             currentView = 'home';
         } else if (data.type === 'screen:show') {
-            renderCustomApp(data.screenId, data.id, data.title, data.subtitle, data.blocks || []);
+            renderCustomApp(data.screenId, data.id, data.title, data.subtitle, data.blocks || [], false);
         } else if (data.type === 'screen:update') {
             if (activeCustomSpec && activeCustomScreenId === data.screenId && data.patch && data.patch.blocks) {
                 for (const blockId in data.patch.blocks) {
                     const partial = data.patch.blocks[blockId];
+                    if (partial.value !== undefined) {
+                        activeCustomValues[blockId] = partial.value;
+                    }
                     for (let i = 0; i < activeCustomSpec.blocks.length; i++) {
                         if (activeCustomSpec.blocks[i].id === blockId) {
                             Object.assign(activeCustomSpec.blocks[i], partial);
@@ -1252,7 +1364,7 @@
                         }
                     }
                 }
-                renderCustomApp(activeCustomScreenId, currentAppId, activeCustomSpec.title, activeCustomSpec.subtitle, activeCustomSpec.blocks);
+                renderCustomApp(activeCustomScreenId, currentAppId, activeCustomSpec.title, activeCustomSpec.subtitle, activeCustomSpec.blocks, true);
             }
         } else if (data.type === 'badge') {
             badges[data.id] = data.count;
@@ -1275,23 +1387,17 @@
 
         if (e.key === 'Escape') {
             e.preventDefault();
+            if (currentView === 'note_edit') {
+                saveCurrentNote();
+            } else if (currentView === 'contact_edit') {
+                saveCurrentContact();
+            }
             postNui('close', {});
         } else if (e.key === 'Backspace') {
             const tag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
             if (tag !== 'input' && tag !== 'textarea') {
                 e.preventDefault();
-                if (currentView === 'home') {
-                    postNui('close', {});
-                } else if (currentView === 'custom_app') {
-                    postNui('back', {});
-                    renderHomeScreen();
-                } else if (currentView === 'note_edit') {
-                    renderNotesList();
-                } else if (currentView === 'contact_edit') {
-                    renderContactsList();
-                } else {
-                    renderHomeScreen();
-                }
+                goBack();
             }
         }
     });
@@ -1300,17 +1406,21 @@
     window.addEventListener('contextmenu', (e) => {
         if (rootEl.classList.contains('hidden')) return;
         e.preventDefault();
-        if (currentView === 'home') {
-            postNui('close', {});
-        } else if (currentView === 'custom_app') {
-            postNui('back', {});
-            renderHomeScreen();
-        } else if (currentView === 'note_edit') {
-            renderNotesList();
-        } else if (currentView === 'contact_edit') {
-            renderContactsList();
-        } else {
-            renderHomeScreen();
+        goBack();
+    });
+
+    // Typing focus tracking
+    window.addEventListener('focusin', (e) => {
+        const tag = e.target ? e.target.tagName.toLowerCase() : '';
+        if (tag === 'input' || tag === 'textarea') {
+            postNui('typing', { on: true });
+        }
+    });
+
+    window.addEventListener('focusout', (e) => {
+        const tag = e.target ? e.target.tagName.toLowerCase() : '';
+        if (tag === 'input' || tag === 'textarea') {
+            postNui('typing', { on: false });
         }
     });
 

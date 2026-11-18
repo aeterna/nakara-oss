@@ -4,7 +4,9 @@
   "resource": "aeterna_phonekit",
   "capabilities": {
     "http": [],
-    "commands": [],
+    "commands": [
+      "aeterna_layout"
+    ],
     "registeredCommands": [
       "aeterna_phonekit_open",
       "+aeterna_phonekit_open",
@@ -17,6 +19,7 @@
     "netEvents": {
       "server": [
         "aeterna_phonekit:sv:open",
+        "aeterna_phonekit:sv:close",
         "aeterna_phonekit:sv:tap",
         "aeterna_phonekit:sv:action"
       ],
