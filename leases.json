@@ -12,6 +12,18 @@
       "plan": "starter-kit",
       "acquired": "2026-11-18T13:28:09Z",
       "expires": "2026-11-18T17:28:09Z"
+    },
+    {
+      "id": "kit-fix-phonekit2-3eb4eb80",
+      "repo": "nakara-oss",
+      "lane": "kit-fix-phonekit2",
+      "host": "win",
+      "scope": [
+        "packages/phonekit/spec/phonekit_spec.lua"
+      ],
+      "plan": "starter-kit",
+      "acquired": "2026-11-18T13:35:04Z",
+      "expires": "2026-11-18T17:35:04Z"
     }
   ]
 }
