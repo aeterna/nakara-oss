@@ -87,12 +87,12 @@ local function acquireFocus()
             keepGameInput = false,
         })
     end)
-    if ok and type(tok) == 'string' then
+    if ok and type(tok) == 'string' and tok ~= '' then
         focusToken = tok
         return tok
     end
-    focusToken = 'local_focus'
-    return focusToken
+    focusToken = nil
+    return nil
 end
 
 local function dropFocus()
@@ -219,8 +219,10 @@ local function tryShowMotd()
     end
     local motd = ctrl:getMotd()
     syncThemeAndLocale()
+    if not acquireFocus() then
+        return false
+    end
     motdOpen = true
-    acquireFocus()
     sendUi({
         type = 'motd:show',
         motd = motd,
@@ -263,6 +265,7 @@ end
 local function registerLayoutElements()
     local defs = L.buildLayoutDefs(currentToastPosition(), translate('notify.announce.title'))
     for i = 1, #defs do
+        defs[i].owner = GetCurrentResourceName()
         TriggerEvent('aeterna_layout:add', defs[i])
     end
 end

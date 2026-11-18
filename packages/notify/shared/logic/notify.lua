@@ -34,15 +34,6 @@ L.POSITIONS = {
     ['bottom-right'] = true,
 }
 
-local TOAST_ALLOWED_KEYS = {
-    id = true,
-    title = true,
-    description = true,
-    type = true,
-    duration = true,
-    icon = true,
-}
-
 local ANNOUNCE_ALLOWED_KEYS = {
     id = true,
     title = true,
@@ -242,11 +233,6 @@ function L.validateToastOpts(opts, toastCfg)
     if type(opts) ~= 'table' then
         return false, 'opts: type'
     end
-    for k in pairs(opts) do
-        if not TOAST_ALLOWED_KEYS[k] then
-            return false, tostring(k) .. ': not allowed'
-        end
-    end
 
     local cleanId = nil
     if opts.id ~= nil then
@@ -254,14 +240,6 @@ function L.validateToastOpts(opts, toastCfg)
             return false, 'id: pattern'
         end
         cleanId = opts.id
-    end
-
-    if type(opts.title) ~= 'string' then
-        return false, 'title: type'
-    end
-    local cleanTitle = L.textClean(opts.title, 60)
-    if L.textLen(cleanTitle) < 1 then
-        return false, 'title: minLen 1'
     end
 
     local cleanDesc = nil
@@ -273,6 +251,24 @@ function L.validateToastOpts(opts, toastCfg)
         if L.textLen(cd) > 0 then
             cleanDesc = cd
         end
+    end
+
+    local cleanTitle = nil
+    if opts.title ~= nil then
+        if type(opts.title) ~= 'string' then
+            return false, 'title: type'
+        end
+        local ct = L.textClean(opts.title, 60)
+        if L.textLen(ct) > 0 then
+            cleanTitle = ct
+        end
+    end
+    if not cleanTitle and cleanDesc then
+        cleanTitle = L.textClean(cleanDesc, 60)
+        cleanDesc = nil
+    end
+    if not cleanTitle then
+        return false, 'title: minLen 1'
     end
 
     local toastType = 'info'
@@ -295,13 +291,7 @@ function L.validateToastOpts(opts, toastCfg)
     local cleanDuration = clampNumber(rawDur, 1000, 15000)
 
     local cleanIcon = nil
-    if opts.icon ~= nil and opts.icon ~= '' then
-        if type(opts.icon) ~= 'string' then
-            return false, 'icon: type'
-        end
-        if not L.isValidIcon(opts.icon) then
-            return false, 'icon: unknown icon'
-        end
+    if type(opts.icon) == 'string' and opts.icon ~= '' and L.isValidIcon(opts.icon) then
         cleanIcon = opts.icon
     end
 
@@ -992,7 +982,7 @@ function L.validateLayoutPlace(place)
     if ay ~= 0 and ay ~= 0.5 and ay ~= 1 then
         return false, 'place.ay: enum'
     end
-    if not scale or scale < 0.5 or scale > 2.0 then
+    if not scale or scale ~= scale or scale <= 0 or scale > 4 then
         return false, 'place.scale: range'
     end
 

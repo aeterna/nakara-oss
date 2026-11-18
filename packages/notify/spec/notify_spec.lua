@@ -143,11 +143,44 @@ describe('aeterna_notify', function()
             assert.is_true(okIcon)
             assert.are.equal('bell', cIcon.icon)
 
-            local okBadIcon = L.validateToastOpts({ title = 'Bad icon', icon = 'not-an-icon' })
-            assert.is_false(okBadIcon)
+            local okBadIcon, _, cBadIcon = L.validateToastOpts({ title = 'Bad icon', icon = 'not-an-icon' })
+            assert.is_true(okBadIcon)
+            assert.is_nil(cBadIcon.icon)
 
             local okEmpty = L.validateToastOpts({ title = '   ' })
             assert.is_false(okEmpty)
+        end)
+
+        it('ignores lib.notify keys it does not use', function()
+            local ok, err, clean = L.validateToastOpts({
+                title = 'Saved',
+                iconColor = '#ffffff',
+                position = 'top',
+                sound = 'bell',
+                onClose = function() end,
+            })
+            assert.is_true(ok)
+            assert.is_nil(err)
+            assert.are.equal('Saved', clean.title)
+            assert.is_nil(clean.iconColor)
+            assert.is_nil(clean.position)
+            assert.is_nil(clean.sound)
+            assert.is_nil(clean.onClose)
+        end)
+
+        it('uses description as the title when title is missing and refuses a toast with neither', function()
+            local ok, err, clean = L.validateToastOpts({ description = 'Saved', type = 'success' })
+            assert.is_true(ok)
+            assert.is_nil(err)
+            assert.are.equal('Saved', clean.title)
+            assert.is_nil(clean.description)
+
+            local okEmpty, errEmpty = L.validateToastOpts({ type = 'info' })
+            assert.is_false(okEmpty)
+            assert.are.equal('title: minLen 1', errEmpty)
+
+            local okBlank = L.validateToastOpts({ title = '   ', description = '   ' })
+            assert.is_false(okBlank)
         end)
     end)
 
@@ -465,6 +498,9 @@ describe('aeterna_notify', function()
             natives.fire('aeterna_layout:hello')
             layoutAdds = natives.emitted('local', 'aeterna_layout:add')
             assert.are.equal(4, #layoutAdds)
+            for i = 1, #layoutAdds do
+                assert.are.equal('aeterna_notify', layoutAdds[i].args[1].owner)
+            end
 
             -- Layout apply for own resource updates placement
             natives.fire('aeterna_layout:apply', 'aeterna_notify', 'toasts', {
@@ -493,6 +529,113 @@ describe('aeterna_notify', function()
             local countBefore = #nuiMessages
             assert.is_false(api.showMotd())
             assert.are.equal(countBefore, #nuiMessages)
+        end)
+
+        it('does not open the MOTD when aeterna_core refuses focus', function()
+            natives.reset({ resource = 'aeterna_notify', side = 'client' })
+            local nuiMessages = natives.spy('SendNUIMessage')
+            natives.spy('RegisterNUICallback', function() end)
+            natives.spy('LoadResourceFile', function(_, path)
+                if path == 'config/motd.json' then
+                    return json.encode({
+                        version = '2026-11-17',
+                        title = 'Welcome',
+                        lines = { 'Focus must be held by aeterna_core' },
+                    })
+                end
+                return nil
+            end)
+            natives.spy('GetResourceState', function(resName)
+                if resName == 'qbx_core' then return 'missing' end
+                return 'started'
+            end)
+            natives.stub('AeternaCore', {
+                log = { debug = function() end, info = function() end, warn = function() end, error = function() end },
+                t = function(k) return k end,
+                lang = function() return 'en' end,
+                kvp = {
+                    get = function(_, _, default) return default end,
+                    set = function() end,
+                },
+            })
+            natives.stub_export('aeterna_core', 'requestFocus', function() error('focus unavailable') end)
+            natives.stub_export('aeterna_core', 'releaseFocus', function() return true end)
+            natives.stub_export('aeterna_core', 'themeHref', function() return nil end)
+
+            local res = resource.load_resource(DIR, 'client')
+            assert.is_false(res.exports.showMotd())
+
+            natives.fire('playerSpawned')
+            local motdShown = false
+            for i = 1, #nuiMessages do
+                if nuiMessages[i][1] and nuiMessages[i][1].type == 'motd:show' then
+                    motdShown = true
+                end
+            end
+            assert.is_false(motdShown)
+        end)
+    end)
+
+    describe('7. layout helpers (shared/logic/notify.lua)', function()
+        local L
+        before_each(function()
+            natives.reset()
+            L = assert(loadfile(DIR .. '/shared/logic/notify.lua'))()
+        end)
+
+        it('accepts any positive layout scale up to 4', function()
+            local function place(scale)
+                return { x = 0.5, y = 0.02, ax = 0.5, ay = 0, scale = scale }
+            end
+
+            local okSmall, _, cSmall = L.validateLayoutPlace(place(0.25))
+            assert.is_true(okSmall)
+            assert.are.equal(0.25, cSmall.scale)
+
+            local okLarge, _, cLarge = L.validateLayoutPlace(place(3.5))
+            assert.is_true(okLarge)
+            assert.are.equal(3.5, cLarge.scale)
+
+            local okMax, _, cMax = L.validateLayoutPlace(place(4))
+            assert.is_true(okMax)
+            assert.are.equal(4, cMax.scale)
+
+            assert.is_false((L.validateLayoutPlace(place(0))))
+            assert.is_false((L.validateLayoutPlace(place(-1))))
+            assert.is_false((L.validateLayoutPlace(place(4.01))))
+        end)
+
+        it('keeps the announcement stand-in at its registered 88 px height', function()
+            local f = assert(io.open(DIR .. '/html/style.css', 'rb'))
+            local css = f:read('*a')
+            f:close()
+            local rule = css:match('%.announce%-box%s*(%b{})')
+            assert.is_truthy(rule)
+            assert.is_truthy(rule:match('min%-height:%s*88px'))
+
+            local defs = L.buildLayoutDefs('top-left', 'Announcement')
+            assert.are.equal(2, #defs)
+            assert.are.equal('toasts', defs[1].id)
+            assert.are.equal('announce', defs[2].id)
+            assert.are.equal(480, defs[2].w)
+            assert.are.equal(88, defs[2].h)
+        end)
+    end)
+
+    describe('8. locale files (locales/en.lua, locales/th.lua)', function()
+        it('merges into the tables created by @aeterna_core/import.lua', function()
+            natives.reset({ resource = 'aeterna_notify', side = 'client' })
+            local res = resource.load_resource(DIR, 'client', {
+                externals = {
+                    ['@aeterna_core/import.lua'] = DIR .. '/../core/import.lua',
+                },
+                skip = { ['client/main.lua'] = true },
+            })
+            assert.is_truthy(res)
+            assert.are.equal('January', Locales.en['core.month.1'])
+            assert.are.equal('Announcement', Locales.en['notify.announce.title'])
+            assert.are.equal('มกราคม', Locales.th['core.month.1'])
+            assert.are.equal('ประกาศ', Locales.th['notify.announce.title'])
         end)
     end)
 end)
