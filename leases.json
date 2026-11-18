@@ -24,18 +24,6 @@
       "plan": "starter-kit",
       "acquired": "2026-11-18T11:25:35Z",
       "expires": "2026-11-18T15:25:35Z"
-    },
-    {
-      "id": "kit-devkit-908f3326",
-      "repo": "nakara-oss",
-      "lane": "kit-devkit",
-      "host": "win",
-      "scope": [
-        "packages/devkit/src/**,packages/devkit/test/**,packages/devkit/docs/**,packages/devkit/CHANGELOG.md"
-      ],
-      "plan": "starter-kit",
-      "acquired": "2026-11-18T11:25:41Z",
-      "expires": "2026-11-18T15:25:41Z"
     }
   ]
 }
