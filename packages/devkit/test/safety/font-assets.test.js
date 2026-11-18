@@ -133,9 +133,23 @@ test('font-assets: leaves launcher/assets/** untouched', async () => {
   );
   assert.equal(of(f, 'font-assets').length, 0);
 
-  const nested = await scan({
-    'launcher/assets/Anuphan-Regular.ttf': FAKE_FONT,
-    'launcher/assets/icon.svg': '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
-  });
+  const nested = await scan(
+    {
+      'launcher/assets/Anuphan-Regular.ttf': FAKE_FONT,
+      'launcher/assets/icon.svg': '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+    },
+    { name: 'packages/uikit' },
+  );
   assert.equal(of(nested, 'font-assets').length, 0);
+});
+
+test('font-assets: ignores resources outside packages/ (e.g. resources/foo)', async () => {
+  const f = await scan(
+    {
+      'html/logo.svg': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"></svg>',
+      'html/fonts/Font.ttf': FAKE_FONT,
+    },
+    { name: 'resources/foo' },
+  );
+  assert.equal(of(f, 'font-assets').length, 0);
 });
