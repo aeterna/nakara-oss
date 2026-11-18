@@ -1,6 +1,6 @@
 # aeterna_invkit
 
-- Package: `packages/invkit` · resource `aeterna_invkit` · wave W2 · status draft
+- Package: `packages/invkit` · resource `aeterna_invkit` · wave W2 · status released in 0.1.0
 - Depends on: `aeterna_core`, `aeterna_uikit` · calls `ox_inventory` only when it is started, never listed as a
   dependency ([ADR 0004](../adr/0004-aeterna-starter-kit.md) decision 15)
 
