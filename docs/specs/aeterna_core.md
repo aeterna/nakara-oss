@@ -134,13 +134,23 @@ Client exports. One owner holds NUI focus at a time; the last request wins.
 
 | Export | Returns | Notes |
 | --- | --- | --- |
-| `requestFocus(opts)` | token (string) | The owner is `GetInvokingResource()`, never a name the caller passes. `opts = { cursor = true, keyboard = true, keepGameInput = false }`. Calls `SetNuiFocus(keyboard, cursor)` and `SetNuiFocusKeepInput(keepGameInput)`. If someone else held focus, they get `aeterna_core:focusLost` with reason `preempted`. |
+| `requestFocus(opts)` | token (string) | The owner is `GetInvokingResource()`, never a name the caller passes. `opts = { cursor = true, keyboard = true, keepGameInput = false }`. Decides ownership only; see the helpers below. |
 | `releaseFocus(token)` | boolean | Only the current token releases; a stale token returns `false` and changes nothing. Focus is cleared when nobody holds it. |
 | `focusOwner()` | string or nil | |
 
 Local client event `aeterna_core:focusLost` → `(owner, token, reason)` with reason `preempted` · `owner_stopped` (the
 owner's resource stopped) · `released_by_core` (`aeterna_core` restarted). Each package closes its own panel when it
 receives it for its own token.
+
+`SetNuiFocus` acts on the NUI frame of the resource that calls it, and `aeterna_core` has no page, so core never calls
+it: the exports only decide who owns focus. Packages use the helpers from `import.lua`, which run in their own resource:
+
+| Helper (client) | Does |
+| --- | --- |
+| `AeternaCore.requestFocus(opts)` | Calls the `requestFocus` export, then `SetNuiFocus(keyboard, cursor)` and `SetNuiFocusKeepInput(keepGameInput)`. Returns the token or nil |
+| `AeternaCore.releaseFocus(token)` | Calls the `releaseFocus` export; when it returns true, clears both natives |
+
+`import.lua` also clears both natives when `aeterna_core:focusLost` names the current resource as owner.
 
 ### Theme
 
