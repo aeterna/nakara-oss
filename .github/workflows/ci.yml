@@ -90,6 +90,51 @@ jobs:
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: node .github/scripts/check-dco.mjs "$BASE_SHA" "$HEAD_SHA"
 
+  # Starter Kit brand scan (ADR 0004 decision 9). The hashed deny list is private; logs show only "term #k at file:line".
+  # Fork PRs have no credentials: the job passes with a notice and a maintainer runs the scan.
+  brand-scan:
+    name: brand scan
+    runs-on: ubuntu-24.04   # pinned: ubuntu-latest moves to 26.04 from 2026-10-19
+    timeout-minutes: 5
+    steps:
+      - name: app credentials present?
+        id: creds
+        env:
+          APP_CLIENT_ID: ${{ vars.ORG_STANDARDS_APP_CLIENT_ID }}
+          APP_KEY_SET: ${{ secrets.ORG_STANDARDS_APP_PRIVATE_KEY != '' }}
+        run: |
+          if [ -n "$APP_CLIENT_ID" ] && [ "$APP_KEY_SET" = "true" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice title=brand scan::no credentials here; a maintainer runs this scan"; fi
+      - name: mint org-standards read token
+        id: app
+        if: steps.creds.outputs.ok == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.ORG_STANDARDS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.ORG_STANDARDS_APP_PRIVATE_KEY }}
+          owner: aeterna
+          repositories: org-standards
+          permission-contents: read
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.creds.outputs.ok == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.creds.outputs.ok == 'true'
+        with:
+          repository: aeterna/org-standards
+          token: ${{ steps.app.outputs.token }}
+          path: .org-standards
+          sparse-checkout: docs/brand-deny
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: steps.creds.outputs.ok == 'true'
+        with:
+          node-version: 22
+      - name: scan kit files
+        if: steps.creds.outputs.ok == 'true'
+        run: node .github/scripts/brand-scan.mjs .org-standards/docs/brand-deny/nakara-oss-kit.sha256 .
+
   # AETERNA delegated delivery (T2): every commit of a team PR carries `Agent:`, product code carries
   # `Delegated-Run:`, the rest `Exempt:` — one trailer block with `Signed-off-by:` (the DCO job above reads the
   # same block, so both pass together). Reads the PR's own commits: squash merges drop trailers on main.
