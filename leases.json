@@ -24,6 +24,18 @@
       "plan": "starter-kit",
       "acquired": "2026-11-18T11:25:35Z",
       "expires": "2026-11-18T15:25:35Z"
+    },
+    {
+      "id": "kit-devkit2-54a529e3",
+      "repo": "nakara-oss",
+      "lane": "kit-devkit2",
+      "host": "win",
+      "scope": [
+        "packages/devkit/src/safety/rules/font-assets.js,packages/devkit/test/safety/font-assets.test.js,packages/devkit/docs/safety.md"
+      ],
+      "plan": "starter-kit",
+      "acquired": "2026-11-18T11:42:50Z",
+      "expires": "2026-11-18T15:42:50Z"
     }
   ]
 }
