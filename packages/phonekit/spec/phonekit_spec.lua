@@ -467,27 +467,27 @@ describe('aeterna_phonekit', function()
 
             -- Case 1: Phone is closed => sends toast, increments badge
             mgr:setPhoneOpen(1, false)
-            local b1 = mgr:notifyApp(1, 'chat', { title = 'New message', body = 'Hi' }, { icon = 'message-circle' }, notifyStub, bannerStub)
+            local b1 = mgr:notifyApp(1, 'demo', 'chat', { title = 'New message', body = 'Hi' }, { icon = 'message-circle' }, notifyStub, bannerStub)
             assert.are.equal(1, b1)
             assert.are.equal(1, #toasts)
             assert.are.equal(0, #banners)
-            assert.are.equal(1, mgr:getBadge(1, 'chat'))
+            assert.are.equal(1, mgr:getBadge(1, 'demo', 'chat'))
 
             -- Case 2: Phone is open, but player is on home screen => sends banner, increments badge
             mgr:setPhoneOpen(1, true)
             mgr:setCurrentApp(1, nil)
-            local b2 = mgr:notifyApp(1, 'chat', { title = 'Another message', body = 'Hello' }, { icon = 'message-circle' }, notifyStub, bannerStub)
+            local b2 = mgr:notifyApp(1, 'demo', 'chat', { title = 'Another message', body = 'Hello' }, { icon = 'message-circle' }, notifyStub, bannerStub)
             assert.are.equal(2, b2)
             assert.are.equal(1, #toasts)
             assert.are.equal(1, #banners)
-            assert.are.equal(2, mgr:getBadge(1, 'chat'))
+            assert.are.equal(2, mgr:getBadge(1, 'demo', 'chat'))
 
             -- Case 3: Phone is open and player is on screen for 'chat' => sends banner, DOES NOT increment badge
             mgr:setCurrentApp(1, 'chat')
-            local b3 = mgr:notifyApp(1, 'chat', { title = 'Third message', body = 'Viewed live' }, { icon = 'message-circle' }, notifyStub, bannerStub)
+            local b3 = mgr:notifyApp(1, 'demo', 'chat', { title = 'Third message', body = 'Viewed live' }, { icon = 'message-circle' }, notifyStub, bannerStub)
             assert.are.equal(2, b3)
             assert.are.equal(2, #banners)
-            assert.are.equal(2, mgr:getBadge(1, 'chat'))
+            assert.are.equal(2, mgr:getBadge(1, 'demo', 'chat'))
         end)
     end)
 
