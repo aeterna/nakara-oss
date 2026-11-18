@@ -2,18 +2,6 @@
   "version": 1,
   "leases": [
     {
-      "id": "kit-fix-demo-09a81f6c",
-      "repo": "nakara-oss",
-      "lane": "kit-fix-demo",
-      "host": "win",
-      "scope": [
-        "spikes/kit-demo/**"
-      ],
-      "plan": "starter-kit",
-      "acquired": "2026-11-18T13:35:44Z",
-      "expires": "2026-11-18T17:35:44Z"
-    },
-    {
       "id": "kit-fix-phonekit3-6fa8ec51",
       "repo": "nakara-oss",
       "lane": "kit-fix-phonekit3",
