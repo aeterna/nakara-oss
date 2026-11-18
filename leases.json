@@ -38,18 +38,6 @@
       "expires": "2026-11-18T15:51:13Z"
     },
     {
-      "id": "kit-core-2c7469e2",
-      "repo": "nakara-oss",
-      "lane": "kit-core",
-      "host": "win",
-      "scope": [
-        "packages/core/spec/core_spec.lua,packages/core/fxmanifest.lua"
-      ],
-      "plan": "starter-kit",
-      "acquired": "2026-11-18T11:51:21Z",
-      "expires": "2026-11-18T15:51:21Z"
-    },
-    {
       "id": "kit-uikit-cf022cf5",
       "repo": "nakara-oss",
       "lane": "kit-uikit",
