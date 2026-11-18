@@ -550,6 +550,7 @@ describe('aeterna_phonekit', function()
                 rateLimit = function() return true end,
             })
             natives.stub_export('aeterna_notify', 'notify', function() return true end)
+            natives.spy('IsPlayerAceAllowed', function() return true end)
 
             local res = resource.load_resource(DIR, 'server')
             local api = res.exports
@@ -656,6 +657,7 @@ describe('aeterna_phonekit', function()
                 return 'missing'
             end)
             local cmdCalls = natives.spy('RegisterCommand')
+            local mapCalls = natives.spy('RegisterKeyMapping')
             local execCalls = natives.spy('ExecuteCommand')
             natives.stub('AeternaCore', {
                 log = { debug = function() end, info = function() end, warn = function() end, error = function() end },
@@ -665,7 +667,9 @@ describe('aeterna_phonekit', function()
                     get = function(_, _, default) return default end,
                     set = function() end,
                 },
-                key = function() end,
+                key = function(cmd, desc)
+                    RegisterKeyMapping(cmd, (Locales and Locales.en and Locales.en[desc]) or desc, 'keyboard', '')
+                end,
             })
             local focusRequested = false
             natives.stub_export('aeterna_core', 'requestFocus', function(opts)
@@ -676,8 +680,17 @@ describe('aeterna_phonekit', function()
             natives.stub_export('aeterna_core', 'releaseFocus', function() return true end)
             natives.stub_export('aeterna_core', 'themeHref', function() return nil end)
             natives.stub_export('aeterna_notify', 'notify', function() return true end)
+            natives.spy('IsPlayerAceAllowed', function() return true end)
 
             local res = resource.load_resource(DIR, 'client')
+
+            -- Commands and key mapping registered on load
+            assert.are.equal(3, #cmdCalls)
+            assert.are.equal('aeterna_phonekit_open', cmdCalls[1][1])
+            assert.are.equal('+aeterna_phonekit_open', cmdCalls[2][1])
+            assert.are.equal('-aeterna_phonekit_open', cmdCalls[3][1])
+            assert.are.equal(1, #mapCalls)
+            assert.are.equal('+aeterna_phonekit_open', mapCalls[1][1])
 
             -- Layout add event fired on startup
             local layoutAdds = natives.emitted('local', 'aeterna_layout:add')
@@ -730,8 +743,6 @@ describe('aeterna_phonekit', function()
 
             local svCloseEvents = natives.emitted('server', 'aeterna_phonekit:sv:close')
             assert.is_true(#svCloseEvents >= 1)
-        end)
-            assert.is_true(foundShellClose)
         end)
     end)
 
