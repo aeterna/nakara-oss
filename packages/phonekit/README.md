@@ -1,0 +1,142 @@
+# aeterna_phonekit
+
+A modular phone shell with built-in utility apps, client KVP storage, and an app API for the AETERNA Starter Kit ([ADR 0004](../../docs/adr/0004-aeterna-starter-kit.md) · [spec](../../docs/specs/aeterna_phonekit.md)).
+
+ระบบโทรศัพท์พื้นฐานสำหรับเซิร์ฟเวอร์ FiveM ในชุด AETERNA Starter Kit มาพร้อมหน้าจอหลัก, แถบสถานะ, แอปพลิเคชันพื้นฐานในเครื่อง 4 ตัว (เครื่องคิดเลข, บันทึกข้อความ, รายชื่อผู้ติดต่อ, การตั้งค่า) และ App API สำหรับให้นักพัฒนาสร้างแอปพลิเคชันเพิ่มเติมลงในโทรศัพท์โดยไม่ต้องแก้ไขโค้ดของโทรศัพท์
+
+---
+
+## What it does / การทำงาน
+
+- **Phone Shell (ตัวเครื่องโทรศัพท์):** Frame 320 × 640 px at scale 1 with Asphalt surfaces (`--surface`, `--raised`), radius 14 outside (`--radius-l`), and radius 10 (`--radius-m`) for app tiles.
+- **Status Bar & Clock (แถบสถานะ):** Shows the current time from `AeternaCore.time` (using the server's `aeterna_timezone`), formatted in 24-hour or 12-hour mode. Does not display fake signal or battery bars.
+- **Home & Navigation (หน้าจอหลักและการควบคุม):** Grid of app tiles sorted by `order` then `id`, with optional badge counters (0–99, or `99+`). Back navigation via bottom home bar, Backspace, or right mouse button (RMB); ESC closes the phone from any screen.
+- **Walking while open (เดินขณะเปิดใช้งาน):** Takes focus through `aeterna_core` with `keepGameInput = true` so the player can walk while the phone is open; mouse look is disabled while hovering over the frame.
+- **Animation & Prop (ท่าทางและอุปกรณ์):** With `Config.animation = true`, the ped holds a phone prop and plays the base-game phone animation. Automatically closes and stops animation if the ped dies, ragdolls, or enters water.
+- **Built-in Apps (แอปพลิเคชันพื้นฐานในเครื่อง):** Four standalone client apps storing data locally on the player's machine (ADR 0004 decision 8):
+  - **Calculator (เครื่องคิดเลข):** Basic operations (+, -, *, /), percent, sign toggle, clear; operator order as typed (no precedence, like a phone calculator), divide-by-zero error handling, and numbers rounded to 10 significant digits.
+  - **Notes (บันทึกข้อความ):** Up to 50 notes, title ≤ 60 chars, body ≤ 2000 chars, stored in client KVP `aeterna_phonekit:notes:v1`.
+  - **Contacts (รายชื่อผู้ติดต่อ):** Up to 100 contacts, name ≤ 40 chars, number ≤ 20 chars, stored in client KVP `aeterna_phonekit:contacts:v1`.
+  - **Settings (การตั้งค่า):** Text size (Normal / Large), 24-hour clock toggle, and "Edit layout" trigger when `aeterna_layout` runs. Stored in client KVP `aeterna_phonekit:settings:v1`.
+- **App API for other resources (ระบบเชื่อมต่อแอปภายนอก):** Resources register app tiles and render server-owned UI screens using `aeterna_uikit` panel specs inside the phone frame without writing custom HTML.
+- **Opening Check (ระบบตรวจสอบสิทธิ์ก่อนเปิด):** When `Config.ask = true`, the server fires `aeterna_phonekit:asking` and allows other resources (e.g. item checks) to allow or deny opening within 1000 ms.
+- **Optional `aeterna_layout` integration (รองรับการจัดวางผ่าน `aeterna_layout`):** Registers element `phone` (320 × 640 at scale 1, `scalable = true`, `hideable = false`) through local client events, allowing players to drag and scale the phone across the screen.
+
+### Deliberate limits in v0.1 / ขอบเขตที่ยังไม่รวมใน v0.1
+
+No voice/calls, no player-to-player messaging, no camera or photo gallery, no banking, no social feeds, and no SIM/numbering plans. Servers implement these as external apps through the App API.
+
+---
+
+## Install / การติดตั้ง
+
+1. Ensure dependencies start before `aeterna_phonekit`:
+
+```cfg
+ensure aeterna_core
+ensure aeterna_uikit
+ensure aeterna_notify
+ensure aeterna_phonekit
+```
+
+2. Configure opening behavior and apps in `config.lua` if desired.
+
+---
+
+## Configuration / การตั้งค่า
+
+`config.lua`:
+
+| Key | Default | Meaning / ความหมาย |
+|---|---|---|
+| `Config.position` | `'bottom-right'` | Screen position: `'bottom-right'` or `'bottom-left'` (24 px inset) / ตำแหน่งเริ่มต้นบนหน้าจอ |
+| `Config.ask` | `false` | When `true`, asks external resources before opening / สอบถามสิทธิ์จากรีซอร์สอื่นก่อนเปิด |
+| `Config.animation` | `true` | Hold phone prop with base animation while open / ถือโทรศัพท์และเล่นแอนิเมชัน |
+| `Config.apps` | `{ calculator = true, notes = true, contacts = true, settings = true }` | Built-in apps to show on the home screen / เปิดหรือปิดแอปพื้นฐาน |
+| `Config.maxApps` | `24` | Maximum external apps from other resources / จำนวนแอปภายนอกสูงสุดที่ลงทะเบียนได้ |
+
+---
+
+## App API (Server Exports) / การเรียกใช้งานสำหรับนักพัฒนา
+
+| Export | Arguments | Description / คำอธิบาย |
+|---|---|---|
+| `addTile(app)` | `app = { id, label, icon, order?, ace? }` | Registers an app tile on the home screen. `id` ≤ 32, `label` ≤ 24, `icon` from uikit icon names. Removed automatically when the owner resource stops. |
+| `removeTile(id)` | `id` | Removes an app tile registered by the calling resource. |
+| `showApp(src, id, spec)` | `src, id, spec` | Draws a uikit panel spec inside the phone frame for app `id`. Returns `screenId` or `nil, err`. |
+| `updateApp(src, screenId, patch)` | `src, screenId, patch` | Updates the active spec screen with partial block patches. |
+| `badge(src, id, count)` | `src, id, count` | Sets the badge counter on an app tile (clamped to 0–99). |
+| `notifyApp(src, id, opts)` | `src, id, { title, body }` | Phone open: displays an in-phone banner. Phone closed: displays an `aeterna_notify` toast. Adds 1 to the app badge unless the app is currently on screen. |
+| `listenOpen()` | — | Registers the calling resource as a listener for `Config.ask` checks. |
+| `allowOpen(checkId)` | `checkId` | Answers an opening check with permission to open. |
+| `denyOpen(checkId, reasonKey?)` | `checkId, reasonKey?` | Denies opening with an optional locale refusal key. |
+
+### Event Flow
+
+1. Player taps a tile -> server checks `app.ace` -> fires `aeterna_phonekit:app` -> `(src, { owner, id })`.
+2. The owner answers with `exports.aeterna_phonekit:showApp(src, id, spec)`.
+3. Player clicks a button or list item -> server validates action & form values -> fires `aeterna_phonekit:action` -> `(src, { owner, id, screenId, action, values })`.
+4. Back button from the root of an app fires `aeterna_phonekit:action` with `action = '__close'` and returns to the home screen.
+
+---
+
+## Commands and keys / คำสั่งและปุ่มลัด
+
+- `aeterna_phonekit_open` — Console / chat command to toggle the phone.
+- `+aeterna_phonekit_open` / `-aeterna_phonekit_open` — Key mapping registered via `AeternaCore.key` (no default key bound, bind in Settings -> Key Bindings -> FiveM).
+- Backspace or Right Mouse Button (RMB) returns to the previous screen.
+- ESC closes the phone.
+
+---
+
+## Capabilities
+
+What this resource is allowed to do to your server, from [`oss.json`](oss.json):
+
+| Capability | Declared |
+|---|---|
+| HTTP requests | none |
+| `ExecuteCommand` | none |
+| Registered commands | `aeterna_phonekit_open`, `+aeterna_phonekit_open`, `-aeterna_phonekit_open` |
+| Convars read | none |
+| Convars written | none |
+| Server net events (accepted from clients) | `aeterna_phonekit:sv:open`, `aeterna_phonekit:sv:tap`, `aeterna_phonekit:sv:action` |
+| Client net events (accepted from the server) | `aeterna_phonekit:cl:open`, `aeterna_phonekit:cl:screen`, `aeterna_phonekit:cl:update`, `aeterna_phonekit:cl:badge`, `aeterna_phonekit:cl:banner`, `aeterna_phonekit:cl:refused` |
+| NUI | yes |
+| Database tables | none (no DDL) |
+| Files written | none |
+
+---
+
+## Support scope / ขอบเขตการรองรับ
+
+- **Tested on / ทดสอบบน:** FXServer Enhanced & Legacy (cerulean, Lua 5.4), standalone with `aeterna_core`, `aeterna_uikit`, and `aeterna_notify`.
+- **Supported / รองรับ:** Standalone FiveM servers, optional draggable/scalable positioning with `aeterna_layout`, client KVP persistence, custom CSS theme overrides via `setr aeterna_theme`, and Thai/English locales.
+- **Not supported / ไม่รองรับ:** Voice or call streaming, server-side SMS databases, or execution without `aeterna_core`.
+
+---
+
+## Verify before you install
+
+Every release zip is built in CI and carries a build-provenance attestation:
+
+```sh
+gh attestation verify aeterna_phonekit-<version>.zip --repo aeterna/nakara-oss --signer-workflow aeterna/nakara-oss/.github/workflows/release.yml
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+---
+
+## Tests
+
+From the repository root:
+
+```sh
+busted --lpath='./packages/devkit/busted/?.lua;./?.lua;./?/init.lua' --pattern=_spec packages/phonekit/spec
+```
+
+---
+
+## License
+
+MIT. See [LICENSE](../../LICENSE). Bundled Lucide icon SVGs are ISC-licensed; see [NOTICE](NOTICE).

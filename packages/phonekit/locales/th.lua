@@ -1,0 +1,20 @@
+Locales = Locales or {}
+Locales.th = Locales.th or {}
+
+Locales.th['phonekit.key.open'] = 'เปิดโทรศัพท์'
+Locales.th['phonekit.home.title'] = 'โทรศัพท์'
+Locales.th['phonekit.back'] = 'ย้อนกลับ'
+Locales.th['phonekit.app.calculator'] = 'เครื่องคิดเลข'
+Locales.th['phonekit.app.notes'] = 'บันทึกข้อความ'
+Locales.th['phonekit.app.contacts'] = 'รายชื่อผู้ติดต่อ'
+Locales.th['phonekit.app.settings'] = 'การตั้งค่า'
+Locales.th['phonekit.notes.new'] = 'โน้ตใหม่'
+Locales.th['phonekit.notes.empty'] = 'ไม่มีบันทึกข้อความ'
+Locales.th['phonekit.notes.full'] = 'พื้นที่จัดเก็บบันทึกเต็ม'
+Locales.th['phonekit.contacts.new'] = 'เพิ่มผู้ติดต่อ'
+Locales.th['phonekit.contacts.empty'] = 'ไม่มีรายชื่อผู้ติดต่อ'
+Locales.th['phonekit.contacts.full'] = 'พื้นที่จัดเก็บรายชื่อเต็ม'
+Locales.th['phonekit.settings.textSize'] = 'ขนาดตัวอักษร'
+Locales.th['phonekit.settings.clock24'] = 'เวลาแบบ 24 ชั่วโมง'
+Locales.th['phonekit.settings.layout'] = 'ปรับแต่งตำแหน่ง'
+Locales.th['phonekit.refused.default'] = 'ไม่สามารถเปิดโทรศัพท์ได้ในขณะนี้'
