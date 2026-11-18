@@ -1,0 +1,32 @@
+{
+  "$schema": "../../oss.schema.json",
+  "name": "layout",
+  "resource": "aeterna_layout",
+  "capabilities": {
+    "http": [],
+    "commands": [],
+    "registeredCommands": [
+      "aeterna_layout",
+      "+aeterna_layout_edit",
+      "-aeterna_layout_edit"
+    ],
+    "convars": {
+      "read": [],
+      "write": []
+    },
+    "netEvents": {
+      "server": [],
+      "client": [
+        "aeterna_layout:cl:open"
+      ]
+    },
+    "nui": true,
+    "db": {
+      "tables": [],
+      "ddl": false
+    },
+    "files": {
+      "write": []
+    }
+  }
+}
