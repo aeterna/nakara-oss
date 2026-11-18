@@ -1,0 +1,456 @@
+/* aeterna_uikit stylesheet — uses only tokens from html/theme.css (ADR 0004 decision 6). */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;
+    font-family: var(--font);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.45;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.uikit-root {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+}
+
+.layer {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    pointer-events: none;
+}
+
+.layer-center {
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    pointer-events: auto;
+}
+
+.layer-bottom {
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 72px;
+}
+
+.card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-l);
+    padding: var(--pad);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: calc(100vh - 64px);
+    pointer-events: auto;
+    transition: opacity var(--enter) var(--ease), transform var(--enter) var(--ease);
+}
+
+.card-sm { width: 360px; }
+.card-md { width: 480px; }
+.card-lg { width: 720px; }
+
+.card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+}
+
+.card-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.card-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+    word-break: break-word;
+}
+
+.card-subtitle {
+    font-size: 13px;
+    color: var(--text-2);
+    word-break: break-word;
+}
+
+.close-btn {
+    appearance: none;
+    background: var(--raised);
+    color: var(--text-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.close-btn:hover {
+    color: var(--text);
+}
+
+.card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.block-text {
+    color: var(--text-2);
+    font-size: 14px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.block-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-2);
+    margin-bottom: 4px;
+}
+
+.block-divider {
+    height: 1px;
+    background: var(--line);
+    border: none;
+    margin: 2px 0;
+}
+
+.list-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.list-item {
+    appearance: none;
+    width: 100%;
+    text-align: left;
+    background: var(--raised);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 14px;
+    transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+
+.list-item:hover:not(:disabled) {
+    border-color: var(--accent);
+}
+
+.list-item:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.list-item-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.list-item-icon {
+    color: var(--text-2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.list-item-label {
+    color: var(--text);
+    font-weight: 500;
+    word-break: break-word;
+}
+
+.list-item-meta {
+    color: var(--text-3);
+    font-size: 12px;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.field-input, .select-input {
+    width: 100%;
+    background: var(--raised);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    padding: 8px 10px;
+    font-family: var(--font);
+    font-size: 14px;
+    transition: border-color var(--fast) var(--ease);
+}
+
+.field-input::placeholder {
+    color: var(--text-3);
+}
+
+.field-input:disabled, .select-input:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    padding: 8px 10px;
+}
+
+.toggle-btn {
+    appearance: none;
+    width: 40px;
+    height: 22px;
+    border-radius: var(--radius-l);
+    background: var(--track);
+    border: 1px solid var(--line);
+    position: relative;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background var(--fast) var(--ease);
+}
+
+.toggle-btn[aria-checked="true"] {
+    background: var(--accent);
+}
+
+.toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: var(--radius-l);
+    background: var(--on-accent);
+    transition: transform var(--fast) var(--ease);
+}
+
+.toggle-btn[aria-checked="true"] .toggle-thumb {
+    transform: translateX(18px);
+}
+
+.progress-block {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.progress-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+}
+
+.progress-track {
+    width: 100%;
+    height: 8px;
+    background: var(--track);
+    border-radius: var(--radius-s);
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: var(--radius-s);
+    transition: width var(--fast) var(--ease);
+}
+
+.buttons-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding-top: 4px;
+}
+
+.btn {
+    appearance: none;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    padding: 8px 14px;
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: opacity var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+
+.btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: var(--on-accent);
+    border-color: var(--accent);
+}
+
+.btn-secondary {
+    background: var(--raised);
+    color: var(--text);
+}
+
+.btn-danger {
+    background: var(--bad);
+    color: var(--on-accent);
+    border-color: var(--bad);
+}
+
+/* Progress prompt bar */
+.progress-prompt-card {
+    width: 320px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    padding: 12px var(--pad);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Skill check bar */
+.skill-card {
+    width: 360px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    padding: 12px var(--pad);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: auto;
+}
+
+.skill-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--text-2);
+}
+
+.skill-track {
+    position: relative;
+    width: 100%;
+    height: 14px;
+    background: var(--track);
+    border-radius: var(--radius-s);
+    overflow: hidden;
+}
+
+.skill-zone {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: var(--good);
+}
+
+.skill-marker {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--on-accent);
+}
+
+/* Key hints */
+.hints-container {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    pointer-events: none;
+}
+
+.hint-row {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.hint-key {
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    padding: 2px 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
+.hint-label {
+    font-size: 13px;
+    color: var(--text-2);
+}
+
+/* Keyboard accessibility focus ring (ADR 0004 decision 13) */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}

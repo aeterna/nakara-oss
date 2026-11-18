@@ -1,0 +1,44 @@
+{
+  "$schema": "../../oss.schema.json",
+  "name": "uikit",
+  "resource": "aeterna_uikit",
+  "capabilities": {
+    "http": [],
+    "commands": [],
+    "registeredCommands": [
+      "aeterna_uikit_menu",
+      "+aeterna_uikit_menu",
+      "-aeterna_uikit_menu",
+      "+aeterna_uikit_cancel",
+      "-aeterna_uikit_cancel",
+      "+aeterna_uikit_skill",
+      "-aeterna_uikit_skill"
+    ],
+    "convars": {
+      "read": [
+        "aeterna_uikit_menu_title"
+      ],
+      "write": []
+    },
+    "netEvents": {
+      "server": [
+        "aeterna_uikit:sv:action",
+        "aeterna_uikit:sv:menu",
+        "aeterna_uikit:sv:showMenu"
+      ],
+      "client": [
+        "aeterna_uikit:cl:open",
+        "aeterna_uikit:cl:update",
+        "aeterna_uikit:cl:close"
+      ]
+    },
+    "nui": true,
+    "db": {
+      "tables": [],
+      "ddl": false
+    },
+    "files": {
+      "write": []
+    }
+  }
+}
