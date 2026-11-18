@@ -24,6 +24,18 @@
       "plan": "starter-kit",
       "acquired": "2026-11-18T13:35:04Z",
       "expires": "2026-11-18T17:35:04Z"
+    },
+    {
+      "id": "kit-fix-demo-09a81f6c",
+      "repo": "nakara-oss",
+      "lane": "kit-fix-demo",
+      "host": "win",
+      "scope": [
+        "spikes/kit-demo/**"
+      ],
+      "plan": "starter-kit",
+      "acquired": "2026-11-18T13:35:44Z",
+      "expires": "2026-11-18T17:35:44Z"
     }
   ]
 }
