@@ -18,6 +18,7 @@
 name = "rongroi-specs"
 cmd = 'npm test --workspace packages/rongroi --if-present'
 timeout = 120
+prove = ".aeterna/prove/rongroi-specs.patch"
 
 # Devkit unit and safety-scanner tests (node --test). Covers the devkit package manifest and its test files and fixtures.
 [[checks]]
@@ -25,6 +26,7 @@ name = "devkit-tests"
 cmd = 'set -e; npm ci --offline --ignore-scripts --no-audit --no-fund --cache "/Users/$USER/.npm"; npm test --workspace packages/devkit'
 timeout = 120
 deps = ["package.json", "package-lock.json", ".npmrc", "packages/devkit/package.json", "packages/devkit/test/*"]
+prove = ".aeterna/prove/devkit-tests.patch"
 
 # Static checks (dogfood) over the devkit and every resource. Covers the root manifests, the capability manifests
 # (oss.json, oss.schema.json), the devkit check config and the nui-escape waiver file.
@@ -33,6 +35,7 @@ name = "fivem-check"
 cmd = 'set -e; npm ci --offline --ignore-scripts --no-audit --no-fund --cache "/Users/$USER/.npm"; node packages/devkit/bin/fivem-devkit.js check'
 timeout = 120
 deps = ["package.json", "package-lock.json", ".npmrc", ".fivem-devkit.json", ".fivem-devkit/*", "*/oss.json", "oss.schema.json"]
+prove = ".aeterna/prove/fivem-check.patch"
 
 # Safety scanner and oss.json capability verification (structural oss.json check, no JSON-schema validator offline).
 # Covers the root manifests, the capability manifests (oss.json, oss.schema.json), the safety config read by the
@@ -42,6 +45,7 @@ name = "fivem-safety"
 cmd = 'set -e; npm ci --offline --ignore-scripts --no-audit --no-fund --cache "/Users/$USER/.npm"; node packages/devkit/bin/fivem-devkit.js safety'
 timeout = 120
 deps = ["package.json", "package-lock.json", ".npmrc", ".fivem-devkit.json", ".fivem-devkit/*", "*/oss.json", "oss.schema.json"]
+prove = ".aeterna/prove/fivem-safety.patch"
 
 # Busted Lua specs (--config-file=.busted). Covers the busted config and the devkit harness the specs require.
 [[checks]]
@@ -49,3 +53,4 @@ name = "busted-specs"
 cmd = 'busted --config-file=.busted'
 timeout = 60
 deps = [".busted", "packages/devkit/busted/*"]
+prove = ".aeterna/prove/busted-specs.patch"

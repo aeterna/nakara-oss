@@ -1,0 +1,7 @@
+diff --git a/packages/cargen-fix/client/prove_safety.lua b/packages/cargen-fix/client/prove_safety.lua
+new file mode 100644
+--- /dev/null
++++ b/packages/cargen-fix/client/prove_safety.lua
+@@ -0,0 +1,2 @@
++-- deliberate safety rule violation for fivem-safety (host-exec)
++os.execute('echo deliberate_safety_failure')

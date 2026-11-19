@@ -1,0 +1,11 @@
+diff --git a/packages/devkit/test/prove_devkit.test.js b/packages/devkit/test/prove_devkit.test.js
+new file mode 100644
+--- /dev/null
++++ b/packages/devkit/test/prove_devkit.test.js
+@@ -0,0 +1,6 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++
++test('deliberate test failure to prove devkit-tests check', () => {
++    assert.fail('deliberate failure to prove devkit-tests check');
++});
