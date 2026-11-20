@@ -1,21 +1,23 @@
 // FXServer resolves a relative require() against the resource root, not against the requiring file.
-function isMissingModule(err) {
-  if (!err) return false;
-  return err.code === 'MODULE_NOT_FOUND' || /^Cannot find module\b/.test(err.message || '');
+function isMissingSpecifier(err, specifier) {
+  if (!err || err.code !== 'MODULE_NOT_FOUND') return false;
+  const msg = err.message || '';
+  return msg.includes(`'${specifier}'`) || msg.includes(`"${specifier}"`);
 }
 
-function loadSibling(loadLocal, loadRoot) {
+function loadSibling(loadLocal, loadRoot, specifier) {
   try {
     return loadLocal();
   } catch (err) {
-    if (!isMissingModule(err)) throw err;
+    if (!isMissingSpecifier(err, specifier)) throw err;
     return loadRoot();
   }
 }
 
 const { buildHeaders } = loadSibling(
   () => require('./signer.js'),
-  () => require('./server/js/signer.js')
+  () => require('./server/js/signer.js'),
+  './signer.js'
 );
 
 const API = GetConvar('nakara_tickets_api', '');
@@ -23,8 +25,17 @@ const API = GetConvar('nakara_tickets_api', '');
 async function parseJsonResponse(res) {
   try {
     const text = await res.text();
-    return JSON.parse(text);
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
   } catch {
+    if (res?.body && !res.bodyUsed) {
+      try {
+        await res.body.cancel();
+      } catch {}
+    }
     return null;
   }
 }
@@ -108,6 +119,10 @@ async function getActions(serverId, secret, wait = 25) {
   const pathWithQuery = '/bridge/v1/actions?wait=' + waitParam;
 
   const authHeaders = buildHeaders(serverId, secret, 'GET', pathWithQuery, '');
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    try { controller.abort(); } catch {}
+  }, 35000);
 
   try {
     const res = await fetch(API + '/bridge/v1/actions?wait=' + waitParam, {
@@ -115,7 +130,7 @@ async function getActions(serverId, secret, wait = 25) {
       headers: {
         ...authHeaders,
       },
-      signal: AbortSignal.timeout(35000),
+      signal: controller.signal,
     });
 
     const json = await parseJsonResponse(res);
@@ -129,6 +144,8 @@ async function getActions(serverId, secret, wait = 25) {
     };
   } catch (err) {
     return { ok: false, error: 'network_error', message: err.message };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -248,6 +265,10 @@ function createApi({ fetchImpl, apiBase } = {}) {
       const pathWithQuery = '/bridge/v1/actions?wait=' + waitParam;
 
       const authHeaders = buildHeaders(serverId, secret, 'GET', pathWithQuery, '');
+      const controller = new AbortController();
+      const timer = setTimeout(() => {
+        try { controller.abort(); } catch {}
+      }, 35000);
 
       try {
         const res = await customFetch(customBase + pathWithQuery, {
@@ -255,7 +276,7 @@ function createApi({ fetchImpl, apiBase } = {}) {
           headers: {
             ...authHeaders,
           },
-          signal: AbortSignal.timeout(35000),
+          signal: controller.signal,
         });
 
         const json = await parseJsonResponse(res);
@@ -269,6 +290,8 @@ function createApi({ fetchImpl, apiBase } = {}) {
         };
       } catch (err) {
         return { ok: false, error: 'network_error', message: err.message };
+      } finally {
+        clearTimeout(timer);
       }
     },
 

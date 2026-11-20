@@ -19,6 +19,8 @@ All notable changes to `nakara_tickets` are documented here. The format follows
 
 ### Fixed
 
+- Action execution player validation, loader dependency resolution, and long-poll reader cleanup.
+
 - Validate give_item allowlist using Object.hasOwn and enforce positive integer caps.
 - Base64url secret decoding in `signer.js` to match bridge API HMAC key representation.
 - Global export function resolution in CommonJS module `actions.js` using `globalThis.exports`.
