@@ -113,7 +113,7 @@ describe('packages/tickets actions execution (g1)', () => {
     assert.equal(res.ok, true);
     assert.equal(res.code, 'done');
     assert.equal(reviveCallCount, 1);
-    assert.equal(reviveCalledWith, '1');
+    assert.equal(reviveCalledWith, 1);
   });
 
   it('give_item not in allow → not_allowed', async () => {
@@ -205,7 +205,7 @@ describe('packages/tickets actions execution (g1)', () => {
     assert.equal(res.code, 'done');
     assert.equal(canCarryCalled, true);
     assert.equal(addItemCalledCount, 1);
-    assert.deepEqual(addItemArgs, { src: '1', item: 'bandage', count: 3 });
+    assert.deepEqual(addItemArgs, { src: 1, item: 'bandage', count: 3 });
   });
 
   it('give_item prototype property rejection (Object.hasOwn) → not_allowed', async () => {
@@ -280,5 +280,170 @@ describe('packages/tickets actions execution (g1)', () => {
     });
     assert.equal(resStr.ok, false);
     assert.equal(resStr.code, 'not_allowed');
+  });
+
+  it('player.info uses lowercase getPlayers when GetPlayers is absent', async () => {
+    const originalGetPlayers = globalThis.GetPlayers;
+    try {
+      delete globalThis.GetPlayers;
+      globalThis.getPlayers = () => ['7'];
+      playerIdentifiers = {
+        '7': ['license:x', 'discord:111122223333444455'],
+      };
+
+      const res = await actions.executeAction({
+        id: 'act-info-getplayers',
+        action: 'player.info',
+        discordId: '111122223333444455',
+      });
+
+      assert.notEqual(res.code, 'player_offline');
+      assert.equal(res.ok, true);
+      assert.equal(res.code, 'done');
+    } finally {
+      globalThis.GetPlayers = originalGetPlayers;
+      delete globalThis.getPlayers;
+    }
+  });
+
+  it('player.info uses player indices when GetPlayers and getPlayers are absent', async () => {
+    const originalGetPlayers = globalThis.GetPlayers;
+    try {
+      delete globalThis.GetPlayers;
+      playerIdentifiers = {
+        '9': ['license:x', 'discord:111122223333444455'],
+      };
+      globalThis.GetNumPlayerIndices = () => 1;
+      globalThis.GetPlayerFromIndex = (index) => (index === 0 ? 9 : null);
+
+      const res = await actions.executeAction({
+        id: 'act-info-indices',
+        action: 'player.info',
+        discordId: '111122223333444455',
+      });
+
+      assert.notEqual(res.code, 'player_offline');
+      assert.equal(res.ok, true);
+      assert.equal(res.code, 'done');
+    } finally {
+      globalThis.GetPlayers = originalGetPlayers;
+      delete globalThis.GetNumPlayerIndices;
+      delete globalThis.GetPlayerFromIndex;
+    }
+  });
+
+  it('player.info uses GetNumPlayerIdentifiers and GetPlayerIdentifier when GetPlayerIdentifiers is absent', async () => {
+    const originalGetPlayerIdentifiers = globalThis.GetPlayerIdentifiers;
+    try {
+      delete globalThis.GetPlayerIdentifiers;
+      onlinePlayers = ['7'];
+      const p7Identifiers = ['license:x', 'discord:111122223333444455'];
+      globalThis.GetNumPlayerIdentifiers = (playerId) => (String(playerId) === '7' ? p7Identifiers.length : 0);
+      globalThis.GetPlayerIdentifier = (playerId, index) => (String(playerId) === '7' ? p7Identifiers[index] : null);
+
+      const res = await actions.executeAction({
+        id: 'act-info-num-identifiers',
+        action: 'player.info',
+        discordId: '111122223333444455',
+      });
+
+      assert.notEqual(res.code, 'player_offline');
+      assert.equal(res.ok, true);
+      assert.equal(res.code, 'done');
+    } finally {
+      globalThis.GetPlayerIdentifiers = originalGetPlayerIdentifiers;
+      delete globalThis.GetNumPlayerIdentifiers;
+      delete globalThis.GetPlayerIdentifier;
+    }
+  });
+
+  it('give_item when AddItem returns [false, "invalid_inventory"] → returns ok:false, error, message containing invalid_inventory', async () => {
+    actions.setConfig({
+      enabledActions: ['player.info', 'player.teleport', 'player.give_item'],
+      giveItem: {
+        allow: {
+          water: 5,
+        },
+      },
+    });
+    mockResourceStates.ox_inventory = 'started';
+
+    mockExports.ox_inventory.CanCarryItem = () => true;
+    mockExports.ox_inventory.AddItem = () => [false, 'invalid_inventory'];
+
+    const res = await actions.executeAction({
+      id: 'act-give-array-fail',
+      action: 'player.give_item',
+      discordId: '111122223333444455',
+      params: {
+        item: 'water',
+        count: 1,
+      },
+    });
+
+    assert.equal(res.ok, false);
+    assert.equal(res.code, 'error');
+    assert.match(res.message, /invalid_inventory/);
+  });
+
+  it('player id received by AddItem, CanCarryItem, and Revive is a number, while GetPlayers returns strings', async () => {
+    actions.setConfig({
+      enabledActions: ['player.info', 'player.teleport', 'player.revive', 'player.give_item'],
+      giveItem: {
+        allow: {
+          water: 5,
+        },
+      },
+    });
+    mockResourceStates.ox_inventory = 'started';
+    mockResourceStates.qbx_medical = 'started';
+
+    let canCarryIdType = null;
+    let addItemIdType = null;
+    let reviveIdType = null;
+    let getPlayersResultTypes = null;
+
+    mockExports.ox_inventory.CanCarryItem = (src) => {
+      canCarryIdType = typeof src;
+      return true;
+    };
+    mockExports.ox_inventory.AddItem = (src) => {
+      addItemIdType = typeof src;
+      return true;
+    };
+    mockExports.qbx_medical.Revive = (src) => {
+      reviveIdType = typeof src;
+      return true;
+    };
+    const originalGetPlayers = globalThis.GetPlayers;
+    globalThis.GetPlayers = () => {
+      const players = originalGetPlayers();
+      getPlayersResultTypes = players.map(p => typeof p);
+      return players;
+    };
+
+    try {
+      const resGive = await actions.executeAction({
+        id: 'act-type-give',
+        action: 'player.give_item',
+        discordId: '111122223333444455',
+        params: { item: 'water', count: 1 },
+      });
+      assert.equal(resGive.ok, true);
+
+      const resRevive = await actions.executeAction({
+        id: 'act-type-revive',
+        action: 'player.revive',
+        discordId: '111122223333444455',
+      });
+      assert.equal(resRevive.ok, true);
+
+      assert.equal(addItemIdType, 'number');
+      assert.equal(canCarryIdType, 'number');
+      assert.equal(reviveIdType, 'number');
+      assert.ok(getPlayersResultTypes.every(t => t === 'string'));
+    } finally {
+      globalThis.GetPlayers = originalGetPlayers;
+    }
   });
 });
