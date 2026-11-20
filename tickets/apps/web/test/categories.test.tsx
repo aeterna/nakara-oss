@@ -4,6 +4,7 @@ import React from 'react';
 import { Categories } from '../src/pages/Categories.js';
 import { api } from '../src/api.js';
 import * as serversApi from '../src/api/servers.js';
+import * as discordApi from '../src/api/discord.js';
 import type { Category } from '../src/types.js';
 import type { GameServer } from '../src/api/servers.js';
 
@@ -54,6 +55,13 @@ describe('Categories component', () => {
   it('renders server name in the table and Edit fills the form then saving sends selected gameServerId', async () => {
     vi.spyOn(api, 'getCategories').mockResolvedValue([mockCategory]);
     vi.spyOn(serversApi, 'getGameServers').mockResolvedValue(mockServers);
+    vi.spyOn(discordApi, 'getGuildChannels').mockResolvedValue([
+      { id: '987654321098765432', name: 'ticket-parent', type: 0, parentId: null, position: 0 },
+    ]);
+    vi.spyOn(discordApi, 'getGuildRoles').mockResolvedValue([
+      { id: 'role-123', name: 'Role 123', color: 0, position: 1 },
+      { id: 'role-456', name: 'Role 456', color: 0, position: 2 },
+    ]);
     const updateSpy = vi.spyOn(api, 'updateCategory').mockResolvedValue({
       ...mockCategory,
       gameServerId: 'srv-2',
@@ -65,8 +73,9 @@ describe('Categories component', () => {
       expect(screen.getByText('General Support')).toBeTruthy();
     });
 
-    // Server name appears in the table
+    // Server name and channel name appear in the table
     expect(screen.getByText('Alpha Server')).toBeTruthy();
+    expect(screen.getByText('#ticket-parent')).toBeTruthy();
 
     // Click Edit button
     const editBtn = screen.getByText('Edit');
@@ -76,11 +85,11 @@ describe('Categories component', () => {
     const nameInput = screen.getByLabelText('Category Name') as HTMLInputElement;
     expect(nameInput.value).toBe('General Support');
 
-    const parentInput = screen.getByLabelText('Parent Channel ID') as HTMLInputElement;
-    expect(parentInput.value).toBe('987654321098765432');
+    const parentSelect = screen.getByLabelText('Parent Channel ID') as HTMLSelectElement;
+    expect(parentSelect.value).toBe('987654321098765432');
 
-    const rolesInput = screen.getByLabelText('Staff Role IDs') as HTMLInputElement;
-    expect(rolesInput.value).toBe('role-123, role-456');
+    expect((screen.getByLabelText('Role 123') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Role 456') as HTMLInputElement).checked).toBe(true);
 
     const serverSelect = screen.getByLabelText('Game server') as HTMLSelectElement;
     expect(serverSelect.value).toBe('srv-1');
@@ -98,6 +107,8 @@ describe('Categories component', () => {
         mockCategory.id,
         expect.objectContaining({
           name: 'General Support',
+          parentChannelId: '987654321098765432',
+          staffRoleIds: ['role-123', 'role-456'],
           gameServerId: 'srv-2',
         })
       );
@@ -107,6 +118,8 @@ describe('Categories component', () => {
   it('sends null gameServerId when none is selected', async () => {
     vi.spyOn(api, 'getCategories').mockResolvedValue([mockCategory]);
     vi.spyOn(serversApi, 'getGameServers').mockResolvedValue(mockServers);
+    vi.spyOn(discordApi, 'getGuildChannels').mockResolvedValue([]);
+    vi.spyOn(discordApi, 'getGuildRoles').mockResolvedValue([]);
     const updateSpy = vi.spyOn(api, 'updateCategory').mockResolvedValue({
       ...mockCategory,
       gameServerId: null,

@@ -3,6 +3,8 @@ import type { Locale } from '../i18n.js';
 import { t } from '../i18n.js';
 import { api } from '../api.js';
 import { panelsApi, type Panel, type PanelInput, type PanelButton } from '../api/panels.js';
+import { getGuildChannels, type DiscordChannel } from '../api/discord.js';
+import { ChannelSelect } from '../components/DiscordPicker.js';
 import type { Category } from '../types.js';
 import './Panels.css';
 
@@ -27,6 +29,8 @@ function hexToIntColor(hex: string): number {
 export const Panels: React.FC<PanelsProps> = ({ guildId, locale }) => {
   const [panels, setPanels] = useState<Panel[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [channels, setChannels] = useState<DiscordChannel[]>([]);
+  const [channelError, setChannelError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const [sending, setSending] = useState<boolean>(false);
@@ -52,12 +56,14 @@ export const Panels: React.FC<PanelsProps> = ({ guildId, locale }) => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [panelsData, catsData] = await Promise.all([
+      const [panelsData, catsData, channelsData] = await Promise.all([
         panelsApi.getPanels(guildId),
         api.getCategories(guildId),
+        getGuildChannels(guildId).then((c) => { setChannelError(null); return c; }).catch((e) => { setChannelError(e?.message || t('error', locale)); return [] as DiscordChannel[]; }),
       ]);
       setPanels(panelsData);
       setCategories(catsData);
+      setChannels(channelsData);
 
       // Default the first button's category if empty and categories exist
       if (catsData.length > 0) {
@@ -347,7 +353,9 @@ export const Panels: React.FC<PanelsProps> = ({ guildId, locale }) => {
                 onClick={() => selectPanel(p)}
               >
                 <div className="panel-item-title">{p.embed.title || 'Untitled Panel'}</div>
-                <div className="panel-item-channel">Channel: {p.channelId}</div>
+                <div className="panel-item-channel">
+                  Channel: {channels.find((c) => c.id === p.channelId)?.name ? `#${channels.find((c) => c.id === p.channelId)!.name}` : p.channelId}
+                </div>
                 {p.messageId && (
                   <span className="panel-item-status">✓ {t('sentToDiscordStatus', locale)}</span>
                 )}
@@ -365,15 +373,16 @@ export const Panels: React.FC<PanelsProps> = ({ guildId, locale }) => {
           <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div className="form-group">
               <label htmlFor="panel-channel-id">{t('channelId', locale)}</label>
-              <input
+              <ChannelSelect
                 id="panel-channel-id"
                 data-testid="panel-channel-input"
-                type="text"
-                className="form-control"
-                placeholder={t('channelIdPlaceholder', locale)}
+                channels={channels}
+                error={channelError}
+                allowedTypes={[0, 5]}
                 value={channelId}
-                onChange={(e) => setChannelId(e.target.value)}
+                onChange={setChannelId}
                 required
+                locale={locale}
               />
             </div>
 

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import type { Category, CategoryInput } from '../types.js';
 import { api } from '../api.js';
 import { getGameServers, type GameServer } from '../api/servers.js';
+import { getGuildChannels, getGuildRoles, type DiscordChannel, type DiscordRole } from '../api/discord.js';
+import { ChannelSelect, RoleMultiSelect } from '../components/DiscordPicker.js';
 import { t, type Locale } from '../i18n.js';
 
 export interface CategoriesProps {
@@ -12,6 +14,10 @@ export interface CategoriesProps {
 export const Categories: React.FC<CategoriesProps> = ({ guildId, locale }) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [servers, setServers] = useState<GameServer[]>([]);
+  const [channels, setChannels] = useState<DiscordChannel[]>([]);
+  const [roles, setRoles] = useState<DiscordRole[]>([]);
+  const [channelError, setChannelError] = useState<string | null>(null);
+  const [roleError, setRoleError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,7 +29,7 @@ export const Categories: React.FC<CategoriesProps> = ({ guildId, locale }) => {
   const [formEmoji, setFormEmoji] = useState<string>('');
   const [formMode, setFormMode] = useState<'thread' | 'channel'>('thread');
   const [formParentId, setFormParentId] = useState<string>('');
-  const [formRoles, setFormRoles] = useState<string>('');
+  const [formRoles, setFormRoles] = useState<string[]>([]);
   const [formTemplate, setFormTemplate] = useState<string>('ticket-{number}');
   const [formMaxOpen, setFormMaxOpen] = useState<string>('1');
   const [formWelcome, setFormWelcome] = useState<string>('');
@@ -34,12 +40,16 @@ export const Categories: React.FC<CategoriesProps> = ({ guildId, locale }) => {
     try {
       setLoading(true);
       setError(null);
-      const [data, serversData] = await Promise.all([
+      const [data, serversData, channelsData, rolesData] = await Promise.all([
         api.getCategories(guildId),
         getGameServers(guildId).catch(() => [] as GameServer[]),
+        getGuildChannels(guildId).then((c) => { setChannelError(null); return c; }).catch((e) => { setChannelError(e?.message || t('error', locale)); return [] as DiscordChannel[]; }),
+        getGuildRoles(guildId).then((r) => { setRoleError(null); return r; }).catch((e) => { setRoleError(e?.message || t('error', locale)); return [] as DiscordRole[]; }),
       ]);
       setCategories(data);
       setServers(serversData);
+      setChannels(channelsData);
+      setRoles(rolesData);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t('error', locale));
     } finally {
@@ -56,7 +66,7 @@ export const Categories: React.FC<CategoriesProps> = ({ guildId, locale }) => {
     setFormEmoji('');
     setFormMode('thread');
     setFormParentId('');
-    setFormRoles('');
+    setFormRoles([]);
     setFormTemplate('ticket-{number}');
     setFormMaxOpen('1');
     setFormWelcome('');
@@ -77,7 +87,7 @@ export const Categories: React.FC<CategoriesProps> = ({ guildId, locale }) => {
     setFormEmoji(category.emoji || '');
     setFormMode(category.mode);
     setFormParentId(category.parentChannelId);
-    setFormRoles((category.staffRoleIds || []).join(', '));
+    setFormRoles(category.staffRoleIds || []);
     setFormTemplate(category.nameTemplate || 'ticket-{number}');
     setFormMaxOpen(String(category.maxOpenPerUser ?? 1));
     setFormWelcome(category.welcomeMessage || '');
@@ -90,16 +100,11 @@ export const Categories: React.FC<CategoriesProps> = ({ guildId, locale }) => {
     e.preventDefault();
     setError(null);
 
-    const roles = formRoles
-      .split(',')
-      .map((r) => r.trim())
-      .filter(Boolean);
-
     const payload: CategoryInput = {
       name: formName.trim(),
       mode: formMode,
       parentChannelId: formParentId.trim(),
-      staffRoleIds: roles,
+      staffRoleIds: formRoles,
       nameTemplate: formTemplate.trim() || 'ticket-{number}',
       maxOpenPerUser: parseInt(formMaxOpen, 10) || 1,
       gameServerId: formGameServerId || null,
@@ -204,26 +209,27 @@ export const Categories: React.FC<CategoriesProps> = ({ guildId, locale }) => {
 
             <div className="form-group">
               <label htmlFor="cat-parent" className="form-label">{t('parentChannelId', locale)}</label>
-              <input
+              <ChannelSelect
                 id="cat-parent"
-                type="text"
-                className="form-control"
+                channels={channels}
+                error={channelError}
+                allowedTypes={formMode === 'thread' ? [0, 5, 15] : [4]}
                 value={formParentId}
-                onChange={(e) => setFormParentId(e.target.value)}
+                onChange={setFormParentId}
                 required
+                locale={locale}
               />
             </div>
 
             <div className="form-group">
               <label htmlFor="cat-roles" className="form-label">{t('staffRoleIds', locale)}</label>
-              <input
+              <RoleMultiSelect
                 id="cat-roles"
-                type="text"
-                className="form-control"
+                roles={roles}
+                error={roleError}
                 value={formRoles}
-                onChange={(e) => setFormRoles(e.target.value)}
-                placeholder="123456789012345678, 234567890123456789"
-                required
+                onChange={setFormRoles}
+                locale={locale}
               />
             </div>
 
@@ -328,7 +334,13 @@ export const Categories: React.FC<CategoriesProps> = ({ guildId, locale }) => {
                       {cat.mode}
                     </span>
                   </td>
-                  <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{cat.parentChannelId}</td>
+                  <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    {channels.find((c) => c.id === cat.parentChannelId)?.name
+                      ? (channels.find((c) => c.id === cat.parentChannelId)!.type === 4
+                          ? channels.find((c) => c.id === cat.parentChannelId)!.name
+                          : `#${channels.find((c) => c.id === cat.parentChannelId)!.name}`)
+                      : cat.parentChannelId}
+                  </td>
                   <td>
                     {cat.gameServerId
                       ? (servers.find((s) => s.id === cat.gameServerId)?.name ?? cat.gameServerId)
