@@ -1,0 +1,71 @@
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, afterAll } from 'vitest';
+import Fastify from 'fastify';
+import { eq } from 'drizzle-orm';
+import { openTestDb, type TestDbHandle } from '@nakara-tickets/db/test-support';
+import { guilds, categories } from '@nakara-tickets/db';
+import { installSession } from '../src/session.js';
+import routes from '../src/routes/index.js';
+import type { TicketsConfig } from '../src/config.js';
+import { createTestSession } from './helpers/session.js';
+
+describe('GET /api/v1/me (name from OAuth list wins over placeholder)', () => {
+  const GUILD_ID = '111111111111111111';
+  const USER = '333333333333333333';
+  const ROLE = '444444444444444444';
+  const config: TicketsConfig = {
+    ROLE: 'all', PORT: 8080, DATABASE_URL: 'postgres://localhost/mock',
+    TICKETS_DATA_KEY: Buffer.alloc(32, 5), DISCORD_TOKEN: 'mock-bot',
+    DISCORD_APP_ID: '123456789012345678', DISCORD_CLIENT_SECRET: 'mock-sec',
+    PUBLIC_ORIGIN: 'http://localhost:8080', ALLOWED_GUILD_IDS: [GUILD_ID], STORAGE_DIR: '/tmp',
+  };
+
+  let env: TestDbHandle;
+  let app: ReturnType<typeof Fastify>;
+  let cookie: string;
+
+  beforeAll(async () => { env = await openTestDb(); });
+  afterAll(async () => { await env.close(); });
+
+  beforeEach(async () => {
+    await env.reset();
+    await env.db.insert(guilds).values({ guild_id: GUILD_ID, name: `Guild ${GUILD_ID}` });
+    await env.db.insert(categories).values({
+      id: '11111111-1111-1111-1111-111111111111', guild_id: GUILD_ID,
+      name: 'General', staff_role_ids: [ROLE], mode: 'thread', parent_channel_id: '999',
+    });
+
+    ({ cookie } = await createTestSession(env.db, config, { userId: USER, username: 'staff' }));
+
+    app = Fastify();
+    app.decorate('config', config);
+    app.decorate('db', env.db);
+    await installSession(app, { config, db: env.db });
+    await app.register(routes);
+    await app.ready();
+
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => {
+      const u = String(url);
+      if (u.includes('/users/@me/guilds')) {
+        return { ok: true, status: 200, json: async () => [{ id: GUILD_ID, name: 'Real OAuth Name' }] };
+      }
+      if (u.includes('/members/')) {
+        return { ok: true, status: 200, json: async () => ({ roles: [ROLE], user: { id: USER } }) };
+      }
+      if (u.includes('/roles')) {
+        return { ok: true, status: 200, json: async () => [{ id: ROLE, permissions: '0' }] };
+      }
+      return { ok: false, status: 404 };
+    }));
+  });
+
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('name from OAuth list wins over placeholder', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/v1/me', headers: { cookie } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().guilds[0].name).toBe('Real OAuth Name');
+
+    const [row] = await env.db.select().from(guilds).where(eq(guilds.guild_id, GUILD_ID));
+    expect(row.name).toBe('Real OAuth Name');
+  });
+});

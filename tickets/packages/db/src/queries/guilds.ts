@@ -1,18 +1,54 @@
+import { eq } from 'drizzle-orm';
 import type { TicketsDb } from '../index.js';
 import { guilds, guildSettings } from '../schema.js';
 import { inGuild } from '../index.js';
 import { TicketError } from './errors.js';
 
+export function isPlaceholderGuildName(name: string, guildId: string): boolean {
+  return (
+    name === `Guild ${guildId}` ||
+    name === 'Guild <id>' ||
+    name === `Guild <${guildId}>` ||
+    name === `Guild ${guildId.trim()}`
+  );
+}
+
 export async function ensureGuild(db: TicketsDb, guildId: string, name: string) {
+  const isPlaceholder = isPlaceholderGuildName(name, guildId);
+
   return await db.transaction(async (tx) => {
-    const [guild] = await tx
-      .insert(guilds)
-      .values({ guild_id: guildId, name })
-      .onConflictDoUpdate({
-        target: guilds.guild_id,
-        set: { name },
-      })
-      .returning();
+    const [existing] = await tx
+      .select()
+      .from(guilds)
+      .where(eq(guilds.guild_id, guildId))
+      .limit(1);
+
+    let guild = existing;
+
+    if (!existing) {
+      [guild] = await tx
+        .insert(guilds)
+        .values({ guild_id: guildId, name })
+        .onConflictDoNothing()
+        .returning();
+
+      if (!guild) {
+        [guild] = await tx
+          .select()
+          .from(guilds)
+          .where(eq(guilds.guild_id, guildId))
+          .limit(1);
+      }
+    } else {
+      const existingIsPlaceholder = isPlaceholderGuildName(existing.name, guildId);
+      if (name !== existing.name && (!isPlaceholder || existingIsPlaceholder)) {
+        [guild] = await tx
+          .update(guilds)
+          .set({ name })
+          .where(eq(guilds.guild_id, guildId))
+          .returning();
+      }
+    }
 
     await tx
       .insert(guildSettings)
