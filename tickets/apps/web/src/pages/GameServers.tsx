@@ -82,7 +82,8 @@ export const GameServers: React.FC<GameServersProps> = ({ guildId, locale }) => 
   useEffect(() => {
     if (!pairCode) return;
 
-    const initialIds = new Set(servers.map((s) => s.id));
+    let cancelled = false;
+    let initialIds: Set<string> | null = null;
     const msRemaining = new Date(pairCode.expiresAt).getTime() - Date.now();
     if (msRemaining <= 0) return;
 
@@ -94,6 +95,17 @@ export const GameServers: React.FC<GameServersProps> = ({ guildId, locale }) => 
       }
     };
 
+    getGameServers(guildId)
+      .then((baseline) => {
+        if (cancelled) return;
+        initialIds = new Set(baseline.map((s) => s.id));
+        setServers(baseline);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        initialIds = new Set();
+      });
+
     intervalId = setInterval(async () => {
       if (new Date(pairCode.expiresAt).getTime() <= Date.now()) {
         stopPolling();
@@ -102,7 +114,7 @@ export const GameServers: React.FC<GameServersProps> = ({ guildId, locale }) => 
       try {
         const data = await getGameServers(guildId);
         setServers(data);
-        if (data.some((s) => !initialIds.has(s.id))) {
+        if (initialIds && data.some((s) => !initialIds!.has(s.id))) {
           stopPolling();
           setPairCode(null);
         }
@@ -114,6 +126,7 @@ export const GameServers: React.FC<GameServersProps> = ({ guildId, locale }) => 
     const expiryTimer = setTimeout(stopPolling, msRemaining);
 
     return () => {
+      cancelled = true;
       stopPolling();
       clearTimeout(expiryTimer);
     };

@@ -862,8 +862,8 @@ components:
         mode: { type: string, enum: [thread, channel], default: thread }
         parentChannelId: { $ref: '#/components/schemas/Snowflake', description: 'text channel for threads, category channel for channels' }
         nameTemplate: { type: string, maxLength: 64, default: 'ticket-{number}' }
-        welcomeMessage: { type: string, maxLength: 2000 }
-        form: { type: array, maxItems: 5, items: { $ref: '#/components/schemas/FormField' } }
+        welcomeMessage: { type: [string, 'null'], maxLength: 2000 }
+        form: { type: [array, 'null'], maxItems: 5, items: { $ref: '#/components/schemas/FormField' } }
         autoCloseHours: { type: [integer, 'null'], minimum: 1, maximum: 720 }
         maxOpenPerUser: { type: integer, minimum: 1, maximum: 10, default: 1 }
         gameServerId: { type: [string, 'null'], format: uuid }
@@ -875,6 +875,8 @@ components:
           properties:
             id: { type: string, format: uuid }
             createdAt: { type: string, format: date-time }
+            welcomeMessage: { type: [string, 'null'], maxLength: 2000 }
+            form: { type: [array, 'null'], maxItems: 5, items: { $ref: '#/components/schemas/FormField' } }
     PanelButton:
       type: object
       additionalProperties: false

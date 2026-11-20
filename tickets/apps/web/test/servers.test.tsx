@@ -217,4 +217,53 @@ describe('GameServers page acceptance tests (g4)', () => {
 
     vi.useRealTimers();
   });
+
+  it('takes baseline from fresh getGameServers when polling starts so existing server does not dismiss pair dialog if initial state was empty', async () => {
+    vi.useFakeTimers();
+
+    const existingServer = mockServers[0];
+
+    globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (url.endsWith(`/api/v1/guilds/${guildId}/game-servers`)) {
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => [existingServer],
+        };
+      }
+
+      if (url.endsWith(`/api/v1/guilds/${guildId}/game-servers/pair-codes`)) {
+        return {
+          ok: true,
+          status: 201,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => ({
+            code: 'PAIR_NEW_1',
+            expiresAt: new Date(Date.now() + 20000).toISOString(),
+          }),
+        };
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ code: 'not_found' }),
+      };
+    }) as any;
+
+    render(<GameServers guildId={guildId} locale="en" />);
+
+    const createBtn = screen.getByRole('button', { name: /create pair code/i });
+    fireEvent.click(createBtn);
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByText(/nakara_tickets pair PAIR_NEW_1/)).toBeDefined();
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(screen.getByText(/nakara_tickets pair PAIR_NEW_1/)).toBeDefined();
+
+    vi.useRealTimers();
+  });
 });

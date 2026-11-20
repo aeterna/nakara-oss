@@ -1,11 +1,14 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { and, eq } from 'drizzle-orm';
 import {
   listCategories,
   createCategory,
   updateCategory,
   deleteCategory,
   TicketError,
+  gameServers,
+  inGuild,
   type TicketsDb,
 } from '@nakara-tickets/db';
 
@@ -27,8 +30,8 @@ const categoryInputSchema = z.object({
   mode: z.enum(['thread', 'channel']).default('thread'),
   parentChannelId: z.string().regex(snowflakeRegex),
   nameTemplate: z.string().max(64).default('ticket-{number}'),
-  welcomeMessage: z.string().max(2000).optional(),
-  form: z.array(formFieldSchema).max(5).optional(),
+  welcomeMessage: z.string().max(2000).nullable().optional(),
+  form: z.array(formFieldSchema).max(5).nullable().optional(),
   autoCloseHours: z.number().int().min(1).max(720).nullable().optional(),
   maxOpenPerUser: z.number().int().min(1).max(10).default(1),
   gameServerId: z.string().uuid().nullable().optional(),
@@ -50,7 +53,7 @@ export function formatCategory(cat: any) {
     gameServerId: cat.game_server_id ?? cat.gameServerId ?? null,
     createdAt: cat.created_at instanceof Date
       ? cat.created_at.toISOString()
-      : (cat.createdAt ?? (cat.created_at ? new Date(cat.created_at).toISOString() : new Date().toISOString())),
+      : new Date(cat.created_at).toISOString(),
   };
 }
 
@@ -86,6 +89,23 @@ export default async function (app: FastifyInstance) {
         });
       }
 
+      if (parsed.data.gameServerId) {
+        const [srv] = await db
+          .select({ id: gameServers.id })
+          .from(gameServers)
+          .where(
+            and(
+              eq(gameServers.id, parsed.data.gameServerId),
+              inGuild(gameServers, req.guildId),
+              eq(gameServers.revoked, false)
+            )
+          )
+          .limit(1);
+        if (!srv) {
+          return reply.code(400).send({ code: 'invalid', message: 'unknown game server' });
+        }
+      }
+
       const created = await createCategory(db, req.guildId, parsed.data);
       return reply.code(201).send(formatCategory(created));
     }
@@ -103,6 +123,23 @@ export default async function (app: FastifyInstance) {
           code: 'invalid',
           message: parsed.error.issues.map((i) => i.message).join('; '),
         });
+      }
+
+      if (parsed.data.gameServerId) {
+        const [srv] = await db
+          .select({ id: gameServers.id })
+          .from(gameServers)
+          .where(
+            and(
+              eq(gameServers.id, parsed.data.gameServerId),
+              inGuild(gameServers, req.guildId),
+              eq(gameServers.revoked, false)
+            )
+          )
+          .limit(1);
+        if (!srv) {
+          return reply.code(400).send({ code: 'invalid', message: 'unknown game server' });
+        }
       }
 
       try {

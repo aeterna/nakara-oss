@@ -149,4 +149,52 @@ describe('Categories component', () => {
       );
     });
   });
+
+  it('editing a category with emptied emoji, welcome message and auto-close hours sends nulls', async () => {
+    vi.spyOn(api, 'getCategories').mockResolvedValue([mockCategory]);
+    vi.spyOn(serversApi, 'getGameServers').mockResolvedValue(mockServers);
+    vi.spyOn(discordApi, 'getGuildChannels').mockResolvedValue([]);
+    vi.spyOn(discordApi, 'getGuildRoles').mockResolvedValue([]);
+    const updateSpy = vi.spyOn(api, 'updateCategory').mockResolvedValue({
+      ...mockCategory,
+      emoji: null,
+      welcomeMessage: null,
+      autoCloseHours: null,
+    });
+
+    render(<Categories guildId={guildId} locale="en" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('General Support')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText('Edit'));
+
+    const emojiInput = screen.getByLabelText('Emoji') as HTMLInputElement;
+    const welcomeInput = screen.getByLabelText('Welcome Message') as HTMLTextAreaElement;
+    const autoCloseInput = screen.getByLabelText('Auto Close Hours') as HTMLInputElement;
+
+    expect(emojiInput.value).toBe('🎫');
+    expect(welcomeInput.value).toBe('Hello!');
+    expect(autoCloseInput.value).toBe('48');
+
+    fireEvent.change(emojiInput, { target: { value: '' } });
+    fireEvent.change(welcomeInput, { target: { value: '' } });
+    fireEvent.change(autoCloseInput, { target: { value: '' } });
+
+    fireEvent.click(screen.getByText('Save Category'));
+
+    await waitFor(() => {
+      expect(updateSpy).toHaveBeenCalledWith(
+        guildId,
+        mockCategory.id,
+        expect.objectContaining({
+          name: 'General Support',
+          emoji: null,
+          welcomeMessage: null,
+          autoCloseHours: null,
+        })
+      );
+    });
+  });
 });

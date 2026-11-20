@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vites
 import Fastify from 'fastify';
 import { eq } from 'drizzle-orm';
 import * as dbSchema from '@nakara-tickets/db';
-import { guilds, categories, tickets } from '@nakara-tickets/db';
+import { guilds, categories, tickets, gameServers } from '@nakara-tickets/db';
 import { openTestDb } from '@nakara-tickets/db/test-support';
 import { installSession } from '../src/session.js';
 import { clearStaffCache } from '../src/staff.js';
@@ -289,5 +289,103 @@ describe('categories acceptance tests', () => {
       },
     });
     expect(delCleanRes.statusCode).toBe(204);
+  });
+
+  it('PUT with nulls clears emoji, welcomeMessage and autoCloseHours', async () => {
+    const postRes = await app.inject({
+      method: 'POST',
+      url: `/api/v1/guilds/${GUILD_A}/categories`,
+      headers: { cookie, 'x-csrf-token': csrf, 'content-type': 'application/json' },
+      payload: {
+        name: 'Clearable Category',
+        emoji: '🎫',
+        welcomeMessage: 'Hello Welcome',
+        autoCloseHours: 48,
+        staffRoleIds: [ROLE_STAFF],
+        mode: 'thread',
+        parentChannelId: '123456789012345678',
+      },
+    });
+    expect(postRes.statusCode).toBe(201);
+    const cat = postRes.json();
+    expect(cat.emoji).toBe('🎫');
+    expect(cat.welcomeMessage).toBe('Hello Welcome');
+    expect(cat.autoCloseHours).toBe(48);
+
+    const putRes = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/guilds/${GUILD_A}/categories/${cat.id}`,
+      headers: { cookie, 'x-csrf-token': csrf, 'content-type': 'application/json' },
+      payload: {
+        name: 'Clearable Category',
+        emoji: null,
+        welcomeMessage: null,
+        autoCloseHours: null,
+        staffRoleIds: [ROLE_STAFF],
+        mode: 'thread',
+        parentChannelId: '123456789012345678',
+      },
+    });
+    expect(putRes.statusCode).toBe(200);
+    const updated = putRes.json();
+    expect(updated.emoji).toBeNull();
+    expect(updated.welcomeMessage).toBeNull();
+    expect(updated.autoCloseHours).toBeNull();
+
+    const [dbRow] = await testDb.select().from(categories).where(eq(categories.id, cat.id));
+    expect(dbRow.emoji).toBeNull();
+    expect(dbRow.welcome_message).toBeNull();
+    expect(dbRow.auto_close_hours).toBeNull();
+  });
+
+  it('rejects gameServerId from another guild or non-existent server with 400', async () => {
+    const [serverB] = await testDb.insert(gameServers).values({
+      guild_id: GUILD_B,
+      name: 'Guild B Server',
+      secret_enc: Buffer.from('secret-b'),
+    }).returning();
+
+    const postRes = await app.inject({
+      method: 'POST',
+      url: `/api/v1/guilds/${GUILD_A}/categories`,
+      headers: { cookie, 'x-csrf-token': csrf, 'content-type': 'application/json' },
+      payload: {
+        name: 'Cross Guild Server Category',
+        staffRoleIds: [ROLE_STAFF],
+        mode: 'thread',
+        parentChannelId: '123456789012345678',
+        gameServerId: serverB.id,
+      },
+    });
+    expect(postRes.statusCode).toBe(400);
+    expect(postRes.json()).toEqual({ code: 'invalid', message: 'unknown game server' });
+
+    const validPost = await app.inject({
+      method: 'POST',
+      url: `/api/v1/guilds/${GUILD_A}/categories`,
+      headers: { cookie, 'x-csrf-token': csrf, 'content-type': 'application/json' },
+      payload: {
+        name: 'Valid Category',
+        staffRoleIds: [ROLE_STAFF],
+        mode: 'thread',
+        parentChannelId: '123456789012345678',
+      },
+    });
+    const validCat = validPost.json();
+
+    const putRes = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/guilds/${GUILD_A}/categories/${validCat.id}`,
+      headers: { cookie, 'x-csrf-token': csrf, 'content-type': 'application/json' },
+      payload: {
+        name: 'Valid Category',
+        staffRoleIds: [ROLE_STAFF],
+        mode: 'thread',
+        parentChannelId: '123456789012345678',
+        gameServerId: serverB.id,
+      },
+    });
+    expect(putRes.statusCode).toBe(400);
+    expect(putRes.json()).toEqual({ code: 'invalid', message: 'unknown game server' });
   });
 });

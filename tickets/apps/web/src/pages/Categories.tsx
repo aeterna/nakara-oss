@@ -100,28 +100,26 @@ export const Categories: React.FC<CategoriesProps> = ({ guildId, locale }) => {
     e.preventDefault();
     setError(null);
 
+    let autoCloseHours: number | null = null;
+    if (formAutoClose.trim()) {
+      const hours = parseInt(formAutoClose, 10);
+      if (!Number.isNaN(hours)) {
+        autoCloseHours = hours;
+      }
+    }
+
     const payload: CategoryInput = {
       name: formName.trim(),
+      emoji: formEmoji.trim() || null,
       mode: formMode,
       parentChannelId: formParentId.trim(),
       staffRoleIds: formRoles,
       nameTemplate: formTemplate.trim() || 'ticket-{number}',
+      welcomeMessage: formWelcome.trim() || null,
+      autoCloseHours,
       maxOpenPerUser: parseInt(formMaxOpen, 10) || 1,
       gameServerId: formGameServerId || null,
     };
-
-    if (formEmoji.trim()) {
-      payload.emoji = formEmoji.trim();
-    }
-    if (formWelcome.trim()) {
-      payload.welcomeMessage = formWelcome.trim();
-    }
-    if (formAutoClose.trim()) {
-      const hours = parseInt(formAutoClose, 10);
-      if (!Number.isNaN(hours)) {
-        payload.autoCloseHours = hours;
-      }
-    }
 
     try {
       if (editingId) {

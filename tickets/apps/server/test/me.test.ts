@@ -5,6 +5,7 @@ import { openTestDb, type TestDbHandle } from '@nakara-tickets/db/test-support';
 import { guilds, categories } from '@nakara-tickets/db';
 import { installSession } from '../src/session.js';
 import routes from '../src/routes/index.js';
+import { clearGuildLookupNegativeCache } from '../src/routes/me.js';
 import type { TicketsConfig } from '../src/config.js';
 import { createTestSession } from './helpers/session.js';
 
@@ -29,6 +30,7 @@ describe('GET /api/v1/me (guild name resolution)', () => {
 
   beforeEach(async () => {
     await env.reset();
+    clearGuildLookupNegativeCache();
     await env.db.insert(guilds).values({ guild_id: GUILD_ID, name: `Guild ${GUILD_ID}` });
     await env.db.insert(categories).values({
       id: '11111111-1111-1111-1111-111111111111', guild_id: GUILD_ID,
@@ -96,5 +98,40 @@ describe('GET /api/v1/me (guild name resolution)', () => {
       String(u) === `https://discord.com/api/v10/guilds/${GUILD_ID}`
     );
     expect(guildCalls).toHaveLength(0);
+  });
+
+  it('failing lookup records negative cache so second request makes no /guilds/{id} call from me.ts', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      const u = String(url);
+      if (u === `https://discord.com/api/v10/guilds/${GUILD_ID}`) {
+        return { ok: false, status: 500 };
+      }
+      if (u.includes('/members/')) {
+        return { ok: true, status: 200, json: async () => ({ roles: [ROLE], user: { id: USER } }) };
+      }
+      if (u.includes('/roles')) {
+        return { ok: true, status: 200, json: async () => [{ id: ROLE, permissions: '0' }] };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    const res1 = await app.inject({ method: 'GET', url: '/api/v1/me', headers: { cookie } });
+    expect(res1.statusCode).toBe(200);
+    expect(res1.json().guilds[0].name).toBe(`Guild ${GUILD_ID}`);
+
+    const guildCalls1 = fetchMock.mock.calls.filter(([u]: [string]) =>
+      String(u) === `https://discord.com/api/v10/guilds/${GUILD_ID}`
+    );
+    expect(guildCalls1).toHaveLength(2);
+
+    fetchMock.mockClear();
+    const res2 = await app.inject({ method: 'GET', url: '/api/v1/me', headers: { cookie } });
+    expect(res2.statusCode).toBe(200);
+    expect(res2.json().guilds[0].name).toBe(`Guild ${GUILD_ID}`);
+
+    const guildCalls2 = fetchMock.mock.calls.filter(([u]: [string]) =>
+      String(u) === `https://discord.com/api/v10/guilds/${GUILD_ID}`
+    );
+    expect(guildCalls2).toHaveLength(0);
   });
 });
