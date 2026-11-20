@@ -6,6 +6,7 @@ import {
   pairCodes,
   gameServers,
   guilds,
+  guildSettings,
   gameActions,
   auditLog,
   tickets,
@@ -16,6 +17,19 @@ export { normalizePairCode, sha256hex };
 
 const serverPlayers = new Map<string, any[]>();
 const pairRateLimits = new Map<string, { count: number; resetAt: number }>();
+
+function formatActionResultMessage(
+  locale: string,
+  icon: string,
+  action: string,
+  code: string,
+  requester: string
+): string {
+  if (locale === 'en') {
+    return `${icon} Action \`${action}\` (${code}) requested by ${requester}`;
+  }
+  return `${icon} คำสั่ง \`${action}\` (${code}) ร้องขอโดย ${requester}`;
+}
 
 export function getOnlinePlayers(serverId: string): any[] {
   return serverPlayers.get(serverId) ?? [];
@@ -423,9 +437,27 @@ export default async function (app: FastifyInstance) {
             .where(eq(tickets.id, updatedAction.ticket_id));
 
           if (ticket?.channel_id) {
+            let locale = 'th';
+            if (updatedAction.guild_id) {
+              const [settings] = await app.db
+                .select({ locale: guildSettings.locale })
+                .from(guildSettings)
+                .where(eq(guildSettings.guild_id, updatedAction.guild_id));
+              if (settings?.locale) {
+                locale = settings.locale;
+              }
+            }
+
             const icon = body.ok ? '✅' : '❌';
-            const requestedBy = updatedAction.requested_by || 'staff';
-            const message = `${icon} Action \`${updatedAction.action}\` (${body.code}) requested by ${requestedBy}`;
+            const rawRequester = updatedAction.requested_by || 'staff';
+            const requester = rawRequester.startsWith('<@') ? rawRequester : `<@${rawRequester}>`;
+            const message = formatActionResultMessage(
+              locale,
+              icon,
+              updatedAction.action,
+              body.code,
+              requester
+            );
             void app.discord
               .sendMessage(ticket.channel_id, {
                 content: message,
