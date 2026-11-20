@@ -1,0 +1,152 @@
+# SPDX-License-Identifier: MIT
+# Owner-only Nakara Tickets release (ADR 0003 decision 11): one tag `nakara-tickets@<version>` covers the
+# container image `ghcr.io/aeterna/nakara-tickets:<version>` and the resource zip `nakara_tickets-<version>.zip`.
+# Triggered by hand from `main`. The build job has read access only; the publish job runs in the `release`
+# environment, which requires the owner's approval before it can push the image, tag or release.
+# Every asset and the image carry a build-provenance attestation. Anyone can check them with:
+#   gh attestation verify <zip> --repo aeterna/nakara-oss --signer-workflow aeterna/nakara-oss/.github/workflows/tickets-release.yml
+#   gh attestation verify oci://ghcr.io/aeterna/nakara-tickets:<version> --repo aeterna/nakara-oss
+# Owner steps: docs/maintainers/tickets-release.md.
+name: tickets-release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tickets-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: test + bundle nakara-tickets
+    runs-on: ubuntu-24.04   # pinned: ubuntu-latest moves to 26.04 from 2026-10-19
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - name: Only from main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::releases run from main only (got $GITHUB_REF)"
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - id: meta
+        name: Version (resource fxmanifest = tickets/apps/server/package.json = CHANGELOG section)
+        run: |
+          set -euo pipefail
+          FX=$(sed -nE "s/^version '([^']+)'.*/\1/p" packages/tickets/fxmanifest.lua)
+          APP=$(node -p "require('./tickets/apps/server/package.json').version")
+          if [ -z "$FX" ] || [ "$FX" != "$APP" ]; then
+            echo "::error::version mismatch: packages/tickets/fxmanifest.lua '$FX' vs tickets/apps/server/package.json '$APP'"
+            exit 1
+          fi
+          grep -qE "^## \[?$FX\]?( |$)" packages/tickets/CHANGELOG.md || {
+            echo "::error::packages/tickets/CHANGELOG.md has no '## $FX' section"; exit 1; }
+          TAG="nakara-tickets@$FX"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::tag $TAG already exists"; exit 1
+          fi
+          echo "version=$FX" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: tickets — install, tests, types, builds
+        working-directory: tickets
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          npx vitest run
+          npx tsc -b
+          (cd apps/web && npx tsc --noEmit -p . && npx vite build)
+          npm run build:server
+      - name: resource — specs, check, safety, zip
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          npm test --workspace packages/tickets
+          node packages/devkit/bin/fivem-devkit.js check
+          node packages/devkit/bin/fivem-devkit.js safety
+          # build-release.mjs names its tag after the resource (nakara_tickets@x); this release uses the
+          # ADR 0003 tag from the meta step instead and takes only the zip, SHA256SUMS and notes from it.
+          node .github/scripts/build-release.mjs tickets out
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tickets-release-out
+          path: out/
+          if-no-files-found: error
+
+  publish:
+    name: publish ${{ needs.build.outputs.tag }}
+    needs: build
+    runs-on: ubuntu-24.04   # pinned: ubuntu-latest moves to 26.04 from 2026-10-19
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: write        # create the tag + GitHub release
+      packages: write        # push ghcr.io/aeterna/nakara-tickets
+      id-token: write        # OIDC for attestations
+      attestations: write
+    env:
+      IMAGE: ghcr.io/aeterna/nakara-tickets
+      VERSION: ${{ needs.build.outputs.version }}
+      TAG: ${{ needs.build.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: tickets-release-out
+          path: out/
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      # The image build runs `npm ci` inside the build container; no token is passed into it.
+      - id: image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: tickets
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ${{ env.IMAGE }}:${{ env.VERSION }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.title=nakara-tickets
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: out/SHA256SUMS
+      - name: create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          {
+            fence='```'
+            printf '## Container image\n\n%s\n%s:%s\n%s@%s\n%s\n\n' "$fence" "$IMAGE" "$VERSION" "$IMAGE" "$DIGEST" "$fence"
+            # build-release.mjs writes the verify line for release.yml; this release is signed by this workflow.
+            sed 's#workflows/release\.yml#workflows/tickets-release.yml#' out/RELEASE_NOTES.md
+          } > notes.md
+          gh release create "$TAG" out/*.zip out/SHA256SUMS \
+            --target "$GITHUB_SHA" \
+            --title "$TAG" \
+            --notes-file notes.md
