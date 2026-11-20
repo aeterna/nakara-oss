@@ -6,6 +6,7 @@ import { guilds, categories } from '@nakara-tickets/db';
 import { installSession } from '../src/session.js';
 import routes from '../src/routes/index.js';
 import { clearGuildLookupNegativeCache } from '../src/routes/me.js';
+import { clearStaffCache } from '../src/staff.js';
 import type { TicketsConfig } from '../src/config.js';
 import { createTestSession } from './helpers/session.js';
 
@@ -31,6 +32,7 @@ describe('GET /api/v1/me (guild name resolution)', () => {
   beforeEach(async () => {
     await env.reset();
     clearGuildLookupNegativeCache();
+    clearStaffCache();
     await env.db.insert(guilds).values({ guild_id: GUILD_ID, name: `Guild ${GUILD_ID}` });
     await env.db.insert(categories).values({
       id: '11111111-1111-1111-1111-111111111111', guild_id: GUILD_ID,

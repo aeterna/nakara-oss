@@ -255,6 +255,8 @@ describe('GameServers page acceptance tests (g4)', () => {
 
     render(<GameServers guildId={guildId} locale="en" />);
 
+    await vi.advanceTimersByTimeAsync(0);
+
     const createBtn = screen.getByRole('button', { name: /create pair code/i });
     fireEvent.click(createBtn);
 
