@@ -24,9 +24,22 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function listPlayerIds() {
+  if (typeof GetPlayers === 'function') return GetPlayers().map(String);
+  if (typeof getPlayers === 'function') return getPlayers().map(String);
+  if (typeof GetNumPlayerIndices === 'function' && typeof GetPlayerFromIndex === 'function') {
+    const ids = [];
+    const count = GetNumPlayerIndices();
+    for (let i = 0; i < count; i++) {
+      ids.push(String(GetPlayerFromIndex(i)));
+    }
+    return ids;
+  }
+  return [];
+}
+
 function collectOnlinePlayers() {
-  if (typeof GetPlayers !== 'function') return [];
-  const players = GetPlayers();
+  const players = listPlayerIds();
   const list = [];
 
   for (const playerId of players) {

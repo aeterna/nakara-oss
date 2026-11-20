@@ -281,4 +281,54 @@ describe('packages/tickets actions execution (g1)', () => {
     assert.equal(resStr.ok, false);
     assert.equal(resStr.code, 'not_allowed');
   });
+
+  it('player.info uses lowercase getPlayers when GetPlayers is absent', async () => {
+    const originalGetPlayers = globalThis.GetPlayers;
+    try {
+      delete globalThis.GetPlayers;
+      globalThis.getPlayers = () => ['7'];
+      playerIdentifiers = {
+        '7': ['license:x', 'discord:111122223333444455'],
+      };
+
+      const res = await actions.executeAction({
+        id: 'act-info-getplayers',
+        action: 'player.info',
+        discordId: '111122223333444455',
+      });
+
+      assert.notEqual(res.code, 'player_offline');
+      assert.equal(res.ok, true);
+      assert.equal(res.code, 'done');
+    } finally {
+      globalThis.GetPlayers = originalGetPlayers;
+      delete globalThis.getPlayers;
+    }
+  });
+
+  it('player.info uses player indices when GetPlayers and getPlayers are absent', async () => {
+    const originalGetPlayers = globalThis.GetPlayers;
+    try {
+      delete globalThis.GetPlayers;
+      playerIdentifiers = {
+        '9': ['license:x', 'discord:111122223333444455'],
+      };
+      globalThis.GetNumPlayerIndices = () => 1;
+      globalThis.GetPlayerFromIndex = (index) => (index === 0 ? 9 : null);
+
+      const res = await actions.executeAction({
+        id: 'act-info-indices',
+        action: 'player.info',
+        discordId: '111122223333444455',
+      });
+
+      assert.notEqual(res.code, 'player_offline');
+      assert.equal(res.ok, true);
+      assert.equal(res.code, 'done');
+    } finally {
+      globalThis.GetPlayers = originalGetPlayers;
+      delete globalThis.GetNumPlayerIndices;
+      delete globalThis.GetPlayerFromIndex;
+    }
+  });
 });

@@ -45,10 +45,24 @@ function getResourceExport(resourceName) {
   return null;
 }
 
-function findPlayerByDiscordId(targetDiscordId) {
-  if (!targetDiscordId || typeof GetPlayers !== 'function') return null;
+function listPlayerIds() {
+  if (typeof GetPlayers === 'function') return GetPlayers().map(String);
+  if (typeof getPlayers === 'function') return getPlayers().map(String);
+  if (typeof GetNumPlayerIndices === 'function' && typeof GetPlayerFromIndex === 'function') {
+    const ids = [];
+    const count = GetNumPlayerIndices();
+    for (let i = 0; i < count; i++) {
+      ids.push(String(GetPlayerFromIndex(i)));
+    }
+    return ids;
+  }
+  return [];
+}
 
-  const players = GetPlayers();
+function findPlayerByDiscordId(targetDiscordId) {
+  if (!targetDiscordId) return null;
+
+  const players = listPlayerIds();
   const searchPrefix = 'discord:' + targetDiscordId.toLowerCase();
 
   for (const playerId of players) {
