@@ -34,6 +34,26 @@ const categoryInputSchema = z.object({
   gameServerId: z.string().uuid().nullable().optional(),
 });
 
+export function formatCategory(cat: any) {
+  return {
+    id: cat.id,
+    name: cat.name,
+    emoji: cat.emoji ?? null,
+    staffRoleIds: cat.staff_role_ids ?? cat.staffRoleIds ?? [],
+    mode: cat.mode,
+    parentChannelId: cat.parent_channel_id ?? cat.parentChannelId,
+    nameTemplate: cat.name_template ?? cat.nameTemplate ?? 'ticket-{number}',
+    welcomeMessage: cat.welcome_message ?? cat.welcomeMessage ?? null,
+    form: cat.form ?? null,
+    autoCloseHours: cat.auto_close_hours ?? cat.autoCloseHours ?? null,
+    maxOpenPerUser: cat.max_open_per_user ?? cat.maxOpenPerUser ?? 1,
+    gameServerId: cat.game_server_id ?? cat.gameServerId ?? null,
+    createdAt: cat.created_at instanceof Date
+      ? cat.created_at.toISOString()
+      : (cat.createdAt ?? (cat.created_at ? new Date(cat.created_at).toISOString() : new Date().toISOString())),
+  };
+}
+
 export default async function (app: FastifyInstance) {
   const requireStaff = async (req: FastifyRequest, reply: FastifyReply) => {
     if (typeof app.requireStaff !== 'function') {
@@ -49,7 +69,7 @@ export default async function (app: FastifyInstance) {
     async (req: FastifyRequest, reply: FastifyReply) => {
       const db = req.server.db as TicketsDb;
       const cats = await listCategories(db, req.guildId);
-      return reply.send(cats);
+      return reply.send(cats.map(formatCategory));
     }
   );
 
@@ -67,7 +87,7 @@ export default async function (app: FastifyInstance) {
       }
 
       const created = await createCategory(db, req.guildId, parsed.data);
-      return reply.code(201).send(created);
+      return reply.code(201).send(formatCategory(created));
     }
   );
 
@@ -87,7 +107,7 @@ export default async function (app: FastifyInstance) {
 
       try {
         const updated = await updateCategory(db, req.guildId, categoryId, parsed.data);
-        return reply.send(updated);
+        return reply.send(formatCategory(updated));
       } catch (err: any) {
         if (
           (err instanceof TicketError || err?.name === 'TicketError') &&

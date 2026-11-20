@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Category, CategoryInput } from '../types.js';
 import { api } from '../api.js';
+import { getGameServers, type GameServer } from '../api/servers.js';
 import { t, type Locale } from '../i18n.js';
 
 export interface CategoriesProps {
@@ -10,6 +11,7 @@ export interface CategoriesProps {
 
 export const Categories: React.FC<CategoriesProps> = ({ guildId, locale }) => {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [servers, setServers] = useState<GameServer[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,13 +28,18 @@ export const Categories: React.FC<CategoriesProps> = ({ guildId, locale }) => {
   const [formMaxOpen, setFormMaxOpen] = useState<string>('1');
   const [formWelcome, setFormWelcome] = useState<string>('');
   const [formAutoClose, setFormAutoClose] = useState<string>('');
+  const [formGameServerId, setFormGameServerId] = useState<string>('');
 
   const loadCategories = async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await api.getCategories(guildId);
+      const [data, serversData] = await Promise.all([
+        api.getCategories(guildId),
+        getGameServers(guildId).catch(() => [] as GameServer[]),
+      ]);
       setCategories(data);
+      setServers(serversData);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t('error', locale));
     } finally {
@@ -54,6 +61,7 @@ export const Categories: React.FC<CategoriesProps> = ({ guildId, locale }) => {
     setFormMaxOpen('1');
     setFormWelcome('');
     setFormAutoClose('');
+    setFormGameServerId('');
     setEditingId(null);
     setIsEditing(false);
   };
@@ -69,11 +77,12 @@ export const Categories: React.FC<CategoriesProps> = ({ guildId, locale }) => {
     setFormEmoji(category.emoji || '');
     setFormMode(category.mode);
     setFormParentId(category.parentChannelId);
-    setFormRoles(category.staffRoleIds.join(', '));
+    setFormRoles((category.staffRoleIds || []).join(', '));
     setFormTemplate(category.nameTemplate || 'ticket-{number}');
     setFormMaxOpen(String(category.maxOpenPerUser ?? 1));
     setFormWelcome(category.welcomeMessage || '');
     setFormAutoClose(category.autoCloseHours ? String(category.autoCloseHours) : '');
+    setFormGameServerId(category.gameServerId || '');
     setIsEditing(true);
   };
 
@@ -93,6 +102,7 @@ export const Categories: React.FC<CategoriesProps> = ({ guildId, locale }) => {
       staffRoleIds: roles,
       nameTemplate: formTemplate.trim() || 'ticket-{number}',
       maxOpenPerUser: parseInt(formMaxOpen, 10) || 1,
+      gameServerId: formGameServerId || null,
     };
 
     if (formEmoji.trim()) {
@@ -265,6 +275,23 @@ export const Categories: React.FC<CategoriesProps> = ({ guildId, locale }) => {
               />
             </div>
 
+            <div className="form-group">
+              <label htmlFor="cat-server" className="form-label">{t('gameServer', locale)}</label>
+              <select
+                id="cat-server"
+                className="form-control"
+                value={formGameServerId}
+                onChange={(e) => setFormGameServerId(e.target.value)}
+              >
+                <option value="">{t('none', locale)}</option>
+                {servers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="form-actions">
               <button type="submit" className="btn btn-primary">
                 {t('saveCategory', locale)}
@@ -286,6 +313,7 @@ export const Categories: React.FC<CategoriesProps> = ({ guildId, locale }) => {
                 <th>{t('categoryName', locale)}</th>
                 <th>{t('mode', locale)}</th>
                 <th>{t('parentChannelId', locale)}</th>
+                <th>{t('gameServer', locale)}</th>
                 <th>{t('maxOpenTickets', locale)}</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
@@ -301,6 +329,11 @@ export const Categories: React.FC<CategoriesProps> = ({ guildId, locale }) => {
                     </span>
                   </td>
                   <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{cat.parentChannelId}</td>
+                  <td>
+                    {cat.gameServerId
+                      ? (servers.find((s) => s.id === cat.gameServerId)?.name ?? cat.gameServerId)
+                      : '—'}
+                  </td>
                   <td>{cat.maxOpenPerUser ?? 1}</td>
                   <td style={{ textAlign: 'right' }}>
                     <button

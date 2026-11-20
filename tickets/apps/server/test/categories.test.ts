@@ -25,108 +25,6 @@ vi.mock('@nakara-tickets/core', async (importOriginal) => {
   };
 });
 
-vi.mock('@nakara-tickets/db', async (importOriginal) => {
-  const orig = await importOriginal<Record<string, any>>();
-  class TicketError extends Error {
-    readonly code: string;
-    constructor(code: string, message?: string) {
-      super(message ?? code);
-      this.name = 'TicketError';
-      this.code = code;
-    }
-  }
-
-  function toApiCategory(r: any) {
-    return {
-      id: r.id,
-      name: r.name,
-      emoji: r.emoji,
-      staffRoleIds: r.staff_role_ids ?? [],
-      mode: r.mode,
-      parentChannelId: r.parent_channel_id,
-      nameTemplate: r.name_template,
-      welcomeMessage: r.welcome_message,
-      form: r.form,
-      autoCloseHours: r.auto_close_hours,
-      maxOpenPerUser: r.max_open_per_user,
-      gameServerId: r.game_server_id,
-      createdAt: r.created_at?.toISOString?.() ?? new Date().toISOString(),
-    };
-  }
-
-  return {
-    ...orig,
-    TicketError: orig.TicketError ?? TicketError,
-    listCategories: orig.listCategories ?? (async (db: any, guildId: string) => {
-      const rows = await db.select().from(orig.categories).where(orig.inGuild(orig.categories, guildId));
-      return rows.map(toApiCategory);
-    }),
-    getCategory: orig.getCategory ?? (async (db: any, guildId: string, id: string) => {
-      const [r] = await db.select().from(orig.categories).where(
-        orig.and ? orig.and(orig.eq(orig.categories.guild_id, guildId), orig.eq(orig.categories.id, id))
-          : orig.eq(orig.categories.id, id)
-      );
-      if (!r || r.guild_id !== guildId) {
-        throw new (orig.TicketError ?? TicketError)('not_found', 'Category not found');
-      }
-      return toApiCategory(r);
-    }),
-    createCategory: orig.createCategory ?? (async (db: any, guildId: string, input: any) => {
-      const [inserted] = await db.insert(orig.categories).values({
-        guild_id: guildId,
-        name: input.name,
-        emoji: input.emoji ?? null,
-        staff_role_ids: input.staffRoleIds ?? [],
-        mode: input.mode ?? 'thread',
-        parent_channel_id: input.parentChannelId,
-        name_template: input.nameTemplate ?? 'ticket-{number}',
-        welcome_message: input.welcomeMessage ?? null,
-        form: input.form ?? null,
-        auto_close_hours: input.autoCloseHours ?? null,
-        max_open_per_user: input.maxOpenPerUser ?? 1,
-        game_server_id: input.gameServerId ?? null,
-      }).returning();
-      return toApiCategory(inserted);
-    }),
-    updateCategory: orig.updateCategory ?? (async (db: any, guildId: string, id: string, patch: any) => {
-      const [existing] = await db.select().from(orig.categories).where(orig.eq(orig.categories.id, id));
-      if (!existing || existing.guild_id !== guildId) {
-        throw new (orig.TicketError ?? TicketError)('not_found', 'Category not found');
-      }
-      const values: any = {};
-      if (patch.name !== undefined) values.name = patch.name;
-      if (patch.emoji !== undefined) values.emoji = patch.emoji;
-      if (patch.staffRoleIds !== undefined) values.staff_role_ids = patch.staffRoleIds;
-      if (patch.mode !== undefined) values.mode = patch.mode;
-      if (patch.parentChannelId !== undefined) values.parent_channel_id = patch.parentChannelId;
-      if (patch.nameTemplate !== undefined) values.name_template = patch.nameTemplate;
-      if (patch.welcomeMessage !== undefined) values.welcome_message = patch.welcomeMessage;
-      if (patch.form !== undefined) values.form = patch.form;
-      if (patch.autoCloseHours !== undefined) values.auto_close_hours = patch.autoCloseHours;
-      if (patch.maxOpenPerUser !== undefined) values.max_open_per_user = patch.maxOpenPerUser;
-      if (patch.gameServerId !== undefined) values.game_server_id = patch.gameServerId;
-
-      const [updated] = await db.update(orig.categories)
-        .set(values)
-        .where(orig.eq(orig.categories.id, id))
-        .returning();
-      return toApiCategory(updated);
-    }),
-    deleteCategory: orig.deleteCategory ?? (async (db: any, guildId: string, id: string) => {
-      const [existing] = await db.select().from(orig.categories).where(orig.eq(orig.categories.id, id));
-      if (!existing || existing.guild_id !== guildId) {
-        throw new (orig.TicketError ?? TicketError)('not_found', 'Category not found');
-      }
-      // Check if tickets reference this category
-      const ticketRefs = await db.select().from(orig.tickets).where(orig.eq(orig.tickets.category_id, id));
-      if (ticketRefs.length > 0) {
-        throw new (orig.TicketError ?? TicketError)('limit', 'Cannot delete category with tickets');
-      }
-      await db.delete(orig.categories).where(orig.eq(orig.categories.id, id));
-    }),
-  };
-});
-
 describe('categories acceptance tests', () => {
   const GUILD_A = '111111111111111111';
   const GUILD_B = '222222222222222222';
@@ -229,6 +127,17 @@ describe('categories acceptance tests', () => {
       },
     });
     expect(postRes.statusCode).toBe(201);
+    const createdCat = postRes.json();
+    expect(createdCat.name).toBe('Billing');
+    expect(createdCat.parentChannelId).toBe('123456789012345678');
+    expect(createdCat.staffRoleIds).toEqual([ROLE_STAFF]);
+    expect(createdCat.mode).toBe('thread');
+    expect(createdCat.nameTemplate).toBe('ticket-{number}');
+    expect(createdCat.maxOpenPerUser).toBe(1);
+    expect(createdCat.gameServerId).toBeNull();
+    expect(createdCat.createdAt).toBeDefined();
+    expect(createdCat).not.toHaveProperty('parent_channel_id');
+    expect(createdCat).not.toHaveProperty('staff_role_ids');
 
     const getRes = await app.inject({
       method: 'GET',
@@ -242,6 +151,11 @@ describe('categories acceptance tests', () => {
     expect(Array.isArray(list)).toBe(true);
     expect(list.length).toBe(1);
     expect(list[0].name).toBe('Billing');
+    expect(list[0].parentChannelId).toBe('123456789012345678');
+    expect(list[0].staffRoleIds).toEqual([ROLE_STAFF]);
+    expect(list[0].gameServerId).toBeNull();
+    expect(list[0]).not.toHaveProperty('parent_channel_id');
+    expect(list[0]).not.toHaveProperty('staff_role_ids');
   });
 
   it('(a5) category of guild A not reachable via guild B → 404', async () => {
@@ -333,8 +247,13 @@ describe('categories acceptance tests', () => {
       },
     });
     expect(putRes.statusCode).toBe(200);
-    expect(putRes.json().name).toBe('Technical Support');
-    expect(putRes.json().mode).toBe('channel');
+    const updated = putRes.json();
+    expect(updated.name).toBe('Technical Support');
+    expect(updated.mode).toBe('channel');
+    expect(updated.parentChannelId).toBe('123456789012345678');
+    expect(updated.staffRoleIds).toEqual([ROLE_STAFF]);
+    expect(updated).not.toHaveProperty('parent_channel_id');
+    expect(updated).not.toHaveProperty('staff_role_ids');
 
     // Attach a ticket to this category to test 409 on delete
     await testDb.insert(tickets).values({
