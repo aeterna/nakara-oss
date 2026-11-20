@@ -1,5 +1,20 @@
-const store = require('./store.js');
-let config = require('../../config.json');
+// FXServer resolves a relative require() against the resource root, not against the requiring file.
+function isMissingModule(err) {
+  if (!err) return false;
+  return err.code === 'MODULE_NOT_FOUND' || /^Cannot find module\b/.test(err.message || '');
+}
+
+function loadSibling(loadLocal, loadRoot) {
+  try {
+    return loadLocal();
+  } catch (err) {
+    if (!isMissingModule(err)) throw err;
+    return loadRoot();
+  }
+}
+
+const store = loadSibling(() => require('./store.js'), () => require('./server/js/store.js'));
+let config = loadSibling(() => require('../../config.json'), () => require('./config.json'));
 
 const customActions = new Map(); // actionName -> { schema, fn }
 

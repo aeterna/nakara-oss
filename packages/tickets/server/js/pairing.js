@@ -1,5 +1,20 @@
-const store = require('./store.js');
-const api = require('./api.js');
+// FXServer resolves a relative require() against the resource root, not against the requiring file.
+function isMissingModule(err) {
+  if (!err) return false;
+  return err.code === 'MODULE_NOT_FOUND' || /^Cannot find module\b/.test(err.message || '');
+}
+
+function loadSibling(loadLocal, loadRoot) {
+  try {
+    return loadLocal();
+  } catch (err) {
+    if (!isMissingModule(err)) throw err;
+    return loadRoot();
+  }
+}
+
+const store = loadSibling(() => require('./store.js'), () => require('./server/js/store.js'));
+const api = loadSibling(() => require('./api.js'), () => require('./server/js/api.js'));
 
 async function handleCommand(source, args, injectedApi = api) {
   // Refuse unless source === 0 (server console)

@@ -1,7 +1,24 @@
-require('./pairing.js');
-const store = require('./store.js');
-const api = require('./api.js');
-const actions = require('./actions.js');
+// FXServer resolves a relative require() against the resource root, not against the requiring file, so
+// './store.js' only exists on plain Node. Try the file-relative path first and fall back to the
+// resource-root path. Every require() argument stays a string literal for the safety scanner.
+function isMissingModule(err) {
+  if (!err) return false;
+  return err.code === 'MODULE_NOT_FOUND' || /^Cannot find module\b/.test(err.message || '');
+}
+
+function loadSibling(loadLocal, loadRoot) {
+  try {
+    return loadLocal();
+  } catch (err) {
+    if (!isMissingModule(err)) throw err;
+    return loadRoot();
+  }
+}
+
+loadSibling(() => require('./pairing.js'), () => require('./server/js/pairing.js'));
+const store = loadSibling(() => require('./store.js'), () => require('./server/js/store.js'));
+const api = loadSibling(() => require('./api.js'), () => require('./server/js/api.js'));
+const actions = loadSibling(() => require('./actions.js'), () => require('./server/js/actions.js'));
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
