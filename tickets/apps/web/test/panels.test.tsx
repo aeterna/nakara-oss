@@ -244,18 +244,30 @@ describe('Panels web component (acceptance test n5)', () => {
     let capturedBody: any = null;
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, opts?: RequestInit) => {
       const urlStr = String(url);
-      if (urlStr.includes('/categories')) return { ok: true, status: 200, headers: new Headers(), json: async () => mockCategories };
+      if (urlStr.includes('/categories')) {
+        return { ok: true, status: 200, headers: new Headers({ 'content-type': 'application/json' }), json: async () => mockCategories };
+      }
       if (urlStr.includes('/discord/channels')) {
-        return { ok: true, status: 200, headers: new Headers(), json: async () => [{ id: 'chan-888', name: 'ticket-drop', type: 0, parentId: null, position: 0 }] };
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => [{ id: 'chan-888', name: 'ticket-drop', type: 0, parentId: null, position: 0 }],
+        };
       }
       if (urlStr.includes('/panels')) {
         if (opts?.method === 'POST') {
           capturedBody = JSON.parse(opts.body as string);
-          return { ok: true, status: 201, headers: new Headers(), json: async () => ({ id: 'new-panel', ...capturedBody, createdAt: '2026-01-01' }) };
+          return {
+            ok: true,
+            status: 201,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({ id: 'new-panel', ...capturedBody, createdAt: '2026-01-01' }),
+          };
         }
-        return { ok: true, status: 200, headers: new Headers(), json: async () => [] };
+        return { ok: true, status: 200, headers: new Headers({ 'content-type': 'application/json' }), json: async () => [] };
       }
-      return { ok: false, status: 404, headers: new Headers(), json: async () => ({}) };
+      return { ok: false, status: 404, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({}) };
     }));
 
     render(<Panels guildId={GUILD_ID} locale="en" />);

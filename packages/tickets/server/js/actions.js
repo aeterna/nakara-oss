@@ -2,7 +2,19 @@
 function isMissingSpecifier(err, specifier) {
   if (!err || err.code !== 'MODULE_NOT_FOUND') return false;
   const msg = err.message || '';
-  return msg.includes(`'${specifier}'`) || msg.includes(`"${specifier}"`);
+  const suffix = specifier.startsWith('./') ? specifier.slice(1) : (specifier.startsWith('/') ? specifier : `/${specifier}`);
+  const bare = specifier.startsWith('./') ? specifier.slice(2) : specifier;
+  const winSuffix = suffix.replace(/\//g, '\\');
+  return (
+    msg.includes(`'${specifier}'`) ||
+    msg.includes(`"${specifier}"`) ||
+    msg.includes(`${suffix}'`) ||
+    msg.includes(`${suffix}"`) ||
+    msg.includes(`${winSuffix}'`) ||
+    msg.includes(`${winSuffix}"`) ||
+    msg.includes(`'${bare}'`) ||
+    msg.includes(`"${bare}"`)
+  );
 }
 
 function loadSibling(loadLocal, loadRoot, specifier) {
@@ -361,4 +373,5 @@ module.exports = {
   registerAction,
   findPlayerByDiscordId: players.findPlayerByDiscordId,
   setConfig,
+  _loadSibling: loadSibling,
 };

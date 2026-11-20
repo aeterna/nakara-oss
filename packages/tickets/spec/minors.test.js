@@ -51,6 +51,25 @@ describe('tickets minors (W3b L6b)', () => {
     );
   });
 
+  it('item 1 (rework 4): loadSibling falls back for resolved path and rethrows other missing modules', () => {
+    const actionsMod = require('../server/js/actions.js');
+    const errResolved = new Error("Cannot find module '/x/y/pairing.js'");
+    errResolved.code = 'MODULE_NOT_FOUND';
+    const fallbackRes = actionsMod._loadSibling(
+      () => { throw errResolved; },
+      () => ({ fallback: true }),
+      './pairing.js'
+    );
+    assert.deepEqual(fallbackRes, { fallback: true });
+
+    const errOther = new Error("Cannot find module '/x/y/other.js'");
+    errOther.code = 'MODULE_NOT_FOUND';
+    assert.throws(
+      () => actionsMod._loadSibling(() => { throw errOther; }, () => ({ fallback: true }), './pairing.js'),
+      /other\.js/
+    );
+  });
+
   it('item 3: player helpers are in server/js/players.js and imported cleanly', () => {
     const players = require('../server/js/players.js');
     assert.equal(typeof players.listPlayerIds, 'function');
