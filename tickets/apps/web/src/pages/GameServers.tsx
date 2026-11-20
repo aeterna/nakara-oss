@@ -78,6 +78,47 @@ export const GameServers: React.FC<GameServersProps> = ({ guildId, locale }) => 
     };
   }, [pairCode]);
 
+  // Refresh server list every 5s while pair code is shown
+  useEffect(() => {
+    if (!pairCode) return;
+
+    const initialIds = new Set(servers.map((s) => s.id));
+    const msRemaining = new Date(pairCode.expiresAt).getTime() - Date.now();
+    if (msRemaining <= 0) return;
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const stopPolling = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    intervalId = setInterval(async () => {
+      if (new Date(pairCode.expiresAt).getTime() <= Date.now()) {
+        stopPolling();
+        return;
+      }
+      try {
+        const data = await getGameServers(guildId);
+        setServers(data);
+        if (data.some((s) => !initialIds.has(s.id))) {
+          stopPolling();
+          setPairCode(null);
+        }
+      } catch {
+        // ignore background poll errors
+      }
+    }, 5000);
+
+    const expiryTimer = setTimeout(stopPolling, msRemaining);
+
+    return () => {
+      stopPolling();
+      clearTimeout(expiryTimer);
+    };
+  }, [pairCode?.code, guildId]);
+
   const handleCreatePairCode = async () => {
     setActionLoading(true);
     setError(null);

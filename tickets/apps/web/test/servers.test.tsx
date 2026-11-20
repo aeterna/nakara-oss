@@ -151,4 +151,70 @@ describe('GameServers page acceptance tests (g4)', () => {
       expect(deletedServerId).toBe('server-uuid-1');
     });
   });
+
+  it('refreshes list every 5s while pair code is shown and stops when new server appears or expires', async () => {
+    vi.useFakeTimers();
+
+    let fetchCount = 0;
+    const initialServers = [mockServers[0]];
+    const newServer = mockServers[1];
+    let currentServers = [...initialServers];
+
+    globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (url.endsWith(`/api/v1/guilds/${guildId}/game-servers`)) {
+        fetchCount++;
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => currentServers,
+        };
+      }
+
+      if (url.endsWith(`/api/v1/guilds/${guildId}/game-servers/pair-codes`)) {
+        return {
+          ok: true,
+          status: 201,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => ({
+            code: 'PAIR123',
+            expiresAt: new Date(Date.now() + 20000).toISOString(),
+          }),
+        };
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ code: 'not_found' }),
+      };
+    }) as any;
+
+    render(<GameServers guildId={guildId} locale="en" />);
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByText('Main Roleplay Server')).toBeDefined();
+    const countAfterInitial = fetchCount;
+
+    const createBtn = screen.getByRole('button', { name: /create pair code/i });
+    fireEvent.click(createBtn);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByText(/nakara_tickets pair PAIR123/)).toBeDefined();
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(fetchCount).toBeGreaterThan(countAfterInitial);
+
+    currentServers = [...initialServers, newServer];
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(screen.queryByText(/nakara_tickets pair PAIR123/)).toBeNull();
+    expect(screen.getByText('Staging Server')).toBeDefined();
+
+    const countAfterHidden = fetchCount;
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(fetchCount).toBe(countAfterHidden);
+
+    vi.useRealTimers();
+  });
 });

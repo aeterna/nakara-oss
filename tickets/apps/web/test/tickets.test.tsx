@@ -125,4 +125,25 @@ describe('Tickets Web Page (acceptance test t6)', () => {
     // 6. Verify attachments and actions are rendered
     expect(screen.getByText('screenshot.png')).toBeTruthy();
   });
+
+  it('shows no tickets empty state for empty ticket list in both en and th', async () => {
+    vi.spyOn(ticketsApi, 'getTickets').mockResolvedValue({
+      items: [],
+      next: null,
+    });
+
+    const { rerender } = render(<Tickets guildId={guildId} locale="en" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('No tickets yet')).toBeTruthy();
+    });
+    expect(screen.queryByText('No messages yet')).toBeNull();
+
+    rerender(<Tickets guildId={guildId} locale="th" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('ยังไม่มีทิกเก็ต')).toBeTruthy();
+    });
+    expect(screen.queryByText('ยังไม่มีข้อความ')).toBeNull();
+  });
 });
