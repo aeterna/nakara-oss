@@ -1,0 +1,13 @@
+diff --git a/packages/rongroi/spec/prove_specs.test.js b/packages/rongroi/spec/prove_specs.test.js
+new file mode 100644
+--- /dev/null
++++ b/packages/rongroi/spec/prove_specs.test.js
+@@ -0,0 +1,8 @@
++'use strict';
++
++const test = require('node:test');
++const assert = require('node:assert/strict');
++
++test('deliberate test failure to prove rongroi-specs check', () => {
++    assert.fail('deliberate failure to prove rongroi-specs check');
++});
