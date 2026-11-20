@@ -10,7 +10,7 @@ Plan and live status table (owner's doc): https://claude.ai/artifact/RvXxBw8wnhY
 | W0 | release script fix, ADR 0003, `openapi.yaml`, schema + migration, route stubs, CI workflow | merged | #34 `7db5315` · #35 `8a36db0` · #36 `37cf907` |
 | W1 | core (crypto, HMAC, state machine), Discord gateway, dashboard login/categories/settings, bridge API, resource `nakara_tickets` (pair, signed `fetch` long-poll, info/teleport) | merged | #39 `7b3b343` |
 | W2 | end-to-end wiring + esbuild image, transcripts + attachment archive (local/S3), personal data (delete/export/retention), panel designer, analytics + ratings + audit, auto-close + `/tag` + blocks, revive/give_item + repeat-confirm + results in Discord, game servers page | merged | #40 `4f852c1`; main CI runs 43617424598 + 43617424610 success |
-| W3a | Live test on the owner's Windows host instead of a VM (owner's pick, 2026-11-20): real Discord bot, dashboard on the tailnet, clean qbx FXServer Enhanced (kit-test) | **passed** after six fixes; test setup removed | fixes #79 · method #77 |
+| W3a | Live test on the owner's Windows host instead of a VM (owner's pick, 2026-11-20): real Discord bot, dashboard on the tailnet, clean qbx FXServer Enhanced (kit-test) | **passed** after six fixes; test setup removed | fixes #79 `190d178` · method + handoff #77 `18dbf51` (both merged 2026-11-20) |
 | W3b | Nakara deploy: own small VM (Q4b), a Discord app of its own, panel in the support channel, private adapter in nakara-city | not started — owner decides (VM price first) | — |
 | W4 | release `nakara-tickets@0.1.0` (image + resource zip with provenance), public announcement | not started — owner decides | — |
 
@@ -52,10 +52,10 @@ Remove the scratch folder and the image afterwards.
 
 ## Owner's pending items
 
-1. **Merge #79 and #77** (owner review). Then W3b (Nakara deploy): approve the VM machine type and monthly price before it is created (AGENTS §15.2),
+1. **W3b** (Nakara deploy): approve the VM machine type and monthly price before it is created (AGENTS §15.2),
    create the Discord application (turn off Public Bot, enable the four intents) and put the token in the VM's secret
    files yourself, pick the support channel for the first panel.
-2. Done in W3a: real-server test of `player.revive` and `player.give_item`. Reset the borrowed AETERNA Game bot token in the Developer Portal (it sat on the test host during W3a) and update its env file.
+2. Done in W3a: real-server test of `player.revive` and `player.give_item`. Still open: reset the borrowed AETERNA Game bot token in the Developer Portal (it sat on the test host during W3a) and update its env file.
 3. **W4** release and any public announcement (AGENTS §6).
 
 ## Rollback
@@ -88,3 +88,4 @@ Remove the scratch folder and the image afterwards.
   when agy and the free engines hit quota, runs fall back to the paid `claude` engine (about $0.60 on 2026-11-14).
 - Same check failing twice ⇒ diagnose before re-briefing (AGENTS §5.6); in W1–W2 the cause was usually the test (locale, jsdom
   `confirm`, stream timing) and sometimes the product (`@fastify/static` `setHeaders` signature).
+- 2026-11-20 — #79 merged as `190d178`, #77 as `18dbf51` (owner's order). Work branches and Mac worktrees closed out with `tools/closeout` (manifest in the workspace `backups/`). Nine `delegate/task-20261120-*` branches stay in the Windows host's fleet bare repo: `closeout` cannot prove them there (no GitHub remote), so they wait for the fleet `--delegate-gc` tool. Next: W3b. — Claude Code - Claude Opus 5.5
