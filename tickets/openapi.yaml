@@ -27,6 +27,7 @@ tags:
   - name: audit
   - name: data
   - name: bridge
+  - name: discord
 
 security:
   - session: []
@@ -160,6 +161,36 @@ paths:
           content:
             application/json: { schema: { type: object } }
         '403': { $ref: '#/components/responses/Error' }
+
+  /api/v1/guilds/{guildId}/discord/channels:
+    parameters: [{ $ref: '#/components/parameters/guildId' }]
+    get:
+      operationId: getDiscordChannels
+      summary: GET /api/v1/guilds/{guildId}/discord/channels
+      tags: [discord]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/DiscordChannel' } }
+        '403': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+
+  /api/v1/guilds/{guildId}/discord/roles:
+    parameters: [{ $ref: '#/components/parameters/guildId' }]
+    get:
+      operationId: getDiscordRoles
+      summary: GET /api/v1/guilds/{guildId}/discord/roles
+      tags: [discord]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/DiscordRole' } }
+        '403': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
 
   /api/v1/guilds/{guildId}/categories:
     parameters: [{ $ref: '#/components/parameters/guildId' }]
@@ -1111,3 +1142,22 @@ components:
         target: { type: [string, 'null'] }
         detail: { type: object }
         createdAt: { type: string, format: date-time }
+    DiscordChannel:
+      type: object
+      additionalProperties: false
+      required: [id, name, type, parentId, position]
+      properties:
+        id: { $ref: '#/components/schemas/Snowflake' }
+        name: { type: string }
+        type: { type: integer, enum: [0, 4, 5, 15] }
+        parentId: { oneOf: [{ $ref: '#/components/schemas/Snowflake' }, { type: 'null' }] }
+        position: { type: integer }
+    DiscordRole:
+      type: object
+      additionalProperties: false
+      required: [id, name, color, position]
+      properties:
+        id: { $ref: '#/components/schemas/Snowflake' }
+        name: { type: string }
+        color: { type: integer }
+        position: { type: integer }
