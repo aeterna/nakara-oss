@@ -254,7 +254,7 @@ describe('bridge result acceptance tests (g3)', () => {
         action: 'player.revive',
         params: {},
         status: 'leased',
-        requested_by: null,
+        requested_by: '',
         expires_at: new Date(Date.now() + 60 * 1000),
       })
       .returning();

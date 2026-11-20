@@ -259,7 +259,8 @@ describe('Panels web component (acceptance test n5)', () => {
     }));
 
     render(<Panels guildId={GUILD_ID} locale="en" />);
-    const channelSelect = await screen.findByLabelText('Channel ID');
+    await screen.findByRole('option', { name: '# ticket-drop' });
+    const channelSelect = screen.getByLabelText('Channel ID');
     fireEvent.change(channelSelect, { target: { value: 'chan-888' } });
     fireEvent.click(screen.getByText('Save Panel'));
 

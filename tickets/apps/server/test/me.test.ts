@@ -70,10 +70,11 @@ describe('GET /api/v1/me (guild name resolution)', () => {
     const [row] = await env.db.select().from(guilds).where(eq(guilds.guild_id, GUILD_ID));
     expect(row.name).toBe('Real Discord Name');
 
+    // Two /guilds/{id} calls on cold request: 1 from checkStaff (reading owner_id) + 1 from me.ts (resolving placeholder name)
     const guildCalls = fetchMock.mock.calls.filter(([u]: [string]) =>
       String(u) === `https://discord.com/api/v10/guilds/${GUILD_ID}`
     );
-    expect(guildCalls).toHaveLength(1);
+    expect(guildCalls).toHaveLength(2);
 
     // Second call: row now has real name in DB and staff status cached -> no fetch at all
     fetchMock.mockClear();
