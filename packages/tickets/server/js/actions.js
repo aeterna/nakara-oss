@@ -1,5 +1,20 @@
-const store = require('./store.js');
-let config = require('../../config.json');
+// FXServer resolves a relative require() against the resource root, not against the requiring file.
+function isMissingModule(err) {
+  if (!err) return false;
+  return err.code === 'MODULE_NOT_FOUND' || /^Cannot find module\b/.test(err.message || '');
+}
+
+function loadSibling(loadLocal, loadRoot) {
+  try {
+    return loadLocal();
+  } catch (err) {
+    if (!isMissingModule(err)) throw err;
+    return loadRoot();
+  }
+}
+
+const store = loadSibling(() => require('./store.js'), () => require('./server/js/store.js'));
+let config = loadSibling(() => require('../../config.json'), () => require('./config.json'));
 
 const customActions = new Map(); // actionName -> { schema, fn }
 
@@ -30,19 +45,44 @@ function getResourceExport(resourceName) {
   return null;
 }
 
-function findPlayerByDiscordId(targetDiscordId) {
-  if (!targetDiscordId || typeof GetPlayers !== 'function') return null;
+function listPlayerIds() {
+  if (typeof GetPlayers === 'function') return GetPlayers().map(String);
+  if (typeof getPlayers === 'function') return getPlayers().map(String);
+  if (typeof GetNumPlayerIndices === 'function' && typeof GetPlayerFromIndex === 'function') {
+    const ids = [];
+    const count = GetNumPlayerIndices();
+    for (let i = 0; i < count; i++) {
+      ids.push(String(GetPlayerFromIndex(i)));
+    }
+    return ids;
+  }
+  return [];
+}
 
-  const players = GetPlayers();
+function listIdentifiers(playerId) {
+  if (typeof GetPlayerIdentifiers === 'function') return GetPlayerIdentifiers(playerId) || [];
+  if (typeof GetNumPlayerIdentifiers === 'function' && typeof GetPlayerIdentifier === 'function') {
+    const ids = [];
+    const count = GetNumPlayerIdentifiers(playerId);
+    for (let k = 0; k < count; k++) {
+      ids.push(String(GetPlayerIdentifier(playerId, k)));
+    }
+    return ids;
+  }
+  return [];
+}
+
+function findPlayerByDiscordId(targetDiscordId) {
+  if (!targetDiscordId) return null;
+
+  const players = listPlayerIds();
   const searchPrefix = 'discord:' + targetDiscordId.toLowerCase();
 
   for (const playerId of players) {
-    if (typeof GetPlayerIdentifiers === 'function') {
-      const identifiers = GetPlayerIdentifiers(playerId) || [];
-      for (const idStr of identifiers) {
-        if (idStr.toLowerCase() === searchPrefix) {
-          return playerId;
-        }
+    const identifiers = listIdentifiers(playerId) || [];
+    for (const idStr of identifiers) {
+      if (idStr.toLowerCase() === searchPrefix) {
+        return Number(playerId);
       }
     }
   }
@@ -250,20 +290,24 @@ async function executeAction(action) {
               };
             } else {
               try {
-                const canCarry = oxInv.CanCarryItem(playerId, item, count);
-                if (!canCarry) {
+                const canCarryRes = oxInv.CanCarryItem(playerId, item, count);
+                const canCarryOk = Array.isArray(canCarryRes) ? canCarryRes[0] : canCarryRes;
+                if (!canCarryOk) {
+                  const canCarryReason = Array.isArray(canCarryRes) && typeof canCarryRes[1] === 'string' ? canCarryRes[1] : null;
                   result = {
                     ok: false,
                     code: 'error',
-                    message: 'Player cannot carry item',
+                    message: canCarryReason ? `Player cannot carry item: ${canCarryReason}` : 'Player cannot carry item',
                   };
                 } else {
                   const added = oxInv.AddItem(playerId, item, count);
-                  if (added === false || added === null || added === undefined) {
+                  const ok = Array.isArray(added) ? added[0] : added;
+                  const reason = Array.isArray(added) && typeof added[1] === 'string' ? added[1] : null;
+                  if (!ok) {
                     result = {
                       ok: false,
                       code: 'error',
-                      message: 'Failed to add item',
+                      message: reason ? `Failed to add item: ${reason}` : 'Failed to add item',
                     };
                   } else {
                     result = {

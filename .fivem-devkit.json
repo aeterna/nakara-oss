@@ -51,6 +51,24 @@
           "path": "packages/rongroi/oss.json",
           "reason": "files.write is used by filestore.js, whose runtime path the scanner cannot match to the declaration (ADR 0001 section 4)"
         }
+      ],
+      "host-access": [
+        {
+          "path": "packages/tickets/spec/require-paths.test.js",
+          "reason": "the spec patches node:module _resolveFilename to emulate FXServer resolving relative require() from the resource root; specs are never shipped in release zips"
+        }
+      ],
+      "undeclared-convar": [
+        {
+          "path": "packages/tickets/spec/**",
+          "reason": "tickets specs stub FiveM natives such as GetConvar on globalThis to load the resource outside FXServer; specs are never shipped in release zips"
+        }
+      ],
+      "undeclared-http": [
+        {
+          "path": "packages/tickets/spec/**",
+          "reason": "tickets specs stub fetch on globalThis to test the bridge without network; specs are never shipped in release zips"
+        }
       ]
     }
   }

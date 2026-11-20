@@ -54,7 +54,7 @@ export async function checkStaff(
   const fetchImpl = options.fetchImpl ?? fetch;
 
   try {
-    const [memberRes, rolesRes] = await Promise.all([
+    const [memberRes, rolesRes, guildRes] = await Promise.all([
       fetchImpl(`https://discord.com/api/v10/guilds/${guildId}/members/${userId}`, {
         headers: { Authorization: `Bot ${token}` },
         signal: AbortSignal.timeout(10_000),
@@ -63,6 +63,10 @@ export async function checkStaff(
         headers: { Authorization: `Bot ${token}` },
         signal: AbortSignal.timeout(10_000),
       }),
+      fetchImpl(`https://discord.com/api/v10/guilds/${guildId}`, {
+        headers: { Authorization: `Bot ${token}` },
+        signal: AbortSignal.timeout(10_000),
+      }).catch(() => null),
     ]);
 
     if (!memberRes.ok || !rolesRes.ok) {
@@ -72,6 +76,18 @@ export async function checkStaff(
 
     const member = (await memberRes.json()) as { roles?: string[] };
     const roles = (await rolesRes.json()) as Array<{ id: string; permissions: string }>;
+
+    if (guildRes?.ok) {
+      try {
+        const guild = (await guildRes.json()) as { owner_id?: string };
+        if (guild.owner_id === userId) {
+          setStaffCache(cacheKey, { result: true, expiresAt: now + CACHE_TTL_MS });
+          return true;
+        }
+      } catch {
+        // Fall back to role permissions when the guild payload cannot be read.
+      }
+    }
 
     let permissions = 0n;
     if (Array.isArray(roles)) {
