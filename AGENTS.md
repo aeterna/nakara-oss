@@ -9,7 +9,7 @@ When working inside the AETERNA workspace (`freelance/aeterna/fivem/nakara-oss`)
 
 Every resource declares its capabilities in `oss.json` (validated against [`oss.schema.json`](oss.schema.json)), every PR is scanned for dangerous code and undeclared capabilities by `fivem-devkit safety`, and every release is built in CI with a provenance attestation.
 
-Read before changing code: [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`packages/devkit/docs/safety.md`](packages/devkit/docs/safety.md) · [`docs/maintainers/SETUP.md`](docs/maintainers/SETUP.md) · [`SECURITY.md`](SECURITY.md).
+Read before changing code: [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`packages/devkit/docs/safety.md`](packages/devkit/docs/safety.md) · [`docs/maintainers/SETUP.md`](docs/maintainers/SETUP.md) · [`SECURITY.md`](SECURITY.md). Before calling a resource tested, run it on a real FXServer: [`docs/maintainers/live-test.md`](docs/maintainers/live-test.md).
 
 ## Hard rules (CI enforces them)
 
