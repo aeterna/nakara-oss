@@ -1,0 +1,10 @@
+diff --git a/packages/cargen-fix/spec/prove_busted_spec.lua b/packages/cargen-fix/spec/prove_busted_spec.lua
+new file mode 100644
+--- /dev/null
++++ b/packages/cargen-fix/spec/prove_busted_spec.lua
+@@ -0,0 +1,5 @@
++describe('deliberate spec failure to prove busted-specs check', function()
++    it('fails deliberately on assertion failure', function()
++        assert.is_true(false)
++    end)
++end)

@@ -16,7 +16,7 @@ export const GuildPicker: React.FC<GuildPickerProps> = ({ guilds, onSelectGuild,
         <p className="card-desc">{t('guildPickerDesc', locale)}</p>
 
         {guilds.length === 0 ? (
-          <div className="empty-state">{t('noCategories', locale)}</div>
+          <div className="empty-state">{t('noGuilds', locale)}</div>
         ) : (
           <div className="server-grid">
             {guilds.map((guild) => {

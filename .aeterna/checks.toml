@@ -13,18 +13,37 @@
 # A repo with no file reports `not-configured`.
 # To skip the checks once: aeterna-delegate -m write ... --skip-checks
 
+# Protected files (refused by delegate write runs)
+protected = [
+  ".aeterna/*",
+  ".github/*",
+  "LICENSE",
+  "packages/*/NOTICE",
+]
+
+# Generated package lockfiles (written by package managers)
+generated = [
+  "package-lock.json",
+  "tickets/package-lock.json",
+  "launcher/Cargo.lock",
+]
+
 # Rongroi Server Kit specs (node --test). Plain Node, no npm packages.
+# shuffle: fixed seed (Delegate Upgrade R5 U12b)
 [[checks]]
 name = "rongroi-specs"
-cmd = 'npm test --workspace packages/rongroi --if-present'
+cmd = 'cd packages/rongroi && node --test --test-randomize --test-random-seed=20261120 "spec/**/*.test.js"'
 timeout = 120
+prove = ".aeterna/prove/rongroi-specs.patch"
 
 # Devkit unit and safety-scanner tests (node --test). Covers the devkit package manifest and its test files and fixtures.
+# shuffle: fixed seed (Delegate Upgrade R5 U12b)
 [[checks]]
 name = "devkit-tests"
-cmd = 'set -e; npm ci --offline --ignore-scripts --no-audit --no-fund --cache "/Users/$USER/.npm"; npm test --workspace packages/devkit'
+cmd = 'set -e; npm ci --offline --ignore-scripts --no-audit --no-fund --cache "/Users/$USER/.npm"; cd packages/devkit && node --test --test-randomize --test-random-seed=20261120 "test/**/*.test.js"'
 timeout = 120
 deps = ["package.json", "package-lock.json", ".npmrc", "packages/devkit/package.json", "packages/devkit/test/*"]
+prove = ".aeterna/prove/devkit-tests.patch"
 
 # Static checks (dogfood) over the devkit and every resource. Covers the root manifests, the capability manifests
 # (oss.json, oss.schema.json), the devkit check config and the nui-escape waiver file.
@@ -33,6 +52,7 @@ name = "fivem-check"
 cmd = 'set -e; npm ci --offline --ignore-scripts --no-audit --no-fund --cache "/Users/$USER/.npm"; node packages/devkit/bin/fivem-devkit.js check'
 timeout = 120
 deps = ["package.json", "package-lock.json", ".npmrc", ".fivem-devkit.json", ".fivem-devkit/*", "*/oss.json", "oss.schema.json"]
+prove = ".aeterna/prove/fivem-check.patch"
 
 # Safety scanner and oss.json capability verification (structural oss.json check, no JSON-schema validator offline).
 # Covers the root manifests, the capability manifests (oss.json, oss.schema.json), the safety config read by the
@@ -42,10 +62,14 @@ name = "fivem-safety"
 cmd = 'set -e; npm ci --offline --ignore-scripts --no-audit --no-fund --cache "/Users/$USER/.npm"; node packages/devkit/bin/fivem-devkit.js safety'
 timeout = 120
 deps = ["package.json", "package-lock.json", ".npmrc", ".fivem-devkit.json", ".fivem-devkit/*", "*/oss.json", "oss.schema.json"]
+prove = ".aeterna/prove/fivem-safety.patch"
 
 # Busted Lua specs (--config-file=.busted). Covers the busted config and the devkit harness the specs require.
+# shuffle: off — two specs in packages/core/spec/core_spec.lua (lines 346 and 489) depend on test order;
+# add --shuffle --seed=20261120 once they are fixed (U12b)
 [[checks]]
 name = "busted-specs"
 cmd = 'busted --config-file=.busted'
 timeout = 60
 deps = [".busted", "packages/devkit/busted/*"]
+prove = ".aeterna/prove/busted-specs.patch"

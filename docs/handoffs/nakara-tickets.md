@@ -10,7 +10,8 @@ Plan and live status table (owner's doc): https://claude.ai/artifact/RvXxBw8wnhY
 | W0 | release script fix, ADR 0003, `openapi.yaml`, schema + migration, route stubs, CI workflow | merged | #34 `7db5315` · #35 `8a36db0` · #36 `37cf907` |
 | W1 | core (crypto, HMAC, state machine), Discord gateway, dashboard login/categories/settings, bridge API, resource `nakara_tickets` (pair, signed `fetch` long-poll, info/teleport) | merged | #39 `7b3b343` |
 | W2 | end-to-end wiring + esbuild image, transcripts + attachment archive (local/S3), personal data (delete/export/retention), panel designer, analytics + ratings + audit, auto-close + `/tag` + blocks, revive/give_item + repeat-confirm + results in Discord, game servers page | merged | #40 `4f852c1`; main CI runs 43617424598 + 43617424610 success |
-| W3 | Nakara deploy: own small VM (Q4b), Discord app, panel in support channel, private adapter in nakara-city | **not started — owner decides** | — |
+| W3a | Live test on the owner's Windows host instead of a VM (owner's pick, 2026-11-20): real Discord bot, dashboard on the tailnet, clean qbx FXServer Enhanced (kit-test) | **passed** after six fixes; test setup removed | fixes #79 `190d178` · method + handoff #77 `18dbf51` (both merged 2026-11-20) |
+| W3b | Nakara deploy: own small VM (Q4b), a Discord app of its own, panel in the support channel, private adapter in nakara-city | not started — owner decides (VM price first) | — |
 | W4 | release `nakara-tickets@0.1.0` (image + resource zip with provenance), public announcement | not started — owner decides | — |
 
 Verified on `main` (local, 2026-11-14): vitest 233/233 three runs in a row, `tsc -b` 0, web build, server bundle,
@@ -19,7 +20,9 @@ Verified on `main` (local, 2026-11-14): vitest 233/233 three runs in a row, `tsc
 200, `/api/v1/me` 401, `/metrics` 404 without token, `/auth/login` 302 to Discord, `/data/files` writable, container
 healthy). Two Q3 reviews per wave by another model; every blocker and major fixed.
 
-**Not verified yet:** a real Discord bot (gateway login, slash commands, rating DMs, panels in a live guild), a real
+**Proven on 2026-11-20 (W3a):** gateway login, slash-command registration, panel post, ticket open + claim in a private thread, dashboard login as the guild owner, pairing + heartbeat, and all four game actions on FXServer Enhanced (info, teleport, give_item with the inventory read back, revive of a dead character). **Still not verified:** rating DMs, transcripts on close, S3, and Legacy. The W3a run first failed on six bugs every spec had passed (#79).
+
+**Earlier note (2026-11-15) — not verified then:** a real Discord bot (gateway login, slash commands, rating DMs, panels in a live guild), a real
 FiveM server running `nakara_tickets` against a deployed API (`qbx_medical` `Revive` and `ox_inventory` `AddItem` —
 names taken from Nakara's own server code), S3 against a real endpoint. W3 is where these get proven.
 
@@ -49,10 +52,10 @@ Remove the scratch folder and the image afterwards.
 
 ## Owner's pending items
 
-1. **Start W3** (Nakara deploy): approve the VM machine type and monthly price before it is created (AGENTS §15.2),
+1. **W3b** (Nakara deploy): approve the VM machine type and monthly price before it is created (AGENTS §15.2),
    create the Discord application (turn off Public Bot, enable the four intents) and put the token in the VM's secret
    files yourself, pick the support channel for the first panel.
-2. During W3, one real-server test of `player.revive` and `player.give_item` (both off by default in `config.json`).
+2. Done in W3a: real-server test of `player.revive` and `player.give_item`. Still open: reset the borrowed AETERNA Game bot token in the Developer Portal (it sat on the test host during W3a) and update its env file.
 3. **W4** release and any public announcement (AGENTS §6).
 
 ## Rollback
@@ -75,6 +78,7 @@ Remove the scratch folder and the image afterwards.
   blockers: migration replay, archive SSRF via redirects, unbounded download; plus a CSRF test regression, a
   `@ts-ignore` hiding a missing export, a test-design flaw in the stream-cancel test); merged #40.
 - 2026-11-15 — This handoff.
+- 2026-11-20 — W3a live test (owner chose the Windows host, borrowed the AETERNA Game app, test channel under STAFF). Six bugs found and fixed with failing-first tests: guild owner not staff; relative `require` from the resource root; `rawCommand` replacing the api in the pair command; Lua-only `GetPlayers` and `GetPlayerIdentifiers` in JS; string player ids and multi-value export returns. PR #79 (Q3 Sonnet: no blocker, no major; five minors listed there). Method written as `docs/maintainers/live-test.md` (#77). Test setup removed the same day: channel, rcon, diagnostics resource, stack and secrets on the host, tailscale serve, bot intents and redirect. UI issues seen (not fixed): category edit button, snake_case vs camelCase in the category table, no game-server field, raw IDs in forms, guild name `Guild <id>`, English panel defaults, repeat-confirm counting a failed action, server list not refreshing after pairing; FXServer logs `Reader released` on each long-poll cycle (non-fatal). — Claude Code - Claude Opus 5.5
 
 ## Lessons kept for the next waves
 
@@ -84,3 +88,4 @@ Remove the scratch folder and the image afterwards.
   when agy and the free engines hit quota, runs fall back to the paid `claude` engine (about $0.60 on 2026-11-14).
 - Same check failing twice ⇒ diagnose before re-briefing (AGENTS §5.6); in W1–W2 the cause was usually the test (locale, jsdom
   `confirm`, stream timing) and sometimes the product (`@fastify/static` `setHeaders` signature).
+- 2026-11-20 — #79 merged as `190d178`, #77 as `18dbf51` (owner's order). Work branches and Mac worktrees closed out with `tools/closeout` (manifest in the workspace `backups/`). Nine `delegate/task-20261120-*` branches stay in the Windows host's fleet bare repo: `closeout` cannot prove them there (no GitHub remote), so they wait for the fleet `--delegate-gc` tool. Next: W3b. — Claude Code - Claude Opus 5.5

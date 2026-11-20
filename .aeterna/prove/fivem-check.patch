@@ -1,0 +1,7 @@
+diff --git a/packages/cargen-fix/client/prove_check.lua b/packages/cargen-fix/client/prove_check.lua
+new file mode 100644
+--- /dev/null
++++ b/packages/cargen-fix/client/prove_check.lua
+@@ -0,0 +1,2 @@
++-- deliberate lint check failure for fivem-check (lua-and-nil-or)
++local val = true and nil or false

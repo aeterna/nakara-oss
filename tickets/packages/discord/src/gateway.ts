@@ -261,7 +261,7 @@ export async function startGateway(deps: StartGatewayDeps): Promise<GatewayHandl
     await checkGuildAllowed(guild);
   });
 
-  client.on('ready', async () => {
+  client.on('clientReady', async () => {
     currentStatus = 'connected';
     deps.log.info('Discord gateway connected and ready');
 
