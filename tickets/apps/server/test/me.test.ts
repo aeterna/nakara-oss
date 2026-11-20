@@ -99,7 +99,8 @@ describe('GET /api/v1/me (guild name resolution)', () => {
     const guildCalls = fetchMock.mock.calls.filter(([u]: [string]) =>
       String(u) === `https://discord.com/api/v10/guilds/${GUILD_ID}`
     );
-    expect(guildCalls).toHaveLength(0);
+    // the one call is the staff check (owner_id), none from me.ts
+    expect(guildCalls).toHaveLength(1);
   });
 
   it('failing lookup records negative cache so second request makes no /guilds/{id} call from me.ts', async () => {
