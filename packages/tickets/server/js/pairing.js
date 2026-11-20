@@ -58,7 +58,13 @@ async function handleCommand(source, args, injectedApi = api) {
 }
 
 if (typeof RegisterCommand === 'function') {
-  RegisterCommand('nakara_tickets', handleCommand, true);
+  // FXServer passes the raw command string as the third argument; only forward a spec-injected api object.
+  RegisterCommand(
+    'nakara_tickets',
+    (source, args, injectedApi) =>
+      handleCommand(source, args, injectedApi && typeof injectedApi === 'object' ? injectedApi : undefined),
+    true
+  );
 }
 
 module.exports = {
