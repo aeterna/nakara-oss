@@ -36,15 +36,18 @@ export const Panels: React.FC<PanelsProps> = ({ guildId, locale }) => {
 
   // Form Fields
   const [channelId, setChannelId] = useState<string>('');
-  const [title, setTitle] = useState<string>('Open a Support Ticket');
-  const [description, setDescription] = useState<string>('Select an option below to create a ticket.');
+  const [title, setTitle] = useState<string>(() => t('defaultTitle', locale));
+  const [description, setDescription] = useState<string>(() => t('defaultDescription', locale));
   const [colorHex, setColorHex] = useState<string>('#5865f2');
   const [footer, setFooter] = useState<string>('');
   const [imageUrl, setImageUrl] = useState<string>('');
   const [kind, setKind] = useState<'buttons' | 'select'>('buttons');
-  const [buttons, setButtons] = useState<PanelButton[]>([
-    { categoryId: '', label: 'General Support', emoji: '🎫', style: 'primary' },
+  const [buttons, setButtons] = useState<PanelButton[]>(() => [
+    { categoryId: '', label: t('defaultButtonLabel', locale), emoji: '🎫', style: 'primary' },
   ]);
+  const [titleTouched, setTitleTouched] = useState<boolean>(false);
+  const [descriptionTouched, setDescriptionTouched] = useState<boolean>(false);
+  const [buttonsTouched, setButtonsTouched] = useState<boolean>(false);
 
   const loadData = async () => {
     try {
@@ -76,11 +79,26 @@ export const Panels: React.FC<PanelsProps> = ({ guildId, locale }) => {
     loadData();
   }, [guildId]);
 
+  useEffect(() => {
+    if (selectedPanelId) return;
+    if (!titleTouched) {
+      setTitle(t('defaultTitle', locale));
+    }
+    if (!descriptionTouched) {
+      setDescription(t('defaultDescription', locale));
+    }
+    if (!buttonsTouched) {
+      setButtons((prev) =>
+        prev.map((b, idx) => (idx === 0 ? { ...b, label: t('defaultButtonLabel', locale) } : b))
+      );
+    }
+  }, [locale, selectedPanelId, titleTouched, descriptionTouched, buttonsTouched]);
+
   const resetForm = () => {
     setSelectedPanelId(null);
     setChannelId('');
-    setTitle('Open a Support Ticket');
-    setDescription('Select an option below to create a ticket.');
+    setTitle(t('defaultTitle', locale));
+    setDescription(t('defaultDescription', locale));
     setColorHex('#5865f2');
     setFooter('');
     setImageUrl('');
@@ -88,11 +106,14 @@ export const Panels: React.FC<PanelsProps> = ({ guildId, locale }) => {
     setButtons([
       {
         categoryId: categories.length > 0 ? categories[0].id : '',
-        label: 'General Support',
+        label: t('defaultButtonLabel', locale),
         emoji: '🎫',
         style: 'primary',
       },
     ]);
+    setTitleTouched(false);
+    setDescriptionTouched(false);
+    setButtonsTouched(false);
     setStatusMessage(null);
   };
 
@@ -111,17 +132,21 @@ export const Panels: React.FC<PanelsProps> = ({ guildId, locale }) => {
         : [
             {
               categoryId: categories.length > 0 ? categories[0].id : '',
-              label: 'General Support',
+              label: t('defaultButtonLabel', locale),
               emoji: '🎫',
               style: 'primary',
             },
           ]
     );
+    setTitleTouched(false);
+    setDescriptionTouched(false);
+    setButtonsTouched(false);
     setStatusMessage(null);
   };
 
   const handleAddButton = () => {
     if (buttons.length >= 25) return;
+    setButtonsTouched(true);
     const defaultCatId = categories.length > 0 ? categories[0].id : '';
     setButtons((prev) => [
       ...prev,
@@ -136,12 +161,14 @@ export const Panels: React.FC<PanelsProps> = ({ guildId, locale }) => {
 
   const handleRemoveButton = (index: number) => {
     if (buttons.length <= 1) return;
+    setButtonsTouched(true);
     setButtons((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleMoveButton = (index: number, delta: number) => {
     const targetIdx = index + delta;
     if (targetIdx < 0 || targetIdx >= buttons.length) return;
+    setButtonsTouched(true);
     setButtons((prev) => {
       const copy = [...prev];
       const item = copy[index];
@@ -152,6 +179,7 @@ export const Panels: React.FC<PanelsProps> = ({ guildId, locale }) => {
   };
 
   const handleButtonChange = (index: number, field: keyof PanelButton, value: any) => {
+    setButtonsTouched(true);
     setButtons((prev) => {
       const copy = [...prev];
       copy[index] = { ...copy[index], [field]: value };
@@ -366,7 +394,10 @@ export const Panels: React.FC<PanelsProps> = ({ guildId, locale }) => {
                 className="form-control"
                 placeholder={t('embedTitlePlaceholder', locale)}
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  setTitleTouched(true);
+                }}
                 maxLength={256}
                 required
               />
@@ -388,7 +419,10 @@ export const Panels: React.FC<PanelsProps> = ({ guildId, locale }) => {
                 className="form-control"
                 placeholder={t('embedDescriptionPlaceholder', locale)}
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => {
+                  setDescription(e.target.value);
+                  setDescriptionTouched(true);
+                }}
                 maxLength={4096}
                 rows={3}
               />
@@ -546,6 +580,7 @@ export const Panels: React.FC<PanelsProps> = ({ guildId, locale }) => {
                       <label style={{ fontSize: '0.75rem', color: '#949ba4' }}>{t('buttonLabel', locale)}</label>
                       <input
                         type="text"
+                        data-testid="button-label-input"
                         className="form-control"
                         value={btn.label}
                         onChange={(e) => handleButtonChange(idx, 'label', e.target.value)}

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import { Panels } from '../src/pages/Panels.js';
+import panelsDict from '../src/i18n/panels.js';
 
 describe('Panels web component (acceptance test n5)', () => {
   const GUILD_ID = '123456789012345678';
@@ -111,5 +112,131 @@ describe('Panels web component (acceptance test n5)', () => {
     const descCounter = screen.getByTestId('description-counter');
     expect(descCounter.textContent).toContain('16');
     expect(descCounter.textContent).toContain('4096');
+  });
+
+  it('new panel in th shows Thai defaults, in en English', async () => {
+    const { unmount } = render(<Panels guildId={GUILD_ID} locale="th" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('panel-title-input')).toBeDefined();
+    });
+
+    const thTitleInput = screen.getByTestId('panel-title-input') as HTMLInputElement;
+    expect(thTitleInput.value).toBe(panelsDict.th.defaultTitle);
+    expect(screen.getByTestId('preview-title').textContent).toBe(panelsDict.th.defaultTitle);
+
+    const thDescInput = screen.getByTestId('panel-description-input') as HTMLTextAreaElement;
+    expect(thDescInput.value).toBe(panelsDict.th.defaultDescription);
+    expect(screen.getByTestId('preview-description').textContent).toBe(panelsDict.th.defaultDescription);
+
+    const thButton = screen.getByTestId('panel-button-item');
+    const thButtonInput = (screen.queryByTestId('button-label-input') || thButton.querySelectorAll('input')[0]) as HTMLInputElement;
+    expect(thButtonInput.value).toBe(panelsDict.th.defaultButtonLabel);
+    expect(screen.getByTestId('preview-components').textContent).toContain(panelsDict.th.defaultButtonLabel);
+
+    unmount();
+
+    render(<Panels guildId={GUILD_ID} locale="en" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('panel-title-input')).toBeDefined();
+    });
+
+    const enTitleInput = screen.getByTestId('panel-title-input') as HTMLInputElement;
+    expect(enTitleInput.value).toBe(panelsDict.en.defaultTitle);
+    expect(screen.getByTestId('preview-title').textContent).toBe(panelsDict.en.defaultTitle);
+
+    const enDescInput = screen.getByTestId('panel-description-input') as HTMLTextAreaElement;
+    expect(enDescInput.value).toBe(panelsDict.en.defaultDescription);
+    expect(screen.getByTestId('preview-description').textContent).toBe(panelsDict.en.defaultDescription);
+
+    const enButton = screen.getByTestId('panel-button-item');
+    const enButtonInput = (screen.queryByTestId('button-label-input') || enButton.querySelectorAll('input')[0]) as HTMLInputElement;
+    expect(enButtonInput.value).toBe(panelsDict.en.defaultButtonLabel);
+    expect(screen.getByTestId('preview-components').textContent).toContain(panelsDict.en.defaultButtonLabel);
+  });
+
+  it('switching locale on untouched panel updates defaults, but never overwrites text user typed', async () => {
+    const { rerender } = render(<Panels guildId={GUILD_ID} locale="en" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('panel-title-input')).toBeDefined();
+    });
+
+    // Untouched panel switches defaults when locale changes to 'th'
+    rerender(<Panels guildId={GUILD_ID} locale="th" />);
+
+    const titleInput = screen.getByTestId('panel-title-input') as HTMLInputElement;
+    const descInput = screen.getByTestId('panel-description-input') as HTMLTextAreaElement;
+    expect(titleInput.value).toBe(panelsDict.th.defaultTitle);
+    expect(descInput.value).toBe(panelsDict.th.defaultDescription);
+
+    // User types custom text into title
+    fireEvent.change(titleInput, { target: { value: 'My Custom Typed Title' } });
+    expect(titleInput.value).toBe('My Custom Typed Title');
+
+    // Switch locale back to 'en': typed title is preserved, untouched description switches
+    rerender(<Panels guildId={GUILD_ID} locale="en" />);
+    expect(titleInput.value).toBe('My Custom Typed Title');
+    expect(descInput.value).toBe(panelsDict.en.defaultDescription);
+  });
+
+  it('editing an existing panel keeps its saved text when locale changes', async () => {
+    const savedPanel = {
+      id: 'panel-saved-1',
+      guildId: GUILD_ID,
+      channelId: '555666777',
+      messageId: 'msg-999',
+      embed: {
+        title: 'Saved Panel Title',
+        description: 'Saved Panel Description',
+        color: 0x5865f2,
+        footer: 'Saved Footer',
+        imageUrl: null,
+      },
+      kind: 'buttons' as const,
+      buttons: [
+        { categoryId: 'cat-1', label: 'Saved Button Label', emoji: '🎫', style: 'primary' as const },
+      ],
+      createdAt: '2026-01-01T00:00:00Z',
+    };
+
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => {
+      const urlStr = String(url);
+      if (urlStr.includes('/categories')) {
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => mockCategories,
+        };
+      }
+      if (urlStr.includes('/panels')) {
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => [savedPanel],
+        };
+      }
+      return { ok: false, status: 404, headers: new Headers(), json: async () => ({}) };
+    }));
+
+    const { rerender } = render(<Panels guildId={GUILD_ID} locale="en" />);
+
+    const panelItem = await screen.findByText('Saved Panel Title');
+    fireEvent.click(panelItem);
+
+    const titleInput = screen.getByTestId('panel-title-input') as HTMLInputElement;
+    const descInput = screen.getByTestId('panel-description-input') as HTMLTextAreaElement;
+    expect(titleInput.value).toBe('Saved Panel Title');
+    expect(descInput.value).toBe('Saved Panel Description');
+
+    // Change dashboard locale to 'th' while editing saved panel
+    rerender(<Panels guildId={GUILD_ID} locale="th" />);
+
+    // Saved panel text must NOT be changed
+    expect(titleInput.value).toBe('Saved Panel Title');
+    expect(descInput.value).toBe('Saved Panel Description');
   });
 });
