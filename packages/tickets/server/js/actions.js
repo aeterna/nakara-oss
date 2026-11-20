@@ -82,7 +82,7 @@ function findPlayerByDiscordId(targetDiscordId) {
     const identifiers = listIdentifiers(playerId) || [];
     for (const idStr of identifiers) {
       if (idStr.toLowerCase() === searchPrefix) {
-        return playerId;
+        return Number(playerId);
       }
     }
   }
@@ -290,20 +290,24 @@ async function executeAction(action) {
               };
             } else {
               try {
-                const canCarry = oxInv.CanCarryItem(playerId, item, count);
-                if (!canCarry) {
+                const canCarryRes = oxInv.CanCarryItem(playerId, item, count);
+                const canCarryOk = Array.isArray(canCarryRes) ? canCarryRes[0] : canCarryRes;
+                if (!canCarryOk) {
+                  const canCarryReason = Array.isArray(canCarryRes) && typeof canCarryRes[1] === 'string' ? canCarryRes[1] : null;
                   result = {
                     ok: false,
                     code: 'error',
-                    message: 'Player cannot carry item',
+                    message: canCarryReason ? `Player cannot carry item: ${canCarryReason}` : 'Player cannot carry item',
                   };
                 } else {
                   const added = oxInv.AddItem(playerId, item, count);
-                  if (added === false || added === null || added === undefined) {
+                  const ok = Array.isArray(added) ? added[0] : added;
+                  const reason = Array.isArray(added) && typeof added[1] === 'string' ? added[1] : null;
+                  if (!ok) {
                     result = {
                       ok: false,
                       code: 'error',
-                      message: 'Failed to add item',
+                      message: reason ? `Failed to add item: ${reason}` : 'Failed to add item',
                     };
                   } else {
                     result = {
