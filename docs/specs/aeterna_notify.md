@@ -1,6 +1,6 @@
 # aeterna_notify
 
-- Package: `packages/notify` · resource `aeterna_notify` · wave W2 · status draft
+- Package: `packages/notify` · resource `aeterna_notify` · wave W2 · status released in 0.1.0
 - Depends on: `aeterna_core` (its own NUI; it does not use `aeterna_uikit`)
 
 ## Purpose and limits

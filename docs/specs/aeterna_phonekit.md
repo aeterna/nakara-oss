@@ -1,6 +1,6 @@
 # aeterna_phonekit
 
-- Package: `packages/phonekit` · resource `aeterna_phonekit` · wave W3 · status draft
+- Package: `packages/phonekit` · resource `aeterna_phonekit` · wave W3 · status released in 0.1.0
 - Depends on: `aeterna_core` (focus, KVP, locale, keys, time), `aeterna_uikit` (panel spec format, menu entry),
   `aeterna_notify` (notifications while the phone is closed)
 
