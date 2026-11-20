@@ -59,6 +59,19 @@ function listPlayerIds() {
   return [];
 }
 
+function listIdentifiers(playerId) {
+  if (typeof GetPlayerIdentifiers === 'function') return GetPlayerIdentifiers(playerId) || [];
+  if (typeof GetNumPlayerIdentifiers === 'function' && typeof GetPlayerIdentifier === 'function') {
+    const ids = [];
+    const count = GetNumPlayerIdentifiers(playerId);
+    for (let k = 0; k < count; k++) {
+      ids.push(String(GetPlayerIdentifier(playerId, k)));
+    }
+    return ids;
+  }
+  return [];
+}
+
 function findPlayerByDiscordId(targetDiscordId) {
   if (!targetDiscordId) return null;
 
@@ -66,12 +79,10 @@ function findPlayerByDiscordId(targetDiscordId) {
   const searchPrefix = 'discord:' + targetDiscordId.toLowerCase();
 
   for (const playerId of players) {
-    if (typeof GetPlayerIdentifiers === 'function') {
-      const identifiers = GetPlayerIdentifiers(playerId) || [];
-      for (const idStr of identifiers) {
-        if (idStr.toLowerCase() === searchPrefix) {
-          return playerId;
-        }
+    const identifiers = listIdentifiers(playerId) || [];
+    for (const idStr of identifiers) {
+      if (idStr.toLowerCase() === searchPrefix) {
+        return playerId;
       }
     }
   }

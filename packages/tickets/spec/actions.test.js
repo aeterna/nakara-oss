@@ -331,4 +331,29 @@ describe('packages/tickets actions execution (g1)', () => {
       delete globalThis.GetPlayerFromIndex;
     }
   });
+
+  it('player.info uses GetNumPlayerIdentifiers and GetPlayerIdentifier when GetPlayerIdentifiers is absent', async () => {
+    const originalGetPlayerIdentifiers = globalThis.GetPlayerIdentifiers;
+    try {
+      delete globalThis.GetPlayerIdentifiers;
+      onlinePlayers = ['7'];
+      const p7Identifiers = ['license:x', 'discord:111122223333444455'];
+      globalThis.GetNumPlayerIdentifiers = (playerId) => (String(playerId) === '7' ? p7Identifiers.length : 0);
+      globalThis.GetPlayerIdentifier = (playerId, index) => (String(playerId) === '7' ? p7Identifiers[index] : null);
+
+      const res = await actions.executeAction({
+        id: 'act-info-num-identifiers',
+        action: 'player.info',
+        discordId: '111122223333444455',
+      });
+
+      assert.notEqual(res.code, 'player_offline');
+      assert.equal(res.ok, true);
+      assert.equal(res.code, 'done');
+    } finally {
+      globalThis.GetPlayerIdentifiers = originalGetPlayerIdentifiers;
+      delete globalThis.GetNumPlayerIdentifiers;
+      delete globalThis.GetPlayerIdentifier;
+    }
+  });
 });
