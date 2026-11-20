@@ -492,8 +492,8 @@ describe('acceptance tests d1-d8', () => {
       client: mockClient,
     });
 
-    // Trigger ready
-    for (const h of listeners['ready'] ?? []) {
+    // Trigger clientReady
+    for (const h of listeners['clientReady'] ?? []) {
       await h(mockClient);
     }
     expect(registeredGuildCommands).toContain('allowed-guild-111');

@@ -1,4 +1,22 @@
-const { buildHeaders } = require('./signer.js');
+// FXServer resolves a relative require() against the resource root, not against the requiring file.
+function isMissingModule(err) {
+  if (!err) return false;
+  return err.code === 'MODULE_NOT_FOUND' || /^Cannot find module\b/.test(err.message || '');
+}
+
+function loadSibling(loadLocal, loadRoot) {
+  try {
+    return loadLocal();
+  } catch (err) {
+    if (!isMissingModule(err)) throw err;
+    return loadRoot();
+  }
+}
+
+const { buildHeaders } = loadSibling(
+  () => require('./signer.js'),
+  () => require('./server/js/signer.js')
+);
 
 const API = GetConvar('nakara_tickets_api', '');
 
