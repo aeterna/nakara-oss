@@ -6,13 +6,13 @@ follow it. A change to a released contract is a new major version of that packag
 
 | Spec | Package | Wave | Status |
 | --- | --- | --- | --- |
-| [aeterna_core](aeterna_core.md) | `packages/core` | W1 | draft |
-| [aeterna_uikit](aeterna_uikit.md) | `packages/uikit` | W1 | draft |
-| [aeterna_notify](aeterna_notify.md) | `packages/notify` | W2 | draft |
-| [aeterna_invkit](aeterna_invkit.md) | `packages/invkit` | W2 | draft |
-| [aeterna_layout](aeterna_layout.md) | `packages/layout` | W2 | draft |
-| [aeterna_hudkit](aeterna_hudkit.md) | `packages/hudkit` | W3 | draft |
-| [aeterna_phonekit](aeterna_phonekit.md) | `packages/phonekit` | W3 | draft |
+| [aeterna_core](aeterna_core.md) | `packages/core` | W1 | released 0.1.0 |
+| [aeterna_uikit](aeterna_uikit.md) | `packages/uikit` | W1 | released 0.1.0 |
+| [aeterna_notify](aeterna_notify.md) | `packages/notify` | W2 | released 0.1.0 |
+| [aeterna_invkit](aeterna_invkit.md) | `packages/invkit` | W2 | released 0.1.0 |
+| [aeterna_layout](aeterna_layout.md) | `packages/layout` | W2 | released 0.1.0 |
+| [aeterna_hudkit](aeterna_hudkit.md) | `packages/hudkit` | W3 | released 0.1.0 |
+| [aeterna_phonekit](aeterna_phonekit.md) | `packages/phonekit` | W3 | released 0.1.0 |
 
 ## Conventions every spec follows
 

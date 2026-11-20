@@ -1,6 +1,6 @@
 # aeterna_hudkit
 
-- Package: `packages/hudkit` · resource `aeterna_hudkit` · wave W3 · status draft
+- Package: `packages/hudkit` · resource `aeterna_hudkit` · wave W3 · status released in 0.1.0
 - Depends on: `aeterna_core` (focus, KVP, locale, keys), `aeterna_uikit` (menu entry), `aeterna_layout` (elements)
 - The minimap part is proven by spike S3 (ADR 0004 decision 12, 2026-11-17)
 

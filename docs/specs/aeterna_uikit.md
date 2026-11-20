@@ -1,6 +1,6 @@
 # aeterna_uikit
 
-- Package: `packages/uikit` · resource `aeterna_uikit` · wave W1 · status draft
+- Package: `packages/uikit` · resource `aeterna_uikit` · wave W1 · status released in 0.1.0
 - Depends on: `aeterna_core`
 - Used by: `aeterna_layout`, `aeterna_hudkit`, `aeterna_phonekit`, `aeterna_invkit`
 

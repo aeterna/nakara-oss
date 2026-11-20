@@ -6,6 +6,8 @@ All notable changes to `aeterna_uikit` are documented here. The format follows
 
 ## Unreleased
 
+## [0.1.0] - 2026-11-18
+
 - Bundle the IBM Plex Sans Thai font (OFL-1.1).
 ### Added
 
