@@ -88,6 +88,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: node .github/scripts/check-dco.mjs "$BASE_SHA" "$HEAD_SHA"
 
   # Starter Kit brand scan (ADR 0004 decision 9). The hashed deny list is private; logs show only "term #k at file:line".
