@@ -130,6 +130,7 @@ describe('Web acceptance tests (w1-w3)', () => {
       nameTemplate: 'tech-{number}',
       welcomeMessage: 'Describe your tech issue',
       maxOpenPerUser: 3,
+      gameServerId: null,
     });
 
     // Negative control: error from api displays message and does not add category

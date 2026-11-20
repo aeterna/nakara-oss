@@ -59,16 +59,11 @@ function getResourceExport(resourceName) {
 }
 
 function resolvePlayer(action) {
-  if (action.playerId !== undefined) {
-    const id = Number(action.playerId);
-    return Number.isFinite(id) ? id : NaN;
-  }
-  if (action.params?.playerId !== undefined) {
-    const id = Number(action.params.playerId);
-    return Number.isFinite(id) ? id : NaN;
-  }
   if (action.discordId) {
-    return players.findPlayerByDiscordId(action.discordId);
+    const raw = players.findPlayerByDiscordId(action.discordId);
+    if (raw === null || raw === undefined) return null;
+    const id = Number(raw);
+    return Number.isFinite(id) ? id : NaN;
   }
   return null;
 }
@@ -366,5 +361,4 @@ module.exports = {
   registerAction,
   findPlayerByDiscordId: players.findPlayerByDiscordId,
   setConfig,
-  _loadSibling: loadSibling,
 };
