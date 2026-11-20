@@ -60,8 +60,14 @@
       ],
       "undeclared-convar": [
         {
-          "path": "packages/tickets/spec/require-paths.test.js",
-          "reason": "the spec stubs GetConvar on globalThis so main.js can load outside FXServer; specs are never shipped in release zips"
+          "path": "packages/tickets/spec/**",
+          "reason": "tickets specs stub FiveM natives such as GetConvar on globalThis to load the resource outside FXServer; specs are never shipped in release zips"
+        }
+      ],
+      "undeclared-http": [
+        {
+          "path": "packages/tickets/spec/**",
+          "reason": "tickets specs stub fetch on globalThis to test the bridge without network; specs are never shipped in release zips"
         }
       ]
     }
