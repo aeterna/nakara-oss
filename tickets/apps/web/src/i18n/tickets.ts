@@ -25,7 +25,7 @@ export default {
     noAttachments: 'ไม่มีไฟล์แนบ',
     messages: 'ข้อความการสนทนา',
     noMessages: 'ยังไม่มีข้อความ',
-    noTickets: 'ยังไม่มีทิกเก็ต',
+    noTickets: 'ยังไม่มีตั๋ว',
     loadMore: 'โหลดเพิ่มเติม',
     loading: 'กำลังโหลด...',
     error: 'เกิดข้อผิดพลาด',

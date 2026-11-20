@@ -8,7 +8,7 @@ import routes from '../src/routes/index.js';
 import type { TicketsConfig } from '../src/config.js';
 import { createTestSession } from './helpers/session.js';
 
-describe('GET /api/v1/me (name from OAuth list wins over placeholder)', () => {
+describe('GET /api/v1/me (guild name resolution)', () => {
   const GUILD_ID = '111111111111111111';
   const USER = '333333333333333333';
   const ROLE = '444444444444444444';
@@ -22,6 +22,7 @@ describe('GET /api/v1/me (name from OAuth list wins over placeholder)', () => {
   let env: TestDbHandle;
   let app: ReturnType<typeof Fastify>;
   let cookie: string;
+  let fetchMock: any;
 
   beforeAll(async () => { env = await openTestDb(); });
   afterAll(async () => { await env.close(); });
@@ -43,10 +44,10 @@ describe('GET /api/v1/me (name from OAuth list wins over placeholder)', () => {
     await app.register(routes);
     await app.ready();
 
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => {
+    fetchMock = vi.fn().mockImplementation(async (url: string) => {
       const u = String(url);
-      if (u.includes('/users/@me/guilds')) {
-        return { ok: true, status: 200, json: async () => [{ id: GUILD_ID, name: 'Real OAuth Name' }] };
+      if (u === `https://discord.com/api/v10/guilds/${GUILD_ID}`) {
+        return { ok: true, status: 200, json: async () => ({ id: GUILD_ID, name: 'Real Discord Name' }) };
       }
       if (u.includes('/members/')) {
         return { ok: true, status: 200, json: async () => ({ roles: [ROLE], user: { id: USER } }) };
@@ -55,17 +56,44 @@ describe('GET /api/v1/me (name from OAuth list wins over placeholder)', () => {
         return { ok: true, status: 200, json: async () => [{ id: ROLE, permissions: '0' }] };
       }
       return { ok: false, status: 404 };
-    }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
   });
 
   afterEach(() => { vi.restoreAllMocks(); });
 
-  it('name from OAuth list wins over placeholder', async () => {
-    const res = await app.inject({ method: 'GET', url: '/api/v1/me', headers: { cookie } });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().guilds[0].name).toBe('Real OAuth Name');
+  it('placeholder row calls /guilds/{id} once and stores real name; real-name row makes no fetch at all', async () => {
+    const res1 = await app.inject({ method: 'GET', url: '/api/v1/me', headers: { cookie } });
+    expect(res1.statusCode).toBe(200);
+    expect(res1.json().guilds[0].name).toBe('Real Discord Name');
 
     const [row] = await env.db.select().from(guilds).where(eq(guilds.guild_id, GUILD_ID));
-    expect(row.name).toBe('Real OAuth Name');
+    expect(row.name).toBe('Real Discord Name');
+
+    const guildCalls = fetchMock.mock.calls.filter(([u]: [string]) =>
+      String(u) === `https://discord.com/api/v10/guilds/${GUILD_ID}`
+    );
+    expect(guildCalls).toHaveLength(1);
+
+    // Second call: row now has real name in DB and staff status cached -> no fetch at all
+    fetchMock.mockClear();
+    const res2 = await app.inject({ method: 'GET', url: '/api/v1/me', headers: { cookie } });
+    expect(res2.statusCode).toBe(200);
+    expect(res2.json().guilds[0].name).toBe('Real Discord Name');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('real-name row in DB makes no /guilds/{id} Discord call', async () => {
+    await env.db.update(guilds).set({ name: 'Existing Guild' }).where(eq(guilds.guild_id, GUILD_ID));
+    fetchMock.mockClear();
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/me', headers: { cookie } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().guilds[0].name).toBe('Existing Guild');
+
+    const guildCalls = fetchMock.mock.calls.filter(([u]: [string]) =>
+      String(u) === `https://discord.com/api/v10/guilds/${GUILD_ID}`
+    );
+    expect(guildCalls).toHaveLength(0);
   });
 });

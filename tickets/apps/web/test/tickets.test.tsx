@@ -142,7 +142,7 @@ describe('Tickets Web Page (acceptance test t6)', () => {
     rerender(<Tickets guildId={guildId} locale="th" />);
 
     await waitFor(() => {
-      expect(screen.getByText('ยังไม่มีทิกเก็ต')).toBeTruthy();
+      expect(screen.getByText('ยังไม่มีตั๋ว')).toBeTruthy();
     });
     expect(screen.queryByText('ยังไม่มีข้อความ')).toBeNull();
   });

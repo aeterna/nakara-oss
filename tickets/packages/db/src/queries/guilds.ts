@@ -5,12 +5,7 @@ import { inGuild } from '../index.js';
 import { TicketError } from './errors.js';
 
 export function isPlaceholderGuildName(name: string, guildId: string): boolean {
-  return (
-    name === `Guild ${guildId}` ||
-    name === 'Guild <id>' ||
-    name === `Guild <${guildId}>` ||
-    name === `Guild ${guildId.trim()}`
-  );
+  return name === `Guild ${guildId}`;
 }
 
 export async function ensureGuild(db: TicketsDb, guildId: string, name: string) {

@@ -113,7 +113,7 @@ describe('bridge result acceptance tests (g3)', () => {
         action: 'player.revive',
         params: {},
         status: 'leased',
-        requested_by: 'staff-mod-1',
+        requested_by: '111122223333444455',
         expires_at: new Date(Date.now() + 60 * 1000),
       })
       .returning();
@@ -156,7 +156,7 @@ describe('bridge result acceptance tests (g3)', () => {
     expect(sentMessage!.body.content).toContain('player.revive');
     expect(sentMessage!.body.content).toContain('done');
     expect(sentMessage!.body.content).toContain('ร้องขอโดย');
-    expect(sentMessage!.body.content).toContain('<@staff-mod-1>');
+    expect(sentMessage!.body.content).toContain('<@111122223333444455>');
     expect(sentMessage!.body.allowed_mentions).toEqual({ parse: [] });
   });
 
@@ -226,8 +226,69 @@ describe('bridge result acceptance tests (g3)', () => {
     expect(sentMessage!.body.content).toContain('player.give_item');
     expect(sentMessage!.body.content).toContain('done');
     expect(sentMessage!.body.content).toContain('requested by');
-    expect(sentMessage!.body.content).toContain('<@staff-mod-2>');
+    expect(sentMessage!.body.content).toContain('staff-mod-2');
+    expect(sentMessage!.body.content).not.toContain('<@staff-mod-2>');
     expect(sentMessage!.body.allowed_mentions).toEqual({ parse: [] });
+  });
+
+  it('(g3) result posts plain text staff when requested_by is empty', async () => {
+    let sentMessage: { channelId: string; body: any } | null = null;
+    const discordMock = {
+      sendMessage: vi.fn().mockImplementation(async (channelId: string, body: any) => {
+        sentMessage = { channelId, body };
+        return { id: 'msg-empty' };
+      }),
+      editMessage: vi.fn(),
+      deleteMessage: vi.fn(),
+      createDM: vi.fn(),
+    };
+
+    const app = createTestApp(discordMock);
+
+    const [action] = await db
+      .insert(schema.gameActions)
+      .values({
+        guild_id: guildId,
+        ticket_id: '11111111-1111-1111-1111-111111111111',
+        server_id: serverId,
+        action: 'player.revive',
+        params: {},
+        status: 'leased',
+        requested_by: null,
+        expires_at: new Date(Date.now() + 60 * 1000),
+      })
+      .returning();
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const nonce = 'nonce-test-g3-empty';
+    const pathWithQuery = `/bridge/v1/actions/${action.id}/result`;
+    const payload = JSON.stringify({ ok: true, code: 'done' });
+    const sig = signBridge(Buffer.from(rawSecret, 'base64url'), {
+      timestamp: nowSec,
+      nonce,
+      method: 'POST',
+      pathWithQuery,
+      body: payload,
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: pathWithQuery,
+      headers: {
+        'content-type': 'application/json',
+        'x-tickets-server': serverId,
+        'x-tickets-timestamp': String(nowSec),
+        'x-tickets-nonce': nonce,
+        'x-tickets-signature': sig,
+        'x-tickets-protocol': '1',
+      },
+      payload,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(discordMock.sendMessage).toHaveBeenCalledTimes(1);
+    expect(sentMessage!.body.content).toContain('ร้องขอโดย staff');
+    expect(sentMessage!.body.content).not.toContain('<@staff>');
   });
 
   it('(g3) discord throwing still returns 200', async () => {

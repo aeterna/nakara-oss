@@ -449,8 +449,12 @@ export default async function (app: FastifyInstance) {
             }
 
             const icon = body.ok ? '✅' : '❌';
-            const rawRequester = updatedAction.requested_by || 'staff';
-            const requester = rawRequester.startsWith('<@') ? rawRequester : `<@${rawRequester}>`;
+            const rawRequester = typeof updatedAction.requested_by === 'string'
+              ? updatedAction.requested_by.trim()
+              : '';
+            const requester = /^[0-9]{17,20}$/.test(rawRequester)
+              ? `<@${rawRequester}>`
+              : (rawRequester || 'staff');
             const message = formatActionResultMessage(
               locale,
               icon,

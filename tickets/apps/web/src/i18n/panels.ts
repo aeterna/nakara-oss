@@ -5,7 +5,7 @@ export default {
     panelsDesc: 'ออกแบบพาเนลสำหรับเปิดตั๋วในช่อง Discord พร้อมพรีวิวแบบเรียลไทม์',
     createPanel: 'สร้างพาเนลใหม่',
     defaultTitle: 'เปิดตั๋วติดต่อทีมงาน',
-    defaultDescription: 'เลือกหมวดหมู่ด้านล่างเพื่อเปิดตั๋ว...',
+    defaultDescription: 'เลือกหัวข้อด้านล่างเพื่อเปิดตั๋ว',
     defaultButtonLabel: 'ช่วยเหลือทั่วไป',
     editPanel: 'แก้ไขพาเนล',
     panelList: 'รายการพาเนล',
