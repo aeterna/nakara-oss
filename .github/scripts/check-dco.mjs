@@ -8,7 +8,22 @@ if (!base || !head) {
   console.error('usage: check-dco.mjs <base-sha> <head-sha>');
   process.exit(2);
 }
-const raw = execFileSync('git', ['log', '--no-merges', '--format=%H%x00%an%x00%ae%x00%B%x1e', `${base}..${head}`], { encoding: 'utf8' });
+// A promotion into `main` carries commits that already passed this check in their own PR into `dev` (the `dev`
+// ruleset requires it, with no bypass). Bot commits squash-merged there keep the bot as author but lose the
+// bot exemption here, because the promotion PR is opened by a person. So when the base is `main`, check only
+// the commits that are not on `dev` yet (the "sync main" merge and anything added to the promotion branch).
+const args = ['log', '--no-merges', '--format=%H%x00%an%x00%ae%x00%B%x1e', `${base}..${head}`];
+if (process.env.BASE_REF === 'main') {
+  const devRef = 'refs/remotes/origin/dev';
+  try {
+    execFileSync('git', ['rev-parse', '--verify', '--quiet', devRef], { stdio: 'ignore' });
+  } catch {
+    console.error(`✗ base is main but ${devRef} is missing; fetch it (checkout fetch-depth: 0) so promotions can be checked`);
+    process.exit(2);
+  }
+  args.push('--not', devRef);
+}
+const raw = execFileSync('git', args, { encoding: 'utf8' });
 // GitHub's own bots cannot sign off. Commit author emails are NOT authenticated (anyone can set them),
 // so a bot commit is exempt only when the PR itself was opened by that bot account (PR_AUTHOR comes
 // from the event payload, which a contributor cannot forge). Bot PRs still need owner review + green CI.
