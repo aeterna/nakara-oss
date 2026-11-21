@@ -8,8 +8,10 @@ A modular phone shell with built-in utility apps, client KVP storage, and an app
 
 ## What it does / การทำงาน
 
-- **Phone Shell (ตัวเครื่องโทรศัพท์):** Frame 320 × 640 px at scale 1 with Asphalt surfaces (`--surface`, `--raised`), radius 14 outside (`--radius-l`), and radius 10 (`--radius-m`) for app tiles.
-- **Status Bar & Clock (แถบสถานะ):** Shows the current time from `AeternaCore.time` (using the server's `aeterna_timezone`), formatted in 24-hour or 12-hour mode. Does not display fake signal or battery bars.
+- **Phone models (รุ่นโทรศัพท์, 0.2):** Eight models with their own frame and case colours: `keypad` 300 × 660, `burner` 300 × 660, `qwerty` 392 × 760, `slab` 392 × 812 (default), `fold` 380 × 842 open / 380 × 430 closed, `pro` 392 × 812, `book` 380 × 812 closed / 780 × 700 open, `pad` 600 × 812. The frame is scaled to fit the screen, then by the layout scale, so it never clips.
+- **Status Bar & Clock (แถบสถานะ):** Shows the current time from `AeternaCore.time` (using the server's `aeterna_timezone`), formatted in 24-hour or 12-hour mode, a live pill set by an add-on, and the battery the server counts (0.2). No signal bars.
+- **Lock screen, control centre, cover screen (0.2):** The lock screen (`Config.lockScreen`) shows when something is waiting; swipe up or OK unlocks. Pull down from the status bar for the control centre (text size, 24-hour clock, layout, carried phones in item mode, notification history from `aeterna_notify`). A closed `fold` shows a cover screen with time, battery, waiting items and an incoming ring.
+- **Two panes (0.2):** On an open `book`, a panel spec with `detailOf` keeps the list on the left and draws the detail on the right. Folding changes the layout only; the screen, its scroll and typed text stay.
 - **Home & Navigation (หน้าจอหลักและการควบคุม):** Grid of app tiles sorted by `order` then `id`, with optional badge counters (0–99, or `99+`). Back navigation via bottom home bar, Backspace, or right mouse button (RMB); ESC closes the phone from any screen.
 - **Walking while open (เดินขณะเปิดใช้งาน):** Takes focus through `aeterna_core` with `keepGameInput = true` so the player can walk while the phone is open; mouse look is disabled while hovering over the frame.
 - **Animation & Prop (ท่าทางและอุปกรณ์):** With `Config.animation = true`, the ped holds a phone prop and plays the base-game phone animation. Automatically closes and stops animation if the ped dies, ragdolls, or enters water.
@@ -20,7 +22,13 @@ A modular phone shell with built-in utility apps, client KVP storage, and an app
   - **Settings (การตั้งค่า):** Text size (Normal / Large), 24-hour clock toggle, and "Edit layout" trigger when `aeterna_layout` runs. Stored in client KVP `aeterna_phonekit:settings:v1`.
 - **App API for other resources (ระบบเชื่อมต่อแอปภายนอก):** Resources register app tiles and render server-owned UI screens using `aeterna_uikit` panel specs inside the phone frame without writing custom HTML.
 - **Opening Check (ระบบตรวจสอบสิทธิ์ก่อนเปิด):** When `Config.ask = true`, the server fires `aeterna_phonekit:asking` and allows other resources (e.g. item checks) to allow or deny opening within 1000 ms.
-- **Optional `aeterna_layout` integration (รองรับการจัดวางผ่าน `aeterna_layout`):** Registers element `phone` (320 × 640 at scale 1, `scalable = true`, `hideable = false`) through local client events, allowing players to drag and scale the phone across the screen.
+- **Optional `aeterna_layout` integration (รองรับการจัดวางผ่าน `aeterna_layout`):** Registers element `phone` (the held model's frame size, `scalable = true`, `hideable = false`) through local client events, allowing players to drag and scale the phone across the screen. 0.2: the element is re-added with the new size on a model switch, fold or unfold; without layout 0.2 phonekit keeps the frame inside the viewport itself and saves nothing.
+
+### Device modes and battery (0.2) / โหมดอุปกรณ์และแบตเตอรี่
+
+- `Config.devices = 'single'`: every player holds one phone of `Config.singleModel`; battery and fold live in server resource KVP `aeterna_phonekit:device:v1:<who>` (`cid:<character id>` with `qbx_core`, else `lic:<license>`).
+- `Config.devices = 'items'`: the phone is an inventory item. Phonekit never touches an inventory; the resource that owns the items (for example `aeterna_invkit`) answers the open gate with the phones the player carries and stores battery and fold in item metadata when phonekit fires `aeterna_phonekit:deviceSave`. Item definitions and images are added by the server owner in the inventory (see `aeterna_invkit`'s README).
+- The server counts the battery: standby drain, more while a screen is on, a call or a camera is up, divided by the model's multiplier; charging in a vehicle or from chargers other resources add. At 0 % every phone surface closes and opening is refused until it is charged.
 
 ### Deliberate limits in v0.1 / ขอบเขตที่ยังไม่รวมใน v0.1
 
@@ -54,6 +62,18 @@ ensure aeterna_phonekit
 | `Config.animation` | `true` | Hold phone prop with base animation while open / ถือโทรศัพท์และเล่นแอนิเมชัน |
 | `Config.apps` | `{ calculator = true, notes = true, contacts = true, settings = true }` | Built-in apps to show on the home screen / เปิดหรือปิดแอปพื้นฐาน |
 | `Config.maxApps` | `24` | Maximum external apps from other resources / จำนวนแอปภายนอกสูงสุดที่ลงทะเบียนได้ |
+| `Config.devices` | `'single'` | `'single'` or `'items'` (0.2) / โหมดอุปกรณ์ |
+| `Config.singleModel` | `'slab'` | Model in `single` mode / รุ่นที่ทุกคนถือในโหมด single |
+| `Config.names` | `'neutral'` | `'neutral'` or `'universe'` display names / ชุดชื่อรุ่น |
+| `Config.models` | `{ burner = { apps = '*,-contacts' } }` | Per model: `label` (≤ 24), `apps` (app spec), `colors` (hex list), `prop` / ตั้งค่ารายรุ่น |
+| `Config.prop` | `'prop_npc_phone_02'` | The held prop / อุปกรณ์ที่ถือ |
+| `Config.battery` | table | `tickSec` 10, `standby` 0.25, `screen` 1.0, `call` 1.5, `media` 2.5 (%/min), `vehicleSec` 300, `warnAt` `{ 20, 10, 5 }`, `saveStep` 5, `pulseTtlSec` 45, `startPct` 100; `false` turns the battery off / แบตเตอรี่ |
+| `Config.lockScreen` | `false` | Lock screen when something is waiting / หน้าจอล็อก |
+| `Config.cover` | `true` | `false`: a `fold` never closes / ปิดฝาพับได้หรือไม่ |
+
+App spec (`Config.models[m].apps`): comma-separated tokens, `*` = every app, `-x` removes `x`, anything else adds it; built-in ids (`calculator`, `notes`, `contacts`, `settings`) or `<owner>:<id>`. `settings` is always kept.
+
+**Upgrade from 0.1:** a layout scale saved in 0.1 was chosen for a 320 × 640 frame. The same scale now applies to the larger frame, capped so it stays on screen; players who want the old size set the scale again in the layout editor (about 0.8 of the old value).
 
 ---
 
@@ -61,15 +81,36 @@ ensure aeterna_phonekit
 
 | Export | Arguments | Description / คำอธิบาย |
 |---|---|---|
-| `addTile(app)` | `app = { id, label, icon, order?, ace? }` | Registers an app tile on the home screen. `id` ≤ 32, `label` ≤ 24, `icon` from uikit icon names. Removed automatically when the owner resource stops. |
+| `addTile(app)` | `app = { id, label, icon, order?, ace?, needs?, handles? }` | Registers an app tile on the home screen. `id` ≤ 32, `label` ≤ 24, `icon` from uikit icon names. 0.2: `needs = 'voice'` hides it on models without calls; `handles = { 'tel', 'sms' }` makes it the target of a contact's Call / Message. Removed automatically when the owner resource stops. |
 | `removeTile(id)` | `id` | Removes an app tile registered by the calling resource. |
 | `showApp(src, id, spec)` | `src, id, spec` | Draws a uikit panel spec inside the phone frame for app `id`. Returns `screenId` or `nil, err`. |
 | `updateApp(src, screenId, patch)` | `src, screenId, patch` | Updates the active spec screen with partial block patches. |
 | `badge(src, id, count)` | `src, id, count` | Sets the badge counter on an app tile (clamped to 0–99). |
 | `notifyApp(src, id, opts)` | `src, id, { title, body }` | Phone open: displays an in-phone banner. Phone closed: displays an `aeterna_notify` toast. Adds 1 to the app badge unless the app is currently on screen. |
 | `listenOpen()` | — | Registers the calling resource as a listener for `Config.ask` checks. |
-| `allowOpen(checkId)` | `checkId` | Answers an opening check with permission to open. |
+| `allowOpen(checkId, answer?)` | `checkId, answer?` | Answers an opening check with permission to open. 0.2: `answer = { allow = true, devices = { { id, model, battery?, fold?, color? } } }` (item mode). |
 | `denyOpen(checkId, reasonKey?)` | `checkId, reasonKey?` | Denies opening with an optional locale refusal key. |
+
+### 0.2 exports
+
+| Export (server) | Description |
+| --- | --- |
+| `device(src)` | `{ model, id, label, voice, fold, battery }` of the active phone, or `nil` |
+| `refreshDevices(src)` | Asks the item gate again |
+| `battery(src)` · `setBattery(src, pct)` · `charge(src, pct)` | Shown value 0–100 (or `nil`), set it, add to it |
+| `setCharger(src, id, secToFull \| false)` | A charger from the calling resource; the fastest wins |
+| `activity(src, 'call', on)` | A connected call drains more |
+| `ring(src, id, { title, body })` · `stopRing(src, ringId)` | Incoming card with Answer / Decline (`__answer` / `__decline` actions) |
+| `live(src, { id, text } \| nil)` | A pill in the status bar |
+| `canCall(src)` | `false` for `pad`, no phone or a dead battery |
+
+| Export (client) | Description |
+| --- | --- |
+| `activity('media', on)` | A camera viewfinder drains more |
+| `isOpen()` | Whether any phonekit surface is on screen |
+| `getContacts()` · `addContact({ name, number })` | The built-in contact list; `aeterna_phonekit:contactsChanged` fires after a change |
+
+Server-local events (0.2): `aeterna_phonekit:hello`, `:listen`, `:answer`, `:devicesChanged`, `:deviceSave`, `:power`; `aeterna_phonekit:asking` carries `devices = 'single' | 'items'`; `aeterna_phonekit:app` may carry `intent = { kind, number }`.
 
 ### Event Flow
 
@@ -84,8 +125,9 @@ ensure aeterna_phonekit
 
 - `aeterna_phonekit_open` — Console / chat command to toggle the phone.
 - `+aeterna_phonekit_open` / `-aeterna_phonekit_open` — Key mapping registered via `AeternaCore.key` (no default key bound, bind in Settings -> Key Bindings -> FiveM).
-- Backspace or Right Mouse Button (RMB) returns to the previous screen.
-- ESC closes the phone.
+- `aeterna_phonekit_fold`, `+aeterna_phonekit_fold` / `-aeterna_phonekit_fold` (0.2) — fold or unfold a `fold` or `book` while it is open (no default key).
+- Backspace or Right Mouse Button (RMB) returns to the previous screen (control centre open: closes it).
+- ESC closes the phone from every screen. The key bound to the open mapping also puts the phone away (an F-key works while typing).
 
 ---
 
@@ -97,11 +139,11 @@ What this resource is allowed to do to your server, from [`oss.json`](oss.json):
 |---|---|
 | HTTP requests | none |
 | `ExecuteCommand` | none |
-| Registered commands | `aeterna_phonekit_open`, `+aeterna_phonekit_open`, `-aeterna_phonekit_open` |
+| Registered commands | `aeterna_phonekit_open`, `+aeterna_phonekit_open`, `-aeterna_phonekit_open`, `aeterna_phonekit_fold`, `+aeterna_phonekit_fold`, `-aeterna_phonekit_fold` |
 | Convars read | none |
 | Convars written | none |
-| Server net events (accepted from clients) | `aeterna_phonekit:sv:open`, `aeterna_phonekit:sv:tap`, `aeterna_phonekit:sv:action` |
-| Client net events (accepted from the server) | `aeterna_phonekit:cl:open`, `aeterna_phonekit:cl:screen`, `aeterna_phonekit:cl:update`, `aeterna_phonekit:cl:badge`, `aeterna_phonekit:cl:banner`, `aeterna_phonekit:cl:refused` |
+| Server net events (accepted from clients) | `aeterna_phonekit:sv:open`, `aeterna_phonekit:sv:close`, `aeterna_phonekit:sv:tap`, `aeterna_phonekit:sv:action`, `aeterna_phonekit:sv:screen`, `aeterna_phonekit:sv:fold`, `aeterna_phonekit:sv:device`, `aeterna_phonekit:sv:ring`, `aeterna_phonekit:sv:battery` |
+| Client net events (accepted from the server) | `aeterna_phonekit:cl:open`, `aeterna_phonekit:cl:screen`, `aeterna_phonekit:cl:update`, `aeterna_phonekit:cl:badge`, `aeterna_phonekit:cl:banner`, `aeterna_phonekit:cl:refused`, `aeterna_phonekit:cl:device`, `aeterna_phonekit:cl:battery`, `aeterna_phonekit:cl:power`, `aeterna_phonekit:cl:ring`, `aeterna_phonekit:cl:ringStop`, `aeterna_phonekit:cl:live` |
 | NUI | yes |
 | Database tables | none (no DDL) |
 | Files written | none |

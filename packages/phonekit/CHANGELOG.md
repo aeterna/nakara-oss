@@ -6,6 +6,52 @@ All notable changes to `aeterna_phonekit` are documented here. The format follow
 
 ## Unreleased
 
+Version 0.2.0 (ADR 0005 decisions 1, 2, 3, 5). Written by Claude Code - Claude Opus 5.5 (agent engineer).
+
+### Added
+
+- Eight phone models (`keypad`, `burner`, `qwerty`, `slab`, `fold`, `pro`, `book`, `pad`) with their own frame size,
+  case colours, home form (tile pages or a numbered list with keypad keys) and apps per model (`Config.models[m].apps`,
+  burner `'*,-contacts'`). Neutral names or the optional universe preset (`Config.names`).
+- Device modes: `single` (server resource KVP `aeterna_phonekit:device:v1:<who>`) and `items` (the open gate answered
+  through the server-local events `hello`, `listen`, `answer`, `devicesChanged`, `deviceSave`; active device KVP
+  `aeterna_phonekit:active:v1:<who>`). `allowOpen(checkId, answer?)` takes the optional device answer.
+- Battery counted by the server: tick over loaded players, screen pulse, vehicle charging, chargers, warnings, save
+  rule, `cl:power` and the server-local `aeterna_phonekit:power` event. Exports `battery`, `setBattery`, `charge`,
+  `setCharger`, `activity`, `device`, `refreshDevices`; client exports `activity`, `isOpen`.
+- Hooks for add-ons: `ring`, `stopRing`, `live`, `canCall`, contact intents (`addTile` `handles`, `needs = 'voice'`),
+  client `getContacts`, `addContact` and the client-local `aeterna_phonekit:contactsChanged`.
+- Shell: lock screen (`Config.lockScreen`), control centre, battery and live pill in the status bar, home bar, cover
+  screen on a closed `fold` (`Config.cover`), fold continuity, two panes on an open `book` from uikit 0.2 `detailOf`,
+  exit contract with the open key's code, keypad list rules, notification history from `aeterna_notify`'s `history`
+  export (client KVP `aeterna_phonekit:seen:v1` for Clear).
+- Command and key `aeterna_phonekit_fold` / `+aeterna_phonekit_fold` / `-aeterna_phonekit_fold` (no default key).
+- Net events `sv:screen`, `sv:fold`, `sv:device`, `sv:ring`, `sv:battery`, `cl:device`, `cl:battery`, `cl:power`,
+  `cl:ring`, `cl:ringStop`, `cl:live`.
+- The phonekit copy of the uikit spec validator accepts uikit 0.2: `tabs`, `slider`, `table`, `empty`, list `search`
+  and `empty`, `detailOf` / `detailItem`, and the new `update` keys.
+- `Config.prop` (the held prop, per model with `Config.models[m].prop`).
+
+### Changed
+
+- The frame size comes from the held model (default `slab` 392 × 812) instead of 320 × 640. The layout element
+  `phone` is re-added with the new size on every model switch, fold and unfold.
+- The status bar shows the battery; `Config.battery = false` brings back the 0.1 status bar.
+- `sv:tap` may carry an optional `intent = { kind, number }` (contact intents); a tap needs an open phone.
+- Text sizes use the theme type tokens (`--fs-1` … `--fs-5`, `--lh`).
+
+### Upgrade note
+
+- A layout scale a player saved in 0.1 was chosen for a 320 × 640 frame. After the upgrade the same scale applies to
+  the larger 0.2 frame (a `slab` is 1.27 × taller), capped by the viewport fit so it stays on screen. Players who want
+  the 0.1 size set the phone's scale again in the layout editor (about 0.8 of the old value).
+- Nothing else changes for a 0.1 server until it sets the new keys: the lock screen is off, the device mode is
+  `single`, and the App API, KVP keys and 0.1 events keep their names and schemas.
+
+### Fixed
+
+- `postNui` reads the callback's JSON answer, so the notes and contacts lists refresh after a save.
+
 ## [0.1.0] - 2026-11-18
 
 - Bundle the IBM Plex Sans Thai font (OFL-1.1).
