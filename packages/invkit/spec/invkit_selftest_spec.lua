@@ -91,6 +91,21 @@ describe('aeterna_invkit self-tests', function()
             end
         end)
 
+        it('tells the presser what to do on every ped row, in en and th', function()
+            natives.stub('Locales', {})
+            assert(loadfile(DIR .. '/locales/en.lua'))()
+            assert(loadfile(DIR .. '/locales/th.lua'))()
+            local en = by_name(ST.definitions(function(key) return Locales.en[key] end))
+            assert.are.equal('Stand at a stash point, then walk away from it', en.stash_open.expect)
+            assert.are.equal('Carry a phone_fold and a phone_slab item', en.phone_two_items.expect)
+            assert.are.equal('Carry two phone items, then drop one of them', en.phone_drop_active.expect)
+            assert.are.equal('Drop or store every phone item you carry', en.phone_no_item.expect)
+            local th = by_name(ST.definitions(function(key) return Locales.th[key] end))
+            for _, name in ipairs({ 'stash_open', 'phone_two_items', 'phone_drop_active', 'phone_no_item' }) do
+                assert.is_true(utf8.len(th[name].expect) > 0 and utf8.len(th[name].expect) <= 240, name)
+            end
+        end)
+
         it('lets core skip the ox_inventory rows when ox_inventory is not started', function()
             local m = by_name(ST.definitions())
             assert.are.same({ resources = { 'ox_inventory' } }, m.stash_open.skipWhen)
