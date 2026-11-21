@@ -288,14 +288,152 @@ function L.stickToSlot(x, y, deadZone, totalPositions)
     return L.angleToSlot(angle, totalPositions)
 end
 
+-- Server re-check of a pick. Groups open rings and are never picked; flags live on the client, so the
+-- server skips them and the owner re-checks its own state in its handler.
 function L.handleServerPick(src, owner, id, registry, ctx)
     if not registry or type(registry.getSlot) ~= 'function' then return false end
     local slot = registry:getSlot(owner, id, 'server')
-    if not slot then return false end
+    if not slot or slot.isGroup then return false end
     local c = ctx or {}
     c.src, c.owner = src, owner
-    if not L.evalCondition(slot.when, c) then return false end
+    local when = slot.when
+    if when and when.flags then
+        when = { vehicle = when.vehicle, jobs = when.jobs, grade = when.grade, ace = when.ace }
+    end
+    if not L.evalCondition(when, c) then return false end
     return true, { owner = owner, id = id }
+end
+
+local function sameParent(slot, side, parent)
+    if parent == nil then return slot.parent == nil end
+    return slot.parent == parent.id and slot.owner == parent.owner and side == parent.side
+end
+
+local function slotKey(slot)
+    return tostring(slot.side) .. ':' .. tostring(slot.owner) .. ':' .. tostring(slot.id)
+end
+
+-- The ring for `parent` (nil = root, else a ring entry of a group) across registries. `ctx` holds the
+-- condition inputs (inVehicle, isDriver, hasQbx, job, grade, flags = owner -> name -> bool) and an
+-- optional warn, called at most once per slot for a missing qbx_core.
+function L.ringFor(registries, parent, ctx)
+    local base = ctx or {}
+    base.warned = base.warned or {}
+
+    local function visible(slot)
+        local c = {
+            inVehicle = base.inVehicle, isDriver = base.isDriver,
+            hasQbx = base.hasQbx, job = base.job, grade = base.grade,
+            owner = slot.owner, flags = base.flags,
+        }
+        if base.warn then
+            local key = slotKey(slot)
+            c.warn = function(msg)
+                if not base.warned[key] then
+                    base.warned[key] = true
+                    base.warn(msg .. ' (' .. key .. ')')
+                end
+            end
+        end
+        return L.evalCondition(slot.when, c)
+    end
+
+    local function children(groupSide, group)
+        local out = {}
+        for _, reg in ipairs(registries) do
+            for owner, slots in pairs((reg.slots and reg.slots[groupSide]) or {}) do
+                if owner == group.owner then
+                    for _, s in pairs(slots) do
+                        if s.parent == group.id then out[#out + 1] = s end
+                    end
+                end
+            end
+        end
+        return out
+    end
+
+    local entries = {}
+    for _, reg in ipairs(registries) do
+        for side, owners in pairs(reg.slots or {}) do
+            for _, slots in pairs(owners) do
+                for _, s in pairs(slots) do
+                    if sameParent(s, side, parent) then
+                        local show = visible(s)
+                        if show and s.isGroup then
+                            show = false
+                            for _, child in ipairs(children(side, s)) do
+                                if visible(child) then show = true; break end
+                            end
+                        end
+                        entries[#entries + 1] = {
+                            owner = s.owner, side = side, id = s.id, label = s.label, icon = s.icon,
+                            order = s.order, when = s.when, isGroup = s.isGroup == true, visible = show,
+                        }
+                    end
+                end
+            end
+        end
+    end
+    return L.buildRing(entries, { warn = base.warn })
+end
+
+-- The visible slot at a 1-based ring index, or nil (empty position, wrong type, out of range).
+function L.slotAt(ring, index)
+    if not ring or type(index) ~= 'number' or index ~= math.floor(index) or index < 1 then return nil end
+    return ring.slots[math.tointeger(index)]
+end
+
+-- What the NUI draws for each slot: nothing that names an owner or a condition.
+function L.nuiSlots(ring)
+    local out = {}
+    for i, s in ipairs((ring and ring.slots) or {}) do
+        out[i] = { label = s.label, icon = s.icon, group = s.isGroup == true }
+    end
+    return out
+end
+
+-- Moves the highlight one step (dir 1 = clockwise, -1 = back) over `count` visible slots.
+function L.stepIndex(current, count, dir)
+    if type(count) ~= 'number' or count < 1 then return nil end
+    if current == nil then return dir < 0 and count or 1 end
+    return ((current - 1 + dir) % count) + 1
+end
+
+-- Copy of a stored slot for a client: owner included, side and ace left out.
+function L.publicSlot(stored)
+    local out = {
+        owner = stored.owner, id = stored.id, label = stored.label, icon = stored.icon,
+        order = stored.order, parent = stored.parent, isGroup = stored.isGroup == true or nil,
+    }
+    if stored.when then
+        local w = stored.when
+        out.when = { vehicle = w.vehicle, jobs = w.jobs, grade = w.grade, flags = w.flags }
+    end
+    return out
+end
+
+-- Public copies of the slots of one side, roots before children so a receiving registry finds each
+-- parent first. `filter(stored)` (optional) keeps a slot when it returns true.
+function L.listSlots(registry, side, filter)
+    local roots, kids = {}, {}
+    for _, slots in pairs((registry.slots and registry.slots[side]) or {}) do
+        for _, s in pairs(slots) do
+            if filter == nil or filter(s) then
+                local bucket = s.parent == nil and roots or kids
+                bucket[#bucket + 1] = s
+            end
+        end
+    end
+    local function byKey(a, b)
+        if a.owner ~= b.owner then return a.owner < b.owner end
+        return a.id < b.id
+    end
+    table.sort(roots, byKey)
+    table.sort(kids, byKey)
+    local out = {}
+    for i = 1, #roots do out[#out + 1] = L.publicSlot(roots[i]) end
+    for i = 1, #kids do out[#out + 1] = L.publicSlot(kids[i]) end
+    return out
 end
 
 return RadialLogic
