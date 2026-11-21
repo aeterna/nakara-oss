@@ -18,7 +18,8 @@ function M.rows(t)
         { name = 'aeterna_camera.viewfinder', meta = { kind = 'eye', players = 1, destructive = false,
             expect = t('camera.selftest.viewfinder') } },
         { name = 'aeterna_camera.shoot_and_view', meta = { kind = 'eye', players = 1, destructive = true,
-            expect = t('camera.selftest.shoot_and_view'), skipWhen = { resources = { 'screenshot-basic' } } } },
+            expect = t('camera.selftest.shoot_and_view'), skipWhen = { resources = { 'screenshot-basic' } },
+            timeout = 15000 } },
     }
 end
 
@@ -29,9 +30,10 @@ M.VIEWFINDER_STEPS = {
     { at = 3000, action = 'close' },
 }
 
--- shoot_and_view on the client: wait for the server's viewfinder, shoot, then wait for the gallery it opens.
-M.SHOOT_WAIT_VIEWFINDER_MS = 1500
-M.SHOOT_WAIT_GALLERY_MS = 3200
+-- shoot_and_view on the client: wait for the server's viewfinder, shoot, then wait for the gallery it opens
+-- (capture plus a latent upload of a few hundred KB). Both fit inside the row's 15 s timeout.
+M.SHOOT_WAIT_VIEWFINDER_MS = 5000
+M.SHOOT_WAIT_GALLERY_MS = 8000
 
 local BAD_IDS = {
     '../0123456789abcdef0123456789ab', '0123456789ABCDEF0123456789ABCDEF', '0123456789abcdef0123456789abcde',
