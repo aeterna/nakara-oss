@@ -1,0 +1,184 @@
+/* aeterna_radial stylesheet: uses only tokens from html/theme.css (ADR 0004 decision 6).
+   Geometry is in px at 1080p; .stage scales it by --s, which app.js sets from the window height. */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;
+    font-family: var(--font);
+    color: var(--text);
+    font-size: var(--fs-3);
+    line-height: var(--lh);
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+}
+
+.radial {
+    --r: 150px;
+    --s: 1;
+    --dz: 52px;
+    --slot-w: 96px;
+    --slot-h: 64px;
+    position: fixed;
+    inset: 0;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--enter) var(--ease), visibility 0s linear var(--enter);
+}
+
+.radial.open {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    transition: opacity var(--enter) var(--ease), visibility 0s;
+}
+
+.stage {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 0;
+    height: 0;
+    transform: scale(var(--s));
+}
+
+.body {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform: scale(.96);
+    transition: transform var(--enter) var(--ease);
+}
+
+.radial.open .body {
+    transform: none;
+}
+
+/* The ring's backdrop: one disc behind the slots, a little wider than the slot circle. */
+.disc {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: calc(var(--r) * 2 + var(--slot-w) + 24px);
+    height: calc(var(--r) * 2 + var(--slot-w) + 24px);
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    opacity: .94;
+    transform: translate(-50%, -50%);
+}
+
+.slot {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: var(--slot-w);
+    height: var(--slot-h);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 8px;
+    border-radius: var(--radius-m);
+    background: var(--raised);
+    color: var(--text-2);
+    transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y)));
+    transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.slot svg {
+    flex: none;
+}
+
+.slot-label {
+    max-width: 100%;
+    font-size: var(--fs-2);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.slot.hover {
+    background: var(--accent);
+    color: var(--on-accent);
+}
+
+/* A group opens a second ring: a short bar under its label says there is more inside. */
+.slot.group::after {
+    content: '';
+    width: 14px;
+    height: 2px;
+    border-radius: 1px;
+    background: currentColor;
+    opacity: .6;
+}
+
+.slot.empty {
+    background: transparent;
+    border: 1px solid var(--line);
+}
+
+.centre {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: calc(var(--dz) * 2);
+    height: calc(var(--dz) * 2);
+    min-width: 96px;
+    min-height: 96px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 10px;
+    border-radius: 50%;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    text-align: center;
+    transform: translate(-50%, -50%);
+}
+
+.centre-label {
+    max-width: 100%;
+    font-size: var(--fs-3);
+    font-weight: 600;
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+
+.centre-label:empty {
+    display: none;
+}
+
+.centre-sub {
+    font-size: var(--fs-1);
+    color: var(--text-3);
+}
+
+.centre.denied .centre-label {
+    color: var(--bad);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .radial,
+    .radial.open,
+    .body,
+    .slot {
+        transition: none;
+    }
+
+    .body {
+        transform: none;
+    }
+}
