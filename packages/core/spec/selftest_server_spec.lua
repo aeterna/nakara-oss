@@ -144,4 +144,98 @@ describe('aeterna_core server: gates in a console run (0.2)', function()
     end)
 end)
 
+describe('aeterna_core server: runs, phases and results (0.2)', function()
+    before_each(function() load_server() end)
+
+    -- runProgress rows named `name`, in emitted order.
+    local function rowsNamed(name)
+        local out = {}
+        for _, e in ipairs(natives.emitted('local', 'aeterna_core:runProgress')) do
+            if e.args[2].name == name then out[#out + 1] = e.args[2] end
+        end
+        return out
+    end
+    local function rowOf(name) return rowsNamed(name)[1] end
+
+    it('holds one run at a time: busy() shows it, a second start is refused, runDone counts rows', function()
+        exports.aeterna_core:addSelftest('slow', { timeout = 1000 })
+        local id = exports.aeterna_core:startRun({ by = 0 })
+        assert.are.equal(id, exports.aeterna_core:runStatus(id).runId)
+        assert.are.equal('console', exports.aeterna_core:busy().by)
+        local nope, held = exports.aeterna_core:startRun({ by = 0 })
+        assert.is_nil(nope)
+        assert.are.equal('console', held.by)
+        local rows = exports.aeterna_core:runSelftests()
+        assert.are.same({ 'aeterna_core.lock', 'FAIL' }, { rows[1].name, rows[1].state })
+        natives.advance(1000)
+        assert.is_nil(exports.aeterna_core:busy())
+        assert.are.same({ 'FAIL', 'timeout' }, { rowOf('aeterna_core.slow').state, rowOf('aeterna_core.slow').detail })
+        local done = natives.last_emitted('local', 'aeterna_core:runDone').args[2]
+        assert.are.same({ 1, 1 }, { done.counts.PASS, done.counts.FAIL })
+    end)
+
+    it('fires headless tests before mocks, whatever the registration order', function()
+        exports.aeterna_core:addSelftest('m', { kind = 'mock' })
+        exports.aeterna_core:addSelftest('h1')
+        local order = {}
+        AddEventHandler('aeterna_core:selftest', function(runId, name)
+            order[#order + 1] = name
+            if name == 'aeterna_core.h1' then exports.aeterna_core:reportSelftest(runId, name, true, 'ok') end
+            if name == 'aeterna_core.m' then exports.aeterna_core:reportSelftest(runId, name, 'mock', 'ok', { restored = true }) end
+        end)
+        exports.aeterna_core:startRun({ by = 0 })
+        natives.advance(0)
+        assert.are.same({ 'aeterna_core.core', 'aeterna_core.h1', 'aeterna_core.m' }, order)
+        assert.are.equal('MOCK', rowOf('aeterna_core.m').state)
+    end)
+
+    it('gives each test its own timeout', function()
+        exports.aeterna_core:addSelftest('quick', { timeout = 500 })
+        exports.aeterna_core:addSelftest('long', { timeout = 3000 })
+        exports.aeterna_core:startRun({ by = 0 })
+        natives.advance(500)
+        assert.are.same({ 'FAIL', 'timeout' }, { rowOf('aeterna_core.quick').state, rowOf('aeterna_core.quick').detail })
+        assert.is_nil(rowOf('aeterna_core.long'))
+        assert.is_not_nil(exports.aeterna_core:busy())
+        natives.advance(2500)
+        assert.are.equal('timeout', rowOf('aeterna_core.long').detail)
+        assert.is_nil(exports.aeterna_core:busy())
+    end)
+
+    it('accepts the 0.2 states and extras from reportSelftest, and refuses ready on the server', function()
+        exports.aeterna_core:addSelftest('skipper')
+        exports.aeterna_core:addSelftest('step')
+        exports.aeterna_core:addSelftest('mockless', { kind = 'mock' })
+        exports.aeterna_core:addSelftest('ready')
+        local refused
+        AddEventHandler('aeterna_core:selftest', function(runId, name)
+            if name == 'aeterna_core.skipper' then exports.aeterna_core:reportSelftest(runId, name, 'skip', 'needs pma-voice') end
+            if name == 'aeterna_core.step' then
+                exports.aeterna_core:reportSelftest(runId, name, false, 'step 3: home', { step = 3, expected = 'contacts.detail' })
+            end
+            if name == 'aeterna_core.mockless' then exports.aeterna_core:reportSelftest(runId, name, 'mock', 'ok') end
+            if name == 'aeterna_core.ready' then refused = exports.aeterna_core:reportSelftest(runId, name, 'ready') end
+        end)
+        exports.aeterna_core:runSelftests()
+        assert.are.same({ 'SKIP', 'needs pma-voice' }, { rowOf('aeterna_core.skipper').state, rowOf('aeterna_core.skipper').detail })
+        local step = rowOf('aeterna_core.step')
+        assert.are.same({ 'FAIL', 3, 'contacts.detail' }, { step.state, step.step, step.expected })
+        assert.are.equal('state not restored', rowOf('aeterna_core.mockless').detail)
+        assert.is_false(refused)
+        assert.are.equal('timeout', rowOf('aeterna_core.ready').detail)
+    end)
+
+    it('takes a local report only from the owner that invokes it', function()
+        as('aeterna_demo')
+        exports.aeterna_core:addSelftest('ping')
+        AddEventHandler('aeterna_core:selftest', function(runId, name)
+            if name ~= 'aeterna_demo.ping' then return end
+            natives.fire('aeterna_core:selftest:report', 'aeterna_other', runId, name, true, 'spoof')
+            natives.fire('aeterna_core:selftest:report', 'aeterna_demo', runId, name, true, 'ok')
+        end)
+        exports.aeterna_core:runSelftests()
+        assert.are.equal('ok', rowOf('aeterna_demo.ping').detail)
+    end)
+end)
+
 
