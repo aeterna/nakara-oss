@@ -21,6 +21,11 @@ local lastShot = nil
 local pendingDelete = nil
 local shootTest = nil -- { runId, refused = reason? } while shoot_and_view runs here
 
+-- Focus and self-test events are trusted only from aeterna_core; any resource can fire a local event.
+local function fromCore()
+    return GetInvokingResource() == 'aeterna_core'
+end
+
 local function send(msg)
     SendNUIMessage(msg)
 end
@@ -312,6 +317,7 @@ end)
 --------------------------------------------------------------------------------
 
 AddEventHandler('aeterna_core:focusLost', function(owner, token)
+    if not fromCore() then return end
     if owner ~= RES then return end
     if vf and vf.token == token then
         vf.token = nil
@@ -324,12 +330,14 @@ AddEventHandler('aeterna_core:focusLost', function(owner, token)
 end)
 
 AddEventHandler('aeterna_core:focusPaused', function(owner)
+    if not fromCore() then return end
     if owner ~= RES then return end
     if vf then vf.paused = true end
     if gallery then gallery.paused = true end
 end)
 
 AddEventHandler('aeterna_core:focusResumed', function(owner, token)
+    if not fromCore() then return end
     if owner ~= RES then return end
     if vf and vf.token == token then vf.paused = false end
     if gallery and gallery.token == token then gallery.paused = false end
@@ -349,11 +357,6 @@ end)
 --------------------------------------------------------------------------------
 
 local testRun = nil
-
--- Self-test events are trusted only from aeterna_core.
-local function fromCore()
-    return GetInvokingResource() == 'aeterna_core'
-end
 
 local function report(runId, name, ok, detail)
     local sent, err = pcall(function() return exports.aeterna_core:reportSelftest(runId, name, ok, detail) end)
@@ -422,10 +425,11 @@ AddEventHandler('aeterna_core:selftest', function(runId, name)
         report(runId, name, 'skip', 'needs screenshot-basic')
         return
     end
-    shootTest = { runId = runId }
+    local mine = { runId = runId }
+    shootTest = mine
     CreateThread(function()
-        local mine = shootTest
-        if not waitFor(function() return vf ~= nil and not vf.paused end, ST.SHOOT_WAIT_VIEWFINDER_MS) then
+        if not waitFor(function() return shootTest ~= mine or (vf ~= nil and not vf.paused) end,
+            ST.SHOOT_WAIT_VIEWFINDER_MS) or shootTest ~= mine then
             if shootTest == mine then report(runId, name, false, 'viewfinder did not open') end
             return
         end
@@ -439,4 +443,14 @@ AddEventHandler('aeterna_core:selftest', function(runId, name)
             report(runId, name, false, 'no photo: ' .. tostring(mine.refused or 'timeout'))
         end
     end)
+end)
+
+-- A stopped core ends every run without a selftestEnd: drop both test halves and close what they opened.
+AddEventHandler('onResourceStop', function(resource)
+    if resource ~= 'aeterna_core' then return end
+    local hadShoot = shootTest ~= nil
+    testRun = nil
+    shootTest = nil
+    if vf and (vf.test or hadShoot) then closeViewfinder() end
+    if gallery and hadShoot then closeGallery() end
 end)
