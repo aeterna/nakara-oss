@@ -519,6 +519,75 @@ describe('aeterna_core server: client test started and selftestEnd (case 17)', f
         assert.are.equal(0, #eventsFor('aeterna_core:selftestStarted', 'aeterna_core.walk'))
         assert.are.equal(0, #eventsFor('aeterna_core:selftestEnd', 'aeterna_core.walk'))
     end)
+
+    it('fires exactly one server selftestEnd when the run is cancelled in the middle of a client test', function()
+        exports.aeterna_core:addSelftest('walk', { kind = 'ped', timeout = 5000 })
+        as('aeterna_testkit')
+        local id = exports.aeterna_core:startRun({ by = 1 })
+        natives.advance(0)
+        assert.are.equal(1, #eventsFor('aeterna_core:selftestStarted', 'aeterna_core.walk'))
+        assert.is_true(exports.aeterna_core:cancelRun(id))
+        natives.advance(100)
+        assert.are.equal('run cancelled', rowOf('aeterna_core.walk').detail)
+        assert.are.equal(1, #eventsFor('aeterna_core:selftestEnd', 'aeterna_core.walk'))
+        natives.advance(6000)
+        assert.are.equal(1, #eventsFor('aeterna_core:selftestEnd', 'aeterna_core.walk'))
+    end)
+
+    it('has ended every fired test exactly once before runDone, and fires no end after it', function()
+        exports.aeterna_core:addSelftest('h')
+        exports.aeterna_core:addSelftest('walk', { kind = 'ped', timeout = 1000 })
+        AddEventHandler('aeterna_core:selftest', function(runId, name)
+            if name == 'aeterna_core.h' then exports.aeterna_core:reportSelftest(runId, name, true, 'ok') end
+        end)
+        local id = exports.aeterna_core:startRun({ by = 1 })
+        natives.advance(0)
+        natives.fire_net('aeterna_core:sv:selftestResult', 1, { runId = id, name = 'aeterna_core.walk', state = 'pass' })
+        natives.advance(50)
+        local doneAt, ends = nil, {}
+        for i, e in ipairs(natives.emitted('local')) do
+            if e.name == 'aeterna_core:runDone' then doneAt = i end
+            if e.name == 'aeterna_core:selftestEnd' then ends[#ends + 1] = { at = i, name = e.args[2] } end
+        end
+        assert.is_number(doneAt)
+        local count = {}
+        for _, e in ipairs(ends) do
+            assert.is_true(e.at < doneAt)
+            count[e.name] = (count[e.name] or 0) + 1
+        end
+        assert.are.same({ ['aeterna_core.core'] = 1, ['aeterna_core.h'] = 1, ['aeterna_core.walk'] = 1 }, count)
+        natives.advance(5000)
+        assert.are.equal(#ends, #natives.emitted('local', 'aeterna_core:selftestEnd'))
+    end)
+
+    it('ends a fired test once on the run failed path and frees the lock', function()
+        exports.aeterna_core:addSelftest('boom')
+        exports.aeterna_core:addSelftest('later', { kind = 'mock' })
+        AddEventHandler('aeterna_core:selftest', function(_, name)
+            if name == 'aeterna_core.boom' then error('owner handler broke') end
+        end)
+        exports.aeterna_core:startRun({ by = 0 })
+        natives.advance(0)
+        assert.are.same({ 'GAP', 'run failed' }, { rowOf('aeterna_core.boom').state, rowOf('aeterna_core.boom').detail })
+        assert.are.equal(1, #eventsFor('aeterna_core:selftestEnd', 'aeterna_core.boom'))
+        assert.are.equal('run failed', rowOf('aeterna_core.later').detail)
+        assert.are.equal(0, #eventsFor('aeterna_core:selftestEnd', 'aeterna_core.later'))
+        assert.is_true(natives.last_emitted('local', 'aeterna_core:runDone').args[2].cancelled)
+        assert.is_nil(exports.aeterna_core:busy())
+    end)
+
+    it('frees the lock and ends the test once when a selftestStarted listener throws', function()
+        exports.aeterna_core:addSelftest('walk', { kind = 'ped', timeout = 2000 })
+        AddEventHandler('aeterna_core:selftestStarted', function() error('listener broke') end)
+        exports.aeterna_core:startRun({ by = 1 })
+        natives.advance(0)
+        assert.are.equal('run failed', rowOf('aeterna_core.walk').detail)
+        assert.are.equal(1, #eventsFor('aeterna_core:selftestEnd', 'aeterna_core.walk'))
+        assert.are.equal(0, #natives.emitted('client', 'aeterna_core:cl:selftest'))
+        assert.is_nil(exports.aeterna_core:busy())
+        natives.advance(3000)
+        assert.are.equal(1, #eventsFor('aeterna_core:selftestEnd', 'aeterna_core.walk'))
+    end)
 end)
 
 describe('aeterna_core server: write guard (case 18)', function()
@@ -555,7 +624,7 @@ describe('aeterna_core server: write guard (case 18)', function()
         assert.are.equal('PASS', rowOf('aeterna_core.wipe').state)
     end)
 
-    it('returns false while the gate is shut: the destructive test never runs and stays SKIP', function()
+    it('returns false for a destructive test that the shut gate kept from firing (SKIP, never in flight)', function()
         exports.aeterna_core:addSelftest('wipe', { destructive = true })
         local answer
         AddEventHandler('aeterna_core:runProgress', function(runId, row)
@@ -617,5 +686,39 @@ describe('aeterna_core server: write guard (case 18)', function()
         natives.advance(2000)
         assert.are.equal('timeout, state may not be restored', rowOf('aeterna_core.later').detail)
         assert.is_false(answers.ended)
+    end)
+
+    it('resolves a short name with the core prefix when no resource invokes it, and still fails a non-destructive test', function()
+        exports.aeterna_core:addSelftest('plain')
+        local answer
+        AddEventHandler('aeterna_core:selftest', function(runId, name)
+            if name == 'aeterna_core.plain' then answer = exports.aeterna_core:selftestMayWrite(runId, 'plain') end
+        end)
+        exports.aeterna_core:runSelftests()
+        assert.is_false(answer)
+        assert.are.equal('undeclared destructive', rowOf('aeterna_core.plain').detail)
+    end)
+end)
+
+describe('aeterna_core import.lua: write guard fails closed (case 18)', function()
+    local function load_import_in(res)
+        natives.reset({ resource = res, side = 'server' })
+        rawset(_G, 'AeternaCore', nil)
+        assert(loadfile(DIR .. '/import.lua'))()
+    end
+
+    it('returns false when aeterna_core is absent', function()
+        load_import_in('aeterna_demo')
+        assert.is_false(AeternaCore.selftest.mayWrite('r1-abcd', 'aeterna_demo.wipe'))
+    end)
+
+    it('returns false when the export throws or answers with something other than true', function()
+        load_import_in('aeterna_demo')
+        natives.stub_export('aeterna_core', 'selftestMayWrite', function() error('core broke') end)
+        assert.is_false(AeternaCore.selftest.mayWrite('r1-abcd', 'aeterna_demo.wipe'))
+        natives.stub_export('aeterna_core', 'selftestMayWrite', function() return 'yes' end)
+        assert.is_false(AeternaCore.selftest.mayWrite('r1-abcd', 'aeterna_demo.wipe'))
+        natives.stub_export('aeterna_core', 'selftestMayWrite', function() return true end)
+        assert.is_true(AeternaCore.selftest.mayWrite('r1-abcd', 'aeterna_demo.wipe'))
     end)
 end)
