@@ -809,6 +809,16 @@ if not IsDuplicityVersion() then
     end
 end
 
+-- Write guard for self-tests (server): call before any persistent write made inside a test. true only for a test
+-- declared destructive in a run whose gate is open; false when core cannot be reached.
+if IsDuplicityVersion() then
+    AeternaCore.selftest = AeternaCore.selftest or {}
+    function AeternaCore.selftest.mayWrite(runId, name)
+        local ok, allowed = pcall(function() return exports.aeterna_core:selftestMayWrite(runId, name) end)
+        return ok and allowed == true
+    end
+end
+
 -- Theme message for a kit page; `preset` only applies when `href` is empty (ADR 0005 decision 9).
 function AeternaCore.themeMessage()
     local okH, href = pcall(function() return exports.aeterna_core:themeHref() end)

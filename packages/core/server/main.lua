@@ -91,6 +91,9 @@ local function settle(run, item, res)
         state = res.state, ok = res.state ~= 'FAIL', detail = res.detail or (res.state == 'FAIL' and 'failed' or 'ok'),
         ms = GetGameTimer() - (item.startMs or GetGameTimer()), step = res.step, expected = res.expected,
     })
+    if item.fired then
+        TriggerEvent('aeterna_core:selftestEnd', run.id, item.name)
+    end
 end
 
 -- Waits until each test in the batch is final. A test that passes its own deadline settles as a timeout.
@@ -213,7 +216,13 @@ local function beginRun(by, starter, b, only)
 end
 
 -- Sends one client-side test to A (and B) and waits for it; the server judges every report.
+-- The owner's server hears selftestStarted first; a test it already ended there (write guard) is not sent.
 local function runOnClients(run, item)
+    item.fired = true
+    TriggerEvent('aeterna_core:selftestStarted', run.id, item.name, ST.startedCtx(item, run.a, run.b))
+    if item.done then
+        return
+    end
     item.roles = { A = run.a }
     if item.players == 2 then item.roles.B = run.b end
     item.results = {}
@@ -241,11 +250,12 @@ local function drivePhases(run)
             elseif not item.done then
                 item.startMs = GetGameTimer()
                 item.deadline = item.startMs + item.timeout
-                if (item.side == 'client' or item.players == 2) and (run.gone[run.a] or (item.players == 2 and run.gone[run.b])) then
+                if ST.toClients(item) and (run.gone[run.a] or (item.players == 2 and run.gone[run.b])) then
                     settle(run, item, { state = 'GAP', detail = 'player left' })
-                elseif item.side == 'client' or item.players == 2 then
+                elseif ST.toClients(item) then
                     runOnClients(run, item)
                 else
+                    item.fired = true
                     TriggerEvent('aeterna_core:selftest', run.id, item.name,
                         { kind = item.kind, side = 'server', a = run.a, b = run.b, destructive = item.destructive })
                     if group.phase == 'headless' then
@@ -387,6 +397,25 @@ exports('cancelRun', function(runId)
     end
     cancelInternal(run)
     return true
+end)
+
+-- Write guard: true only for an in-flight destructive test of the invoker in a run whose gate is open.
+-- An in-flight test that is not destructive is settled FAIL 'undeclared destructive'.
+exports('selftestMayWrite', function(runId, name)
+    local run = type(runId) == 'string' and activeRuns[runId]
+    if not run or type(name) ~= 'string' then
+        return false
+    end
+    local invoker = GetInvokingResource()
+    local item = run.byName[name] or (invoker and run.byName[normalizeTestName(invoker, name)])
+    if not item or (invoker and invoker ~= GetCurrentResourceName() and invoker ~= item.owner) then
+        return false
+    end
+    local allowed, failReason = ST.mayWrite(item, run.gateOpen)
+    if failReason then
+        settle(run, item, judge(item, { guard = true }))
+    end
+    return allowed
 end)
 
 -- The in-flight client test `name` of run `runId` sent to `src`, and that player's role.
