@@ -114,6 +114,26 @@ A server pick that fails a check is dropped with a `debug` log. When a slot's co
 
 While the menu is open the player keeps walking and driving; camera look and weapon fire are disabled. Another resource taking focus closes the menu with no pick; an overlay (for example the test kit's eye card) pauses it until focus returns. With `prefers-reduced-motion: reduce` nothing moves.
 
+## Self-tests / การทดสอบตัวเอง
+
+radial registers these tests with `aeterna_core` on start (`aeterna_testkit` lists and runs them). An eye test with
+nobody to run it is GAP.
+
+| Test | Kind | Runs | What it checks |
+|---|---|---|---|
+| `aeterna_radial.registry` | headless | server | A private registry: add, replace, `maxPerOwner`, `maxTotal`, a child of a child and a cross-owner parent refused, owner stop removes only its slots and flags |
+| `aeterna_radial.conditions` | headless | server | `vehicle` in/out/driver, `jobs` + `grade`, `jobs` false without `qbx_core`, `flags` all-true |
+| `aeterna_radial.open_pick` | eye | presser | Adds six slots "Test 1" … "Test 6" and opens the ring; after the person picks one (a feed line says "picked Test N") or after 50 s, the card asks for the look |
+| `aeterna_radial.child_ring` | eye | presser | Adds a group with three children and opens the ring; after the person opens the group and goes back, the card asks for the look |
+| `aeterna_radial.gamepad` | eye | presser | Adds six slots and opens the ring; after the person picks or cancels with the pad, the card asks. No gamepad: press Skip (GAP) |
+
+The eye tests act before the card because the card takes focus and pauses the ring. Their slots belong to
+`aeterna_radial` and are removed, and the ring closed, when the test ends. The ring also shows the root slots of other
+resources that are visible at the time.
+
+Not registered in this version: `server_recheck` from the spec. As a ped test it runs on the presser's client, but it
+needs a temporary server slot and a server-side drop, which the client can neither create nor see.
+
 ## Commands and keys / คำสั่งและปุ่มลัด
 
 - `aeterna_radial_open` — chat or F8: opens the menu in `toggle` mode (runs again to close)
