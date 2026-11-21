@@ -334,6 +334,16 @@ describe('aeterna_radial self-tests', function()
             assert.are.equal(2, msgs[2].target)
         end)
 
+        it('server_recheck: a select event from another resource does not take the slot back', function()
+            local inVehicle = { value = false }
+            bootServer(inVehicle)
+            fireAsCore('aeterna_core:selftestStarted', 'r5-abcd', 'aeterna_radial.server_recheck',
+                { kind = 'ped', side = 'client', a = 2 })
+            natives.stub('GetInvokingResource', function() return 'other_res' end)
+            natives.fire('aeterna_radial:select', 2, { owner = 'aeterna_radial', id = 'selftest_recheck' })
+            assert.are.equal(1, #slotMessages())
+        end)
+
         it('server_recheck: a selftestStarted from another resource sends and registers nothing', function()
             local inVehicle = { value = false }
             bootServer(inVehicle)
@@ -490,6 +500,18 @@ describe('aeterna_radial self-tests', function()
             assert.are.equal('skip', env.reports[1].ok)
             assert.are.equal('presser is in a vehicle', env.reports[1].detail)
             assert.is_nil(natives.last_emitted('server', 'aeterna_radial:sv:select'))
+        end)
+
+        it('open_pick ignores a select event from another resource', function()
+            local env = loadClient()
+            fireAsCore('aeterna_core:selftest', 'r2-abcd', 'aeterna_radial.open_pick', { kind = 'eye', role = 'A' })
+            natives.advance(200)
+            natives.stub('GetInvokingResource', function() return 'other_res' end)
+            natives.fire('aeterna_radial:select', 'aeterna_radial', 'selftest_3')
+            natives.stub('GetInvokingResource', function() return 'aeterna_radial' end)
+            natives.advance(500)
+            assert.are.equal(0, #env.feed)
+            assert.are.equal(0, #env.reports)
         end)
 
         it('ignores a selftest event from another resource', function()

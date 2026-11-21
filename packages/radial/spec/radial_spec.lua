@@ -6,6 +6,14 @@ local resource = require('helpers.resource')
 local HERE = debug.getinfo(1, 'S').source:match('^@(.*)/[^/]*$') or '.'
 local DIR = HERE .. '/..'
 
+-- Core's local events come from aeterna_core: fire them with that invoking resource, as FXServer does.
+local function fireAsCore(name, ...)
+    local original = GetInvokingResource
+    natives.stub('GetInvokingResource', function() return 'aeterna_core' end)
+    natives.fire(name, ...)
+    natives.stub('GetInvokingResource', original)
+end
+
 local function load_logic()
     return assert(loadfile(DIR .. '/shared/logic/radial.lua'))()
 end
@@ -674,7 +682,7 @@ describe('aeterna_radial', function()
 
             commands['aeterna_radial_open']()
             assert.is_true(api.isOpen())
-            natives.fire('aeterna_core:focusLost', 'aeterna_radial', 'tok_1', 'preempted')
+            fireAsCore('aeterna_core:focusLost', 'aeterna_radial', 'tok_1', 'preempted')
             assert.is_false(api.isOpen())
             assert.are.equal('ring:close', nui[#nui][1].type)
             assert.are.equal(1, #natives.emitted('local', 'aeterna_radial:select'))
@@ -726,7 +734,7 @@ describe('aeterna_radial', function()
         it('client: close while paused gives the token back without clearing the overlay focus', function()
             local env = loadClient()
             env.commands['aeterna_radial_open']()
-            natives.fire('aeterna_core:focusPaused', 'aeterna_radial')
+            fireAsCore('aeterna_core:focusPaused', 'aeterna_radial')
             local before = #env.focus
             env.api.close()
             assert.is_false(env.api.isOpen())
@@ -747,11 +755,21 @@ describe('aeterna_radial', function()
         it('client: the frame loop idles while paused', function()
             local env = loadClient()
             env.commands['aeterna_radial_open']()
-            natives.fire('aeterna_core:focusPaused', 'aeterna_radial')
+            fireAsCore('aeterna_core:focusPaused', 'aeterna_radial')
             natives.advance(1)
             assert.is_true(natives.advance(1000) <= 10)
-            natives.fire('aeterna_core:focusResumed', 'aeterna_radial', 'tok_1')
+            fireAsCore('aeterna_core:focusResumed', 'aeterna_radial', 'tok_1')
             assert.is_true(natives.advance(500) > 10)
+        end)
+
+        it('client: focus events from another resource change nothing', function()
+            local env = loadClient()
+            env.commands['aeterna_radial_open']()
+            natives.fire('aeterna_core:focusLost', 'aeterna_radial', 'tok_1', 'preempted')
+            natives.fire('aeterna_core:focusPaused', 'aeterna_radial')
+            assert.is_true(env.api.isOpen())
+            natives.advance(1)
+            assert.is_true(natives.advance(100) > 10) -- not paused: the frame loop still runs every frame
         end)
 
         it('client: retries sv:hello once when no slots arrive', function()

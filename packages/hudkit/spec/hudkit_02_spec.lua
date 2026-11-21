@@ -10,6 +10,14 @@ local function load_logic(name)
     return assert(loadfile(DIR .. '/shared/logic/' .. name .. '.lua'))()
 end
 
+-- Core's local events come from aeterna_core: fire them with that invoking resource, as FXServer does.
+local function fireAsCore(name, ...)
+    local original = GetInvokingResource
+    natives.stub('GetInvokingResource', function() return 'aeterna_core' end)
+    natives.fire(name, ...)
+    natives.stub('GetInvokingResource', original)
+end
+
 local function near(expected, actual, eps)
     assert.is_true(math.abs(expected - actual) <= (eps or 1e-9),
         ('expected %s, got %s'):format(tostring(expected), tostring(actual)))
@@ -594,7 +602,7 @@ describe('aeterna_hudkit 0.2', function()
             natives.fire('aeterna_hudkit:cl:settings')
             assert.are.equal(1, #ctx.messages('settings:open'))
 
-            natives.fire('aeterna_core:focusPaused', 'aeterna_hudkit', 'tok')
+            fireAsCore('aeterna_core:focusPaused', 'aeterna_hudkit', 'tok')
             ctx.callbacks.settings({ key = 'barStyle', value = 'ring' }, function() end)
             ctx.callbacks.close({}, function() end)
             ctx.callbacks.layoutEditor({}, function() end)
@@ -602,10 +610,31 @@ describe('aeterna_hudkit 0.2', function()
             assert.are.equal(0, released)
             assert.are.equal(0, #ctx.messages('settings:close'))
 
-            natives.fire('aeterna_core:focusResumed', 'aeterna_hudkit', 'tok')
+            fireAsCore('aeterna_core:focusResumed', 'aeterna_hudkit', 'tok')
             ctx.callbacks.close({}, function() end)
             assert.are.equal(1, released)
             assert.are.equal(1, #ctx.messages('settings:close'))
+        end)
+    end)
+
+    describe('7b. focus events only from aeterna_core', function()
+        it('client: a focusPaused or focusLost from another resource changes nothing', function()
+            local ctx = load_client({})
+            local released = 0
+            natives.stub('AeternaCore', {
+                log = { warn = function() end },
+                t = function(k) return k end,
+                kvp = { get = function(_, _, default) return default end, set = function() end },
+                requestFocus = function() return 'tok' end,
+                releaseFocus = function() released = released + 1; return true end,
+            })
+            natives.fire('aeterna_hudkit:cl:settings')
+            natives.stub('GetInvokingResource', function() return 'other_res' end)
+            natives.fire('aeterna_core:focusPaused', 'aeterna_hudkit', 'tok')
+            natives.fire('aeterna_core:focusLost', 'aeterna_hudkit', 'tok', 'preempted')
+            assert.are.equal(0, #ctx.messages('settings:close'))
+            ctx.callbacks.close({}, function() end)
+            assert.are.equal(1, released)
         end)
     end)
 
