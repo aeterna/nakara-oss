@@ -90,7 +90,7 @@ The page cannot be themed from outside, so everything is done inside this resour
 | --- | --- |
 | Name, tagline, tips, language, preset, audio | Edit `html/config.json` |
 | Background image | Put the image under `html/custom/` and set `background` to `custom/<file>` |
-| Colours, fonts, spacing beyond the presets | Edit `html/custom.css` (shipped empty, loaded after `theme.css`); override the same custom properties as `aeterna_theme` would, for example `:root { --accent: #c2410c; }` |
+| Colours, fonts, spacing beyond the presets | Edit `html/custom.css` (shipped empty, loaded after `theme.css`); override the same custom properties as `aeterna_theme` would, for example `:root, :root[data-preset] { --accent: #c2410c; }` (the second selector is needed so the override also beats a preset) |
 | A font | Put an OFL `.woff2` under `html/custom/` with its licence and add an `@font-face` in `custom.css` |
 | Wording of the stages | Edit `html/locale.json` (`th` and `en` blocks) |
 
