@@ -2,18 +2,6 @@
   "version": 1,
   "leases": [
     {
-      "id": "kit02-w1-uikit-4abde9fb",
-      "repo": "nakara-oss",
-      "lane": "kit02-w1-uikit",
-      "host": "mac",
-      "scope": [
-        "packages/uikit/**"
-      ],
-      "plan": "KIT02",
-      "acquired": "2026-11-21T13:19:11Z",
-      "expires": "2026-11-21T17:19:11Z"
-    },
-    {
       "id": "kit02-w1-notify-2ca8be77",
       "repo": "nakara-oss",
       "lane": "kit02-w1-notify",
