@@ -206,7 +206,7 @@ reason `owner` (the player deleted it), `admin`, or the `removePhoto` reason.
 | `aeterna_camera:sv:upload` | client → server (latent) | `{ ticket: string = 32, pattern ^[0-9a-f]+$; data: string ≤ ceil(Config.maxBytes × 4 / 3) + 32 }` | 1 / 1000 ms |
 | `aeterna_camera:cl:viewfinder` | server → client | `{ count, cap }` | — |
 | `aeterna_camera:cl:capture` | server → client | `{ ticket: string = 32 }` | — |
-| `aeterna_camera:cl:shot` | server → client | `{ ok: boolean, id?: string, reason?: string ≤ 32 }` | — |
+| `aeterna_camera:cl:shot` | server → client | `{ ok: boolean, id?: string, reason?: string ≤ 32 }`; `reason` is a locale key, or the token `power_off` when the phone loses power, which closes the viewfinder and the gallery | — |
 | `aeterna_camera:cl:gallery` | server → client | `{ items: array ≤ 500 }` | — |
 | `aeterna_camera:saved` | server-local | see § Hook | — |
 | `aeterna_camera:removed` | server-local | `(id, reason)` | — |
@@ -251,8 +251,8 @@ one `warn` when it does not. Nothing in client KVP.
 
 `camera.app.camera`, `camera.app.gallery`, `camera.key.shutter`, `camera.key.switch`, `camera.hint.shutter`,
 `camera.hint.switch`, `camera.hint.close`, `camera.saved`, `camera.failed`, `camera.full`, `camera.disk_full`,
-`camera.slow`, `camera.unavailable`, `camera.gallery.empty`, `camera.gallery.delete`, `camera.gallery.delete_confirm`,
-`camera.admin.usage`, `camera.admin.removed`, `camera.admin.unknown`.
+`camera.slow`, `camera.unavailable`, `camera.gallery.empty`, `camera.gallery.delete`, `camera.gallery.delete_confirm`, `camera.gallery.cancel`,
+`camera.admin.usage`, `camera.admin.removed`, `camera.admin.unknown`, `camera.selftest.viewfinder`.
 
 ## `oss.json` capabilities
 

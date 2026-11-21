@@ -43,7 +43,7 @@ add_ace group.admin aeterna.phonecall.admin allow
 | `Config.number.assign` | `'first_open'` | `first_open`: a character gets a number the first time it opens either app · `on_load`: when the character loads |
 | `Config.sms.maxLen` | `160` | Visible characters (`AeternaCore.text.len`), 1–300 |
 | `Config.sms.keep` | `100` | Messages kept per character, incoming and outgoing together; the oldest leave first. 10–100 |
-| `Config.call.ringSeconds` | `30` | Ringing without an answer becomes `missed` |
+| `Config.call.ringSeconds` | `30` | Ringing without an answer becomes `missed`. 5–60 (phonekit's ring card ends at 60 s) |
 | `Config.call.maxMinutes` | `60` | An active call ends with reason `limit` |
 | `Config.call.channelBase` | `20000` | Legacy only: first `pma-voice` call channel this package uses; it uses `channelBase + 1` … `channelBase + 9999` |
 | `Config.recentCalls` | `30` | Call log entries kept per character |
@@ -78,7 +78,7 @@ add_ace group.admin aeterna.phonecall.admin allow
   and the badge goes up. On load the badge is set to the unread count.
 - Limits per sender: 1 message / 2000 ms and 15 / 60 s; per sender → recipient pair, 6 / 60 s. A refused send shows
   `phonecall.sms.slow`.
-- Threads: grouped by `peer`, newest first, at most 50 threads listed; a thread shows its last 50 messages. Opening a
+- Threads: grouped by `peer`, newest first, at most 50 threads listed; a thread shows its last 34 messages (phonekit draws at most 40 blocks per screen; the rest are the header, compose and reply rows). Opening a
   thread marks its messages read.
 
 ## Calls
@@ -210,6 +210,7 @@ rate limited by phonekit against the spec on screen). This package adds only:
 | `aeterna_phonecall:sv:hangup` | client → server | none | 2 / 1000 ms |
 | `aeterna_phonecall:cl:state` | server → client | `{ callId: string ≤ 12, state: enum, peer: string ≤ 40, reason?: enum }` | — |
 | `aeterna_phonecall:cl:askNames` | server → client | none | — |
+| `aeterna_phonecall:cl:saveContact` | server → client | `{ number: digits ≤ 20, name: string ≤ 40 }`; the client passes it to phonekit's client export `addContact` | — |
 
 Inside `aeterna_phonekit:action` handlers this package applies its own limits on top: dial 1 / 3000 ms and 10 / 60 s;
 send message as in § Messages. Every value is re-validated with these schemas:
@@ -279,7 +280,8 @@ spike). If a write fails, the oldest messages are dropped until it fits and one 
   "convars": { "read": ["gamename"], "write": [] },
   "netEvents": { "server": ["aeterna_phonecall:sv:names", "aeterna_phonecall:sv:answer",
                             "aeterna_phonecall:sv:hangup"],
-                 "client": ["aeterna_phonecall:cl:state", "aeterna_phonecall:cl:askNames"] },
+                 "client": ["aeterna_phonecall:cl:state", "aeterna_phonecall:cl:askNames",
+                            "aeterna_phonecall:cl:saveContact"] },
   "nui": false, "db": { "tables": [], "ddl": false }, "files": { "write": [] } }
 ```
 
@@ -295,7 +297,7 @@ busted (pure logic in `shared/logic/`):
    start; 50 failures → nil; digits-only comparison.
 2. Message store: cap at `Config.sms.keep` drops the oldest; both copies written; unknown number stores nothing;
    empty and over-long bodies; control characters removed.
-3. Threads: grouping, order, 50-thread and 50-message caps, mark-read.
+3. Threads: grouping, order, 50-thread and 34-message caps, mark-read.
 4. Rate limits: 1 / 2 s, 15 / 60 s, pair 6 / 60 s, `sendSms` 30 / 60 s per resource.
 5. Call state machine: dialing → ringing → active → ended for each end reason; a call to a busy player ends `busy`;
    self-call ends `unavailable`; ring timeout ends `missed`; channel slots allocated lowest-free and released.
@@ -341,6 +343,11 @@ Mock tests use the fake keys `test:a` and `test:b` in place of `<who>`, and dele
 so the result is MOCK with the state restored. `sms_ab` writes one real message into A's and B's stored lists (body "Self-test"),
 so it is destructive (ADR 0005 decision 7) and reports SKIP while `aeterna_core_allow_destructive` is closed. Two-player tests report GAP when
 no second player is on the server.
+
+
+Self-test calls (`call_ab`, `call_busy`) never write the call log, so they stay non-destructive. Two-player rows take A and B
+from core's `aeterna_core:selftestStarted` and clear their pair state on the server-side `selftestEnd`; the package has
+no net event of its own for self-tests.
 
 ## Done when
 
