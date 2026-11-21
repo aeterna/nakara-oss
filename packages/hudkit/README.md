@@ -116,7 +116,7 @@ A missing value hides its part of the indicator.
 hudkit registers these tests with `aeterna_core` on start (`aeterna_testkit` lists and runs them). A test reports SKIP
 only for the reason in the last column; a ped or eye test with nobody to run it is GAP.
 
-The voice rows and `seatbelt_event` carry a short instruction as `expect` ("Talk into your microphone, then change your voice range"); `aeterna_testkit` shows a ped row's instruction while it runs.
+Every client row except `bar_style` carries a short instruction as `expect` ("Talk into your microphone, then change your voice range"; `compass_tape` and `minimap_follows`: "Keep still while the test moves the camera and radar"); `aeterna_testkit` shows it while the row runs.
 
 Self-test events are accepted only from `aeterna_core` (the invoking resource), so no other resource can start a test or its server preparation.
 
