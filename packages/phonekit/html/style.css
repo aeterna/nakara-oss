@@ -29,37 +29,88 @@ body {
     z-index: 1000;
 }
 
-/* Base phone frame (320 × 640 px at scale 1) */
+/* Phone frame: size from the held model (inline width/height, devicelayout.js), placed in px and scaled by
+   fit x layout scale. The bezel colour is the model's case colour (an object colour, not a theme token);
+   everything inside the glass uses theme.css tokens. */
 .phone-frame {
+    --case: #3D4046;
     position: fixed;
-    width: 320px;
-    height: 640px;
-    background-color: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-l);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--line);
+    left: 0;
+    top: 0;
+    width: 392px;
+    height: 812px;
+    padding: 12px;
+    background-color: var(--case);
+    border-radius: 44px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    gap: 10px;
     pointer-events: auto;
-    transition: transform var(--enter) var(--ease), opacity var(--enter) var(--ease);
+    transition: opacity var(--enter) var(--ease);
     opacity: 1;
 }
 
-/* Default placements (24 px screen inset) */
-.pos-bottom-right {
-    right: 24px;
-    bottom: 24px;
+/* The fold animation (about 260 ms); reduced motion turns it off below. */
+.phone-frame.is-folding {
+    transition: width 260ms var(--ease), height 260ms var(--ease), left 260ms var(--ease), top 260ms var(--ease),
+        transform 260ms var(--ease);
 }
 
-.pos-bottom-left {
-    left: 24px;
-    bottom: 24px;
+.phone-glass {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    background-color: var(--surface);
+    border-radius: 34px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-size: calc(var(--fs-2) * var(--tscale, 1));
+    line-height: var(--lh);
+}
+
+.phone-frame[data-model="keypad"],
+.phone-frame[data-model="burner"] {
+    border-radius: 36px;
+    padding: 16px 18px 18px;
+}
+
+.phone-frame[data-model="keypad"] .phone-glass,
+.phone-frame[data-model="burner"] .phone-glass {
+    flex: 0 0 300px;
+    border-radius: var(--radius-m);
+}
+
+.phone-frame[data-model="qwerty"] .phone-glass {
+    flex: 0 0 520px;
+    border-radius: 24px;
+}
+
+.phone-frame[data-model="pad"] {
+    border-radius: 36px;
+    padding: 18px;
+}
+
+.phone-frame[data-model="pad"] .phone-glass {
+    border-radius: 22px;
+}
+
+.phone-frame[data-model="book"][data-fold="open"] {
+    border-radius: 32px;
+}
+
+.phone-frame[data-model="book"][data-fold="open"] .phone-glass {
+    border-radius: 22px;
+}
+
+.phone-frame.is-paused .phone-glass {
+    pointer-events: none;
 }
 
 /* Text Size setting override */
 .phone-large-text {
-    font-size: 16px;
+    --tscale: 1.15;
 }
 
 /* In-phone Banner */
@@ -110,7 +161,7 @@ body {
 }
 
 .phone-banner-title {
-    font-size: 12px;
+    font-size: calc(var(--fs-2) * var(--tscale, 1));
     font-weight: 600;
     color: var(--text);
     overflow: hidden;
@@ -119,7 +170,7 @@ body {
 }
 
 .phone-banner-body {
-    font-size: 11px;
+    font-size: calc(var(--fs-1) * var(--tscale, 1));
     color: var(--text-2);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -133,7 +184,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 12px;
+    font-size: calc(var(--fs-2) * var(--tscale, 1));
     font-weight: 600;
     color: var(--text);
     flex-shrink: 0;
@@ -143,21 +194,33 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
-/* Main Content Area */
+/* Main Content Area: one pane, or two on an open book */
 .phone-content {
     flex: 1;
+    min-height: 0;
+    display: flex;
+    position: relative;
+}
+
+.pane {
+    flex: 1;
+    min-width: 0;
     overflow-y: auto;
     overflow-x: hidden;
     display: flex;
     flex-direction: column;
-    position: relative;
 }
 
-.phone-content::-webkit-scrollbar {
+.two-pane .pane-left {
+    flex: 0 0 50%;
+    border-right: 1px solid var(--line);
+}
+
+.pane::-webkit-scrollbar {
     width: 4px;
 }
 
-.phone-content::-webkit-scrollbar-thumb {
+.pane::-webkit-scrollbar-thumb {
     background-color: var(--line);
     border-radius: var(--radius-s);
 }
@@ -260,7 +323,7 @@ body {
     background-color: var(--bad);
     color: var(--on-accent);
     border-radius: 9px;
-    font-size: 10px;
+    font-size: calc(var(--fs-1) * var(--tscale, 1));
     font-weight: 700;
     display: flex;
     align-items: center;
@@ -269,7 +332,7 @@ body {
 }
 
 .app-label {
-    font-size: 11px;
+    font-size: calc(var(--fs-1) * var(--tscale, 1));
     font-weight: 500;
     color: var(--text-2);
     text-align: center;
@@ -327,7 +390,7 @@ body {
 }
 
 .app-header-title {
-    font-size: 14px;
+    font-size: calc(var(--fs-3) * var(--tscale, 1));
     font-weight: 600;
     color: var(--text);
     overflow: hidden;
@@ -336,7 +399,7 @@ body {
 }
 
 .app-header-sub {
-    font-size: 11px;
+    font-size: calc(var(--fs-1) * var(--tscale, 1));
     color: var(--text-3);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -347,7 +410,7 @@ body {
     background: transparent;
     border: none;
     color: var(--accent);
-    font-size: 13px;
+    font-size: calc(var(--fs-3) * var(--tscale, 1));
     font-weight: 600;
     cursor: pointer;
     padding: 6px 8px;
@@ -388,7 +451,7 @@ body {
     display: flex;
     align-items: flex-end;
     justify-content: flex-end;
-    font-size: 32px;
+    font-size: calc(var(--fs-5) * var(--tscale, 1));
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     overflow-x: auto;
@@ -409,7 +472,7 @@ body {
     border: 1px solid var(--line);
     border-radius: var(--radius-m);
     color: var(--text);
-    font-size: 18px;
+    font-size: calc(var(--fs-5) * var(--tscale, 1));
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     cursor: pointer;
@@ -454,7 +517,7 @@ body {
     padding: 32px 16px;
     text-align: center;
     color: var(--text-3);
-    font-size: 13px;
+    font-size: calc(var(--fs-3) * var(--tscale, 1));
 }
 
 .items-stack {
@@ -480,7 +543,7 @@ body {
 }
 
 .note-item-title, .contact-item-name {
-    font-size: 13px;
+    font-size: calc(var(--fs-3) * var(--tscale, 1));
     font-weight: 600;
     color: var(--text);
     overflow: hidden;
@@ -489,7 +552,7 @@ body {
 }
 
 .note-item-body {
-    font-size: 12px;
+    font-size: calc(var(--fs-2) * var(--tscale, 1));
     color: var(--text-2);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -499,7 +562,7 @@ body {
 }
 
 .contact-item-number {
-    font-size: 12px;
+    font-size: calc(var(--fs-2) * var(--tscale, 1));
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
 }
@@ -519,7 +582,7 @@ body {
     color: var(--text);
     padding: 10px 12px;
     font-family: inherit;
-    font-size: 13px;
+    font-size: calc(var(--fs-3) * var(--tscale, 1));
     outline: none;
     transition: border-color var(--fast) var(--ease);
 }
@@ -540,7 +603,7 @@ body {
     color: var(--bad);
     border-radius: var(--radius-s);
     padding: 10px 14px;
-    font-size: 13px;
+    font-size: calc(var(--fs-3) * var(--tscale, 1));
     font-weight: 600;
     cursor: pointer;
     margin-top: auto;
@@ -572,7 +635,7 @@ body {
 }
 
 .settings-label {
-    font-size: 13px;
+    font-size: calc(var(--fs-3) * var(--tscale, 1));
     color: var(--text);
     font-weight: 500;
 }
@@ -588,7 +651,7 @@ body {
 
 .segment-btn {
     padding: 4px 10px;
-    font-size: 11px;
+    font-size: calc(var(--fs-1) * var(--tscale, 1));
     border-radius: 4px;
     border: none;
     background: transparent;
@@ -610,7 +673,7 @@ body {
     border: 1px solid var(--line);
     border-radius: var(--radius-s);
     color: var(--text);
-    font-size: 13px;
+    font-size: calc(var(--fs-3) * var(--tscale, 1));
     font-weight: 600;
     cursor: pointer;
     display: flex;
@@ -629,7 +692,7 @@ body {
    uikit Panel Blocks (Inside Custom App Screens)
 ------------------------------------------------------------- */
 .block-text {
-    font-size: 13px;
+    font-size: calc(var(--fs-3) * var(--tscale, 1));
     line-height: 1.5;
     color: var(--text-2);
 }
@@ -649,7 +712,7 @@ body {
 .block-progress-head {
     display: flex;
     justify-content: space-between;
-    font-size: 12px;
+    font-size: calc(var(--fs-2) * var(--tscale, 1));
     color: var(--text-2);
 }
 
@@ -674,7 +737,7 @@ body {
 }
 
 .block-field-label {
-    font-size: 12px;
+    font-size: calc(var(--fs-2) * var(--tscale, 1));
     color: var(--text-2);
     font-weight: 500;
 }
@@ -688,7 +751,7 @@ body {
     flex: 1;
     padding: 10px 12px;
     border-radius: var(--radius-s);
-    font-size: 12px;
+    font-size: calc(var(--fs-2) * var(--tscale, 1));
     font-weight: 600;
     cursor: pointer;
     border: 1px solid transparent;
@@ -761,12 +824,12 @@ body {
 
 .uikit-list-item-label {
     flex: 1;
-    font-size: 13px;
+    font-size: calc(var(--fs-3) * var(--tscale, 1));
     color: var(--text);
 }
 
 .uikit-list-item-meta {
-    font-size: 11px;
+    font-size: calc(var(--fs-1) * var(--tscale, 1));
     color: var(--text-3);
 }
 
@@ -811,10 +874,605 @@ body {
     transform: translateX(20px);
 }
 
-/* Reduced motion */
+/* -------------------------------------------------------------
+   0.2 status bar: live pill and battery
+------------------------------------------------------------- */
+.phone-status {
+    gap: 8px;
+    touch-action: none;
+    cursor: ns-resize;
+}
+
+.phone-live {
+    padding: 0 8px;
+    border-radius: 9px;
+    background-color: var(--good);
+    color: var(--on-accent);
+    font-size: calc(var(--fs-1) * var(--tscale, 1));
+    max-width: 50%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.phone-battery {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-variant-numeric: tabular-nums;
+}
+
+.phone-live + .phone-battery,
+.phone-live.hidden + .phone-battery {
+    margin-left: auto;
+}
+
+.battery-icon {
+    position: relative;
+    width: 22px;
+    height: 11px;
+    border: 1px solid var(--text-2);
+    border-radius: 3px;
+    padding: 1px;
+}
+
+.battery-icon::after {
+    content: '';
+    position: absolute;
+    right: -3px;
+    top: 3px;
+    width: 2px;
+    height: 4px;
+    border-radius: 0 1px 1px 0;
+    background-color: var(--text-2);
+}
+
+.battery-fill {
+    display: block;
+    height: 100%;
+    border-radius: 1px;
+    background-color: var(--text);
+}
+
+.phone-battery.is-low .battery-fill {
+    background-color: var(--bad);
+}
+
+.battery-charge {
+    width: 6px;
+    height: 10px;
+    background-color: var(--good);
+    clip-path: polygon(60% 0, 0 55%, 45% 55%, 35% 100%, 100% 40%, 55% 40%);
+}
+
+/* -------------------------------------------------------------
+   0.2 home pages (tiles per page from the model) and keypad list
+------------------------------------------------------------- */
+.home-pages {
+    flex: 1;
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+}
+
+.home-pages::-webkit-scrollbar {
+    height: 0;
+}
+
+.home-pages .home-screen {
+    flex: 0 0 100%;
+    scroll-snap-align: start;
+}
+
+.phone-frame[data-model="qwerty"] .home-screen {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.phone-frame[data-model="pad"] .home-screen {
+    grid-template-columns: repeat(5, 1fr);
+}
+
+.phone-frame[data-model="book"][data-fold="open"] .home-pages .home-screen {
+    flex-basis: 50%;
+}
+
+.keypad-list {
+    list-style: none;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.keypad-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    border-radius: var(--radius-s);
+    color: var(--text-2);
+    cursor: pointer;
+}
+
+.keypad-row.is-active {
+    background-color: var(--accent);
+    color: var(--on-accent);
+}
+
+.keypad-row-num {
+    width: 16px;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.8;
+}
+
+.keypad-row-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.keypad-row-badge {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+/* Keypad keys under the LCD (keypad, burner) */
+.phone-keys {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.keys-nav,
+.keys-pad {
+    display: grid;
+    gap: 8px;
+}
+
+.keys-nav {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.keys-pad {
+    flex: 1;
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.key-btn {
+    border: none;
+    border-radius: var(--radius-m);
+    background-color: rgba(255, 255, 255, 0.10);
+    color: #f2f3f5;
+    font-family: var(--font);
+    font-size: var(--fs-3);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color var(--fast) var(--ease);
+}
+
+.key-btn:hover {
+    background-color: rgba(255, 255, 255, 0.18);
+}
+
+.key-btn:focus-visible {
+    box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* Qwerty hard keyboard under the screen (drawn, not interactive) */
+.phone-hardkb {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+}
+
+.hardkb-row {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+}
+
+.hardkb-key {
+    width: 28px;
+    height: 30px;
+    border-radius: 5px;
+    background-color: rgba(255, 255, 255, 0.10);
+    color: rgba(255, 255, 255, 0.75);
+    font-size: var(--fs-1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.phone-frame[data-model="keypad"] .phone-status,
+.phone-frame[data-model="burner"] .phone-status {
+    height: 24px;
+    cursor: default;
+}
+
+/* -------------------------------------------------------------
+   0.2 lock screen, control centre, cover screen, ring card
+------------------------------------------------------------- */
+.phone-lock,
+.phone-cc,
+.phone-cover {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--surface);
+    display: flex;
+    flex-direction: column;
+    z-index: 50;
+    touch-action: none;
+}
+
+.phone-lock {
+    top: 32px;
+    align-items: center;
+    padding: 24px 16px 56px;
+    gap: 8px;
+}
+
+.lock-time,
+.cover-time {
+    font-size: var(--fs-5);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    transform: scale(2);
+    margin: 20px 0 16px;
+}
+
+.lock-date {
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+}
+
+.lock-cards {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.lock-card,
+.cover-item,
+.cc-device {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 12px;
+    background-color: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: calc(var(--fs-2) * var(--tscale, 1));
+    text-align: left;
+    cursor: pointer;
+}
+
+.lock-card-label {
+    font-weight: 600;
+    flex-shrink: 0;
+    max-width: 50%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.lock-card-body {
+    flex: 1;
+    min-width: 0;
+    color: var(--text-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.lock-card-count,
+.cc-count {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-2);
+}
+
+.lock-hint {
+    margin-top: auto;
+    color: var(--text-3);
+    font-size: calc(var(--fs-1) * var(--tscale, 1));
+}
+
+.phone-cc {
+    top: 0;
+    padding: 16px 12px 48px;
+    gap: 8px;
+    overflow-y: auto;
+    background-color: var(--raised);
+}
+
+.cc-title {
+    font-size: calc(var(--fs-4) * var(--tscale, 1));
+    font-weight: 600;
+    padding: 0 4px;
+}
+
+.cc-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cc-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 4px 0;
+}
+
+.cc-section-title {
+    font-weight: 600;
+    color: var(--text-2);
+}
+
+.cc-clear {
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    font-family: var(--font);
+    font-size: calc(var(--fs-2) * var(--tscale, 1));
+    cursor: pointer;
+}
+
+.cc-history {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cc-history-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background-color: var(--surface);
+    border-radius: var(--radius-m);
+}
+
+.cc-device.is-active {
+    border-color: var(--accent);
+}
+
+.cc-device-label {
+    flex: 1;
+}
+
+.cc-device-battery,
+.cc-device-active {
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+}
+
+.phone-cover {
+    top: 0;
+    align-items: center;
+    padding: 20px 16px;
+    gap: 8px;
+}
+
+.cover-meta {
+    display: flex;
+    gap: 12px;
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+}
+
+.cover-waiting {
+    color: var(--text-2);
+}
+
+.cover-item.is-picked {
+    border-color: var(--accent);
+}
+
+/* While the fold is closed the app screen keeps its open size behind the cover, so scroll and typed text stay. */
+.phone-frame.is-covered .phone-content {
+    visibility: hidden;
+    position: absolute;
+    left: 0;
+    top: 32px;
+    width: 356px;
+    height: 778px;
+}
+
+.phone-frame.is-covered .phone-bottom-bar,
+.phone-frame.is-covered .phone-status {
+    visibility: hidden;
+}
+
+.phone-ring {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: 44px;
+    z-index: 80;
+    padding: 14px;
+    background-color: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-l);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.phone-ring.on-cover,
+.phone-ring.on-lock {
+    position: static;
+    width: 100%;
+    box-shadow: none;
+}
+
+.ring-title {
+    font-size: calc(var(--fs-4) * var(--tscale, 1));
+    font-weight: 600;
+}
+
+.ring-body {
+    color: var(--text-2);
+}
+
+.ring-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.ring-actions .uikit-btn {
+    flex: 1;
+    justify-content: center;
+}
+
+.phone-bottom-bar {
+    position: relative;
+    z-index: 60;
+    touch-action: none;
+}
+
+/* -------------------------------------------------------------
+   0.2 uikit blocks: tabs, slider, table, empty, list search, picked row
+------------------------------------------------------------- */
+.block-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 2px;
+    background-color: var(--raised);
+    border-radius: var(--radius-m);
+}
+
+.block-tab {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 8px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-s);
+    color: var(--text-2);
+    font-family: var(--font);
+    font-size: calc(var(--fs-3) * var(--tscale, 1));
+    cursor: pointer;
+    transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.block-tab.active {
+    background-color: var(--surface);
+    color: var(--text);
+}
+
+.slider-input {
+    width: 100%;
+    accent-color: var(--accent);
+}
+
+.block-slider-value {
+    font-variant-numeric: tabular-nums;
+    font-size: calc(var(--fs-1) * var(--tscale, 1));
+    color: var(--text-2);
+}
+
+.block-table {
+    overflow-x: auto;
+}
+
+.block-table-grid {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: calc(var(--fs-3) * var(--tscale, 1));
+}
+
+.block-table-grid th {
+    font-size: calc(var(--fs-1) * var(--tscale, 1));
+    font-weight: 600;
+    color: var(--text-2);
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--line);
+}
+
+.block-table-grid td {
+    padding: 8px;
+    border-bottom: 1px solid var(--line);
+}
+
+.block-table-grid .align-end {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.block-table-grid tr.is-selectable {
+    cursor: pointer;
+}
+
+.block-table-grid tr.is-selectable:hover {
+    background-color: var(--raised);
+}
+
+.block-table-grid tr.disabled {
+    opacity: 0.5;
+}
+
+.block-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 24px 12px;
+    color: var(--text-2);
+    text-align: center;
+}
+
+.block-empty-label {
+    font-size: calc(var(--fs-4) * var(--tscale, 1));
+    color: var(--text);
+}
+
+.block-empty-body {
+    font-size: calc(var(--fs-2) * var(--tscale, 1));
+}
+
+.list-search {
+    margin-bottom: 6px;
+}
+
+.uikit-list-item.is-picked,
+.block-table-grid tr.is-picked {
+    background-color: var(--raised);
+    box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* Reduced motion: nothing moves; elements appear and disappear (the fold animation is off too). */
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
         animation-duration: 0ms !important;
         transition-duration: 0ms !important;
+    }
+
+    .phone-frame {
+        transition: none;
+    }
+
+    .home-pages {
+        scroll-behavior: auto;
     }
 }
