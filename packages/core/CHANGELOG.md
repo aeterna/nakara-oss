@@ -6,6 +6,10 @@ All notable changes to `aeterna_core` are documented here. The format follows
 
 ## Unreleased
 
+### Fixed
+
+- `busy().since` and the `busy: <phase> since <n> s` detail now count whole seconds; the server passed milliseconds.
+
 ### Added
 
 - Self-test fields `kind`, `side`, `players`, `destructive`, `expect`, `ask`, `timeout`, `skipWhen`, and the result

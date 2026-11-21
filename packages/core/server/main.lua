@@ -189,7 +189,7 @@ local function beginRun(by, starter, b, only)
         a = (by or 0) > 0 and by or nil, gone = {},
         b = (by or 0) > 0 and math.type(b) == 'integer' and b > 0 and b ~= by and GetPlayerName(b) ~= nil and b or nil,
     }
-    lock = ST.acquire(nil, run.id, by == 0 and 'console' or 'resource', starter, now)
+    lock = ST.acquire(nil, run.id, by == 0 and 'console' or 'resource', starter, now // 1000)
     run.gateOpen, run.gateReason = ST.gate(GetConvar('aeterna_core_allow_destructive', 'false'), GetConvar('sv_master1', '<unset>'))
     activeRuns[run.id] = run
     for i = 1, #registeredTests do
@@ -296,7 +296,7 @@ end
 local function executeSelftests()
     local run, held = beginRun(0, nil)
     if not run then
-        return { { name = 'aeterna_core.lock', ok = false, state = 'FAIL', detail = ST.busyReason(held, GetGameTimer()) } }
+        return { { name = 'aeterna_core.lock', ok = false, state = 'FAIL', detail = ST.busyReason(held, GetGameTimer() // 1000) } }
     end
     drive(run)
     return run.rows
@@ -360,7 +360,7 @@ exports('startRun', function(opts)
     end
     local run, held = beginRun(opts.by, GetInvokingResource() or GetCurrentResourceName(), opts.b, opts.only)
     if not run then
-        return nil, ST.busy(held, GetGameTimer())
+        return nil, ST.busy(held, GetGameTimer() // 1000)
     end
     CreateThread(function() drive(run) end)
     return run.id
@@ -491,7 +491,7 @@ AddEventHandler('playerDropped', function()
 end)
 
 exports('busy', function()
-    return ST.busy(lock, GetGameTimer())
+    return ST.busy(lock, GetGameTimer() // 1000)
 end)
 
 AddEventHandler('aeterna_core:selftest:report', function(owner, runId, name, ok, detail, extra)
