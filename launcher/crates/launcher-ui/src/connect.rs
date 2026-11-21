@@ -40,6 +40,9 @@ pub fn outcome_text(o: &Outcome) -> String {
         Outcome::RecordRefused | Outcome::UploadFailed => {
             "ส่งผลตรวจไม่สำเร็จ ขอรหัสใหม่จากทีมงาน".to_string()
         }
+        Outcome::RelayWaiting => {
+            "relay ได้รับผลตรวจแล้ว แต่เซิร์ฟเวอร์ยังไม่ยืนยัน ถ้าทีมงานไม่ได้รับให้แจ้งทีมงาน".to_string()
+        }
         Outcome::Unknown(n) => {
             format!("Connect จบด้วยรหัส {n} ลองอีกครั้ง หรือติดต่อทีมงาน")
         }
@@ -241,6 +244,10 @@ mod tests {
         assert_eq!(
             outcome_text(&Outcome::Refused),
             "รหัสนี้ใช้ไม่ได้ ขอรหัสใหม่จากทีมงาน"
+        );
+        assert_eq!(
+            outcome_text(&Outcome::RelayWaiting),
+            "relay ได้รับผลตรวจแล้ว แต่เซิร์ฟเวอร์ยังไม่ยืนยัน ถ้าทีมงานไม่ได้รับให้แจ้งทีมงาน"
         );
         assert_eq!(
             outcome_text(&Outcome::Unknown(77)),
