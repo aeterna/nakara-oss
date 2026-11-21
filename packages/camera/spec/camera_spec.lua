@@ -133,11 +133,18 @@ describe('aeterna_camera', function()
     end)
 
     describe('2. ids, path guard and the HTTP router (ids.lua, router.lua)', function()
-        it('draws ids of 32 lowercase hex characters, never the same twice in a row', function()
-            local rand = seqRand(7)
+        -- A stream: its own xorshift state from `seed`, plus math.random, a running counter, the game timer and
+        -- os.clock mixed into every draw.
+        local function stream(seed, rand, now, clock)
+            return Ids.stream({ seed = seed, rand = rand or seqRand(seed), now = now or function() return 0 end,
+                clock = clock or function() return 0 end })
+        end
+
+        it('draws ids of 32 lowercase hex characters, never the same twice', function()
+            local nextId = stream(7)
             local seen = {}
-            for _ = 1, 500 do
-                local id = Ids.new(rand)
+            for _ = 1, 2000 do
+                local id = nextId()
                 assert.is_truthy(id:match('^[0-9a-f]+$'))
                 assert.are.equal(32, #id)
                 assert.is_nil(seen[id])
@@ -145,16 +152,31 @@ describe('aeterna_camera', function()
             end
         end)
 
-        it('re-draws on a collision', function()
-            local calls = 0
-            local first
-            local id = Ids.draw(seqRand(3), function(candidate)
-                calls = calls + 1
-                if calls == 1 then first = candidate return true end
-                return false
-            end)
-            assert.are.equal(2, calls)
-            assert.are_not.equal(first, id)
+        it('stays distinct when math.random, the timer and the clock repeat', function()
+            local nextId = stream(11, function() return 0 end, function() return 5 end, function() return 1.5 end)
+            local seen = {}
+            for _ = 1, 500 do
+                local id = nextId()
+                assert.is_nil(seen[id])
+                seen[id] = true
+            end
+        end)
+
+        it('mixes the counter, timer and clock into every draw', function()
+            local fixed = function() return 0 end
+            local a = stream(3, fixed, fixed, fixed)
+            local b = stream(3, fixed, function() return 1 end, fixed)
+            local c = stream(3, fixed, fixed, function() return 0.001 end)
+            local first = a()
+            assert.are_not.equal(first, b())
+            assert.are_not.equal(first, c())
+            assert.are_not.equal(first, a())
+        end)
+
+        it('two streams with different seeds give different ids from the same inputs', function()
+            local fixed = function() return 0 end
+            local tickets, photos = stream(1, fixed, fixed, fixed), stream(2, fixed, fixed, fixed)
+            for _ = 1, 50 do assert.are_not.equal(tickets(), photos()) end
         end)
 
         it('accepts only exact 32-character lowercase hex ids', function()
@@ -263,10 +285,10 @@ describe('aeterna_camera', function()
         local disk, events, warns = {}, {}, {}
         local clock = { ms = 100000, s = 1700000000 }
         local avail = { on = true }
-        local rand = seqRand(99)
         local store = Store.new({ kv = kv, json = json, perCharacter = cfg.perCharacter or 3,
             maxTotalBytes = cfg.maxTotalBytes or 100000 })
-        local newId = function() return Ids.new(rand) end
+        local newId = Ids.stream({ seed = 99, rand = seqRand(99), now = function() return clock.ms end,
+            clock = function() return 0 end })
         local tickets = Tickets.new({ now = function() return clock.ms end, newId = newId })
         local svc = Service.new({
             store = store,
@@ -345,6 +367,7 @@ describe('aeterna_camera', function()
             assert.is_nil(e.store:get(p1.id))
             assert.is_nil(e.kv.data['aeterna_camera:photo:v1:' .. p1.id])
             assert.are.equal('', e.disk[p1.id])
+            e.clock.ms = e.clock.ms + 3000
             assert.is_true(e.svc:delete(1, 'cid:A', p2.id))
             assert.are.equal(0, e.store:total())
             assert.are.same({}, e.store:list('cid:A'))
@@ -374,6 +397,28 @@ describe('aeterna_camera', function()
     end)
 
     describe('4. ownership', function()
+        it('limits deletes of one player to one per Config.cooldownMs', function()
+            local e = setup({ cooldownMs = 3000 })
+            local p1 = select(2, takePhoto(e, 1, 'cid:A'))
+            local p2 = select(2, takePhoto(e, 1, 'cid:A'))
+            local p3 = select(2, takePhoto(e, 2, 'cid:B'))
+            assert.is_true(e.svc:delete(1, 'cid:A', p1.id))
+            e.clock.ms = e.clock.ms + 2999
+            assert.are.same({ false, 'camera.slow' }, { e.svc:delete(1, 'cid:A', p2.id) })
+            assert.is_not_nil(e.store:get(p2.id))
+            -- another player is not held back
+            assert.is_true(e.svc:delete(2, 'cid:B', p3.id))
+            e.clock.ms = e.clock.ms + 1
+            assert.is_true(e.svc:delete(1, 'cid:A', p2.id))
+        end)
+
+        it('a refused delete does not start the cooldown', function()
+            local e = setup({ cooldownMs = 3000 })
+            local p = select(2, takePhoto(e, 1, 'cid:A'))
+            assert.is_false(e.svc:delete(1, 'cid:A', string.rep('9', 32)))
+            assert.is_true(e.svc:delete(1, 'cid:A', p.id))
+        end)
+
         it('drops a delete of another character\'s photo', function()
             local e = setup()
             local p = select(2, takePhoto(e, 1, 'cid:A', 100))

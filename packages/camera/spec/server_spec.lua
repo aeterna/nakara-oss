@@ -13,7 +13,7 @@ local function jpegData(n)
 end
 
 describe('aeterna_camera server under the harness', function()
-    local files, http, tests, tiles, toasts, reports, started
+    local files, http, tests, tiles, toasts, reports, started, mayWriteCalls
 
     local function boot(opts)
         opts = opts or {}
@@ -21,7 +21,7 @@ describe('aeterna_camera server under the harness', function()
             resource = 'aeterna_camera', side = 'server', players = { [1] = 'One', [2] = 'Two' },
             convars = { aeterna_core_log_level = 'error' },
         })
-        files, http, tests, tiles, toasts, reports = {}, nil, {}, {}, {}, {}
+        files, http, tests, tiles, toasts, reports, mayWriteCalls = {}, nil, {}, {}, {}, {}, {}
         started = { ['screenshot-basic'] = opts.screenshot ~= false, aeterna_phonekit = true }
         natives.stub('GetResourceState', function(name) return started[name] and 'started' or 'missing' end)
         natives.stub('GetPlayerIdentifierByType', function(src) return 'license:p' .. tostring(src) end)
@@ -51,6 +51,10 @@ describe('aeterna_camera server under the harness', function()
         natives.stub_export('aeterna_core', 'reportSelftest', function(runId, name, ok, detail, extra)
             reports[name] = { ok = ok, detail = detail, extra = extra }
             return true
+        end)
+        natives.stub_export('aeterna_core', 'selftestMayWrite', function(runId, name)
+            mayWriteCalls[#mayWriteCalls + 1] = { runId, name }
+            return opts.mayWrite ~= false
         end)
         natives.stub_export('aeterna_phonekit', 'addTile', function(app) tiles[#tiles + 1] = app return true end)
         natives.stub_export('aeterna_notify', 'notify', function(src, o) toasts[#toasts + 1] = { src, o } return true end)
@@ -84,7 +88,8 @@ describe('aeterna_camera server under the harness', function()
         boot()
         assert.are.equal(2, #tiles)
         assert.are.same({ 'camera', 'gallery' }, { tiles[1].id, tiles[2].id })
-        assert.are.equal(7, #tests)
+        assert.are.same({ 'camera', 'image' }, { tiles[1].icon, tiles[2].icon })
+        assert.are.equal(8, #tests)
         for _, row in ipairs(tests) do assert.is_truthy(row[1]:find('^aeterna_camera%.')) end
     end)
 
@@ -185,6 +190,61 @@ describe('aeterna_camera server under the harness', function()
         reports = {}
         natives.fire('aeterna_core:selftest', 'r1-test', 'aeterna_other.caps', {})
         assert.is_nil(next(reports))
+    end)
+
+    local SHOOT = 'aeterna_camera.shoot_and_view'
+    local CTX = { kind = 'eye', side = 'client', a = 1, destructive = true }
+
+    -- What the client half of the eye test sends once the viewfinder is open.
+    local function clientShoots(src)
+        natives.fire_net('aeterna_camera:sv:shoot', src, { mode = 'back' })
+        local cap = last('aeterna_camera:cl:capture')
+        assert.is_table(cap)
+        natives.advance(1100)
+        natives.fire_net('aeterna_camera:sv:upload', src, { ticket = cap.ticket, data = jpegData(64) })
+        return last('aeterna_camera:cl:shot')
+    end
+
+    it('shoot_and_view: selftestStarted opens the viewfinder for A; the photo passes the write guard, then the gallery opens', function()
+        boot()
+        natives.fire('aeterna_core:selftestStarted', 'r9-test', SHOOT, CTX)
+        local vf, target = last('aeterna_camera:cl:viewfinder')
+        assert.are.equal(1, target)
+        assert.is_table(vf)
+        local shot = clientShoots(1)
+        assert.is_true(shot.ok)
+        assert.are.same({ { 'r9-test', SHOOT } }, mayWriteCalls)
+        assert.is_not_nil(files['photos/' .. shot.id .. '.jpg'])
+        local gallery, gTarget = last('aeterna_camera:cl:gallery')
+        assert.are.equal(1, gTarget)
+        assert.are.equal(shot.id, gallery.items[1].id)
+        natives.fire('aeterna_core:selftestEnd', 'r9-test', SHOOT)
+        natives.advance(5000)
+        natives.fire_net('aeterna_camera:sv:shoot', 1, { mode = 'back' })
+        assert.are.same({ ok = false, reason = 'camera.failed' }, (last('aeterna_camera:cl:shot')))
+    end)
+
+    it('shoot_and_view: a closed write guard refuses the photo and writes nothing', function()
+        boot({ mayWrite = false })
+        natives.fire('aeterna_core:selftestStarted', 'r9-test', SHOOT, CTX)
+        local shot = clientShoots(1)
+        assert.are.same({ ok = false, reason = 'camera.failed' }, shot)
+        assert.is_nil(next(files))
+        assert.are.equal(0, #natives.emitted('local', 'aeterna_camera:saved'))
+        assert.is_nil(last('aeterna_camera:cl:gallery'))
+    end)
+
+    it('shoot_and_view: ordinary photos never ask the write guard; other tests and other runs are ignored', function()
+        boot()
+        shootAndUpload(1)
+        assert.are.same({}, mayWriteCalls)
+        natives.fire('aeterna_core:selftestStarted', 'r9-test', 'aeterna_camera.viewfinder', CTX)
+        natives.fire('aeterna_core:selftestStarted', 'r9-test', 'aeterna_other.shoot_and_view', CTX)
+        assert.are.equal(1, #natives.emitted('client', 'aeterna_camera:cl:viewfinder'))
+        natives.fire('aeterna_core:selftestStarted', 'r9-test', SHOOT, CTX)
+        natives.fire('aeterna_core:selftestEnd', 'r8-other', SHOOT)
+        natives.advance(5000)
+        assert.is_true(clientShoots(1).ok)
     end)
 
     it('exports getPhoto, listPhotos, removePhoto and available', function()
