@@ -109,7 +109,7 @@ describe('aeterna_camera', function()
                 { 'data:image/png;base64,' .. b64, 'prefix' },
                 { Codec.PREFIX .. b64:sub(2), 'base64' },
                 { Codec.PREFIX .. Codec.encode('plain text'), 'not jpeg' },
-                { Codec.PREFIX .. Codec.encode(jpegOf(260)), 'too large', 250 },
+                { Codec.PREFIX .. Codec.encode(jpegOf(260)), 'too large', 255 },
                 { 42, 'type' },
             }
             for _, c in ipairs(cases) do
@@ -335,7 +335,7 @@ describe('aeterna_camera', function()
             assert.are.equal('camera.disk_full', reason)
         end)
 
-        it('delete frees the bytes and drops the id from the list', function()
+        it('a removal frees the bytes and takes the id out of its list', function()
             local e = setup()
             local p1 = select(2, takePhoto(e, 1, 'cid:A', 100))
             local p2 = select(2, takePhoto(e, 1, 'cid:A', 200))
