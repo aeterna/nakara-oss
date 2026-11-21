@@ -340,3 +340,5 @@ Settled by the Orchestrator on 2026-11-21:
 The 0.1 conditions, plus: the 0.2 ox_inventory table and the item install steps are verified and corrected, the
 event names and payloads above still match the phonekit 0.2 spec, the busted cases above pass, and every self-test
 above is registered and passes on the kit-test server (SKIP only for its listed reason).
+
+**Smoke (added after W1 review):** drain a carried phone's battery, disconnect, reconnect: the item keeps the last shown value (checks the drop flush against FXServer's real handler order, which busted only models).
