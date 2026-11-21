@@ -5,7 +5,7 @@ lua54 'yes'
 name 'aeterna_invkit'
 author 'AETERNA'
 description 'Personal stashes and item-use progress registry around ox_inventory for the AETERNA Starter Kit.'
-version '0.1.0'
+version '0.2.0'
 repository 'https://github.com/aeterna/nakara-oss'
 
 dependencies {

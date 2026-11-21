@@ -6,6 +6,17 @@ All notable changes to `aeterna_invkit` are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- 0.2.0: phone item mode for `aeterna_phonekit` `Config.devices = 'items'` (ADR 0005). `Config.phone.enabled` (default `false`) and `Config.phone.items` (ox item name → phonekit model, at most 32, bad entries skipped with one `warn`).
+- Answers `aeterna_phonekit:asking` (`devices = 'items'`) with every phone item carried, lowest slots first, at most 8; fires `aeterna_phonekit:listen` on start and on `aeterna_phonekit:hello`. Server-local events only; phonekit stays optional.
+- A phone item with no `metadata.phoneId` gets an 8-character hex serial written on first listing; `battery`, `fold` and `color` metadata are passed through when valid.
+- `aeterna_phonekit:deviceSave` writes `battery` (clamped 0–100) and `fold` into the item metadata, keeping other fields, at most once per player per 5000 ms (later saves held, latest per phone written); a phone no longer carried fires `aeterna_phonekit:devicesChanged`.
+- `swapItems` and `createItem` hooks on the mapped items fire `aeterna_phonekit:devicesChanged` for each player involved, on the next tick after ox_inventory applies the change.
+- README section on adding phone items and images to ox_inventory.
+
+Agent: Claude Code - Claude Opus 5.5 (agent engineer)
+
 ## [0.1.0] - 2026-11-18
 
 ### Added
