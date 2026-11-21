@@ -155,17 +155,21 @@ end
 -- Core's own client check: holder, then an overlay on top of it. Returns a state and a detail.
 local function focusOverlayCheck()
     if focusManager:owner() ~= nil then return 'skip', 'focus is held' end
-    local paused = nil
-    local h = AddEventHandler('aeterna_core:focusPaused', function(owner, token) paused = { owner = owner, token = token } end)
-    local holder = focusManager:request('aeterna_core', { cursor = true })
-    local overlay = focusManager:request('aeterna_core.overlay', { overlay = true, cursor = true })
-    local kept = focusManager:pausedToken() == holder and focusManager:owner() == 'aeterna_core.overlay'
-    local pausedOk = paused ~= nil and paused.token == holder and paused.owner == 'aeterna_core'
-    focusManager:release(overlay)
-    local resumed = focusManager:owner() == 'aeterna_core' and focusManager:token() == holder
-    focusManager:release(holder)
-    RemoveEventHandler(h)
-    if kept and pausedOk and resumed then return 'pass', 'overlay paused the holder and resumed it' end
+    local paused, resumed, lost = nil, nil, nil
+    local probe = focusLogic.new({
+        onPaused = function(owner, token) paused = { owner = owner, token = token } end,
+        onResumed = function(owner, token) resumed = { owner = owner, token = token } end,
+        onLost = function(owner, token, reason) lost = { owner = owner, token = token, reason = reason } end,
+        onApply = function() end,
+    })
+    local holder = probe:request('aeterna_core', { cursor = true })
+    local overlay = probe:request('aeterna_core.overlay', { overlay = true, cursor = true })
+    local kept = probe:pausedToken() == holder and probe:owner() == 'aeterna_core.overlay'
+    local pausedOk = paused ~= nil and paused.token == holder and paused.owner == 'aeterna_core' and lost == nil
+    probe:release(overlay)
+    local resumedOk = resumed ~= nil and resumed.token == holder and resumed.owner == 'aeterna_core'
+        and probe:owner() == 'aeterna_core' and probe:token() == holder and lost == nil
+    if kept and pausedOk and resumedOk then return 'pass', 'overlay paused the holder and resumed it' end
     return 'fail', 'focus overlay state is wrong'
 end
 
