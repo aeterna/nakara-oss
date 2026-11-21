@@ -38,16 +38,16 @@ describe('aeterna_radial self-tests', function()
     end)
 
     describe('registration rows', function()
-        it('lists the buildable spec rows in spec order', function()
+        it('lists the six spec rows in spec order', function()
             local names = {}
             for i, d in ipairs(ST.definitions()) do names[i] = d.name end
-            assert.are.same({ 'registry', 'conditions', 'open_pick', 'child_ring', 'gamepad' }, names)
+            assert.are.same({ 'registry', 'conditions', 'server_recheck', 'open_pick', 'child_ring', 'gamepad' }, names)
         end)
 
         it('sets kind, side, players and destructive as the spec table says', function()
             local rules = assert(loadfile(CORE_DIR .. '/shared/logic/selftest.lua'))()
-            local want = { registry = 'headless', conditions = 'headless', open_pick = 'eye', child_ring = 'eye',
-                gamepad = 'eye' }
+            local want = { registry = 'headless', conditions = 'headless', server_recheck = 'ped', open_pick = 'eye',
+                child_ring = 'eye', gamepad = 'eye' }
             local m = by_name(ST.definitions(en))
             for name, kind in pairs(want) do
                 local test, err = rules.normalize(m[name])
@@ -70,6 +70,7 @@ describe('aeterna_radial self-tests', function()
                 end
                 assert.is_nil(m.registry.expect)
                 assert.is_nil(m.conditions.expect)
+                assert.is_nil(m.server_recheck.expect)
             end
         end)
 
@@ -83,7 +84,8 @@ describe('aeterna_radial self-tests', function()
         it('maps full names to short names only for its own prefix', function()
             assert.are.equal('gamepad', ST.shortName('aeterna_radial.gamepad'))
             assert.is_nil(ST.shortName('aeterna_hudkit.gamepad'))
-            assert.is_nil(ST.shortName('aeterna_radial.server_recheck'))
+            assert.are.equal('server_recheck', ST.shortName('aeterna_radial.server_recheck'))
+            assert.is_nil(ST.shortName('aeterna_radial.nope'))
         end)
     end)
 
@@ -185,11 +187,55 @@ describe('aeterna_radial self-tests', function()
             assert.is_true(w.observe({ type = 'state', open = true, hoverId = 'selftest_group' }))
         end)
 
-        it('gamepad is ready once the ring closed after being open', function()
+        it('gamepad is ready once the pad closed the ring after it was open', function()
             local w = ST.newEyeWatch('gamepad')
-            assert.is_false(w.observe({ type = 'state', open = false }))
-            assert.is_false(w.observe({ type = 'state', open = true }))
-            assert.is_true(w.observe({ type = 'state', open = false }))
+            assert.is_false(w.observe({ type = 'state', open = false, pad = true }, 100))
+            assert.is_false(w.observe({ type = 'state', open = true, pad = true }, 200))
+            assert.is_true(w.observe({ type = 'state', open = false, pad = true }, 300))
+        end)
+
+        it('gamepad does not count a mouse close (right click) as the pad closing the ring', function()
+            local w = ST.newEyeWatch('gamepad')
+            assert.is_false(w.observe({ type = 'state', open = true, pad = true }, 100))
+            assert.is_false(w.observe({ type = 'state', open = false, pad = false }, 200))
+        end)
+
+        it('gamepad asks for the card soon when no pad input comes at all', function()
+            local w = ST.newEyeWatch('gamepad')
+            assert.is_false(w.observe({ type = 'state', open = true, pad = false }, ST.PAD_IDLE_MS - 100))
+            assert.is_true(w.observe({ type = 'state', open = true, pad = false }, ST.PAD_IDLE_MS))
+            assert.is_true(ST.PAD_IDLE_MS <= 10000)
+        end)
+
+        it('gamepad keeps waiting once the pad was used', function()
+            local w = ST.newEyeWatch('gamepad')
+            w.observe({ type = 'state', open = true, pad = true }, 100)
+            assert.is_false(w.observe({ type = 'state', open = true, pad = true }, ST.PAD_IDLE_MS + 1000))
+        end)
+    end)
+
+    describe('server_recheck', function()
+        it('uses a server slot shown only in a vehicle', function()
+            local slot = ST.recheckSlot(en)
+            assert.are.equal('selftest_recheck', slot.id)
+            assert.are.equal('in', slot.when.vehicle)
+            assert.is_true(L.validateSlot(slot, 'server'))
+        end)
+
+        it('passes when the pick from a player on foot was dropped', function()
+            assert.are.equal('pass', (ST.recheckVerdict({ arrived = true, stillThere = true })))
+        end)
+
+        it('fails when the server accepted the pick', function()
+            local state, detail = ST.recheckVerdict({ arrived = true, stillThere = false })
+            assert.are.equal('fail', state)
+            assert.truthy(detail:find('accepted', 1, true))
+        end)
+
+        it('fails when the test slot never reached the presser', function()
+            local state, detail = ST.recheckVerdict({ arrived = false })
+            assert.are.equal('fail', state)
+            assert.truthy(detail:find('never', 1, true))
         end)
     end)
 
@@ -208,10 +254,10 @@ describe('aeterna_radial self-tests', function()
             end)
             resource.load_resource(DIR, 'server', { externals = CORE })
             natives.advance(0)
-            assert.are.equal(5, #added)
+            assert.are.equal(6, #added)
             assert.are.equal('registry', added[1].name)
-            assert.are.equal('gamepad', added[5].name)
-            assert.is_string(added[3].meta.expect)
+            assert.are.equal('gamepad', added[6].name)
+            assert.is_string(added[4].meta.expect)
 
             natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_radial.registry', { kind = 'headless' })
             natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_radial.conditions', { kind = 'headless' })
@@ -220,6 +266,76 @@ describe('aeterna_radial self-tests', function()
             assert.are.equal(2, #reports)
             assert.are.equal('pass', reports[1].ok)
             assert.are.equal('pass', reports[2].ok)
+        end)
+
+        local function bootServer(inVehicle)
+            natives.reset({ resource = 'aeterna_radial', side = 'server', invoker = 'aeterna_radial' })
+            natives.add_player(1, 'One')
+            natives.add_player(2, 'Two')
+            natives.stub('GetResourceState', function() return 'missing' end)
+            natives.stub('GetPlayerPed', function(src) return 100 + tonumber(src) end)
+            natives.stub('GetVehiclePedIsIn', function() return inVehicle.value and 500 or 0 end)
+            natives.stub('GetPedInVehicleSeat', function() return 0 end)
+            natives.stub_export('aeterna_core', 'addSelftest', function() return true end)
+            natives.stub_export('aeterna_core', 'reportSelftest', function() return true end)
+            resource.load_resource(DIR, 'server', { externals = CORE })
+            natives.advance(0)
+        end
+
+        local function slotMessages()
+            local out = {}
+            for _, e in ipairs(natives.emitted('client', 'aeterna_radial:cl:slot')) do
+                if e.args[1].id == 'selftest_recheck' or (e.args[1].slot and e.args[1].slot.id == 'selftest_recheck') then
+                    out[#out + 1] = e
+                end
+            end
+            return out
+        end
+
+        it('server_recheck: selftestStarted sends the test slot to the presser only', function()
+            local inVehicle = { value = false }
+            bootServer(inVehicle)
+            natives.fire('aeterna_core:selftestStarted', 'r5-abcd', 'aeterna_radial.server_recheck',
+                { kind = 'ped', side = 'client', a = 2 })
+            local msgs = slotMessages()
+            assert.are.equal(1, #msgs)
+            assert.are.equal(2, msgs[1].target)
+            assert.are.equal('add', msgs[1].args[1].op)
+            assert.are.equal('in', msgs[1].args[1].slot.when.vehicle)
+        end)
+
+        it('server_recheck: a pick on foot is dropped and nothing comes back', function()
+            local inVehicle = { value = false }
+            bootServer(inVehicle)
+            natives.fire('aeterna_core:selftestStarted', 'r5-abcd', 'aeterna_radial.server_recheck',
+                { kind = 'ped', side = 'client', a = 2 })
+            natives.fire_net('aeterna_radial:sv:select', 2, { owner = 'aeterna_radial', id = 'selftest_recheck' })
+            assert.are.equal(1, #slotMessages())
+            assert.are.equal(0, #natives.emitted('local', 'aeterna_radial:select'))
+        end)
+
+        it('server_recheck: an accepted pick takes the test slot back from the presser', function()
+            local inVehicle = { value = true }
+            bootServer(inVehicle)
+            natives.fire('aeterna_core:selftestStarted', 'r5-abcd', 'aeterna_radial.server_recheck',
+                { kind = 'ped', side = 'client', a = 2 })
+            natives.fire_net('aeterna_radial:sv:select', 2, { owner = 'aeterna_radial', id = 'selftest_recheck' })
+            local msgs = slotMessages()
+            assert.are.equal(2, #msgs)
+            assert.are.equal('remove', msgs[2].args[1].op)
+            assert.are.equal(2, msgs[2].target)
+        end)
+
+        it('server_recheck: selftestEnd removes the slot from the registry and from the presser', function()
+            local inVehicle = { value = false }
+            bootServer(inVehicle)
+            natives.fire('aeterna_core:selftestStarted', 'r5-abcd', 'aeterna_radial.server_recheck',
+                { kind = 'ped', side = 'client', a = 2 })
+            natives.fire('aeterna_core:selftestEnd', 'r5-abcd', 'aeterna_radial.server_recheck')
+            local msgs = slotMessages()
+            assert.are.equal('remove', msgs[#msgs].args[1].op)
+            natives.fire_net('aeterna_radial:sv:hello', 1)
+            assert.are.equal(0, #natives.last_emitted('client', 'aeterna_radial:cl:slots').args[1].slots)
         end)
     end)
 
@@ -301,6 +417,49 @@ describe('aeterna_radial self-tests', function()
             natives.fire('aeterna_core:selftestEnd', 'r3-abcd', 'aeterna_radial.child_ring')
             natives.advance(0)
             assert.is_false(env.api.isOpen())
+        end)
+
+        it('gamepad with no pad input asks for the card after the short idle wait, not 50 s', function()
+            local env = loadClient()
+            natives.fire('aeterna_core:selftest', 'r6-abcd', 'aeterna_radial.gamepad', { kind = 'eye', role = 'A' })
+            natives.advance(ST.PAD_IDLE_MS + 500)
+            assert.are.equal(1, #env.reports)
+            assert.are.equal('ready', env.reports[1].ok)
+        end)
+
+        it('server_recheck passes when the pick on foot changes nothing', function()
+            local env = loadClient()
+            natives.fire_net('aeterna_radial:cl:slot', 1, { op = 'add', owner = 'aeterna_radial',
+                slot = { id = 'selftest_recheck', label = 'Recheck', when = { vehicle = 'in' } } })
+            natives.fire('aeterna_core:selftest', 'r7-abcd', 'aeterna_radial.server_recheck', { kind = 'ped', role = 'A' })
+            natives.advance(300)
+            local pick = natives.last_emitted('server', 'aeterna_radial:sv:select')
+            assert.are.same({ owner = 'aeterna_radial', id = 'selftest_recheck' }, pick.args[1])
+            natives.advance(3000)
+            assert.are.equal(1, #env.reports)
+            assert.are.equal('pass', env.reports[1].ok)
+        end)
+
+        it('server_recheck fails when the server takes the slot back after the pick', function()
+            local env = loadClient()
+            natives.fire_net('aeterna_radial:cl:slot', 1, { op = 'add', owner = 'aeterna_radial',
+                slot = { id = 'selftest_recheck', label = 'Recheck', when = { vehicle = 'in' } } })
+            natives.fire('aeterna_core:selftest', 'r8-abcd', 'aeterna_radial.server_recheck', { kind = 'ped', role = 'A' })
+            natives.advance(300)
+            natives.fire_net('aeterna_radial:cl:slot', 1, { op = 'remove', owner = 'aeterna_radial', id = 'selftest_recheck' })
+            natives.advance(3000)
+            assert.are.equal('fail', env.reports[1].ok)
+        end)
+
+        it('server_recheck skips while the presser is in a vehicle', function()
+            local env = loadClient()
+            natives.stub('GetVehiclePedIsIn', function() return 500 end)
+            natives.stub('GetPedInVehicleSeat', function() return 0 end)
+            natives.fire('aeterna_core:selftest', 'r9-abcd', 'aeterna_radial.server_recheck', { kind = 'ped', role = 'A' })
+            natives.advance(100)
+            assert.are.equal('skip', env.reports[1].ok)
+            assert.are.equal('presser is in a vehicle', env.reports[1].detail)
+            assert.is_nil(natives.last_emitted('server', 'aeterna_radial:sv:select'))
         end)
 
         it('reports fail when the ring cannot open', function()
