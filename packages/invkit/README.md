@@ -26,6 +26,8 @@ Personal stashes and a server-validated item-use progress registry around `ox_in
    ensure aeterna_invkit
    ```
 
+4. Phone item mode (0.2, optional): set `Config.phone.enabled = true` here **and** `Config.devices = 'items'` in `aeterna_phonekit`. Each setting does nothing without the other: phonekit asks for phone items only in `items` mode, and invkit answers only when `Config.phone.enabled` is on. See [Phone items](#phone-items--โทรศัพท์แบบไอเทม-02) for the ox_inventory item entries.
+
 ## Config / การตั้งค่า (`config.lua`)
 
 | Key | Default | Meaning / ความหมาย |
@@ -37,6 +39,16 @@ Personal stashes and a server-validated item-use progress registry around `ox_in
 | `Config.stash.points` | `{}` | Array of `{ coords = vec3(...), radius = 2.0 }` where players can open their stash / พิกัดจุดที่เปิดตู้เก็บของได้ |
 | `Config.stash.command` | `false` | `true` enables the command `aeterna_stash` (still requires a point within `radius` unless `anywhere = true`) / เปิดใช้คำสั่ง `aeterna_stash` |
 | `Config.stash.anywhere` | `false` | Allow opening the stash from anywhere (for testing) / เปิดตู้เก็บของได้จากทุกที่ (สำหรับการทดสอบ) |
+| `Config.phone.enabled` | `false` | Answer `aeterna_phonekit`'s open gate from phone items. Turn on together with phonekit's `Config.devices = 'items'` / ใช้โทรศัพท์จากไอเทมใน `ox_inventory` (เปิดคู่กับ `Config.devices = 'items'` ของ phonekit) |
+| `Config.phone.items` | 9 entries (below) | ox item name → phonekit model id (`keypad`, `burner`, `qwerty`, `slab`, `fold`, `pro`, `book`, `pad`). At most 32; an entry with another model or a name that is not `^[%w_%-]+$` ≤ 64 is skipped with one `warn` at start / ชื่อไอเทม → รุ่นโทรศัพท์ |
+
+```lua
+Config.phone.items = {
+    phone = 'slab', -- the common generic phone item name
+    phone_keypad = 'keypad', phone_burner = 'burner', phone_qwerty = 'qwerty', phone_slab = 'slab',
+    phone_fold = 'fold', phone_pro = 'pro', phone_book = 'book', phone_pad = 'pad',
+}
+```
 
 ## Exports & Events / การเรียกใช้งาน
 
@@ -57,6 +69,41 @@ Filter on `data.owner == GetCurrentResourceName()`:
 
 - `aeterna_invkit:asking` → `(src, { owner, item, slot, useId })` — fired when `ask = true`. Call `allowUse(useId)` or `denyUse(useId, reasonKey)` within 1000 ms; silence counts as denied.
 - `aeterna_invkit:used` → `(src, { owner, item, slot, count })` — fired after the progress bar finishes and the item has been removed from the player's inventory.
+
+## Phone items / โทรศัพท์แบบไอเทม (0.2)
+
+With `Config.phone.enabled = true` and `aeterna_phonekit` set to `Config.devices = 'items'`, the phones a player carries are items in their `ox_inventory`. `aeterna_invkit` answers phonekit's open gate with every phone item carried (at most 8, lowest slots first) and phonekit chooses the active one. phonekit is optional: the two talk only through server-local events, and `aeterna_invkit` works the same without it.
+
+- Each phone item gets a serial in `metadata.phoneId` (8 lowercase hex characters) the first time it is listed. The serial is the phone's id, so it survives moving the item to another slot or giving it to another player.
+- `metadata.battery` (0–100), `metadata.fold` (`'open'` or `'closed'`) and `metadata.color` (case colour index, set by whatever gives the item: a shop, an admin command) are sent to phonekit when valid; otherwise phonekit uses its own defaults.
+- phonekit saves battery and fold back into the item metadata (at most one write per player per 5 seconds). A phone handed to another player keeps its charge.
+- Moving, dropping, giving or receiving a phone item makes phonekit check again, so a dropped active phone is put away at once.
+
+### Install the items in ox_inventory / เพิ่มไอเทมใน ox_inventory
+
+`aeterna_invkit` ships no image and writes nothing into `ox_inventory`. The server owner adds the items (checked against `ox_inventory` 2.44.0):
+
+1. Add one entry per phone item to `ox_inventory/data/items.lua`. `stack = false` is required: each phone keeps its own battery in its metadata.
+
+   ```lua
+   ['phone_fold'] = { label = 'Fold', weight = 190, stack = false, close = true },
+   ['phone_keypad'] = { label = 'Keypad', weight = 120, stack = false, close = true },
+   ```
+
+   `ox_inventory` already ships a `phone` item (`stack = false`, with its own `phone.png`); keep it, it maps to the `slab` model. Its `client.add` / `client.remove` functions only call another phone resource through `pcall` and do nothing without it.
+2. Put an image named `<item>.png` (for example `phone_fold.png`) in `ox_inventory/web/images/`, or in the folder your `inventory:imagepath` convar points to. You provide the images.
+3. Set `Config.phone.enabled = true` here and `Config.devices = 'items'` in `aeterna_phonekit`, then restart both.
+
+### Server-local events (phonekit's contract)
+
+| Event | Fired by | What `aeterna_invkit` does |
+|---|---|---|
+| `aeterna_phonekit:hello` | phonekit | Fires `aeterna_phonekit:listen` again |
+| `aeterna_phonekit:listen` | invkit | Fired on start and on every `hello` |
+| `aeterna_phonekit:asking` `(src, { checkId, devices })` | phonekit | Answers only when `devices == 'items'` |
+| `aeterna_phonekit:answer` `(checkId, { allow = true, devices })` | invkit | `devices` = `{ id, model, battery?, fold?, color? }` per phone; an empty list when none is carried or `ox_inventory` is not started |
+| `aeterna_phonekit:devicesChanged` `(src)` | invkit | A phone item left, entered or moved in that player's inventory |
+| `aeterna_phonekit:deviceSave` `(src, { id, battery?, fold? })` | phonekit | Writes the fields that arrive into the item with that `phoneId` |
 
 ## Commands and keys / คำสั่งและปุ่มลัด
 
@@ -104,7 +151,7 @@ Then read the capability table above (or `oss.json` inside the zip).
 From the repository root:
 
 ```sh
-busted --lpath='./packages/devkit/busted/?.lua;./?.lua;./?/init.lua' --pattern=_spec packages/invkit/spec
+busted --config-file=.busted packages/invkit/spec
 ```
 
 ## License
