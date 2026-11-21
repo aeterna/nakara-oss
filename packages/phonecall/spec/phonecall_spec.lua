@@ -720,7 +720,7 @@ describe('aeterna_phonecall', function()
             assert.are.equal(4000, th:request(2000))     -- contactsChanged 1 s later: one trailing send at 6000
             assert.is_nil(th:request(3000))              -- already scheduled
             th:fire(6000)
-            assert.are.equal(5000, th:request(6500))     -- 0.5 s after the trailing send: wait until 11000
+            assert.are.equal(4500, th:request(6500))     -- 0.5 s after the trailing send: wait until 11000
             th:fire(11000)
             assert.are.equal(0, th:request(16000))
         end)

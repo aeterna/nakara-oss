@@ -14,7 +14,7 @@ C.DEFAULTS = {
 local RANGES = {
     { 'sms', 'maxLen', 1, 300 },
     { 'sms', 'keep', 10, 100 },
-    { 'call', 'ringSeconds', 5, 120 },
+    { 'call', 'ringSeconds', 5, 60 }, -- phonekit's ring card ends by itself after 60 s
     { 'call', 'maxMinutes', 1, 1440 },
     { 'call', 'channelBase', 1, 1000000 },
 }

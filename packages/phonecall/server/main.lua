@@ -154,9 +154,10 @@ local function session(src)
     return s
 end
 
+-- The name `src` saved for `number`, else the number (digits shown in the format when they fit).
 local function peerLabel(src, number)
     local s = sessions[src]
-    return M.label(s and s.names, number)
+    return M.label(s and s.names, shown(N.digits(number)))
 end
 
 local function refreshBadge(src)
@@ -292,7 +293,9 @@ end
 local phoneHome -- forward
 
 local endCall
-endCall = function(call, reason)
+-- opts.calleeQuiet: the callee never saw this call (its ring failed), so it gets no state and no log entry.
+endCall = function(call, reason, opts)
+    local quiet = type(opts) == 'table' and opts.calleeQuiet == true
     local wasRinging = call.state == 'ringing'
     if not calls:finish(call, reason) then return false end
     if wasRinging and call.ringId and connected(call.to) then
@@ -300,7 +303,7 @@ endCall = function(call, reason)
     end
     if call.voice then backend:disconnect(call, connected) end
     local ts = os.time()
-    for _, src in ipairs({ call.from, call.to }) do
+    for _, src in ipairs(quiet and { call.from } or { call.from, call.to }) do
         if call.wasActive and connected(src) then
             pcall(function() exports.aeterna_phonekit:activity(src, 'call', false) end)
             pcall(function() exports.aeterna_phonekit:live(src, nil) end)
@@ -317,17 +320,30 @@ endCall = function(call, reason)
             end)
         end
     end
-    local result = call.wasActive and 'answered' or reason
-    logCall(call.fromWho, { peer = call.toNum, dir = 'out', result = result, ts = ts, seconds = call.seconds })
-    logCall(call.toWho, { peer = call.fromNum, dir = 'in', result = result, ts = ts, seconds = call.seconds })
+    if not call.test then -- self-test calls stay out of the real call log (they are not destructive)
+        local result = call.wasActive and 'answered' or reason
+        logCall(call.fromWho, { peer = call.toNum, dir = 'out', result = result, ts = ts, seconds = call.seconds })
+        if not quiet then
+            logCall(call.toWho, { peer = call.fromNum, dir = 'in', result = result, ts = ts, seconds = call.seconds })
+        end
+    end
     emitCall(call.id, 'ended', call, reason)
     return true
 end
 
 local refusedSeq = 0
 
+-- The reason a dial was refused, on the dialer's number field.
+local function showRefusal(src, screenId, reason)
+    if screenId then
+        update(src, screenId, { blocks = { number = { label = cut(t('phonecall.end.' .. reason), 40) } } })
+    end
+end
+
 -- Places a call from `a` (number aNum) to `b` (nil when the number is unknown or offline, number bNum).
-local function placeCall(a, b, aNum, bNum)
+-- opts = { test = true (self-test: no call log), screenId = the dialer that placed it }
+local function placeCall(a, b, aNum, bNum, opts)
+    local o = type(opts) == 'table' and opts or {}
     local call, reason = calls:dial(a, b, {
         backend = backend:available(), aCan = canCall(a), bCan = b ~= nil and canCall(b),
     })
@@ -335,11 +351,15 @@ local function placeCall(a, b, aNum, bNum)
         refusedSeq = refusedSeq + 1
         local id = 'x' .. S.makeId(refusedSeq)
         sendState(a, id, 'ended', bNum, reason)
+        showRefusal(a, o.screenId, reason)
         local s = sessions[a]
-        logCall(s and s.who, { peer = bNum, dir = 'out', result = reason, ts = os.time(), seconds = 0 })
+        if not o.test then
+            logCall(s and s.who, { peer = bNum, dir = 'out', result = reason, ts = os.time(), seconds = 0 })
+        end
         emitCall(id, 'ended', { fromNum = aNum, toNum = bNum }, reason)
         return nil, reason
     end
+    call.test = o.test == true
     call.fromNum, call.toNum = aNum, bNum
     call.fromWho = sessions[a] and sessions[a].who
     call.toWho = sessions[b] and sessions[b].who
@@ -350,8 +370,10 @@ local function placeCall(a, b, aNum, bNum)
         })
     end)
     if not okRing or not ringId then
-        endCall(call, err == 'busy' and 'busy' or 'unavailable')
-        return nil, 'unavailable'
+        local why = err == 'busy' and 'busy' or 'unavailable'
+        endCall(call, why, { calleeQuiet = true })
+        showRefusal(a, o.screenId, why)
+        return nil, why
     end
     call.ringId = ringId
     emitCall(call.id, 'dialing', call)
@@ -361,8 +383,9 @@ local function placeCall(a, b, aNum, bNum)
     return call
 end
 
+-- Voice is connected before the call turns active, so a voice failure ends a call that was never answered.
 local function answerCall(src)
-    local call = calls:answer(src)
+    local call = calls:canAnswer(src)
     if not call then return false end
     if call.ringId then
         pcall(function() exports.aeterna_phonekit:stopRing(call.to, call.ringId) end)
@@ -372,6 +395,7 @@ local function answerCall(src)
         endCall(call, 'voice_off')
         return false
     end
+    calls:answer(src)
     call.activeTs = os.time()
     for _, p in ipairs({ call.from, call.to }) do
         pcall(function() exports.aeterna_phonekit:activity(p, 'call', true) end)
@@ -394,7 +418,7 @@ local function hangupBy(src)
 end
 
 -- Dial from the Phone app (or a contact intent): the number typed, re-validated and rate limited.
-local function dialFrom(src, input)
+local function dialFrom(src, input, screenId)
     local s = session(src)
     if not s then return end
     local ok, _, clean = AeternaCore.validate({ number = input }, L.DIAL_SCHEMA)
@@ -404,7 +428,7 @@ local function dialFrom(src, input)
     if not mine then return end
     local calleeWho = ownerOf(N.digits(clean.number))
     local b = calleeWho and whoOnline[calleeWho] or nil
-    placeCall(src, b, mine, calleeWho and numberOf(calleeWho) or clean.number)
+    placeCall(src, b, mine, calleeWho and numberOf(calleeWho) or N.digits(clean.number), { screenId = screenId })
 end
 
 --------------------------------------------------------------------------------
@@ -614,7 +638,7 @@ local function onAction(src, scr, screenId, action, values)
     local kind, data = scr.kind, scr.data
     if kind == 'phone' then
         if action == 'call' then
-            dialFrom(src, values.number)
+            dialFrom(src, values.number, screenId)
         elseif data.recent and data.recent[action] then
             update(src, screenId, { blocks = { number = { value = data.recent[action] } } })
         end
@@ -747,7 +771,7 @@ local function dropSession(src, reason)
 end
 
 AddEventHandler('QBCore:Server:OnPlayerUnload', function(src)
-    dropSession(src or source, 'dropped')
+    dropSession(tonumber(src) or source, 'dropped')
 end)
 
 AddEventHandler('QBCore:Server:PlayerLoaded', function(player)
@@ -777,6 +801,9 @@ AddEventHandler('onResourceStop', function(name)
         for _, call in ipairs(calls:all()) do endCall(call, 'voice_off') end
     elseif name == RES then
         for _, call in ipairs(calls:all()) do
+            if call.state == 'ringing' and call.ringId and connected(call.to) then
+                pcall(function() exports.aeterna_phonekit:stopRing(call.to, call.ringId) end)
+            end
             if call.voice then backend:disconnect(call, connected) end
         end
     end
@@ -957,20 +984,17 @@ AddEventHandler('aeterna_core:selftest', function(runId, name, ctx)
     report(runId, name, state, detail, state == 'mock' and { restored = true } or nil)
 end)
 
--- Two-player tests: both clients join; the server acts once it has A and B of a test that is in flight.
-local selftestPairs = T.createPairs()
-local SELFTEST_SCHEMA = { type = 'table', fields = {
-    runId = { type = 'string', minLen = 1, maxLen = 24 },
-    name = { type = 'string', enum = { PREFIX .. 'sms_ab', PREFIX .. 'call_ab', PREFIX .. 'call_busy' } },
-    role = { type = 'string', enum = { 'A', 'B' } },
-} }
+-- Two-player tests: core names A and B in selftestStarted, before the clients get the test. The server acts
+-- 500 ms later, so each client already knows its test when the first call state or toast arrives.
+local tracker = T.createTracker()
 
-local function selftestPair(name, a, b)
+local function selftestPair(runId, name, a, b)
     local sa, sb = session(a), session(b)
     if not sa or not sb then return end
     local na, nb = assignNumber(sa.who), assignNumber(sb.who)
     if not na or not nb then return end
     if name == PREFIX .. 'sms_ab' then
+        if not AeternaCore.selftest.mayWrite(runId, name) then return end
         S.deliver(smsIo, { fromWho = sa.who, toWho = sb.who, fromPeer = N.digits(na), toPeer = N.digits(nb),
             body = 'Self-test', ts = os.time(), keep = Cfg.sms.keep, idOut = nextId(), idIn = nextId() })
         notifyMessage(b, peerLabel(b, na), 'Self-test')
@@ -983,25 +1007,23 @@ local function selftestPair(name, a, b)
     end
     if name == PREFIX .. 'call_busy' then
         calls:hold(b)
-        placeCall(a, b, na, nb)
+        placeCall(a, b, na, nb, { test = true })
         calls:release(b)
     else
-        placeCall(a, b, na, nb)
+        placeCall(a, b, na, nb, { test = true })
     end
 end
 
-RegisterNetEvent('aeterna_phonecall:sv:selftest', function(data)
-    local src = source
-    if not AeternaCore.rateLimit(src, 'phonecall:selftest', 4, 1000) then return end
-    local ok, err, p = AeternaCore.validate(data, SELFTEST_SCHEMA)
-    if not ok then
-        logWarn('aeterna_phonecall:sv:selftest invalid payload', { src = src, err = err })
-        return
-    end
-    local okStatus, status = pcall(function() return exports.aeterna_core:runStatus(p.runId) end)
-    if not okStatus or not T.inFlight(status, p.name) then return end
-    local pair = selftestPairs:join(p.runId, p.name, p.role, src)
-    if pair then selftestPair(p.name, pair.a, pair.b) end
+AddEventHandler('aeterna_core:selftestStarted', function(runId, name, ctx)
+    local pair = tracker:start(runId, name, ctx)
+    if not pair then return end
+    SetTimeout(500, function()
+        if tracker:active(runId, name) then selftestPair(runId, name, pair.a, pair.b) end
+    end)
+end)
+
+AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
+    tracker:finish(runId, name)
 end)
 
 local function registerSelftests()

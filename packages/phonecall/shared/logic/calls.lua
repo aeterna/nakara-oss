@@ -53,10 +53,17 @@ function C.create(opts)
         return call.state
     end
 
-    -- The callee answers a ringing call. Returns the call or nil.
-    function mgr:answer(src)
+    -- The ringing call `src` may answer (as its callee), state unchanged; nil otherwise.
+    function mgr:canAnswer(src)
         local call = self:of(src)
         if not call or call.state ~= 'ringing' or call.to ~= src then return nil end
+        return call
+    end
+
+    -- The callee answers a ringing call. Returns the call or nil.
+    function mgr:answer(src)
+        local call = self:canAnswer(src)
+        if not call then return nil end
         call.state = 'active'
         call.activeAt = now()
         return call

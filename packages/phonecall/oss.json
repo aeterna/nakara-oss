@@ -23,8 +23,7 @@
       "server": [
         "aeterna_phonecall:sv:names",
         "aeterna_phonecall:sv:answer",
-        "aeterna_phonecall:sv:hangup",
-        "aeterna_phonecall:sv:selftest"
+        "aeterna_phonecall:sv:hangup"
       ],
       "client": [
         "aeterna_phonecall:cl:state",

@@ -24,9 +24,24 @@ local CONTACT_SCHEMA = { type = 'table', fields = {
 -- Names map (phonekit contacts -> server, for labels)
 --------------------------------------------------------------------------------
 
-local function sendNames()
+local function pushNames()
     local ok, contacts = pcall(function() return exports.aeterna_phonekit:getContacts() end)
     TriggerServerEvent('aeterna_phonecall:sv:names', { names = M.fromContacts(ok and contacts or {}) })
+end
+
+-- The server takes one names map per 5000 ms; a change inside that window becomes one trailing send.
+local namesThrottle = M.createThrottle(5200)
+
+local function sendNames()
+    local delay = namesThrottle:request(GetGameTimer())
+    if delay == 0 then
+        pushNames()
+    elseif delay then
+        SetTimeout(delay, function()
+            namesThrottle:fire(GetGameTimer())
+            pushNames()
+        end)
+    end
 end
 
 RegisterNetEvent('aeterna_phonecall:cl:askNames', sendNames)
@@ -107,8 +122,8 @@ AddEventHandler('aeterna_core:selftest', function(runId, name, ctx)
     if short == 'my_number' then
         report(runId, name, 'ready')
     elseif short == 'sms_ab' or short == 'call_ab' or short == 'call_busy' then
+        -- the server set this test up from core's selftestStarted and acts 500 ms after it
         pending[name] = { runId = runId, role = role }
-        TriggerServerEvent('aeterna_phonecall:sv:selftest', { runId = runId, name = name, role = role })
         if short == 'sms_ab' then
             SetTimeout(1500, function()
                 local p = pending[name]

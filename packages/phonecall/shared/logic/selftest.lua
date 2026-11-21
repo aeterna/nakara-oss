@@ -121,35 +121,28 @@ function T.callOutcome(test, role, st)
     return nil
 end
 
--- Pairs player A and player B of one two-player test; returns { a, b } once, when both joined.
-function T.createPairs()
-    local p = { pending = {} }
-    local function key(runId, name) return tostring(runId) .. '|' .. tostring(name) end
-    function p:join(runId, name, role, src)
-        local k = key(runId, name)
-        local e = self.pending[k] or {}
-        self.pending[k] = e
-        if e.done or (role ~= 'A' and role ~= 'B') then return nil end
-        e[role] = src
-        if e.A ~= nil and e.B ~= nil and e.A ~= e.B then
-            e.done = true
-            return { a = e.A, b = e.B }
-        end
-        return nil
-    end
-    function p:clear(runId, name)
-        self.pending[key(runId, name)] = nil
-    end
-    return p
-end
+-- Two-player tests the server sets up: A and B come from core's selftestStarted ctx and stay until selftestEnd.
+T.TWO_PLAYER = { [P .. 'sms_ab'] = true, [P .. 'call_ab'] = true, [P .. 'call_busy'] = true }
 
--- A test is in flight while its run exists and has no final row for it (core's runStatus).
-function T.inFlight(status, name)
-    if type(status) ~= 'table' then return false end
-    for _, row in ipairs(status.rows or {}) do
-        if row.name == name then return false end
+function T.createTracker()
+    local tr = { items = {} }
+    local function key(runId, name) return tostring(runId) .. '|' .. tostring(name) end
+    -- Returns { a, b } the first time a two-player test of ours starts with two different players, else nil.
+    function tr:start(runId, name, ctx)
+        if not T.TWO_PLAYER[name] or type(ctx) ~= 'table' then return nil end
+        if ctx.a == nil or ctx.b == nil or ctx.a == ctx.b then return nil end
+        local k = key(runId, name)
+        if self.items[k] then return nil end
+        self.items[k] = { a = ctx.a, b = ctx.b }
+        return { a = ctx.a, b = ctx.b }
     end
-    return true
+    function tr:active(runId, name)
+        return self.items[key(runId, name)] ~= nil
+    end
+    function tr:finish(runId, name)
+        self.items[key(runId, name)] = nil
+    end
+    return tr
 end
 
 return PhonecallSelftest

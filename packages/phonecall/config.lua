@@ -13,7 +13,8 @@ Config.sms = {
     keep = 100,
 }
 
--- Calls: ringing without an answer becomes `missed`; an active call ends with `limit` after maxMinutes.
+-- Calls: ringing without an answer becomes `missed` (5-60 s, phonekit's ring card ends after 60 s); an active call
+-- ends with `limit` after maxMinutes.
 -- channelBase: Legacy only, the first pma-voice call channel this package uses (channelBase + 1 ... + 9999).
 Config.call = {
     ringSeconds = 30,

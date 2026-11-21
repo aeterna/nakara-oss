@@ -57,4 +57,25 @@ function M.fromContacts(contacts)
     return out
 end
 
+-- Client: coalesces names updates so the server's 1 / 5000 ms limit never drops one. `request(now)` returns
+-- 0 (send now), a delay in ms (one trailing send is now scheduled; call `fire(now)` when it runs), or nil (a
+-- trailing send is already scheduled and will carry the newest contacts).
+function M.createThrottle(gapMs)
+    local th = { gap = gapMs, last = nil, pending = false }
+    function th:request(now)
+        if self.pending then return nil end
+        if self.last == nil or now - self.last >= self.gap then
+            self.last = now
+            return 0
+        end
+        self.pending = true
+        return self.last + self.gap - now
+    end
+    function th:fire(now)
+        self.pending = false
+        self.last = now
+    end
+    return th
+end
+
 return PhonecallNames
