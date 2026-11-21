@@ -18,6 +18,14 @@ local function load_logic(name)
     return assert(loadfile(DIR .. '/shared/logic/' .. name .. '.lua'))()
 end
 
+-- Core's local events come from aeterna_core: fire them with that invoking resource, as FXServer does.
+local function fireAsCore(name, ...)
+    local original = GetInvokingResource
+    natives.stub('GetInvokingResource', function() return 'aeterna_core' end)
+    natives.fire(name, ...)
+    natives.stub('GetInvokingResource', original)
+end
+
 local function by_name(defs)
     local out = {}
     for _, d in ipairs(defs) do out[d.name] = d.meta end
@@ -564,9 +572,9 @@ describe('aeterna_invkit self-tests', function()
         it('answers the three headless rows', function()
             local env = boot()
             for _, n in ipairs({ 'stash_id', 'use_state_machine', 'phone_item_map' }) do
-                natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_invkit.' .. n, { kind = 'headless' })
+                fireAsCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_invkit.' .. n, { kind = 'headless' })
             end
-            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_hudkit.stash_id', { kind = 'headless' })
+            fireAsCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_hudkit.stash_id', { kind = 'headless' })
             natives.advance(0)
             assert.are.equal(3, #env.reports)
             for _, r in ipairs(env.reports) do assert.are.equal('pass', r.ok, r.name) end
@@ -574,7 +582,7 @@ describe('aeterna_invkit self-tests', function()
 
         it('phone_item_map reports skip when phone item mode is off', function()
             local env = boot({ phone = false })
-            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_invkit.phone_item_map', { kind = 'headless' })
+            fireAsCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_invkit.phone_item_map', { kind = 'headless' })
             natives.advance(0)
             assert.are.equal('skip', env.reports[1].ok)
             assert.are.equal('Config.phone.enabled = false', env.reports[1].detail)
@@ -582,7 +590,7 @@ describe('aeterna_invkit self-tests', function()
 
         it('phone_device_save gives a test phone, writes battery 42 and fold closed, then removes it', function()
             local env = boot()
-            natives.fire('aeterna_core:selftest', 'r2-abcd', 'aeterna_invkit.phone_device_save',
+            fireAsCore('aeterna_core:selftest', 'r2-abcd', 'aeterna_invkit.phone_device_save',
                 { kind = 'mock', side = 'server', a = 5, destructive = true })
             natives.advance(10000)
             assert.are.equal(1, #env.reports)
@@ -597,7 +605,7 @@ describe('aeterna_invkit self-tests', function()
 
         it('phone_device_save removes its phone by phoneId, never by a slot it guessed', function()
             local env = boot({ carried = { { name = 'phone', slot = 1, count = 1, metadata = { phoneId = 'own00001' } } } })
-            natives.fire('aeterna_core:selftest', 'r2-abcd', 'aeterna_invkit.phone_device_save',
+            fireAsCore('aeterna_core:selftest', 'r2-abcd', 'aeterna_invkit.phone_device_save',
                 { kind = 'mock', side = 'server', a = 5, destructive = true })
             natives.advance(10000)
             assert.are.equal(1, #env.ox.removeCalls)
@@ -610,7 +618,7 @@ describe('aeterna_invkit self-tests', function()
 
         it('phone_device_save never claims restored when it cannot read the inventory back', function()
             local env = boot({ searchFails = true })
-            natives.fire('aeterna_core:selftest', 'r2-abcd', 'aeterna_invkit.phone_device_save',
+            fireAsCore('aeterna_core:selftest', 'r2-abcd', 'aeterna_invkit.phone_device_save',
                 { kind = 'mock', side = 'server', a = 5, destructive = true })
             natives.advance(10000)
             assert.are.equal('fail', env.reports[1].ok)
@@ -621,7 +629,7 @@ describe('aeterna_invkit self-tests', function()
 
         it('phone_device_save gives nothing when the write guard says no', function()
             local env = boot({ mayWrite = false })
-            natives.fire('aeterna_core:selftest', 'r2-abcd', 'aeterna_invkit.phone_device_save',
+            fireAsCore('aeterna_core:selftest', 'r2-abcd', 'aeterna_invkit.phone_device_save',
                 { kind = 'mock', side = 'server', a = 5, destructive = true })
             natives.advance(10000)
             assert.are.equal('fail', env.reports[1].ok)
@@ -630,7 +638,7 @@ describe('aeterna_invkit self-tests', function()
 
         it('phone_device_save skips with needs a presser when nobody pressed', function()
             local env = boot()
-            natives.fire('aeterna_core:selftest', 'r3-abcd', 'aeterna_invkit.phone_device_save',
+            fireAsCore('aeterna_core:selftest', 'r3-abcd', 'aeterna_invkit.phone_device_save',
                 { kind = 'mock', side = 'server', destructive = true })
             natives.advance(0)
             assert.are.equal('skip', env.reports[1].ok)
@@ -640,7 +648,7 @@ describe('aeterna_invkit self-tests', function()
 
         it('item_use: on selftestStarted gives one tagged test item, registers it and starts the use', function()
             local env = boot()
-            natives.fire('aeterna_core:selftestStarted', 'r7-abcd', 'aeterna_invkit.item_use',
+            fireAsCore('aeterna_core:selftestStarted', 'r7-abcd', 'aeterna_invkit.item_use',
                 { kind = 'mock', side = 'client', a = 5, destructive = true })
             natives.advance(0)
             assert.are.same({ ST.USE_ITEMS[1] }, env.ox.added)
@@ -656,10 +664,10 @@ describe('aeterna_invkit self-tests', function()
 
         it('item_use: selftestEnd removes the tagged item and the registration, and nothing else', function()
             local env = boot({ carried = { { name = ST.USE_ITEMS[1], slot = 1, count = 3, metadata = {} } } })
-            natives.fire('aeterna_core:selftestStarted', 'r8-abcd', 'aeterna_invkit.item_use',
+            fireAsCore('aeterna_core:selftestStarted', 'r8-abcd', 'aeterna_invkit.item_use',
                 { kind = 'mock', side = 'client', a = 5, destructive = true })
             natives.advance(0)
-            natives.fire('aeterna_core:selftestEnd', 'r8-abcd', 'aeterna_invkit.item_use')
+            fireAsCore('aeterna_core:selftestEnd', 'r8-abcd', 'aeterna_invkit.item_use')
             natives.advance(ST.USE_START_DELAY_MS + 10)
             assert.are.equal(1, #env.ox.removeCalls)
             assert.are.equal('r8-abcd', env.ox.removeCalls[1].metadata.aeterna_selftest)
@@ -667,11 +675,44 @@ describe('aeterna_invkit self-tests', function()
             assert.is_nil(natives.last_emitted('client', 'aeterna_invkit:cl:use'))
         end)
 
-        it('item_use: prepares nothing when the write guard says no or nobody pressed', function()
-            local env = boot({ mayWrite = false })
+        it('item_use: a selftestStarted from another resource gives nothing and registers nothing', function()
+            local env = boot()
             natives.fire('aeterna_core:selftestStarted', 'r9-abcd', 'aeterna_invkit.item_use',
                 { kind = 'mock', side = 'client', a = 5, destructive = true })
-            natives.fire('aeterna_core:selftestStarted', 'r9-abcd', 'aeterna_invkit.item_use',
+            natives.advance(ST.USE_START_DELAY_MS + 10)
+            assert.are.same({}, env.ox.added)
+            assert.are.same({}, env.guard)
+            assert.is_nil(natives.last_emitted('client', 'aeterna_invkit:cl:use'))
+        end)
+
+        it('item_use: when aeterna_core stops, the tagged item and the registration go', function()
+            local env = boot()
+            fireAsCore('aeterna_core:selftestStarted', 'r9-abcd', 'aeterna_invkit.item_use',
+                { kind = 'mock', side = 'client', a = 5, destructive = true })
+            natives.advance(0)
+            natives.fire('onResourceStop', 'aeterna_core')
+            natives.advance(ST.USE_START_DELAY_MS + 10)
+            assert.are.equal(1, #env.ox.removeCalls)
+            assert.are.equal('r9-abcd', env.ox.removeCalls[1].metadata.aeterna_selftest)
+            assert.is_nil(next(env.inv[5]))
+            assert.is_nil(natives.last_emitted('client', 'aeterna_invkit:cl:use'))
+            assert.is_nil(InvkitServerSelftestHooks.useManager:getUsable(ST.USE_ITEMS[1]))
+        end)
+
+        it('server rows ignore a selftest event from another resource', function()
+            local env = boot()
+            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_invkit.phone_device_save',
+                { kind = 'mock', side = 'server', a = 5, destructive = true })
+            natives.advance(10000)
+            assert.are.equal(0, #env.reports)
+            assert.are.same({}, env.ox.added)
+        end)
+
+        it('item_use: prepares nothing when the write guard says no or nobody pressed', function()
+            local env = boot({ mayWrite = false })
+            fireAsCore('aeterna_core:selftestStarted', 'r9-abcd', 'aeterna_invkit.item_use',
+                { kind = 'mock', side = 'client', a = 5, destructive = true })
+            fireAsCore('aeterna_core:selftestStarted', 'r9-abcd', 'aeterna_invkit.item_use',
                 { kind = 'mock', side = 'client', destructive = true })
             natives.advance(ST.USE_START_DELAY_MS + 10)
             assert.are.same({}, env.ox.added)
@@ -680,7 +721,7 @@ describe('aeterna_invkit self-tests', function()
 
         it('phone_device_save fails and gives nothing when ox refuses the item', function()
             local env = boot({ addFails = true })
-            natives.fire('aeterna_core:selftest', 'r4-abcd', 'aeterna_invkit.phone_device_save',
+            fireAsCore('aeterna_core:selftest', 'r4-abcd', 'aeterna_invkit.phone_device_save',
                 { kind = 'mock', side = 'server', a = 5, destructive = true })
             natives.advance(10000)
             assert.are.equal('fail', env.reports[1].ok)
@@ -736,7 +777,7 @@ describe('aeterna_invkit self-tests', function()
         it('checks away from the point, then at it, and passes', function()
             local env = boot_client({ { coords = vector3(10.0, 10.0, 10.0), radius = 2.0 } })
             natives.set_entity_coords(1, vector3(50.0, 50.0, 10.0))
-            natives.fire('aeterna_core:selftest', 'r5-abcd', 'aeterna_invkit.stash_open', { kind = 'ped', role = 'A' })
+            fireAsCore('aeterna_core:selftest', 'r5-abcd', 'aeterna_invkit.stash_open', { kind = 'ped', role = 'A' })
             natives.advance(0)
             assert.are.equal(1, opens())
             natives.fire_net('aeterna_invkit:cl:refused', 1, { item = 'stash', reason = 'invkit.stash.far' })
@@ -754,7 +795,7 @@ describe('aeterna_invkit self-tests', function()
         it('item_use: sees the tagged item, one use, the item gone, and reports mock with restored', function()
             local env = boot_client({})
             env.inv.runId = 'r7-abcd'
-            natives.fire('aeterna_core:selftest', 'r7-abcd', 'aeterna_invkit.item_use',
+            fireAsCore('aeterna_core:selftest', 'r7-abcd', 'aeterna_invkit.item_use',
                 { kind = 'mock', side = 'client', role = 'A', destructive = true })
             natives.advance(300)
             env.inv.count = 1
@@ -772,7 +813,7 @@ describe('aeterna_invkit self-tests', function()
         it('item_use: fails when the test item never arrives', function()
             local env = boot_client({})
             env.inv.runId = 'r8-abcd'
-            natives.fire('aeterna_core:selftest', 'r8-abcd', 'aeterna_invkit.item_use',
+            fireAsCore('aeterna_core:selftest', 'r8-abcd', 'aeterna_invkit.item_use',
                 { kind = 'mock', side = 'client', role = 'A', destructive = true })
             natives.advance(ST.ITEM_WAIT_MS + ST.USE_WAIT_MS + 1000)
             assert.are.equal(1, #env.reports)
@@ -782,7 +823,7 @@ describe('aeterna_invkit self-tests', function()
         it('phone_no_item passes at once when no phone item is carried', function()
             local env = boot_client({})
             Config.phone.enabled = true
-            natives.fire('aeterna_core:selftest', 'r9-abcd', 'aeterna_invkit.phone_no_item', { kind = 'ped', role = 'A' })
+            fireAsCore('aeterna_core:selftest', 'r9-abcd', 'aeterna_invkit.phone_no_item', { kind = 'ped', role = 'A' })
             natives.advance(500)
             assert.are.equal(1, #env.reports)
             assert.are.equal('pass', env.reports[1].ok)
@@ -791,15 +832,23 @@ describe('aeterna_invkit self-tests', function()
         it('phone rows report skip while phone item mode is off', function()
             local env = boot_client({})
             Config.phone.enabled = false
-            natives.fire('aeterna_core:selftest', 'r9-abcd', 'aeterna_invkit.phone_two_items', { kind = 'ped', role = 'A' })
+            fireAsCore('aeterna_core:selftest', 'r9-abcd', 'aeterna_invkit.phone_two_items', { kind = 'ped', role = 'A' })
             natives.advance(0)
             assert.are.equal('skip', env.reports[1].ok)
             assert.are.equal('Config.phone.enabled = false', env.reports[1].detail)
         end)
 
+        it('ignores a selftest event from another resource', function()
+            local env = boot_client({ { coords = vector3(10.0, 10.0, 10.0), radius = 2.0 } })
+            natives.fire('aeterna_core:selftest', 'r6-abcd', 'aeterna_invkit.stash_open', { kind = 'ped', role = 'A' })
+            natives.advance(100)
+            assert.are.equal(0, #env.reports)
+            assert.are.equal(0, opens())
+        end)
+
         it('reports skip when no stash point is configured', function()
             local env = boot_client({})
-            natives.fire('aeterna_core:selftest', 'r6-abcd', 'aeterna_invkit.stash_open', { kind = 'ped', role = 'A' })
+            fireAsCore('aeterna_core:selftest', 'r6-abcd', 'aeterna_invkit.stash_open', { kind = 'ped', role = 'A' })
             natives.advance(0)
             assert.are.equal('skip', env.reports[1].ok)
             assert.are.equal('no stash point configured', env.reports[1].detail)

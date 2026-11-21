@@ -12,6 +12,14 @@ local function load_logic(name)
     return assert(loadfile(DIR .. '/shared/logic/' .. name .. '.lua'))()
 end
 
+-- Core's local events come from aeterna_core: fire them with that invoking resource, as FXServer does.
+local function fireAsCore(name, ...)
+    local original = GetInvokingResource
+    natives.stub('GetInvokingResource', function() return 'aeterna_core' end)
+    natives.fire(name, ...)
+    natives.stub('GetInvokingResource', original)
+end
+
 local function core_rules()
     return assert(loadfile(CORE_DIR .. '/shared/logic/selftest.lua'))()
 end
@@ -441,13 +449,15 @@ describe('aeterna_hudkit self-tests', function()
             assert.are.equal('values_mapping', added[1].name)
             assert.are.equal('minimap_follows', added[8].name)
 
-            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_hudkit.values_mapping', { kind = 'headless' })
-            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_hudkit.compass_math', { kind = 'headless' })
-            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_notify.values_mapping', { kind = 'headless' })
-            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_hudkit.bar_style', { kind = 'eye' })
+            fireAsCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_hudkit.values_mapping', { kind = 'headless' })
+            fireAsCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_hudkit.compass_math', { kind = 'headless' })
+            fireAsCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_notify.values_mapping', { kind = 'headless' })
+            fireAsCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_hudkit.bar_style', { kind = 'eye' })
             natives.advance(0)
 
-            assert.are.equal(2, #reports)
+            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_hudkit.compass_math', { kind = 'headless' })
+            natives.advance(0)
+            assert.are.equal(2, #reports) -- the last one came from another resource and was ignored
             assert.are.equal('aeterna_hudkit.values_mapping', reports[1].name)
             assert.are.equal('pass', reports[1].ok)
             assert.are.equal('aeterna_hudkit.compass_math', reports[2].name)
@@ -503,7 +513,7 @@ describe('aeterna_hudkit self-tests', function()
             local ctx = load_client({ inVehicle = true })
             natives.advance(500)
             local from = #ctx.ui + 1
-            natives.fire('aeterna_core:selftest', 'r2-abcd', 'aeterna_hudkit.seatbelt_event',
+            fireAsCore('aeterna_core:selftest', 'r2-abcd', 'aeterna_hudkit.seatbelt_event',
                 { kind = 'mock', side = 'client', role = 'A' })
             natives.advance(0)
             local sent = seatbeltStates(ctx.ui, from)
@@ -520,7 +530,7 @@ describe('aeterna_hudkit self-tests', function()
             local ctx = load_client({ inVehicle = false })
             natives.advance(500)
             local from = #ctx.ui + 1
-            natives.fire('aeterna_core:selftest', 'r2-abcd', 'aeterna_hudkit.seatbelt_event',
+            fireAsCore('aeterna_core:selftest', 'r2-abcd', 'aeterna_hudkit.seatbelt_event',
                 { kind = 'mock', side = 'client', role = 'A' })
             natives.advance(0)
             assert.are.equal(0, seatbeltStates(ctx.ui, from).n)
@@ -530,7 +540,7 @@ describe('aeterna_hudkit self-tests', function()
 
         it('seatbelt_event reports skip with the config reason when the icon is off', function()
             local ctx = load_client({ config = shipped_config({ seatbelt = { enabled = false } }) })
-            natives.fire('aeterna_core:selftest', 'r3-abcd', 'aeterna_hudkit.seatbelt_event',
+            fireAsCore('aeterna_core:selftest', 'r3-abcd', 'aeterna_hudkit.seatbelt_event',
                 { kind = 'mock', side = 'client', role = 'A' })
             natives.advance(2000)
             assert.are.equal(1, #ctx.reports)
@@ -540,7 +550,7 @@ describe('aeterna_hudkit self-tests', function()
 
         it('voice rows report skip when pma-voice is not started on this client', function()
             local ctx = load_client()
-            natives.fire('aeterna_core:selftest', 'r4-abcd', 'aeterna_hudkit.voice_radio',
+            fireAsCore('aeterna_core:selftest', 'r4-abcd', 'aeterna_hudkit.voice_radio',
                 { kind = 'ped', side = 'client', role = 'A' })
             natives.advance(100)
             assert.are.equal(1, #ctx.reports)
@@ -550,7 +560,7 @@ describe('aeterna_hudkit self-tests', function()
 
         it('bar_style shows the ring, reports ready, and puts the player style back on selftestEnd', function()
             local ctx = load_client()
-            natives.fire('aeterna_core:selftest', 'r5-abcd', 'aeterna_hudkit.bar_style',
+            fireAsCore('aeterna_core:selftest', 'r5-abcd', 'aeterna_hudkit.bar_style',
                 { kind = 'eye', side = 'client', role = 'A' })
             natives.advance(2000)
             assert.are.equal(1, #ctx.reports)
@@ -561,7 +571,7 @@ describe('aeterna_hudkit self-tests', function()
                 if type(m) == 'table' and m.type == 'settings:apply' then styles[#styles + 1] = m.settings.barStyle end
             end
             assert.are.equal('ring', styles[#styles])
-            natives.fire('aeterna_core:selftestEnd', 'r5-abcd', 'aeterna_hudkit.bar_style')
+            fireAsCore('aeterna_core:selftestEnd', 'r5-abcd', 'aeterna_hudkit.bar_style')
             natives.advance(0)
             styles = {}
             for _, call in ipairs(ctx.ui) do
@@ -571,9 +581,17 @@ describe('aeterna_hudkit self-tests', function()
             assert.are.equal('bar', styles[#styles])
         end)
 
+        it('ignores core events that another resource fires', function()
+            local ctx = load_client({ inVehicle = true })
+            natives.fire('aeterna_core:selftest', 'r7-abcd', 'aeterna_hudkit.seatbelt_event',
+                { kind = 'mock', side = 'client', role = 'A' })
+            natives.advance(2000)
+            assert.are.equal(0, #ctx.reports)
+        end)
+
         it('ignores tests of other resources', function()
             local ctx = load_client()
-            natives.fire('aeterna_core:selftest', 'r6-abcd', 'aeterna_radial.seatbelt_event',
+            fireAsCore('aeterna_core:selftest', 'r6-abcd', 'aeterna_radial.seatbelt_event',
                 { kind = 'mock', side = 'client', role = 'A' })
             natives.advance(2000)
             assert.are.equal(0, #ctx.reports)
