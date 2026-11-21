@@ -121,6 +121,9 @@ local function sendToastToPlayer(src, opts, owner)
         clean.toastId = 't' .. L.base36(toastSeq)
     end
     clean.owner = owner or selfName()
+    if clean.id and not clean.actions then
+        actionTracker:untrack(target, clean.owner, clean.toastId)
+    end
     if clean.actions then
         actionTracker:track(target, {
             toastId = clean.toastId,
@@ -153,9 +156,9 @@ local function getCountdown()
     return countdown
 end
 
-local function startCountdown(opts)
+local function startCountdown(opts, owner)
     local cd = getCountdown()
-    local id, err = cd:start(opts, GetGameTimer())
+    local id, err = cd:start(opts, GetGameTimer(), owner or selfName())
     if not id then
         if err ~= 'busy' then
             logWarn('announceCountdown invalid opts', { err = err })
@@ -180,11 +183,12 @@ exports('announce', function(opts)
 end)
 
 exports('announceCountdown', function(opts)
-    return startCountdown(opts)
+    return startCountdown(opts, callerName())
 end)
 
+-- Only the resource that started the countdown may cancel it.
 exports('cancelCountdown', function(countdownId)
-    return getCountdown():cancel(countdownId)
+    return getCountdown():cancel(countdownId, callerName())
 end)
 
 RegisterNetEvent('aeterna_notify:sv:action', function(payload)
@@ -206,6 +210,19 @@ end)
 
 AddEventHandler('playerDropped', function()
     actionTracker:drop(source)
+end)
+
+-- A countdown ends as cancelled when its owner resource stops, or when notify itself stops.
+AddEventHandler('onResourceStop', function(resName)
+    if not countdown then return end
+    if resName == selfName() then
+        local id = countdown:active()
+        if id then
+            countdown:cancel(id)
+        end
+        return
+    end
+    countdown:cancelOwnedBy(resName)
 end)
 
 RegisterCommand('aeterna_announce', function(src, args, rawCommand)
@@ -236,7 +253,9 @@ RegisterCommand('aeterna_announce_countdown', function(src, args, rawCommand)
         notify = function(targetSrc, toastOpts)
             sendToastToPlayer(targetSrc, toastOpts)
         end,
-        start = startCountdown,
+        start = function(cdOpts)
+            return startCountdown(cdOpts, selfName())
+        end,
     })
     if not ok and (tonumber(src) or 0) == 0 then
         logInfo(tostring(msgOrRes))

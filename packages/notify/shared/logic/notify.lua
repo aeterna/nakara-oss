@@ -230,6 +230,9 @@ end
 -- Toasts: opts validation & queue
 --------------------------------------------------------------------------------
 
+-- Longest toastId a press may carry (`aeterna_notify:sv:action`, NUI `toastAction`).
+L.TOAST_ID_MAX = 24
+
 L.ACTION_VARIANTS = {
     primary = true,
     secondary = true,
@@ -360,6 +363,10 @@ function L.validateToastOpts(opts, toastCfg, warnFn)
 
     local cleanActions = nil
     if opts.actions ~= nil then
+        -- An action press carries the toastId (= id) in at most 24 characters.
+        if cleanId and #cleanId > L.TOAST_ID_MAX then
+            return false, 'id: maxLen 24 with actions'
+        end
         local okAct, errAct, ca = L.validateActions(opts.actions)
         if okAct then
             cleanActions = ca
@@ -535,6 +542,12 @@ function L.createToastQueue(cfg)
         end
         clean.toastId = toastId
         clean.key = clean.id or ('#' .. L.base36(self.seq))
+        -- Auto toastIds of client and server toasts both count from t1, so history keeps them apart.
+        if clean.id then
+            clean.historyId = clean.id
+        else
+            clean.historyId = (c.origin == 'server' and 's:' or 'c:') .. toastId
+        end
         clean.owner = owner
         clean.origin = c.origin == 'server' and 'server' or 'client'
         clean.count = 1

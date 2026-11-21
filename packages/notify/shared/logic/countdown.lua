@@ -111,6 +111,7 @@ end
 
 -- Server clock. deps = { send(payload), fire(endPayload), marks = default marks }.
 -- One countdown at a time; `tick(now)` resends the banner when a mark is passed and ends it at zero.
+-- `owner` is the resource that started it: only it may cancel, and it is cancelled when that resource stops.
 function L.createCountdown(deps)
     local d = type(deps) == 'table' and deps or {}
     local cd = {
@@ -136,7 +137,7 @@ function L.createCountdown(deps)
         }
     end
 
-    function cd:start(opts, now)
+    function cd:start(opts, now, owner)
         if self.current then
             return nil, 'busy'
         end
@@ -153,6 +154,7 @@ function L.createCountdown(deps)
             endsAt = (tonumber(now) or 0) + clean.seconds * 1000,
             marks = clean.marks,
             nextMark = 1,
+            owner = owner,
         }
         self.current = cur
         send(banner(cur, clean.seconds * 1000))
@@ -178,15 +180,27 @@ function L.createCountdown(deps)
         end
     end
 
-    function cd:cancel(countdownId)
+    -- `owner` nil = notify itself (its own resource is stopping); otherwise it must be the starting resource.
+    function cd:cancel(countdownId, owner)
         local cur = self.current
         if not cur or cur.id ~= countdownId then
+            return false
+        end
+        if owner ~= nil and cur.owner ~= owner then
             return false
         end
         self.current = nil
         send({ countdownId = cur.id, hide = true })
         fire({ countdownId = cur.id, cancelled = true })
         return true
+    end
+
+    function cd:cancelOwnedBy(owner)
+        local cur = self.current
+        if not cur or owner == nil or cur.owner ~= owner then
+            return false
+        end
+        return self:cancel(cur.id, owner)
     end
 
     function cd:active()
