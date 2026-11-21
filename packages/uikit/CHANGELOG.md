@@ -8,6 +8,7 @@ All notable changes to `aeterna_uikit` are documented here. The format follows
 
 ### Added
 
+- Self-tests (0.2) registered with `aeterna_core`: `spec_limits`, `values_recheck`, `forged_action` (server), `panel_every_block`, `motion_reduced`, `overlay_pauses` (eye) and `tabs_switch`, `slider_keyboard`, `focus_lost_closes` (ped). Client tests open a test panel on the presser's client only; its actions never reach the server. Written by Claude Code - Claude Opus 5.5 (agent engineer).
 - `slider` block: spec validation (range, step grid, at most 1000 steps, value inside the range) and server-side re-check of its value in `values`.
 - Locale keys `uikit.search.placeholder`, `uikit.search.none`, `uikit.table.empty` and `uikit.tabs.label` (Thai and English).
 - `tabs` block (2–6 tabs, one per spec, switched in the page, active tab in `values`, `report = true` fires the tab id) and `tab` on any block.

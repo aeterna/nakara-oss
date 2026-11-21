@@ -131,6 +131,27 @@ sha256sum -c SHA256SUMS --ignore-missing
 
 Then read the capability table above (or `oss.json` inside the zip).
 
+## Self-tests (0.2)
+
+Registered with `aeterna_core` as `aeterna_layout.<name>` and run from `aeterna_testkit` (or the core console command,
+where client tests are GAP). Spec: `docs/specs/aeterna_layout.md` § Self-tests (0.2).
+
+| Name | Kind | What it checks |
+| --- | --- | --- |
+| `placement_math` | headless | Clamp when an element grows (320 → 780 px), is larger than the screen, scales to 2.0 or the screen shrinks (3440 → 1280); the saved place never changes |
+| `import_validate` | headless | 8193 bytes, a wrong prefix, `v = 2`, 65 entries, a bad key, a scale out of range and extra fields are refused; an export round-trips |
+| `clamp_on_grow` | mock (client) | A test element at the right edge is added again twice as wide, checked on screen, then removed |
+| `preset_apply` | eye | The editor alternates every 3 s between `compact` and Cancel |
+| `grid_drag` | ped | The page drags a test element without and with Shift: grid shown and on it, then no grid and off it |
+| `export_import` | ped | The export box holds one line; a moved test element goes back after importing it |
+| `export_copy` | ped | The page copies from the export box, pastes into the import box and presses Import |
+| `reset_from_menu` | ped, destructive | Clears the presser's saved layout through the client half of Reset all; every element is at its default |
+
+Client tests use test elements owned by `aeterna_layout`, refuse to run while the player has the editor open, and
+cancel the editor session they opened, so nothing they move is saved. `reset_from_menu` runs only when
+`aeterna_core_allow_destructive` is on and the server is not listed publicly; it prints the layout as import text to
+the F8 console before it clears it.
+
 ## Tests
 
 From the repository root:
