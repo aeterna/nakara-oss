@@ -592,3 +592,90 @@ describe('aeterna_phonekit 0.2 additions', function()
         end)
     end)
 end)
+
+describe('aeterna_phonekit 0.2 server under the harness', function()
+    local resource = require('helpers.resource')
+
+    local function boot()
+        natives.reset({ resource = 'aeterna_phonekit', side = 'server', players = { [1] = 'One' } })
+        natives.stub('AeternaCore', {
+            log = { debug = function() end, info = function() end, warn = function() end, error = function() end },
+            t = function(k) return k end,
+            lang = function() return 'en' end,
+            can = function() return true end,
+            rateLimit = function() return true end,
+        })
+        natives.stub('GetPlayerIdentifierByType', function() return 'license:abc' end)
+        natives.stub_export('aeterna_notify', 'notify', function() return true end)
+        return resource.load_resource(DIR, 'server').exports
+    end
+
+    local function lastArgs(kind, name)
+        local e = natives.last_emitted(kind, name)
+        return e and e.args[1], e
+    end
+
+    it('battery: 0 closes every surface, fires power off, saves KVP and refuses open; charge brings it back', function()
+        local api = boot()
+        natives.fire_net('aeterna_phonekit:sv:battery', 1)
+        assert.are.equal(100, lastArgs('client', 'aeterna_phonekit:cl:battery').pct)
+        assert.are.equal('slab', lastArgs('client', 'aeterna_phonekit:cl:device').model)
+        assert.are.equal(100, api.battery(1))
+
+        natives.fire_net('aeterna_phonekit:sv:open', 1)
+        assert.is_true(api.setBattery(1, 0))
+        assert.is_false(lastArgs('client', 'aeterna_phonekit:cl:power').on)
+        local power = natives.last_emitted('local', 'aeterna_phonekit:power')
+        assert.are.equal(1, power.args[1])
+        assert.is_false(power.args[2].on)
+        assert.is_nil(api.device(1))
+        assert.is_truthy(natives.get_kvp('aeterna_phonekit:device:v1:lic:license:abc'))
+        assert.is_nil(api.showApp(1, 'nothing', { title = 'x', blocks = {} }))
+
+        natives.fire_net('aeterna_phonekit:sv:open', 1)
+        assert.are.equal('phonekit.battery.dead', lastArgs('client', 'aeterna_phonekit:cl:refused').reason)
+
+        assert.is_true(api.charge(1, 30))
+        assert.is_true(lastArgs('client', 'aeterna_phonekit:cl:power').on)
+        assert.are.equal(30, api.battery(1))
+        assert.are.equal('slab', api.device(1).model)
+    end)
+
+    it('the tick drains a loaded player and a stale pulse counts as off', function()
+        local api = boot()
+        natives.fire_net('aeterna_phonekit:sv:battery', 1)
+        natives.fire_net('aeterna_phonekit:sv:screen', 1, { level = 'on' })
+        natives.advance(30000)
+        natives.fire_net('aeterna_phonekit:sv:screen', 1, { level = 'on' })
+        natives.advance(30000)
+        local onScreen = 100 - api.battery(1)
+        assert.is_true(onScreen >= 1)
+        natives.advance(600000)
+        local before = api.battery(1)
+        natives.advance(60000)
+        -- pulse long stale: only standby (0.25 %/min) drains
+        assert.is_true(before - api.battery(1) <= 1)
+    end)
+
+    it('ring: busy on a second ring, answer maps to __answer, sv:fold refused on a slab', function()
+        local api = boot()
+        assert.is_true(api.addTile({ id = 'dialer', label = 'Dialer', icon = 'phone', needs = 'voice', handles = { 'tel' } }))
+        natives.fire_net('aeterna_phonekit:sv:battery', 1)
+        natives.fire_net('aeterna_phonekit:sv:open', 1)
+        assert.is_true(api.canCall(1))
+        local ringId = api.ring(1, 'dialer', { title = 'Ann', body = 'calling' })
+        assert.is_string(ringId)
+        assert.are.equal(ringId, lastArgs('client', 'aeterna_phonekit:cl:ring').ringId)
+        assert.are.same({ nil, 'busy' }, { api.ring(1, 'dialer', { title = 'Bob' }) })
+        natives.fire_net('aeterna_phonekit:sv:ring', 1, { ringId = ringId, answer = true })
+        local e = natives.last_emitted('local', 'aeterna_phonekit:action')
+        assert.are.equal('__answer', e.args[2].action)
+        assert.are.equal(ringId, e.args[2].screenId)
+        assert.are.equal('dialer', e.args[2].id)
+        local opened = lastArgs('client', 'aeterna_phonekit:cl:open')
+        assert.are.equal('dialer', opened.intents.tel.id)
+        local kvpBefore = natives.get_kvp('aeterna_phonekit:device:v1:lic:license:abc')
+        natives.fire_net('aeterna_phonekit:sv:fold', 1, { state = 'closed' })
+        assert.are.equal(kvpBefore, natives.get_kvp('aeterna_phonekit:device:v1:lic:license:abc'))
+    end)
+end)
