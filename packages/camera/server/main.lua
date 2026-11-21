@@ -402,7 +402,13 @@ end
 
 local MOCKS = { store_roundtrip = true, caps = true, saved_hook = true }
 
+-- Self-test events are trusted only from aeterna_core; any resource can fire a local event.
+local function fromCore()
+    return GetInvokingResource() == 'aeterna_core'
+end
+
 AddEventHandler('aeterna_core:selftest', function(runId, name, ctx)
+    if not fromCore() then return end
     if type(name) ~= 'string' or name:sub(1, #PREFIX) ~= PREFIX then return end
     if type(ctx) == 'table' and ctx.side == 'client' then return end
     local short = name:sub(#PREFIX + 1)
@@ -431,6 +437,7 @@ end)
 local SHOOT_TEST = PREFIX .. 'shoot_and_view'
 
 AddEventHandler('aeterna_core:selftestStarted', function(runId, name, ctx)
+    if not fromCore() then return end
     if name ~= SHOOT_TEST or type(ctx) ~= 'table' or type(ctx.a) ~= 'number' then return end
     local who = whoOf(ctx.a)
     if not who then return end
@@ -438,15 +445,24 @@ AddEventHandler('aeterna_core:selftestStarted', function(runId, name, ctx)
     TriggerClientEvent('aeterna_camera:cl:viewfinder', ctx.a, svc:openViewfinder(ctx.a, who))
 end)
 
-AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
-    if name ~= SHOOT_TEST then return end
+local function endShootTests(runId)
     for src, t in pairs(shootTests) do
-        if t.runId == runId then
+        if runId == nil or t.runId == runId then
             shootTests[src] = nil
             svc:close(src)
             svc.deps.tickets:drop(src)
         end
     end
+end
+
+AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
+    if not fromCore() or name ~= SHOOT_TEST then return end
+    endShootTests(runId)
+end)
+
+-- A stopped core ends every run without a selftestEnd.
+AddEventHandler('onResourceStop', function(resource)
+    if resource == 'aeterna_core' then endShootTests(nil) end
 end)
 
 --------------------------------------------------------------------------------

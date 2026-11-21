@@ -96,7 +96,7 @@ In the viewfinder the base game's phone controls also work: select = shutter, th
 
 ## Self-tests / การทดสอบในเกม
 
-Registered with `aeterna_core` (run from `aeterna_testkit`): `id_and_path_guard`, `http_router`, `screenshot_detect` (headless), `store_roundtrip`, `caps`, `saved_hook` (mock, test key `test:camera`, restored before they report) `viewfinder` (eye: the test opens the viewfinder, switches to selfie, closes it, then asks) and `shoot_and_view` (eye, destructive, skipped without `screenshot-basic`: the server opens the viewfinder for the presser, the test takes one real photo after core's write guard allows it, then opens the gallery and asks). `shoot_and_view` leaves that photo in the presser's gallery; they can delete it afterwards.
+Registered with `aeterna_core` (run from `aeterna_testkit`): `id_and_path_guard`, `http_router`, `screenshot_detect` (headless), `store_roundtrip`, `caps`, `saved_hook` (mock, test key `test:camera`, restored before they report), `viewfinder` (eye: the test opens the viewfinder, switches to selfie, closes it, then asks) and `shoot_and_view` (eye, destructive, skipped without `screenshot-basic`: the server opens the viewfinder for the presser, the test takes one real photo after core's write guard allows it, then opens the gallery and asks). `shoot_and_view` leaves that photo in the presser's gallery; they can delete it afterwards.
 
 ## Support scope / ขอบเขตการรองรับ
 

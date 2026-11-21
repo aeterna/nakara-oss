@@ -33,7 +33,7 @@ function M.stream(opts)
         local parts = {}
         for i = 1, 8 do
             mix = mix * LCG_MUL + LCG_ADD
-            local v = step() ~ mix ~ (opts.rand(0, 0xFFFF) << 24)
+            local v = step() ~ mix ~ (opts.rand(0, 0xFFFF) << 32)
             parts[i] = string.format('%04x', (v >> 32) & 0xFFFF)
         end
         return table.concat(parts)
