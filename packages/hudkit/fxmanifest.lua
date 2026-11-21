@@ -5,7 +5,7 @@ lua54 'yes'
 name 'aeterna_hudkit'
 author 'AETERNA'
 description 'Player HUD (status bars, vehicle panel, street/compass, and minimap integration) for the AETERNA Starter Kit.'
-version '0.1.0'
+version '0.2.0'
 repository 'https://github.com/aeterna/nakara-oss'
 
 dependencies {

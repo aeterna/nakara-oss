@@ -6,6 +6,24 @@ All notable changes to `aeterna_hudkit` are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- Version 0.2.0 (ADR 0005). Agent: Claude Code - Claude Opus 5.5 (agent engineer).
+- Bar style setting (`bar` or `ring`, default `Config.barStyle`): status bars, extra bars and the fuel figure draw as circular gauges in ring style; the `status` element is re-registered with its new size.
+- Compass tape layout element `compass` (top-centre): a tick every 15°, the eight direction labels and the heading in whole degrees; `Config.compass.enabled` and `Config.compass.span` (60–180).
+- Voice indicator layout element `voice`, shown only while `pma-voice` is started (runtime `GetResourceState` check, never a dependency, no export calls): talking from `NetworkIsPlayerTalking`, proximity mode from the `proximity` state bag, radio from the `radioChannel` state bag and the `pma-voice:radioActive` local event; `Config.voice.enabled`.
+- Seatbelt icon in the vehicle part, driven by the client-local event `aeterna_hudkit:seatbelt` (`{ on = boolean }` or `nil`); the owning resource stopping hides it; `Config.seatbelt.enabled`.
+- NUI messages `hud:compass`, `hud:voice`, `hud:seatbelt`; `settings:open` / `settings:apply` carry `barStyle` and the compass span; `ready` reports `compass` and `voice` sizes.
+- Locale keys for bar style, compass, voice and seatbelt (en, th).
+
+### Changed
+
+- The default screen gains the `compass` element. Upgrade note: `Config.compass.enabled = false` keeps the 0.1 screen.
+- Settings KVP `aeterna_hudkit:settings:v1` gains `barStyle`; a 0.1 value without it reads as `Config.barStyle`.
+- While another resource holds `aeterna_core`'s focus overlay, the settings card stays open and ignores input.
+- Font sizes use the theme type tokens (`--fs-1` … `--fs-5`, `--lh`) instead of pixel values.
+- `ready` accepts sizes only for hudkit's own parts.
+
 ## [0.1.0] - 2026-11-18
 
 - Bundle the IBM Plex Sans Thai font (OFL-1.1).
