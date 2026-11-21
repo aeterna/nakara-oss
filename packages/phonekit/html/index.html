@@ -9,17 +9,32 @@
 </head>
 <body>
     <div id="phonekit-root" class="phonekit-root hidden">
-        <div id="phone-frame" class="phone-frame pos-bottom-right" role="dialog" aria-modal="true">
-            <div id="phone-banner" class="phone-banner hidden" role="status" aria-live="polite"></div>
-            <div id="phone-status" class="phone-status">
-                <span id="phone-time" class="phone-time">12:00</span>
+        <div id="phone-frame" class="phone-frame" data-model="slab" data-fold="none" role="dialog" aria-modal="true">
+            <div id="phone-glass" class="phone-glass">
+                <div id="phone-status" class="phone-status">
+                    <span id="phone-time" class="phone-time">12:00</span>
+                    <span id="phone-live" class="phone-live hidden"></span>
+                    <span id="phone-battery" class="phone-battery hidden">
+                        <span id="phone-battery-charge" class="battery-charge hidden"></span>
+                        <span id="phone-battery-pct" class="battery-pct"></span>
+                        <span class="battery-icon"><span id="phone-battery-fill" class="battery-fill"></span></span>
+                    </span>
+                </div>
+                <div id="phone-banner" class="phone-banner hidden" role="status" aria-live="polite"></div>
+                <div id="phone-content" class="phone-content">
+                    <div id="pane-left" class="pane pane-left hidden"></div>
+                    <div id="pane-main" class="pane pane-main"></div>
+                </div>
+                <div id="phone-lock" class="phone-lock hidden"></div>
+                <div id="phone-cc" class="phone-cc hidden"></div>
+                <div id="phone-cover" class="phone-cover hidden"></div>
+                <div id="phone-ring" class="phone-ring hidden" role="alertdialog"></div>
+                <div id="phone-bottom-bar" class="phone-bottom-bar">
+                    <button type="button" id="phone-home-btn" class="phone-home-btn" aria-label="Home"></button>
+                </div>
             </div>
-            <div id="phone-content" class="phone-content">
-                <!-- Dynamically rendered screens -->
-            </div>
-            <div id="phone-bottom-bar" class="phone-bottom-bar">
-                <button type="button" id="phone-home-btn" class="phone-home-btn" aria-label="Home"></button>
-            </div>
+            <div id="phone-hardkb" class="phone-hardkb hidden" aria-hidden="true"></div>
+            <div id="phone-keys" class="phone-keys hidden"></div>
         </div>
     </div>
     <script src="icons.js"></script>

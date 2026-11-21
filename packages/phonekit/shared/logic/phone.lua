@@ -34,9 +34,14 @@ L.BLOCK_TYPES = {
     progress = true,
     divider = true,
     buttons = true,
+    -- uikit 0.2 block types (phonekit keeps its own copy of the validator)
+    tabs = true,
+    slider = true,
+    table = true,
+    empty = true,
 }
 L.VARIANTS = { primary = true, secondary = true, danger = true }
-L.PATCH_KEYS = { label = true, value = true, items = true, disabled = true }
+L.PATCH_KEYS = { label = true, value = true, items = true, disabled = true, rows = true, empty = true }
 
 local BASE36_CHARS = '0123456789abcdefghijklmnopqrstuvwxyz'
 local MAX_KVP_BYTES = 16384
@@ -611,6 +616,24 @@ function L.createAppRegistry(config)
             end
             aceStr = app.ace
         end
+        -- 0.2: `needs = 'voice'` (hidden on models without calls) and `handles` (contact intents)
+        if app.needs ~= nil and app.needs ~= 'voice' then
+            return false, 'needs: enum'
+        end
+        local handles = nil
+        if app.handles ~= nil then
+            if not isArrayTable(app.handles) or #app.handles > 2 then
+                return false, 'handles: type'
+            end
+            handles = {}
+            for i = 1, #app.handles do
+                local kind = app.handles[i]
+                if kind ~= 'tel' and kind ~= 'sms' then
+                    return false, 'handles: enum'
+                end
+                handles[#handles + 1] = kind
+            end
+        end
 
         local key = owner .. ':' .. app.id
         local existing = self.apps[key]
@@ -637,6 +660,8 @@ function L.createAppRegistry(config)
             icon = app.icon,
             order = orderNum,
             ace = aceStr,
+            needs = app.needs,
+            handles = handles,
         }
         return true
     end
@@ -692,6 +717,7 @@ function L.createAppRegistry(config)
                     label = app.label,
                     icon = app.icon,
                     order = app.order,
+                    needs = app.needs,
                 }
             end
         end
@@ -719,12 +745,13 @@ end
 -- 3. Screen Spec & Action Validation (reusing uikit rules)
 --------------------------------------------------------------------------------
 
-local function validateListItems(items, path, seenIds)
+local function validateListItems(items, path, seenIds, maxItems)
+    local limit = maxItems or 50
     if not isArrayTable(items) then
         return false, path .. ': type'
     end
-    if #items > 50 then
-        return false, path .. ': maxItems 50'
+    if #items > limit then
+        return false, path .. ': maxItems ' .. tostring(limit)
     end
     local cleanItems = {}
     for j = 1, #items do
@@ -882,9 +909,95 @@ local function validateFieldBlock(b, bpath)
     }
 end
 
+-- uikit 0.2 helpers ------------------------------------------------------------
+
+-- `empty = { icon?, label, body? }` (option of list and table, and the shape of the empty block).
+local function validateEmptyShape(e, path, required)
+    if e == nil and not required then return true, nil, nil end
+    if type(e) ~= 'table' then return false, path .. ': type' end
+    local okL, errL, cl = checkCleanString(e.label, 1, 60, path .. '.label')
+    if not okL then return false, errL end
+    local cb
+    if e.body ~= nil then
+        local okB, errB, c = checkCleanString(e.body, 0, 160, path .. '.body')
+        if not okB then return false, errB end
+        cb = c
+    end
+    local icon
+    if e.icon ~= nil and e.icon ~= '' then
+        if not L.isValidIcon(e.icon) then return false, path .. '.icon: unknown icon' end
+        icon = e.icon
+    end
+    return true, nil, { icon = icon, label = cl, body = cb }
+end
+
+local function validateColumns(cols, path)
+    if not isArrayTable(cols) or #cols < 1 or #cols > 6 then
+        return false, path .. ': range'
+    end
+    local clean, seen = {}, {}
+    for j = 1, #cols do
+        local c = cols[j]
+        local cpath = ('%s[%d]'):format(path, j)
+        if type(c) ~= 'table' then return false, cpath .. ': type' end
+        local okId, errId = checkUniqueId(c.id, seen, cpath .. '.id')
+        if not okId then return false, errId end
+        local okL, errL, cl = checkCleanString(c.label, 1, 24, cpath .. '.label')
+        if not okL then return false, errL end
+        local align = c.align or 'start'
+        if align ~= 'start' and align ~= 'end' then return false, cpath .. '.align: enum' end
+        clean[j] = { id = c.id, label = cl, align = align }
+    end
+    return true, nil, clean
+end
+
+local function validateRows(rows, columns, path, seenIds)
+    if not isArrayTable(rows) then return false, path .. ': type' end
+    if #rows > 50 then return false, path .. ': maxItems 50' end
+    local colSet = {}
+    for j = 1, #columns do colSet[columns[j].id] = true end
+    local clean = {}
+    for j = 1, #rows do
+        local r = rows[j]
+        local rpath = ('%s[%d]'):format(path, j)
+        if type(r) ~= 'table' then return false, rpath .. ': type' end
+        local okId, errId = checkUniqueId(r.id, seenIds, rpath .. '.id')
+        if not okId then return false, errId end
+        local cells = {}
+        if r.cells ~= nil then
+            if type(r.cells) ~= 'table' then return false, rpath .. '.cells: type' end
+            for k, v in pairs(r.cells) do
+                if type(k) ~= 'string' or not colSet[k] then
+                    return false, ('%s.cells.%s: unknown column'):format(rpath, tostring(k))
+                end
+                local okC, errC, cc = checkCleanString(type(v) == 'number' and tostring(v) or v, 0, 40,
+                    ('%s.cells.%s'):format(rpath, k))
+                if not okC then return false, errC end
+                cells[k] = cc
+            end
+        end
+        clean[j] = { id = r.id, cells = cells, disabled = r.disabled == true }
+    end
+    return true, nil, clean
+end
+
+local function onStepGrid(v, b)
+    local n = (v - b.min) / b.step
+    return math.abs(n - math.floor(n + 0.5)) <= 1e-6
+end
+
 function L.validateSpec(spec)
     if type(spec) ~= 'table' then
         return false, 'spec: type'
+    end
+
+    -- 0.2 `detailOf` / `detailItem`: shape only; the host checks the earlier screen.
+    if spec.detailOf ~= nil and not L.isValidId(spec.detailOf, 32) then
+        return false, 'detailOf: pattern'
+    end
+    if spec.detailItem ~= nil then
+        if spec.detailOf == nil then return false, 'detailItem: needs detailOf' end
+        if not L.isValidId(spec.detailItem, 32) then return false, 'detailItem: pattern' end
     end
 
     local okTitle, errTitle, cleanTitle = checkCleanString(spec.title, 1, 60, 'title')
@@ -907,11 +1020,34 @@ function L.validateSpec(spec)
     local seenIds = {}
     local cleanBlocks = {}
 
+    -- tabs: at most one per spec; its item ids are what a block's `tab` may name.
+    local tabIds = nil
+    for i = 1, #spec.blocks do
+        local b = spec.blocks[i]
+        if type(b) == 'table' and b.type == 'tabs' then
+            if tabIds then return false, ('blocks[%d]: one tabs block per spec'):format(i) end
+            tabIds = {}
+            if isArrayTable(b.items) then
+                for j = 1, #b.items do
+                    if type(b.items[j]) == 'table' and type(b.items[j].id) == 'string' then
+                        tabIds[b.items[j].id] = true
+                    end
+                end
+            end
+        end
+    end
+
     for i = 1, #spec.blocks do
         local b = spec.blocks[i]
         local bpath = ('blocks[%d]'):format(i)
         if type(b) ~= 'table' then
             return false, bpath .. ': type'
+        end
+        if b.tab ~= nil then
+            if b.type == 'tabs' then return false, bpath .. '.tab: not allowed on tabs' end
+            if not tabIds or type(b.tab) ~= 'string' or not tabIds[b.tab] then
+                return false, bpath .. '.tab: unknown tab'
+            end
         end
 
         local okId, errId = checkUniqueId(b.id, seenIds, bpath .. '.id')
@@ -934,9 +1070,25 @@ function L.validateSpec(spec)
                 if not okLbl then return false, errLbl end
                 cleanLbl = cl
             end
-            local okItems, errItems, cleanItems = validateListItems(b.items, bpath .. '.items', seenIds)
+            local search
+            if b.search == true then
+                search = {}
+            elseif type(b.search) == 'table' then
+                search = {}
+                if b.search.placeholder ~= nil then
+                    local okP, errP, cp = checkCleanString(b.search.placeholder, 0, 40, bpath .. '.search.placeholder')
+                    if not okP then return false, errP end
+                    search.placeholder = cp
+                end
+            elseif b.search ~= nil and b.search ~= false then
+                return false, bpath .. '.search: type'
+            end
+            local okItems, errItems, cleanItems = validateListItems(b.items, bpath .. '.items', seenIds, search and 200 or 50)
             if not okItems then return false, errItems end
-            cleanBlocks[i] = { id = b.id, type = 'list', label = cleanLbl, items = cleanItems }
+            local okE, errE, cleanEmpty = validateEmptyShape(b.empty, bpath .. '.empty', false)
+            if not okE then return false, errE end
+            cleanBlocks[i] = { id = b.id, type = 'list', label = cleanLbl, items = cleanItems, search = search,
+                empty = cleanEmpty }
 
         elseif btype == 'field' then
             local okField, errField, cleanField = validateFieldBlock(b, bpath)
@@ -1010,6 +1162,91 @@ function L.validateSpec(spec)
             local okBtns, errBtns, cleanBtns = validateButtonItems(b.items, bpath .. '.items', seenIds)
             if not okBtns then return false, errBtns end
             cleanBlocks[i] = { id = b.id, type = 'buttons', items = cleanBtns }
+
+        elseif btype == 'tabs' then
+            if not isArrayTable(b.items) or #b.items < 2 or #b.items > 6 then
+                return false, bpath .. '.items: range'
+            end
+            local items = {}
+            for j = 1, #b.items do
+                local it = b.items[j]
+                local ipath = ('%s.items[%d]'):format(bpath, j)
+                if type(it) ~= 'table' then return false, ipath .. ': type' end
+                local okId, errId = checkUniqueId(it.id, seenIds, ipath .. '.id')
+                if not okId then return false, errId end
+                local okL, errL, cl = checkCleanString(it.label, 1, 24, ipath .. '.label')
+                if not okL then return false, errL end
+                local icon
+                if it.icon ~= nil and it.icon ~= '' then
+                    if not L.isValidIcon(it.icon) then return false, ipath .. '.icon: unknown icon' end
+                    icon = it.icon
+                end
+                items[j] = { id = it.id, label = cl, icon = icon }
+            end
+            local val = b.value
+            if val == nil then
+                val = items[1].id
+            elseif not tabIds[val] then
+                return false, bpath .. '.value: tab'
+            end
+            cleanBlocks[i] = { id = b.id, type = 'tabs', items = items, value = val, report = b.report == true }
+
+        elseif btype == 'slider' then
+            local okL, errL, cl = checkCleanString(b.label, 1, 40, bpath .. '.label')
+            if not okL then return false, errL end
+            local mn, mx, st = b.min, b.max, b.step
+            if type(mn) ~= 'number' or type(mx) ~= 'number' or mn ~= mn or mx ~= mx or mn >= mx then
+                return false, bpath .. '.min: max'
+            end
+            if type(st) ~= 'number' or st ~= st or st <= 0 then
+                return false, bpath .. '.step: range'
+            end
+            if (mx - mn) / st > 1000 then
+                return false, bpath .. '.step: maxSteps 1000'
+            end
+            local val = b.value
+            if val == nil then
+                val = mn
+            elseif type(val) ~= 'number' or val ~= val or val < mn or val > mx then
+                return false, bpath .. '.value: range'
+            end
+            local unit
+            if b.unit ~= nil then
+                local okU, errU, cu = checkCleanString(b.unit, 0, 8, bpath .. '.unit')
+                if not okU then return false, errU end
+                unit = cu
+            end
+            cleanBlocks[i] = { id = b.id, type = 'slider', label = cl, min = mn, max = mx, step = st, value = val,
+                unit = unit, disabled = b.disabled == true }
+
+        elseif btype == 'table' then
+            local okC, errC, cols = validateColumns(b.columns, bpath .. '.columns')
+            if not okC then return false, errC end
+            local okR, errR, rows = validateRows(b.rows or {}, cols, bpath .. '.rows', seenIds)
+            if not okR then return false, errR end
+            local okE, errE, cleanEmpty = validateEmptyShape(b.empty, bpath .. '.empty', false)
+            if not okE then return false, errE end
+            cleanBlocks[i] = { id = b.id, type = 'table', columns = cols, rows = rows, selectable = b.selectable == true,
+                empty = cleanEmpty }
+
+        elseif btype == 'empty' then
+            local okE, errE, shape = validateEmptyShape(b, bpath, true)
+            if not okE then return false, errE end
+            local action
+            if b.action ~= nil then
+                if type(b.action) ~= 'table' then return false, bpath .. '.action: type' end
+                local okId, errId = checkUniqueId(b.action.id, seenIds, bpath .. '.action.id')
+                if not okId then return false, errId end
+                local okL, errL, cl = checkCleanString(b.action.label, 1, 24, bpath .. '.action.label')
+                if not okL then return false, errL end
+                action = { id = b.action.id, label = cl }
+            end
+            cleanBlocks[i] = { id = b.id, type = 'empty', icon = shape.icon, label = shape.label, body = shape.body,
+                action = action }
+        end
+
+        if b.tab ~= nil and cleanBlocks[i] then
+            cleanBlocks[i].tab = b.tab
         end
     end
 
@@ -1017,6 +1254,8 @@ function L.validateSpec(spec)
         title = cleanTitle,
         subtitle = cleanSubtitle,
         blocks = cleanBlocks,
+        detailOf = spec.detailOf,
+        detailItem = spec.detailItem,
     }
 end
 
@@ -1034,7 +1273,8 @@ function L.validateValues(spec, values)
     local valueBlocks = {}
     for i = 1, #spec.blocks do
         local b = spec.blocks[i]
-        if b and (b.type == 'field' or b.type == 'toggle' or b.type == 'select') then
+        if b and (b.type == 'field' or b.type == 'toggle' or b.type == 'select' or b.type == 'slider'
+            or b.type == 'tabs') then
             valueBlocks[b.id] = b
         end
     end
@@ -1083,6 +1323,22 @@ function L.validateValues(spec, values)
             end
             cleanValues[k] = v
 
+        elseif b.type == 'slider' then
+            if type(v) ~= 'number' or v ~= v or v < b.min or v > b.max or not onStepGrid(v, b) then
+                return false, ('values.%s: range'):format(k)
+            end
+            cleanValues[k] = v
+
+        elseif b.type == 'tabs' then
+            local found = false
+            for j = 1, #b.items do
+                if b.items[j].id == v then found = true end
+            end
+            if not found then
+                return false, ('values.%s: tab'):format(k)
+            end
+            cleanValues[k] = v
+
         elseif b.type == 'select' then
             if type(v) ~= 'string' then
                 return false, ('values.%s: type'):format(k)
@@ -1111,13 +1367,41 @@ local function isActionInSpec(spec, action)
     if not L.isValidId(action, 32) then return false end
     for i = 1, #spec.blocks do
         local b = spec.blocks[i]
-        if b and (b.type == 'list' or b.type == 'buttons') and type(b.items) == 'table' then
+        if b and (b.type == 'list' or b.type == 'buttons' or (b.type == 'tabs' and b.report == true))
+            and type(b.items) == 'table' then
             for j = 1, #b.items do
                 local item = b.items[j]
                 if item and item.id == action then
                     return item.disabled ~= true
                 end
             end
+        elseif b and b.type == 'table' and b.selectable == true and type(b.rows) == 'table' then
+            for j = 1, #b.rows do
+                if b.rows[j].id == action then
+                    return b.rows[j].disabled ~= true
+                end
+            end
+        elseif b and b.type == 'empty' and type(b.action) == 'table' and b.action.id == action then
+            return true
+        end
+    end
+    return false
+end
+
+-- 0.2 two panes: an item action from the list or table the detail on top names (`detailOf`).
+function L.isDetailSourceAction(underSpec, detailOf, action)
+    if type(underSpec) ~= 'table' or type(underSpec.blocks) ~= 'table' or type(detailOf) ~= 'string' then
+        return false
+    end
+    for i = 1, #underSpec.blocks do
+        local b = underSpec.blocks[i]
+        if b.id == detailOf then
+            local list = b.type == 'list' and b.items or (b.type == 'table' and b.selectable == true and b.rows) or nil
+            if type(list) ~= 'table' then return false end
+            for j = 1, #list do
+                if list[j].id == action then return list[j].disabled ~= true end
+            end
+            return false
         end
     end
     return false
@@ -1183,6 +1467,15 @@ function L.validatePatch(spec, patch)
                 end
             end
         end
+        local replacingRows = b.type == 'table' and type(pb) == 'table' and pb.rows ~= nil
+        if not replacingRows and type(b.rows) == 'table' then
+            for j = 1, #b.rows do
+                seenIds[b.rows[j].id] = true
+            end
+        end
+        if type(b.action) == 'table' and b.action.id then
+            seenIds[b.action.id] = true
+        end
     end
 
     local cleanBlocksPatch = {}
@@ -1224,7 +1517,8 @@ function L.validatePatch(spec, patch)
 
         if partial.items ~= nil then
             if btype == 'list' then
-                local okIt, errIt, ci = validateListItems(partial.items, ('blocks.%s.items'):format(blockId), seenIds)
+                local okIt, errIt, ci = validateListItems(partial.items, ('blocks.%s.items'):format(blockId), seenIds,
+                    target.search and 200 or 50)
                 if not okIt then return false, errIt end
                 cleanPartial.items = ci
             elseif btype == 'buttons' then
@@ -1277,9 +1571,42 @@ function L.validatePatch(spec, patch)
                     return false, ('blocks.%s.value: range'):format(blockId)
                 end
                 cleanPartial.value = partial.value
+            elseif btype == 'slider' then
+                local v = partial.value
+                if type(v) ~= 'number' or v ~= v or v < target.min or v > target.max then
+                    return false, ('blocks.%s.value: range'):format(blockId)
+                end
+                cleanPartial.value = v
+            elseif btype == 'tabs' then
+                local found = false
+                for j = 1, #target.items do
+                    if target.items[j].id == partial.value then found = true end
+                end
+                if not found then
+                    return false, ('blocks.%s.value: tab'):format(blockId)
+                end
+                cleanPartial.value = partial.value
             else
                 return false, ('blocks.%s.value: not supported'):format(blockId)
             end
+        end
+
+        if partial.rows ~= nil then
+            if btype ~= 'table' then
+                return false, ('blocks.%s.rows: not supported'):format(blockId)
+            end
+            local okR, errR, cr = validateRows(partial.rows, target.columns, ('blocks.%s.rows'):format(blockId), seenIds)
+            if not okR then return false, errR end
+            cleanPartial.rows = cr
+        end
+
+        if partial.empty ~= nil then
+            if btype ~= 'list' and btype ~= 'table' then
+                return false, ('blocks.%s.empty: not supported'):format(blockId)
+            end
+            local okE, errE, ce = validateEmptyShape(partial.empty, ('blocks.%s.empty'):format(blockId), true)
+            if not okE then return false, errE end
+            cleanPartial.empty = ce
         end
 
         cleanBlocksPatch[blockId] = cleanPartial
@@ -1292,6 +1619,9 @@ end
 -- 4. Opening Check Manager (Config.ask = true)
 --------------------------------------------------------------------------------
 
+-- onResolve(src, allowed, reasonKey, devices): `devices` is the cleaned gate answer list (0.2) or nil.
+-- createCheck opts (0.2): { silenceDenies = true, silenceReason = key } makes silence a denial even with no
+-- listener (item mode). Validation of an `answer` uses DeviceLogic (shared/logic/device.lua) when loaded.
 function L.createOpeningCheckManager(options)
     local opts = type(options) == 'table' and options or {}
     local setTimeoutFn = opts.setTimeout
@@ -1308,9 +1638,10 @@ function L.createOpeningCheckManager(options)
         return true
     end
 
-    function mgr:createCheck(src, onResolve)
+    function mgr:createCheck(src, onResolve, checkOpts)
         self.seq = self.seq + 1
         local checkId = 'chk_' .. tostring(self.seq)
+        local co = type(checkOpts) == 'table' and checkOpts or {}
 
         local check = {
             id = checkId,
@@ -1318,6 +1649,8 @@ function L.createOpeningCheckManager(options)
             resolved = false,
             timer = nil,
             onResolve = onResolve,
+            silenceDenies = co.silenceDenies == true,
+            silenceReason = co.silenceReason,
         }
 
         if type(setTimeoutFn) == 'function' then
@@ -1330,65 +1663,81 @@ function L.createOpeningCheckManager(options)
         return checkId
     end
 
-    function mgr:allowOpen(checkId)
+    local function take(self, checkId)
         local check = self.pendingChecks[checkId]
         if not check or check.resolved then
-            return false, 'stale'
+            return nil
         end
-
         check.resolved = true
         if check.timer and type(clearTimeoutFn) == 'function' then
             clearTimeoutFn(check.timer)
         end
         self.pendingChecks[checkId] = nil
+        return check
+    end
 
+    local function resolve(check, allowed, reason, devices)
         if type(check.onResolve) == 'function' then
-            check.onResolve(check.src, true, nil)
+            check.onResolve(check.src, allowed, reason, devices)
         end
+    end
+
+    -- `answer` (0.2, optional) = { allow = true, devices = { ... } } or the single-device form.
+    function mgr:allowOpen(checkId, answer)
+        if answer ~= nil then
+            return self:answer(checkId, answer)
+        end
+        local check = take(self, checkId)
+        if not check then return false, 'stale' end
+        resolve(check, true, nil, nil)
         return true
     end
 
     function mgr:denyOpen(checkId, reasonKey)
-        local check = self.pendingChecks[checkId]
-        if not check or check.resolved then
-            return false, 'stale'
-        end
-
-        check.resolved = true
-        if check.timer and type(clearTimeoutFn) == 'function' then
-            clearTimeoutFn(check.timer)
-        end
-        self.pendingChecks[checkId] = nil
+        local check = take(self, checkId)
+        if not check then return false, 'stale' end
 
         local reason = 'phonekit.refused.default'
         if type(reasonKey) == 'string' and reasonKey ~= '' then
             reason = L.textClean(reasonKey, 64)
         end
-        if type(check.onResolve) == 'function' then
-            check.onResolve(check.src, false, reason)
+        resolve(check, false, reason, nil)
+        return true
+    end
+
+    -- The local-event form (`aeterna_phonekit:answer`). allow = false is denyOpen.
+    function mgr:answer(checkId, answer)
+        if type(answer) == 'table' and answer.allow == false then
+            return self:denyOpen(checkId, answer.reason)
+        end
+        local check = take(self, checkId)
+        if not check then return false, 'stale' end
+        local ok, devicesOrReason
+        if DeviceLogic and type(DeviceLogic.validateGateAnswer) == 'function' then
+            ok, devicesOrReason = DeviceLogic.validateGateAnswer(answer)
+        else
+            ok, devicesOrReason = false, 'phonekit.refused.nodevice'
+        end
+        if ok then
+            resolve(check, true, nil, devicesOrReason)
+        else
+            resolve(check, false, L.textClean(devicesOrReason, 64), nil)
         end
         return true
     end
 
     function mgr:handleTimeout(checkId)
-        local check = self.pendingChecks[checkId]
-        if not check or check.resolved then
-            return
-        end
+        local check = take(self, checkId)
+        if not check then return end
 
-        check.resolved = true
-        self.pendingChecks[checkId] = nil
-
-        if self.hasListeners then
+        if check.silenceDenies then
+            resolve(check, false, check.silenceReason or 'phonekit.refused.default', nil)
+        elseif self.hasListeners then
             -- Silence with listeners counts as denied
-            if type(check.onResolve) == 'function' then
-                check.onResolve(check.src, false, 'phonekit.refused.default')
-            end
+            resolve(check, false, 'phonekit.refused.default', nil)
         else
             -- Silence without listeners counts as allowed
-            if type(check.onResolve) == 'function' then
-                check.onResolve(check.src, true, nil)
-            end
+            resolve(check, true, nil, nil)
         end
     end
 
@@ -1554,7 +1903,8 @@ function L.positionToAnchor(pos)
     return { x = 0.9875, y = 0.9778, ax = 1, ay = 1 }
 end
 
-function L.buildLayoutDefs(pos, label)
+-- `w`, `h` (0.2): the held model's frame size; 0.1 callers get 320 x 640.
+function L.buildLayoutDefs(pos, label, w, h)
     local anchor = L.positionToAnchor(pos)
     local lbl = 'Phone'
     if type(label) == 'string' and L.stripControlAndTrim(label) ~= '' then
@@ -1564,8 +1914,8 @@ function L.buildLayoutDefs(pos, label)
         {
             id = 'phone',
             label = lbl,
-            w = 320,
-            h = 640,
+            w = tonumber(w) or 320,
+            h = tonumber(h) or 640,
             x = anchor.x,
             y = anchor.y,
             ax = anchor.ax,
