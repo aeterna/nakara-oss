@@ -634,7 +634,7 @@ describe('aeterna_invkit self-tests', function()
             natives.advance(ST.USE_START_DELAY_MS + 10)
             local use = natives.last_emitted('client', 'aeterna_invkit:cl:use')
             assert.is_truthy(use)
-            assert.are.equal(5, use.args[1])
+            assert.are.equal(5, use.target)
             -- No report from the server for a client test.
             assert.are.equal(0, #env.reports)
         end)
