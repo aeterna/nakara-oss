@@ -247,7 +247,7 @@ local ENV_SCHEMA = { type = 'table', fields = {
     h = { type = 'number', integer = true, min = 240, max = 8640 },
 } }
 
--- A invites B by server id (from the invite panel or aeterna_testkit:sv:invite). Rate limit is the caller's.
+-- A invites B by server id from the invite panel. Rate limit is the caller's.
 local function invite(src, payload)
     if not AeternaCore.can(src, ACE) then return end
     local ok, _, p = AeternaCore.validate(payload, INVITE_SCHEMA)
@@ -347,13 +347,6 @@ RegisterNetEvent('aeterna_testkit:sv:open', function()
     openFor(src)
 end)
 
-RegisterNetEvent('aeterna_testkit:sv:invite', function(payload)
-    local src = tonumber(source)
-    if not src or src <= 0 or not AeternaCore.rateLimit(src, 'aeterna_testkit:sv:invite', 3, 10000) then return end
-    invite(src, payload)
-    refresh(src)
-end)
-
 RegisterNetEvent('aeterna_testkit:sv:inviteAnswer', function(payload)
     local src = tonumber(source)
     if not src or src <= 0 or not AeternaCore.rateLimit(src, 'aeterna_testkit:sv:inviteAnswer', 3, 10000) then return end
@@ -415,7 +408,7 @@ AddEventHandler('aeterna_uikit:action', function(src, data)
             openSuite(src, action)
         end
     elseif m.kind == 'invite' and action == 'send' then
-        if AeternaCore.rateLimit(src, 'aeterna_testkit:sv:invite', 3, 10000) then
+        if AeternaCore.rateLimit(src, 'aeterna_testkit:invite', 3, 10000) then
             invite(src, { target = type(data.values) == 'table' and data.values.target or nil })
         end
         openMain(src)
@@ -427,6 +420,20 @@ AddEventHandler('aeterna_uikit:menu', function(src, picked)
     if inv and inv ~= 'aeterna_uikit' then return end
     src = tonumber(src)
     if src and type(picked) == 'table' and picked.owner == RES and picked.id == 'testkit' then openFor(src) end
+end)
+
+-- aeterna_core stopping (or restarting) ends its run without runDone: drop ours, free B and reset the roles.
+AddEventHandler('onResourceStop', function(name)
+    if name ~= 'aeterna_core' or not current then return end
+    local run = current
+    current = nil
+    if run.by == 'menu' then
+        local b = invites:release(run.starter)
+        setRole(b, 'none')
+        setRole(run.starter, 'none')
+    end
+    throttle:final(GetGameTimer())
+    refreshAll()
 end)
 
 AddEventHandler('playerDropped', function()
@@ -462,7 +469,7 @@ RegisterCommand('aeterna_testkit_run', function(src, args)
     local id, busy = beginRun({ by = 'console', starter = 0, rows = {}, names = {}, json = opts.json, startedAt = nowIso() },
         { by = 0, only = opts.only and { opts.only } or nil })
     if not id then say(busyLine(busy or core('busy'))) end
-end, false)
+end, true)
 
 exports('lastReport', function()
     return last and last.plain or nil

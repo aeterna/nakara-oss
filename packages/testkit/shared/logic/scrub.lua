@@ -6,11 +6,13 @@ local M = {}
 
 -- Identifier types FXServer documents for GetPlayerIdentifiers, as `<prefix>:<value>`.
 -- license2 comes before license so the longer prefix is tried first.
-M.PREFIXES = { 'license2', 'license', 'steam', 'fivem', 'xbl', 'live', 'ip' }
+M.PREFIXES = { 'license2', 'license', 'steam', 'fivem', 'discord', 'xbl', 'live', 'ip' }
+-- Shape rule for identifier types not in the list: `<letters>:` followed by at least this many digits.
+M.LONG_ID_DIGITS = 15
+M.MIN_NAME_LEN = 3
 
-local function escapePattern(s)
-    return (s:gsub('[%^%$%(%)%%%.%[%]%*%+%-%?]', '%%%0'))
-end
+-- Characters a path can hold here: anything but whitespace, brackets, quotes and commas.
+local PATH_CH = '[^%s%(%)%[%]"\',<>]'
 
 local function isIPv4(s)
     local a, b, c, d = s:match('^(%d+)%.(%d+)%.(%d+)%.(%d+)$')
@@ -41,14 +43,39 @@ local function isIPv6(tok)
     return true
 end
 
+local function isWordByte(c)
+    return c ~= '' and c:find('^[%w_]') ~= nil
+end
+
+-- Replaces whole-word occurrences of `name` (no letter, digit or _ right before or after it).
+local function replaceWord(s, name, label)
+    local out, i = {}, 1
+    while true do
+        local a, b = s:find(name, i, true)
+        if not a then break end
+        if not isWordByte(s:sub(a - 1, a - 1)) and not isWordByte(s:sub(b + 1, b + 1)) then
+            out[#out + 1] = s:sub(i, a - 1) .. label
+            i = b + 1
+        else
+            out[#out + 1] = s:sub(i, a)
+            i = a + 1
+        end
+    end
+    out[#out + 1] = s:sub(i)
+    return table.concat(out)
+end
+
+-- Names shorter than MIN_NAME_LEN characters are skipped: replacing them would garble ordinary words.
 local function names(s, list)
     local sorted = {}
     for label, name in pairs(list or {}) do
-        if type(name) == 'string' and name ~= '' then sorted[#sorted + 1] = { label = label, name = name } end
+        if type(name) == 'string' and (utf8.len(name) or #name) >= M.MIN_NAME_LEN then
+            sorted[#sorted + 1] = { label = tostring(label), name = name }
+        end
     end
     table.sort(sorted, function(x, y) return #x.name > #y.name end)
     for _, n in ipairs(sorted) do
-        s = s:gsub(escapePattern(n.name), (tostring(n.label):gsub('%%', '%%%%')))
+        s = replaceWord(s, n.name, n.label)
     end
     return s
 end
@@ -57,6 +84,10 @@ local function identifiers(s)
     for _, prefix in ipairs(M.PREFIXES) do
         s = s:gsub('%f[%w_]' .. prefix .. ':[^%s]+', '[id]')
     end
+    s = s:gsub('%f[%w_]%a+:(%d+)', function(digits)
+        if #digits >= M.LONG_ID_DIGITS then return '[id]' end
+        return nil
+    end)
     return s
 end
 
@@ -78,10 +109,12 @@ local function addresses(s)
     return s
 end
 
+-- Absolute paths, also after `(`, `=` and `@`, and stack frames such as `@res/server/main.lua:12`.
 local function paths(s)
-    s = s:gsub('%f[%a]%a:[\\/][^%s]*', '[path]')
-    s = s:gsub('\\\\[^%s]+', '[path]')
-    s = (' ' .. s):gsub('(%s)/[^%s/]+/[^%s/][^%s]*', '%1[path]'):sub(2)
+    s = s:gsub('%f[%a]%a:[\\/]' .. PATH_CH .. '*', '[path]')
+    s = s:gsub('\\\\' .. PATH_CH .. '+', '[path]')
+    s = s:gsub('@[%w_%-%.]+/' .. PATH_CH .. '+', '[path]')
+    s = (' ' .. s):gsub('([%s%(=@])/[^%s/%(%)]+/[^%s/%(%)]' .. PATH_CH .. '*', '%1[path]'):sub(2)
     return s
 end
 

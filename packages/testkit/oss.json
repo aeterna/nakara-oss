@@ -21,7 +21,6 @@
     "netEvents": {
       "server": [
         "aeterna_testkit:sv:open",
-        "aeterna_testkit:sv:invite",
         "aeterna_testkit:sv:inviteAnswer",
         "aeterna_testkit:sv:leave",
         "aeterna_testkit:sv:env"
