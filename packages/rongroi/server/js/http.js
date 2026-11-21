@@ -156,7 +156,7 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
 
     // Shared by a direct POST, the last chunk and a relay envelope: verify the whole report, store it and consume
     // the ticket. Returns { status, why } with ADR 0089's status codes; `why` is a fixed log string.
-    function verify({ ticket, sha, uploadId, raw, address, addressSource }) {
+    function verify({ ticket, sha, uploadId, raw, address, addressSource, receivedAt }) {
         const bad = (status, why, keep) => {
             if (!keep) store.drop(uploadId);
             return { status, why };
@@ -210,7 +210,10 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
             const gone = !found || found.state === 'expired';
             return bad(gone ? 410 : 422, 'rongroi http: report upload slot gone', true);
         }
-        const event = { caseId: found.caseId, ticket, reportSha256: sha, receivedAt: now() };
+        // Through a relay, the time the Relay received the envelope is the receive time (never later than now).
+        const at = now();
+        const event = { caseId: found.caseId, ticket, reportSha256: sha,
+            receivedAt: typeof receivedAt === 'number' && Number.isFinite(receivedAt) ? Math.min(receivedAt, at) : at };
         // The uploader's address is a raw fact, not parsed: its shape differs between FXServer editions. Through a
         // relay it is what the Relay reports, labelled with how the Relay learned it (ADR 0097 section 3).
         if (typeof address === 'string') event.address = address;
@@ -247,7 +250,7 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
             const begun = store.beginUpload(ticket, sha, { receivedAt });
             if (!begun.ok) return begun.status;
             if (begun.repeat) return 200;
-            const result = verify({ ticket, sha, uploadId: begun.uploadId, raw, address, addressSource });
+            const result = verify({ ticket, sha, uploadId: begun.uploadId, raw, address, addressSource, receivedAt });
             if (result.status !== 200) log(result.why, ticket);
             return result.status;
         } catch {

@@ -136,3 +136,46 @@ test('servers are validated at start', () => {
     assert.throws(() => createRelay({ servers: [{ id: 'v1', keySha256: sha(KEY) }] }), TypeError);
     assert.throws(() => createRelay({ servers: [{ id: 'a', keySha256: 'x' }] }), TypeError);
 });
+
+test('preflight refuses a report before its body is read: unknown ticket, bad headers, no or large Content-Length', () => {
+    const r = make();
+    const pre = (headers, path = '/srv1/report') => {
+        const out = r.relay.preflight({ method: 'POST', path, headers, socketAddress: '198.51.100.7' });
+        return out ? out.status : null;
+    };
+    const good = { 'x-rongroi-upload-id': T, 'x-rongroi-report-sha256': 'a'.repeat(64), 'x-rongroi-envelope': '2', 'content-length': '10' };
+    assert.equal(pre(good), 404, 'ticket not registered');
+    r.register();
+    assert.equal(pre(good), null, 'a plausible upload goes on to read its body');
+    assert.equal(pre({ ...good, 'x-rongroi-envelope': '1' }), 400);
+    assert.equal(pre({ ...good, 'content-length': undefined }), 411);
+    assert.equal(pre({ ...good, 'content-length': String(2 * 1024 * 1024 + 1) }), 413);
+    assert.equal(pre(good, `/srv1/policy/${T}`), null, 'only report uploads are preflighted');
+    assert.equal(pre(good, '/nope/report'), null, 'unknown server falls through to the normal 404');
+});
+
+test('X-Forwarded-For: only from a trusted proxy, rightmost untrusted IP entry, ::ffff: forms match', () => {
+    const r = make();
+    r.register();
+    const via = (xff, from) => {
+        r.upload(`env-${xff}-${from}`, T, xff === undefined ? {} : { 'x-forwarded-for': xff }, from);
+        const listed = r.call('GET', `/v1/tickets/${T}/envelopes`, { key: KEY }).body.envelopes;
+        const last = listed[listed.length - 1];
+        r.call('POST', `/v1/tickets/${T}/envelopes/${last.sha256}/result`, { key: KEY, body: '{"result":409}' });
+        return [last.peer_addr, last.peer_addr_source];
+    };
+    assert.deepEqual(via('203.0.113.9', '198.51.100.7'), ['198.51.100.7', 'socket'], 'untrusted socket: header ignored');
+    assert.deepEqual(via('1.1.1.1, 203.0.113.9', '::ffff:10.0.0.2'), ['203.0.113.9', 'forwarded'], 'rightmost wins; mapped proxy address trusted');
+    assert.deepEqual(via('not-an-ip', '10.0.0.2'), ['10.0.0.2', 'socket'], 'a non-IP entry is not believed');
+});
+
+test('a result is final: a second result for the same envelope is 409', () => {
+    const r = make();
+    r.register();
+    r.upload('env-final');
+    const s = sha(Buffer.from('env-final'));
+    const post = (result) => r.call('POST', `/v1/tickets/${T}/envelopes/${s}/result`, { key: KEY, body: JSON.stringify({ result }) }).status;
+    assert.equal(post('accepted'), 200);
+    assert.equal(post(500), 409);
+    assert.deepEqual(r.call('GET', `/srv1/status/${T}/${s}`).body, { result: 'accepted' });
+});

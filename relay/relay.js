@@ -8,6 +8,7 @@
 // whether a PC passed anything. State is in memory: a restart forgets pending tickets (Connect then sees 404).
 
 const crypto = require('node:crypto');
+const net = require('node:net');
 
 const TICKET_RE = /^[0-9a-f]{32}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
@@ -24,6 +25,13 @@ const RATE_LIMIT = 120;            // public requests per address per window
 
 function sha256Hex(buf) {
     return crypto.createHash('sha256').update(buf).digest('hex');
+}
+
+// An IPv4 client on a dual-stack socket arrives as ::ffff:a.b.c.d; compare and record the plain form.
+function plainAddress(address) {
+    if (typeof address !== 'string') return '';
+    const m = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address);
+    return m ? m[1] : address;
 }
 
 function timingSafeEqualHex(a, b) {
@@ -43,7 +51,7 @@ function createRelay({ servers, trustedProxies = [], now = Date.now, log = () =>
         if (byId.has(s.id)) throw new TypeError(`duplicate server id ${s.id}`);
         byId.set(s.id, s);
     }
-    const trusted = new Set(trustedProxies);
+    const trusted = new Set(trustedProxies.map(plainAddress));
     const tickets = new Map(); // `${id}:${ticket}` -> { expiresAt, policy: Buffer, envelopes: Map(sha -> env) }
     const windows = new Map();
 
@@ -55,12 +63,19 @@ function createRelay({ servers, trustedProxies = [], now = Date.now, log = () =>
         return null;
     }
 
+    // X-Forwarded-For is believed only from a trusted proxy, and only its rightmost entry that is not itself a trusted
+    // proxy (entries further left were written by the client). That entry must be an IP address.
     function peer(socketAddress, forwardedFor) {
-        if (trusted.has(socketAddress) && typeof forwardedFor === 'string' && forwardedFor.length > 0) {
-            const first = forwardedFor.split(',')[0].trim();
-            if (first) return { address: first, source: 'forwarded' };
+        const sock = plainAddress(socketAddress);
+        if (trusted.has(sock) && typeof forwardedFor === 'string' && forwardedFor.length > 0 && forwardedFor.length <= 512) {
+            const hops = forwardedFor.split(',').map((x) => plainAddress(x.trim())).filter(Boolean);
+            for (let i = hops.length - 1; i >= 0; i -= 1) {
+                if (trusted.has(hops[i])) continue;
+                if (net.isIP(hops[i])) return { address: hops[i], source: 'forwarded' };
+                break;
+            }
         }
-        return { address: socketAddress || '', source: 'socket' };
+        return { address: sock, source: 'socket' };
     }
 
     function limited(address) {
@@ -89,8 +104,28 @@ function createRelay({ servers, trustedProxies = [], now = Date.now, log = () =>
 
     const json = (status, body) => ({ status, headers: { 'Content-Type': 'application/json' }, body: Buffer.from(JSON.stringify(body)) });
 
+    // Called before the body is read. A report upload that cannot succeed (bad headers, no or too large Content-Length,
+    // rate limited, unknown ticket) is answered here, so a flood of large bodies is never buffered. Returns a response,
+    // or null: then read the body and call handle(req, { preflighted: true }).
+    function preflight(req) {
+        const path = (req.path || '').split('?')[0];
+        const parts = path.split('/').filter(Boolean);
+        if (req.method !== 'POST' || parts.length !== 2 || parts[1] !== 'report' || !byId.has(parts[0])) return null;
+        const h = req.headers || {};
+        const who = peer(req.socketAddress, h['x-forwarded-for']);
+        if (limited(who.address)) return { ...json(429, { status: 429 }), headers: { 'Content-Type': 'application/json', 'Retry-After': '30' } };
+        const ticket = h['x-rongroi-upload-id'];
+        if (!TICKET_RE.test(ticket || '') || !SHA256_RE.test(h['x-rongroi-report-sha256'] || '') || h['x-rongroi-envelope'] !== '2') {
+            return json(400, { status: 400 });
+        }
+        if (!/^[0-9]+$/.test(h['content-length'] || '')) return json(411, { status: 411 });
+        if (Number(h['content-length']) > MAX_ENVELOPE_BYTES) return json(413, { status: 413 });
+        if (!tickets.has(`${parts[0]}:${ticket}`)) return json(404, { status: 404 });
+        return null;
+    }
+
     // One request: { method, path, headers (lower-case names), body: Buffer, socketAddress }. Returns { status, headers, body }.
-    function handle(req) {
+    function handle(req, { preflighted = false } = {}) {
         const path = (req.path || '').split('?')[0];
         const h = req.headers || {};
         const parts = path.split('/').filter(Boolean);
@@ -125,6 +160,7 @@ function createRelay({ servers, trustedProxies = [], now = Date.now, log = () =>
             if (parts.length === 6 && parts[3] === 'envelopes' && parts[5] === 'result' && req.method === 'POST') {
                 const e = t.envelopes.get(parts[4]);
                 if (!e) return json(404, { status: 404 });
+                if (e.result !== null) return json(409, { status: 409 }); // a result is final
                 let result;
                 try { result = JSON.parse(req.body.toString('utf8')).result; } catch { result = undefined; }
                 if (!RESULTS.includes(result)) return json(400, { status: 400 });
@@ -147,7 +183,7 @@ function createRelay({ servers, trustedProxies = [], now = Date.now, log = () =>
         const id = parts[0];
         if (!byId.has(id || '')) return json(404, { status: 404 });
         const who = peer(req.socketAddress, h['x-forwarded-for']);
-        if (limited(who.address)) return { ...json(429, { status: 429 }), headers: { 'Content-Type': 'application/json', 'Retry-After': '30' } };
+        if (!preflighted && limited(who.address)) return { ...json(429, { status: 429 }), headers: { 'Content-Type': 'application/json', 'Retry-After': '30' } };
         if (parts[1] === 'policy' && parts.length === 3 && req.method === 'GET') {
             const t = TICKET_RE.test(parts[2]) ? tickets.get(`${id}:${parts[2]}`) : null;
             if (!t) return json(404, { status: 404 });
@@ -206,7 +242,7 @@ function createRelay({ servers, trustedProxies = [], now = Date.now, log = () =>
         return json(202, { status: 202 });
     }
 
-    return { handle, sweep, _tickets: tickets };
+    return { preflight, handle, sweep, _tickets: tickets };
 }
 
 module.exports = { createRelay, MAX_ENVELOPE_BYTES };

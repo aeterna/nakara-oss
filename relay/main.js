@@ -30,29 +30,65 @@ try {
     process.exit(2);
 }
 const trustedProxies = (process.env.RELAY_TRUSTED_PROXIES || '').split(',').map((s) => s.trim()).filter(Boolean);
-const relay = createRelay({ servers, trustedProxies, log: (line) => console.log(line) });
+let relay;
+try {
+    relay = createRelay({ servers, trustedProxies, log: (line) => console.log(line) });
+} catch (err) {
+    console.error(`RELAY_SERVERS: ${err.message}`);
+    process.exit(2);
+}
 setInterval(() => relay.sweep(), 30000).unref();
 
+const ERROR_500 = { status: 500, headers: { 'Content-Type': 'application/json' }, body: Buffer.from('{"status":500}') };
+const ERROR_413 = { status: 413, headers: { 'Content-Type': 'application/json' }, body: Buffer.from('{"status":413}') };
+
+function send(res, out) {
+    res.writeHead(out.status, out.headers);
+    res.end(out.body);
+}
+
 const server = http.createServer((req, res) => {
+    const base = { method: req.method, path: req.url, headers: req.headers, socketAddress: req.socket.remoteAddress };
+    let early;
+    try {
+        early = relay.preflight(base);
+    } catch {
+        early = ERROR_500;
+    }
+    if (early) {
+        // Answer without reading the body, and close: the client may still be sending.
+        res.setHeader('Connection', 'close');
+        send(res, early);
+        req.resume();
+        return;
+    }
     const chunks = [];
     let size = 0;
     let over = false;
     req.on('data', (c) => {
+        if (over) return;
         size += c.length;
-        if (size > MAX_ENVELOPE_BYTES + 1024) { over = true; req.destroy(); return; }
+        if (size > MAX_ENVELOPE_BYTES) {
+            over = true;
+            res.setHeader('Connection', 'close');
+            send(res, ERROR_413);
+            req.destroy();
+            return;
+        }
         chunks.push(c);
     });
     req.on('end', () => {
         if (over) return;
         let out;
         try {
-            out = relay.handle({ method: req.method, path: req.url, headers: req.headers, body: Buffer.concat(chunks),
-                socketAddress: req.socket.remoteAddress });
+            out = relay.handle({ ...base, body: Buffer.concat(chunks) }, { preflighted: true });
         } catch {
-            out = { status: 500, headers: { 'Content-Type': 'application/json' }, body: Buffer.from('{"status":500}') };
+            out = ERROR_500;
         }
-        res.writeHead(out.status, out.headers);
-        res.end(out.body);
+        send(res, out);
     });
 });
+// A slow client cannot hold a connection, and its buffer, open for long.
+server.headersTimeout = 15000;
+server.requestTimeout = 30000;
 server.listen(Number(process.env.PORT || 8080), () => console.log(`rongroi relay listening on ${server.address().port}`));

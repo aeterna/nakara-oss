@@ -66,14 +66,17 @@ function createRelayClient({ config, fetchImpl, log = () => {} }) {
             expires_at: expiresAt,
             policy: Buffer.from(policyBody, 'utf8').toString('base64'),
         });
-        if (!r.ok) log(`rongroi relay: register refused (${r.status})`, ticket);
-        return r.ok;
+        // 409: the Relay already has it (an earlier answer was lost), which is what we wanted.
+        const ok = r.ok || r.status === 409;
+        if (!ok) log(`rongroi relay: register refused (${r.status})`, ticket);
+        return ok;
     }
 
-    // Pending envelopes for one ticket: [{ sha256, raw: Buffer, receivedAt, address, addressSource }].
-    async function pending(ticket) {
+    // Pending envelopes for one ticket: { status, envelopes: [{ sha256, raw: Buffer, receivedAt, address, addressSource }] }.
+    // status 404 means the Relay no longer knows the ticket (it restarted), so the Kit registers it again.
+    async function poll(ticket) {
         const r = await call('GET', `/v1/tickets/${ticket}/envelopes`);
-        if (!r.ok || !r.body || !Array.isArray(r.body.envelopes)) return [];
+        if (!r.ok || !r.body || !Array.isArray(r.body.envelopes)) return { status: r.status, envelopes: [] };
         const out = [];
         for (const e of r.body.envelopes) {
             if (!e || typeof e.sha256 !== 'string' || !SHA256_RE.test(e.sha256) || typeof e.body !== 'string') continue;
@@ -86,7 +89,11 @@ function createRelayClient({ config, fetchImpl, log = () => {} }) {
                     ? `relay-${e.peer_addr_source}` : undefined,
             });
         }
-        return out;
+        return { status: r.status, envelopes: out };
+    }
+
+    async function pending(ticket) {
+        return (await poll(ticket)).envelopes;
     }
 
     async function result(ticket, sha256, status) {
@@ -107,7 +114,7 @@ function createRelayClient({ config, fetchImpl, log = () => {} }) {
         return { ok: r.ok, status: r.status, server: r.body && typeof r.body.server === 'string' ? r.body.server : null };
     }
 
-    return { register, pending, result, remove, health, origin: config.origin, id: config.id };
+    return { register, poll, pending, result, remove, health, origin: config.origin, id: config.id };
 }
 
 // Loaded directly as a server_script FXServer provides no CommonJS `module`; the specs still get the export.

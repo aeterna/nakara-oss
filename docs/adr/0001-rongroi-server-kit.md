@@ -303,8 +303,11 @@ a second transport, the Rongroi Relay, and an `rr2.` code. This section is what 
 2. **Which code the Kit issues.** `rr1.` while the transport is direct and the resource is named `nakara_rongroi`, so
    Connect 0.1.1 keeps working. `rr2.` (with `base_path` and `transport`) otherwise. ADR 0097 §2 holds the format.
 3. **Relay client.** When `rongroi_relay_url` and `rongroi_relay_key` are set, the Kit registers each ticket with the
-   Relay before it shows a code, pulls envelopes, decrypts them as today, and posts a result per envelope (ADR 0097
-   §3). The Kit's own HTTP endpoints stay for the direct transport and the saved-file page. A pulled envelope enters
+   Relay when it issues the code and retries every pull round until the Relay confirms (201, or 409 for a ticket it
+   already holds; a 404 while the ticket is still open means the Relay restarted, so the Kit registers it again). It
+   pulls envelopes at most 32 tickets a round, decrypts them as today, and posts a result per envelope (ADR 0097 §3);
+   a result the Relay did not acknowledge is posted again next round, so an accepted report never stays pending on the
+   Relay. Every Relay request has a 10 s timeout and rounds never overlap. The Kit's own HTTP endpoints stay for the direct transport and the saved-file page. A pulled envelope enters
    `uploading` if the Relay's `received_at` is before `expires_at`, so an upload made in time but pulled late is not
    refused as expired; the Kit consumes a ticket only after its own checks, as today. The Kit stores the five values
    of envelope v2's additional data with the ticket when it issues the code, and issues only normalised origins

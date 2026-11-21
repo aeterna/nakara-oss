@@ -34,6 +34,10 @@
         () => require('./relay.js'),
         () => require('./server/js/relay.js'),
     );
+    const { createRelayPump } = loadModule(
+        () => require('./relay-pump.js'),
+        () => require('./server/js/relay-pump.js'),
+    );
     const { pairingCode, pairingCodeV2, policyHash, checkOrigin } = loadModule(
         () => require('./pairing.js'),
         () => require('./server/js/pairing.js'),
@@ -63,7 +67,7 @@
     const STAFF_ACE = 'nakara_rongroi.staff';
     const RELAY_GRACE_MS = 10 * 60 * 1000; // pull a relay ticket until 10 minutes past expires_at (ADR 0097 §3)
     const RELAY_PULL_MS = 3000;
-    const RELAY_RESULTS = [200, 404, 409, 410, 422, 500];
+    const RELAY_TIMEOUT_MS = 10000;
     const NET_WINDOW_MS = 10000;
     const NET_LIMIT = 60;
     const NET_WINDOW_MAX = 256;
@@ -170,8 +174,16 @@
             key: GetConvar('rongroi_relay_key', ''),
         });
         if (!relayParsed.ok && relayParsed.reason !== 'off') log(`relay off: ${relayParsed.reason}`);
-        const relay = relayParsed.ok
-            ? createRelayClient({ config: relayParsed.config, fetchImpl: (path, init) => fetch(RELAY_URL + path, init), log })
+        const hasFetch = typeof fetch === 'function' && typeof AbortSignal === 'function'
+            && typeof AbortSignal.timeout === 'function';
+        if (relayParsed.ok && !hasFetch) log('relay off: this FXServer has no fetch()');
+        // Every relay call gives up after 10 s, so one hung request cannot stall the pull loop.
+        const relay = relayParsed.ok && hasFetch
+            ? createRelayClient({
+                config: relayParsed.config,
+                fetchImpl: (path, init) => fetch(RELAY_URL + path, { ...init, signal: AbortSignal.timeout(RELAY_TIMEOUT_MS) }),
+                log,
+            })
             : null;
         if (relay) log(`relay on: ${relay.origin} as ${relay.id}`);
         const fromServerCfg = [];
@@ -202,6 +214,7 @@
         store.restoreConsumed(storage.consumedSnapshot());
         log(`storage ${edition}`);
 
+        let pump = null;
         // One place makes every pairing code. Relay tickets get an rr2 code bound to the Relay, registered there
         // with the exact policy bytes the Relay serves (the same bytes handlePolicy would serve); others keep rr1.
         function makeCode({ ticket, nonce, expiresAt, policy, serverOrigin }) {
@@ -216,8 +229,9 @@
             });
             if (found && !found.binding && found.state === 'issued') {
                 store.setBinding(ticket, made.binding);
-                const policyBody = JSON.stringify({ ...policy, policy_hash: hash });
-                relay.register({ ticket, expiresAt, policyBody }).catch(() => log('rongroi relay: register failed', ticket));
+                // The same bytes handlePolicy serves. The pump registers them now and retries until the Relay confirms.
+                pump.issued({ ticket, expiresAt, policyBody: JSON.stringify({ ...policy, policy_hash: hash }) });
+                pump.round().catch(() => log('rongroi relay: round failed'));
             }
             return made.code;
         }
@@ -227,7 +241,10 @@
             const forget = store.forget.bind(store);
             store.forget = (ticket) => {
                 const found = store.lookup(ticket);
-                if (found && found.binding) relay.remove(ticket).catch(() => {});
+                if (found && found.binding) {
+                    pump.forget(ticket);
+                    relay.remove(ticket).catch(() => {});
+                }
                 return forget(ticket);
             };
         }
@@ -304,6 +321,8 @@
         setInterval(runRetention, 3600000);
 
         const handler = createHandler({ store, kit, now: Date.now, onReport, log });
+        // makeCode (above) can run before this line only through api calls, which start after startup.
+        pump = relay ? createRelayPump({ relay, store, ingest: handler.ingestRelay, graceMs: RELAY_GRACE_MS, log }) : null;
 
         function openCase({ caseId, policy, serverOrigin, ttlMs } = {}) {
             if (storage.hasCase(caseId)) throw new TypeError('case id is already open');
@@ -509,28 +528,7 @@
         setInterval(() => handler.sweep(), 10000);
 
         if (relay) {
-            let pulling = false;
-            setInterval(async () => {
-                if (pulling) return;
-                pulling = true;
-                try {
-                    for (const ticket of store.relayTickets(RELAY_GRACE_MS)) {
-                        const envelopes = await relay.pending(ticket);
-                        for (const e of envelopes) {
-                            let status = handler.ingestRelay({ ticket, sha: e.sha256, raw: e.raw, receivedAt: e.receivedAt,
-                                address: e.address, addressSource: e.addressSource });
-                            if (status === 429) continue; // a slot is busy: leave it on the Relay, try next round
-                            if (status === 400 || status === 413) status = 422;
-                            if (!RELAY_RESULTS.includes(status)) status = 500;
-                            await relay.result(ticket, e.sha256, status);
-                        }
-                    }
-                } catch {
-                    log('rongroi relay: pull failed');
-                } finally {
-                    pulling = false;
-                }
-            }, RELAY_PULL_MS);
+            setInterval(() => { pump.round().catch(() => log('rongroi relay: round failed')); }, RELAY_PULL_MS);
         }
     } catch {
         console.log('nakara_rongroi: startup failed');
