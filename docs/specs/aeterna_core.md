@@ -457,8 +457,9 @@ SendNUIMessage({ type = 'aeterna:theme', href = exports.aeterna_core:themeHref()
 ```
 
 `import.lua` adds `AeternaCore.themeMessage()` returning that table. The page sets `data-preset="<preset>"` on its
-`<html>` element; the presets in `theme.css` select on it. `href` (the `aeterna_theme` override) still loads after
-`theme.css`, so it wins over any preset. A page that ignores `preset` stays on Asphalt, as in 0.1. A changed preset
+`<html>` element only when `href` is empty; the presets in `theme.css` select on it. When `aeterna_theme` is set the
+page sets no `data-preset`, so the owner's `:root` rules win (a `:root[data-preset=…]` rule would otherwise beat
+them on specificity) and the preset convar is ignored. A page that ignores `preset` stays on Asphalt, as in 0.1. A changed preset
 applies after the package restarts or the player reconnects.
 
 ### Events (0.2)

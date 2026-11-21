@@ -130,7 +130,8 @@ facts that shape the decisions below:
 9. **Theme.** Every `html/theme.css` copy (still identical, checked in CI) gains type tokens (`--fs-1` smallest … `--fs-5`
    largest, `--lh`) and three presets: `asphalt` (default), `paper` (light) and `night-market` (dark, orange accent), selected
    by `setr aeterna_theme_preset`. Each page sets `data-preset="<name>"` on `<html>`, and the presets are written as
-   `:root[data-preset="paper"] { … }` rules. The `aeterna_theme` override still wins over any preset.
+   `:root[data-preset="paper"] { … }` rules. When the `aeterna_theme` override is set, pages set no `data-preset`, so the override wins and the preset is
+   ignored.
 
 10. **One combined zip (owner, 2026-11-21).** `release.yml` gains a job that builds
     `aeterna-starter-kit-<version>.zip` from the per-package zips already released for one commit, plus
