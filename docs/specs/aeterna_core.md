@@ -340,6 +340,16 @@ Server-local event `aeterna_core:selftest` → `(runId, name, ctx)`. The third a
 it: `ctx = { kind, side = 'server', a = src|nil, b = src|nil, destructive = boolean }`. Only `headless` and `mock`
 tests with `side = 'server'` are fired on the server; `side = 'client'`, `ped` and `eye` tests go to clients.
 
+**Client test started (server).** When core sends a client test (`ped`, `eye`, or `side = 'client'`) to its player(s),
+it first fires the server-local event `aeterna_core:selftestStarted` → `(runId, name, ctx)` with
+`ctx = { kind, side = 'client', a = src, b = src|nil, destructive = boolean }`. The owner's server script filters on its
+own name prefix and may prepare server state the client test needs (give an item, set a value, open a slot), and
+tears it down on the server-local `aeterna_core:selftestEnd` → `(runId, name)`, which core fires for every test that
+ends, whatever its side. Results still come only from the client report; the server owner never reports for a client
+test. A preparation that writes stored data still goes through the write guard below. This replaces any package-own
+net event for "my client test began" (added in W2, 2026-11-21, because invkit, radial, phonekit and phonecall rows
+needed server set-up for client tests).
+
 **Write guard.** `AeternaCore.selftest.mayWrite(runId, name) -> boolean` (server, from `import.lua`) calls the export
 `selftestMayWrite`. It returns `true` only for a test declared `destructive` in a run whose gate is open. Called by a
 test that is not declared destructive, it returns `false` and marks that test FAIL `undeclared destructive`. Kit
@@ -552,6 +562,12 @@ busted (pure module `shared/logic/selftest.lua`: registry, judging rules, merge 
 16. Focus overlay (pure state machine): holder H, overlay O → H gets `focusPaused`, keeps its token, owner = O; O
     releases → H gets `focusResumed`, owner = H; overlay O2 while O is up → O gets `focusLost`, H stays paused; normal
     request N while O is up → O and H get `focusLost`; O's resource stops → H resumes.
+17. `selftestStarted`: a `ped` test with `players = 2` fires the server-local event once with `a` and `b` before the
+    client payloads go out; a server-side `headless` test does not fire it; `selftestEnd` fires on the server for both
+    after the test ends (pass, timeout, owner stopped, player left).
+18. Write guard: `selftestMayWrite` returns `true` for an in-flight destructive test in a run whose gate is open,
+    `false` for a closed gate, and `false` plus FAIL `undeclared destructive` for an in-flight non-destructive test;
+    an unknown run id or a test not in flight returns `false` and changes nothing.
 
 Smoke (clean qbx server):
 

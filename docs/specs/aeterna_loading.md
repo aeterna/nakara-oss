@@ -252,9 +252,6 @@ event goes nowhere and the loading screen still works.
   core accepts only events whose `owner` is the invoking resource.
 - **Core restarts.** On `aeterna_core:hello` (server-local on the server, client-local on the client) the script
   registers again, so a core restart after `aeterna_loading` started does not leave it MISSING.
-- **Not built yet:** the server script and the client script in the package do not send `aeterna_core:selftest:add` or
-  any other self-test event, so the four tests above are not registered; the package has no edge to `aeterna_core` in
-  code today. Left for the wave that wires the self-tests.
 - `aeterna_loading` never calls an `aeterna_core` export, never lists it in `dependencies` and never loads its files
   (`check-kit-graph` checks this).
 
