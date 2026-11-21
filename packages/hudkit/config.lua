@@ -23,3 +23,24 @@ Config.minimap = {
 
 -- Hides the base game health and armour bars under the minimap via scaleform SETUP_HEALTH_ARMOUR.
 Config.hideBaseBars = true
+
+-- 0.2: default status bar style for players who have not picked one ('bar' or 'ring').
+Config.barStyle = 'bar'
+
+-- 0.2: tape compass layout element (top-centre).
+Config.compass = {
+    -- false = no tape compass for anyone (keeps the 0.1 screen).
+    enabled = true,
+    -- Degrees visible on the tape, 60-180 (outside that range it is clamped).
+    span = 120,
+}
+
+-- 0.2: voice indicator, shown only while pma-voice is started (detected at run time, never a dependency).
+Config.voice = {
+    enabled = true,
+}
+
+-- 0.2: seatbelt icon in the vehicle part, shown once a resource fires aeterna_hudkit:seatbelt.
+Config.seatbelt = {
+    enabled = true,
+}

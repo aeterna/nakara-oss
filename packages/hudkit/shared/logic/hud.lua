@@ -68,6 +68,31 @@ local RESERVED_BAR_IDS = {
     stress = true,
 }
 
+--- Ring gauge (0.2): the filled fraction of the circle, 0-1, for a 0-100 value; out of range clamps.
+--- html/app.js draws rings with a circumference of 100, so the dash length equals the clamped percentage.
+function HudLogic.ringArc(value)
+    local v = tonumber(value)
+    if not v or v <= 0 then return 0 end
+    if v >= 100 then return 1 end
+    return v / 100
+end
+
+--- Stroke dash for a ring of `circumference`: `length` is drawn, `offset` is the stroke-dashoffset.
+function HudLogic.ringDash(value, circumference)
+    local c = tonumber(circumference) or 100
+    local f = HudLogic.ringArc(value)
+    return { length = c * f, offset = c * (1 - f) }
+end
+
+--- Colour of a bar or ring: 'accent' for health, 'bad' at or below `low`, else 'normal' (--text-2).
+function HudLogic.barTone(id, value, low)
+    if id == 'health' then return 'accent' end
+    local threshold = tonumber(low) or 20
+    local v = tonumber(value)
+    if v and v <= threshold then return 'bad' end
+    return 'normal'
+end
+
 --- Extra bars registry
 function HudLogic.createBarsRegistry(options)
     local opts = options or {}
@@ -92,7 +117,9 @@ function HudLogic.createBarsRegistry(options)
             return false
         end
         local label = def.label
-        if type(label) ~= 'string' or #label < 1 or #label > 24 then
+        -- Length in characters, not bytes (Thai is 3 bytes each); invalid UTF-8 (utf8.len -> nil) is refused.
+        local labelLen = type(label) == 'string' and utf8.len(label) or nil
+        if not labelLen or labelLen < 1 or labelLen > 24 then
             warn('aeterna_hudkit: extra bar invalid label', { owner = owner, id = id })
             return false
         end
@@ -255,6 +282,7 @@ end
 --- Settings validation and KVP round trip
 local VALID_SPEED_UNITS = { kmh = true, mph = true }
 local VALID_MINIMAP_MODES = { always = true, vehicle = true, never = true }
+local VALID_BAR_STYLES = { bar = true, ring = true }
 
 function HudLogic.validateSetting(key, value)
     if key == 'numbers' then
@@ -272,6 +300,11 @@ function HudLogic.validateSetting(key, value)
             return false, 'value must be always, vehicle, or never'
         end
         return true, nil
+    elseif key == 'barStyle' then
+        if type(value) ~= 'string' or not VALID_BAR_STYLES[value] then
+            return false, 'value must be bar or ring'
+        end
+        return true, nil
     end
     return false, 'unknown setting key'
 end
@@ -281,11 +314,14 @@ function HudLogic.resolveSettings(stored, defaults)
         numbers = false,
         speedUnit = 'kmh',
         minimapMode = 'always',
+        barStyle = 'bar',
     }
     local s = {}
     s.numbers = (stored and type(stored.numbers) == 'boolean') and stored.numbers or def.numbers
     s.speedUnit = (stored and stored.speedUnit and VALID_SPEED_UNITS[stored.speedUnit]) and stored.speedUnit or def.speedUnit
     s.minimapMode = (stored and stored.minimapMode and VALID_MINIMAP_MODES[stored.minimapMode]) and stored.minimapMode or def.minimapMode
+    -- 0.2: a saved 0.1 value has no barStyle and reads as the default (Config.barStyle).
+    s.barStyle = (stored and stored.barStyle and VALID_BAR_STYLES[stored.barStyle]) and stored.barStyle or def.barStyle or 'bar'
     return s
 end
 
