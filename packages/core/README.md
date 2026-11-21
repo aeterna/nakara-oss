@@ -100,6 +100,29 @@ Prints `[aeterna_<res>] LEVEL msg key=value …`. Values in `fields` are stringi
 | `exports.aeterna_core:runSelftests()` | `table` | Runs all registered self-tests with a 5 s timeout and returns `{ { name, ok, detail, ms }, … }` |
 | `aeterna_core_selftest` | console output | Server console or players with ACE `aeterna.core.selftest` run all self-tests and print a summary |
 
+### Self-test hooks for package authors (server, 0.2)
+
+| Export / helper / event | Returns / args | Description |
+|---|---|---|
+| `exports.aeterna_core:selftestMayWrite(runId, name)` | `boolean` | Write guard. `true` only for your in-flight test that is declared `destructive`, in a run whose destructive gate is open. An in-flight test that is not declared destructive gets `false` and becomes FAIL `undeclared destructive`. An unknown run, a test not in flight, or another resource's test gets `false` and nothing changes |
+| `AeternaCore.selftest.mayWrite(runId, name)` | `boolean` | The same, from `@aeterna_core/import.lua`; `false` when `aeterna_core` cannot be reached. Call it before any persistent write (KVP, item metadata, files) made inside a test |
+| `aeterna_core:selftestStarted` (server-local) | `(runId, name, ctx)` | Fired before a `ped`, `eye`, `side = 'client'` or two-player test is sent to its player(s). `ctx = { kind, side = 'client', a = src, b = src \| nil, destructive }`. Filter on your own name prefix and prepare server state the client test needs. Results still come only from the client report |
+| `aeterna_core:selftestEnd` (server-local) | `(runId, name)` | Fired for every test that ends, on any side and for any reason (pass, fail, timeout, owner stopped, player left). Tear down what you prepared |
+
+```lua
+AddEventHandler('aeterna_core:selftestStarted', function(runId, name, ctx)
+    if name ~= 'aeterna_mypkg.give_item' then return end
+    if AeternaCore.selftest.mayWrite(runId, name) then
+        -- give the test item to ctx.a
+    end
+end)
+AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
+    if name == 'aeterna_mypkg.give_item' then
+        -- take the test item back
+    end
+end)
+```
+
 ## Focus rules
 
 1. One resource owns NUI focus at a time; the newest `requestFocus` call wins.

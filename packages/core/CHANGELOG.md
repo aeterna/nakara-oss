@@ -22,6 +22,11 @@ All notable changes to `aeterna_core` are documented here. The format follows
 - Server-local and client-local registration events for resources with an optional edge, and `aeterna_core:hello`.
 - Focus overlay: `requestFocus({ overlay = true })`, `focusPaused` / `focusResumed`, `focusPausedOwner()`.
 - Theme presets: `themePreset()` (`aeterna_theme_preset`) and `AeternaCore.themeMessage()`.
+- Client test started (server): before a `ped`, `eye`, `side = 'client'` or two-player test goes out, core fires the
+  server-local `aeterna_core:selftestStarted` → `(runId, name, ctx)`, and it fires the server-local
+  `aeterna_core:selftestEnd` → `(runId, name)` for every test that ends (pass, timeout, owner stopped, player left).
+- Write guard: server export `selftestMayWrite(runId, name)` and `AeternaCore.selftest.mayWrite(runId, name)`; a test
+  not declared destructive that calls it is FAIL `undeclared destructive`.
 
 ### Changed
 
