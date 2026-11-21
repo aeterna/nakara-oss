@@ -6,6 +6,11 @@ All notable changes to `aeterna_uikit` are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- `slider` block: spec validation (range, step grid, at most 1000 steps, value inside the range) and server-side re-check of its value in `values`.
+- Locale keys `uikit.search.placeholder`, `uikit.search.none`, `uikit.table.empty` and `uikit.tabs.label` (Thai and English).
+
 ## [0.1.0] - 2026-11-18
 
 - Bundle the IBM Plex Sans Thai font (OFL-1.1).

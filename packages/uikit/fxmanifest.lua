@@ -5,7 +5,7 @@ lua54 'yes'
 name 'aeterna_uikit'
 author 'AETERNA'
 description 'Server-owned UI panels, client prompts (confirm, input, progress, skill check, key hints), and shared menu for the AETERNA Starter Kit.'
-version '0.1.0'
+version '0.2.0'
 repository 'https://github.com/aeterna/nakara-oss'
 
 dependencies {

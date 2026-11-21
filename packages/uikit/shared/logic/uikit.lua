@@ -29,6 +29,7 @@ L.BLOCK_TYPES = {
     progress = true,
     divider = true,
     buttons = true,
+    slider = true,
 }
 L.VARIANTS = { primary = true, secondary = true, danger = true }
 L.DIFFICULTIES = { easy = true, medium = true, hard = true }
@@ -410,6 +411,14 @@ local function validateFieldBlock(b, bpath)
     }
 end
 
+-- 0.2 slider: a number in [min, max] on the grid min + n * step (tolerance 1e-6 steps).
+function L.isSliderValue(v, block)
+    if type(v) ~= 'number' or v ~= v then return false end
+    if v < block.min or v > block.max then return false end
+    local steps = (v - block.min) / block.step
+    return math.abs(steps - math.floor(steps + 0.5)) <= 1e-6
+end
+
 function L.validateSpec(spec)
     if type(spec) ~= 'table' then
         return false, 'spec: type'
@@ -532,6 +541,46 @@ function L.validateSpec(spec)
                 disabled = b.disabled == true,
             }
 
+        elseif btype == 'slider' then
+            local okLbl, errLbl, cleanLbl = checkCleanString(b.label, 1, 40, bpath .. '.label')
+            if not okLbl then return false, errLbl end
+            if type(b.min) ~= 'number' or type(b.max) ~= 'number' then
+                return false, bpath .. '.min: type'
+            end
+            if not (b.min < b.max) then
+                return false, bpath .. '.min: max'
+            end
+            if type(b.step) ~= 'number' or not (b.step > 0 and b.step < math.huge) then
+                return false, bpath .. '.step: range'
+            end
+            if (b.max - b.min) / b.step > 1000 then
+                return false, bpath .. '.step: maxSteps 1000'
+            end
+            local sliderVal = b.value
+            if sliderVal == nil then
+                sliderVal = b.min
+            elseif type(sliderVal) ~= 'number' or sliderVal ~= sliderVal then
+                return false, bpath .. '.value: type'
+            elseif sliderVal < b.min or sliderVal > b.max then
+                return false, bpath .. '.value: range'
+            end
+            local cleanUnit
+            if b.unit ~= nil then
+                local okUnit, errUnit, cu = checkCleanString(b.unit, 0, 8, bpath .. '.unit')
+                if not okUnit then return false, errUnit end
+                cleanUnit = cu
+            end
+            cleanBlocks[i] = {
+                id = b.id,
+                type = 'slider',
+                label = cleanLbl,
+                min = b.min,
+                max = b.max,
+                step = b.step,
+                value = sliderVal,
+                unit = cleanUnit,
+            }
+
         elseif btype == 'progress' then
             local okLbl, errLbl, cleanLbl = checkCleanString(b.label, 1, 40, bpath .. '.label')
             if not okLbl then return false, errLbl end
@@ -577,7 +626,7 @@ function L.validateValues(spec, values)
     local valueBlocks = {}
     for i = 1, #spec.blocks do
         local b = spec.blocks[i]
-        if b and (b.type == 'field' or b.type == 'toggle' or b.type == 'select') then
+        if b and (b.type == 'field' or b.type == 'toggle' or b.type == 'select' or b.type == 'slider') then
             valueBlocks[b.id] = b
         end
     end
@@ -621,6 +670,12 @@ function L.validateValues(spec, values)
         elseif b.type == 'toggle' then
             if type(v) ~= 'boolean' then
                 return false, ('values.%s: type'):format(k)
+            end
+            cleanValues[k] = v
+
+        elseif b.type == 'slider' then
+            if not L.isSliderValue(v, b) then
+                return false, ('values.%s: range or step'):format(k)
             end
             cleanValues[k] = v
 
