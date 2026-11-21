@@ -2,6 +2,8 @@
 
 - Status: accepted — owner, 2026-11-01 (every owner question answered as recommended)
 - Amended: 2026-11-02, section 4 after the section 2 probe (owner chose files on Enhanced); Claude Code - Claude Opus 5.5
+- Amended: 2026-11-21, section 14 (easy adoption: four convars, the relay transport, keeping reports across an
+  update) after the owner decided aeterna-rongroi ADR 0097's questions; Claude Code - Claude Opus 5.5
 - Date: 2026-11-01
 - Related: aeterna-rongroi ADR 0089, "Rongroi product line and schema 2" (not merged yet:
   [aeterna/aeterna-rongroi#252](https://github.com/aeterna/aeterna-rongroi/pull/252)); aeterna-rongroi
@@ -125,6 +127,7 @@ Windows, so not on a native Linux disk, and with no players connected (median ms
   `files.write: ["cache/rongroi-reports/*"]`. `SaveResourceFile` does not create folders (measured: it returns
   false), so the package ships the folder with a `.gitkeep`. ADR 0089 names `server-data/cache/rongroi-reports/`,
   which the Kit cannot write under this repo's rules; the same change is proposed for ADR 0089.
+  Section 14 keeps them there and protects them across an update (amended 2026-11-21, spike S7).
 - **Scanner exception.** `undeclared-file-write` refuses a path built at runtime, and a file name per case cannot be
   a literal. `.fivem-devkit.json` allows it for one shipped file, `packages/rongroi/server/js/filestore.js`, which holds
   the Kit's only `SaveResourceFile` call and refuses any name outside `(case|index|report)-<hex>` before it builds a
@@ -252,7 +255,8 @@ anything from a record.
 
 ### 11. Settings, frameworks and UI
 
-- Settings live in the in-game panel and KVP. The Kit reads no convar.
+- Settings live in the in-game panel and KVP. The Kit reads only `gamename` and the convars in section 14 (amended
+  2026-11-21).
 - Staff permission is the ACE `nakara_rongroi.staff` via `IsPlayerAceAllowed`.
 - External resources the Kit may touch, each only when `GetResourceState` says it is started: `qbx_core`,
   `qb-core`, `es_extended` (names and identifiers), `ox_lib` (callbacks, rate limit), `oxmysql` (storage).
@@ -282,6 +286,54 @@ requires schema 2 with a binding.
 
 Hub and any hosted service · WASM plug-ins · exe or DLL plug-ins · auto-ban, ban buttons, or any action on a
 cheat-trace finding · any score or verdict · HTTPS through `users.cfx.re` · persistent Connect mode.
+
+### 14. Easy adoption (amended 2026-11-21)
+
+The owner decided aeterna-rongroi ADR 0097 on 2026-11-21 (plan questions Q1–Q7 and R1–R6, each as recommended). It adds
+a second transport, the Rongroi Relay, and an `rr2.` code. This section is what changes in the Kit.
+
+1. **Four convars, server-only.** `rongroi_public_origin`, `rongroi_relay_url`, `rongroi_relay_id` (the Relay's
+   `base_path` for this server) and `rongroi_relay_key`, set with `set`, never `setr` (a replicated convar reaches every
+   client, and the relay key is a credential). Any resource on the server can still read a `set` convar with
+   `GetConvar`; the README says so. They are read at resource start. When one is set, the panel shows its value
+   read-only and says it comes from `server.cfg`, except `rongroi_relay_key`, which shows only "set"; `rongroi doctor`
+   never prints it either. When one is not set, the panel setting applies as before. No other setting moves to a
+   convar. For relay codes, `server_origin` is the public `https` origin of `rongroi_relay_url`; an `http:` relay URL is
+   refused at start.
+2. **Which code the Kit issues.** `rr1.` while the transport is direct and the resource is named `nakara_rongroi`, so
+   Connect 0.1.1 keeps working. `rr2.` (with `base_path` and `transport`) otherwise. ADR 0097 §2 holds the format.
+3. **Relay client.** When `rongroi_relay_url` and `rongroi_relay_key` are set, the Kit registers each ticket with the
+   Relay before it shows a code, pulls envelopes, decrypts them as today, and posts a result per envelope (ADR 0097
+   §3). The Kit's own HTTP endpoints stay for the direct transport and the saved-file page. A pulled envelope enters
+   `uploading` if the Relay's `received_at` is before `expires_at`, so an upload made in time but pulled late is not
+   refused as expired; the Kit consumes a ticket only after its own checks, as today. The Kit stores the five values
+   of envelope v2's additional data with the ticket when it issues the code, and issues only normalised origins
+   (`new URL(o).origin`). The uploader address the
+   Relay passes is stored with its source and shown as "reported by the relay". The Kit sends `DELETE` for a ticket
+   when staff delete its case. **Not verified:** the response size `PerformHttpRequest` accepts; pulling may need
+   slices.
+4. **Report storage survives an update.** On Enhanced the files live in `<resource>/cache/rongroi-reports/`.
+   Updating the Kit by replacing its folder, which a txAdmin recipe or a drop-in install does, deletes every stored
+   report and case file while the index in KVP still names them.
+   - **Spike S7 (2026-11-21, kit-test, FXServer Enhanced b177):** a data-only resource does not work.
+     `SaveResourceFile` with another resource's name returned `false` and `LoadResourceFile` returned `null`, whether
+     that resource was started or only loaded; with the Kit's own name both worked (64 KiB and Thai text came back
+     identical); a missing resource throws "Resource … not found". Legacy was not tested.
+   - **Decision:** files stay in the Kit's folder. The release zip ships `cache/rongroi-reports/` with only `.gitkeep`,
+     the README and the update notes say to keep `cache/` when replacing the folder, and an update script for Windows
+     and Linux copies everything except `cache/`.
+   - **Start check:** at start the Kit reads the file index and checks that each indexed case file loads. If any is
+     missing it logs one line with the count and shows a banner in the staff panel ("N stored reports are missing;
+     the Kit folder was probably replaced without `cache/`"). It never deletes index entries by itself; staff can clear
+     them from the panel.
+5. **Renaming the resource is not supported in Kit 0.2.** The X25519 private key, the settings and, on Legacy, the
+   cases live in Resource KVP, which belongs to the resource name; a renamed resource starts with a new key and loses
+   them. The ACE `nakara_rongroi.staff`, `exports.nakara_rongroi` and the `nakara_rongroi:*` events also keep the name.
+   `rr2` carries `base_path` so a later Kit can add a migration.
+6. **`rongroi doctor`.** A console command that checks the convars, the public origin's form, the report folder and the start check (item 4)
+   and, when a Relay is set, that the Relay answers and accepts the key. It cannot test reachability from outside the
+   server's network without an outside service, and says so.
+7. **Starter Kit.** `nakara_rongroi` is listed in `kits/starter/resources.cfg`.
 
 ## Consequences
 
