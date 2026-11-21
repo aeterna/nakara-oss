@@ -16,6 +16,7 @@ All notable changes to `aeterna_invkit` are documented here. The format follows
 - `swapItems` and `createItem` hooks on the mapped items fire `aeterna_phonekit:devicesChanged` for each player involved (integer player inventory ids of connected players only, never a stash), on the next tick after ox_inventory applies the change.
 - README section on adding phone items and images to ox_inventory.
 - Self-tests registered with `aeterna_core` on start: `stash_id`, `use_state_machine`, `phone_item_map` (server headless), `stash_open`, `phone_two_items`, `phone_drop_active`, `phone_no_item` (ped), `item_use` (client mock, destructive; the server prepares it on `aeterna_core:selftestStarted` and cleans up on `aeterna_core:selftestEnd`) and `phone_device_save` (server mock, destructive), with their expect strings in en and th. Test writes go through `AeternaCore.selftest.mayWrite`; `phone_device_save` removes its phone by `phoneId` and skips with `needs a presser` on a run nobody pressed. `shared/logic/phone.lua` is now a shared script so the client can build the device list. Agent: Claude Code - Claude Opus 5.5 (agent engineer).
+- Self-test instructions as `expect` for `stash_open`, `phone_two_items`, `phone_drop_active` and `phone_no_item` (en, th). Agent: Claude Code - Claude Opus 5.5 (agent engineer).
 
 Agent: Claude Code - Claude Opus 5.5 (agent engineer)
 

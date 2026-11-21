@@ -113,6 +113,8 @@ server state are prepared by invkit's server on core's `aeterna_core:selftestSta
 `aeterna_core:selftestEnd`; the result always comes from the presser's client. Every test write goes through core's
 write guard (`AeternaCore.selftest.mayWrite`) first.
 
+`stash_open` and the three phone rows carry a short instruction as `expect` ("Carry two phone items, then drop one of them"); `aeterna_testkit` shows it while the row runs.
+
 | Test | Kind | Runs | What it checks | SKIP when |
 |---|---|---|---|---|
 | `aeterna_invkit.stash_id` | headless | server | Stash ids for both scopes, with and without qbx; no identifier or an unknown scope gives none | never |

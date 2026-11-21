@@ -116,6 +116,8 @@ A missing value hides its part of the indicator.
 hudkit registers these tests with `aeterna_core` on start (`aeterna_testkit` lists and runs them). A test reports SKIP
 only for the reason in the last column; a ped or eye test with nobody to run it is GAP.
 
+The voice rows and `seatbelt_event` carry a short instruction as `expect` ("Talk into your microphone, then change your voice range"); `aeterna_testkit` shows a ped row's instruction while it runs.
+
 | Test | Kind | Runs | What it checks | SKIP when |
 |---|---|---|---|---|
 | `aeterna_hudkit.values_mapping` | headless | server | Health 100–200 → 0–100 %, km/h and mph, gear text, heading sectors, identical values send nothing | never |
