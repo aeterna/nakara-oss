@@ -58,7 +58,7 @@ The server picks the backend once at start from the `gamename` convar:
 | `Config.number.assign` | `'first_open'` | `first_open`: the first time either app opens · `on_load`: when the character loads |
 | `Config.sms.maxLen` | `160` | Visible characters per message (Thai counts per character), 1–300 |
 | `Config.sms.keep` | `100` | Messages kept per character, in and out together; the oldest leave first. 10–100 |
-| `Config.call.ringSeconds` | `30` | Ringing without an answer becomes `missed` |
+| `Config.call.ringSeconds` | `30` | Ringing without an answer becomes `missed`; 5–60 (phonekit's ring card ends after 60 s) |
 | `Config.call.maxMinutes` | `60` | An active call ends with reason `limit` |
 | `Config.call.channelBase` | `20000` | Legacy only: first `pma-voice` call channel this package uses |
 | `Config.recentCalls` | `30` | Call log entries kept per character |
@@ -132,7 +132,7 @@ What this resource is allowed to do to your server, from [`oss.json`](oss.json).
 | Registered commands | `+aeterna_phonecall_answer`, `-aeterna_phonecall_answer`, `+aeterna_phonecall_hangup`, `-aeterna_phonecall_hangup`, `aeterna_phonecall_number`, `aeterna_phonecall_setnumber` |
 | Convars read | `gamename` (server, once at start) |
 | Convars written | none |
-| Server net events (accepted from clients) | `aeterna_phonecall:sv:names`, `aeterna_phonecall:sv:answer`, `aeterna_phonecall:sv:hangup`, `aeterna_phonecall:sv:selftest` |
+| Server net events (accepted from clients) | `aeterna_phonecall:sv:names`, `aeterna_phonecall:sv:answer`, `aeterna_phonecall:sv:hangup` |
 | Client net events (accepted from the server) | `aeterna_phonecall:cl:state`, `aeterna_phonecall:cl:askNames`, `aeterna_phonecall:cl:saveContact` |
 | NUI | no |
 | Database tables | none (no DDL) |
