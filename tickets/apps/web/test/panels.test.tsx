@@ -272,12 +272,25 @@ describe('Panels web component (acceptance test n5)', () => {
 
     render(<Panels guildId={GUILD_ID} locale="en" />);
     await screen.findByRole('option', { name: '# ticket-drop' });
-    const channelSelect = screen.getByLabelText('Channel ID');
+    const channelSelect = screen.getByLabelText('Channel');
     fireEvent.change(channelSelect, { target: { value: 'chan-888' } });
     fireEvent.click(screen.getByText('Save Panel'));
 
     await waitFor(() => {
       expect(capturedBody?.channelId).toBe('chan-888');
     });
+  });
+
+  it('asks for a channel with the Choose a channel message when none is picked', async () => {
+    render(<Panels guildId={GUILD_ID} locale="en" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('panel-title-input')).toBeDefined();
+    });
+
+    fireEvent.submit(screen.getByText('Save Panel').closest('form') as HTMLFormElement);
+
+    expect(await screen.findByText('Choose a channel')).toBeTruthy();
+    expect(screen.queryByText('Channel ID is required')).toBeNull();
   });
 });

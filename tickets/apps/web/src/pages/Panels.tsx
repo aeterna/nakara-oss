@@ -198,7 +198,7 @@ export const Panels: React.FC<PanelsProps> = ({ guildId, locale }) => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!channelId.trim()) {
-      setStatusMessage({ text: 'Channel ID is required', type: 'error' });
+      setStatusMessage({ text: t('channelRequired', locale), type: 'error' });
       return;
     }
     if (!title.trim()) {
