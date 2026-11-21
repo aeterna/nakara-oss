@@ -8,6 +8,12 @@ local focusManager = focusLogic.new({
     onLost = function(owner, token, reason)
         TriggerEvent('aeterna_core:focusLost', owner, token, reason)
     end,
+    onPaused = function(owner, token)
+        TriggerEvent('aeterna_core:focusPaused', owner, token)
+    end,
+    onResumed = function(owner, token)
+        TriggerEvent('aeterna_core:focusResumed', owner, token)
+    end,
 })
 
 local warnedTheme = nil
@@ -38,6 +44,10 @@ end)
 
 exports('focusOwner', function()
     return focusManager:owner()
+end)
+
+exports('focusPausedOwner', function()
+    return focusManager:pausedOwner()
 end)
 
 exports('themeHref', function()
