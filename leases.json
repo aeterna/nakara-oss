@@ -72,6 +72,18 @@
       "plan": "KIT02",
       "acquired": "2026-11-21T13:19:29Z",
       "expires": "2026-11-21T17:19:29Z"
+    },
+    {
+      "id": "kit02-w1-testkit-99318eea",
+      "repo": "nakara-oss",
+      "lane": "kit02-w1-testkit",
+      "host": "mac",
+      "scope": [
+        "packages/testkit/**"
+      ],
+      "plan": "KIT02",
+      "acquired": "2026-11-21T13:19:32Z",
+      "expires": "2026-11-21T17:19:32Z"
     }
   ]
 }
