@@ -124,7 +124,7 @@ only for the reason in the last column; a ped or eye test with nobody to run it 
 | `aeterna_hudkit.compass_tape` | ped | presser | Turns the camera a full circle in 30° steps; the degree sent to the page follows the camera and N sits on the centre mark facing north; the camera turns back | `Config.compass.enabled = false` |
 | `aeterna_hudkit.voice_indicator` | ped | presser | Within 25 s the presser talks and changes proximity mode: the microphone lights and the mode label changes | `pma-voice` not started, or `Config.voice.enabled = false` |
 | `aeterna_hudkit.voice_radio` | ped | presser | Within 25 s the presser joins a radio channel and transmits: the radio icon shows and is highlighted | `pma-voice` not started, or `Config.voice.enabled = false` |
-| `aeterna_hudkit.seatbelt_event` | mock | presser | Fires `true`, `false`, `nil` through `aeterna_hudkit:seatbelt` and checks the icon state sent to the page as if seated, then puts the previous state and owner back | `Config.seatbelt.enabled = false` |
+| `aeterna_hudkit.seatbelt_event` | mock | presser | With the presser in a vehicle (on foot it fails without firing anything): fires `true`, `false`, `nil` through `aeterna_hudkit:seatbelt` and checks the icon state hudkit's own handler sent to the page, then puts the previous state and owner back | `Config.seatbelt.enabled = false` |
 | `aeterna_hudkit.minimap_follows` | ped | presser | Moves the radar to the top-right and back; at each place its corner is under the stand-in and the mask and blur line up | — |
 
 ## Commands and keys / คำสั่งและปุ่มลัด
