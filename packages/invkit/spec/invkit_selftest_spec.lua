@@ -86,6 +86,19 @@ describe('aeterna_invkit self-tests', function()
             end
         end)
 
+        it('names the fold and slab items from Config.phone.items in the phone_two_items instruction', function()
+            natives.stub('Locales', {})
+            assert(loadfile(DIR .. '/locales/en.lua'))()
+            local function t(key, vars)
+                return (Locales.en[key]:gsub('{(%w+)}', function(k) return tostring(vars and vars[k]) end))
+            end
+            local items = { my_fold = 'fold', big_slab = 'slab', phone = 'slab' }
+            local m = by_name(ST.definitions(t, { phone = { items = items } }))
+            assert.are.equal('Carry a my_fold and a big_slab item', m.phone_two_items.expect)
+            local shipped = by_name(ST.definitions(t, { phone = { items = SHIPPED_ITEMS } }))
+            assert.are.equal('Carry a phone_fold and a phone_slab item', shipped.phone_two_items.expect)
+        end)
+
         it('has the expect string in en and th within core limits', function()
             natives.stub('Locales', {})
             assert(loadfile(DIR .. '/locales/en.lua'))()
@@ -103,15 +116,22 @@ describe('aeterna_invkit self-tests', function()
             natives.stub('Locales', {})
             assert(loadfile(DIR .. '/locales/en.lua'))()
             assert(loadfile(DIR .. '/locales/th.lua'))()
-            local en = by_name(ST.definitions(function(key) return Locales.en[key] end))
+            local function t(lang)
+                return function(key, vars)
+                    return (Locales[lang][key]:gsub('{(%w+)}', function(k) return tostring(vars and vars[k]) end))
+                end
+            end
+            local cfg = { phone = { items = SHIPPED_ITEMS } }
+            local en = by_name(ST.definitions(t('en'), cfg))
             assert.are.equal('Stand at a stash point, then walk away from it', en.stash_open.expect)
             assert.are.equal('Carry a phone_fold and a phone_slab item', en.phone_two_items.expect)
             assert.are.equal('Carry two phone items, then drop one of them', en.phone_drop_active.expect)
             assert.are.equal('Drop or store every phone item you carry', en.phone_no_item.expect)
-            local th = by_name(ST.definitions(function(key) return Locales.th[key] end))
+            local th = by_name(ST.definitions(t('th'), cfg))
             for _, name in ipairs({ 'stash_open', 'phone_two_items', 'phone_drop_active', 'phone_no_item' }) do
                 assert.is_true(utf8.len(th[name].expect) > 0 and utf8.len(th[name].expect) <= 240, name)
             end
+            assert.truthy(th.phone_two_items.expect:find('phone_fold', 1, true))
         end)
 
         it('lets core skip the ox_inventory rows when ox_inventory is not started', function()
@@ -424,6 +444,8 @@ describe('aeterna_invkit self-tests', function()
             local state, detail = w.verdict()
             assert.are.equal('pass', state)
             assert.truthy(detail:find('64', 1, true))
+            assert.truthy(detail:find('inventory shows', 1, true))
+            assert.falsy(detail:find('answers', 1, true))
         end)
 
         it('phone_two_items fails naming the missing model', function()
@@ -442,6 +464,20 @@ describe('aeterna_invkit self-tests', function()
             assert.are.equal('pass', (w.verdict()))
         end)
 
+        it('phone_drop_active compares stable ids: a phone without phoneId is not taken for a new one', function()
+            local w = ST.newPhoneWatch('phone_drop_active')
+            assert.is_false(w.observe(devices({ { 'phone_fold', nil, 64 }, { 'phone_slab', nil, 12 } })))
+            -- Same two phones, still carried: nothing was dropped.
+            assert.is_false(w.observe(devices({ { 'phone_fold', nil, 64 }, { 'phone_slab', nil, 12 } })))
+            -- The fold in slot 1 left; the slab in slot 2 stays.
+            local after = ST.devicesFrom(InvkitPhoneLogic, { { slot = 2, name = 'phone_slab', metadata = { battery = 12 } } },
+                InvkitPhoneLogic.validateItemMap(SHIPPED_ITEMS))
+            assert.is_true(w.observe(after))
+            local state, detail = w.verdict()
+            assert.are.equal('pass', state)
+            assert.truthy(detail:find('inventory shows', 1, true))
+        end)
+
         it('phone_drop_active fails when the presser never carried two phones', function()
             local w = ST.newPhoneWatch('phone_drop_active')
             w.observe(devices({ { 'phone_fold', 'aaaa0001', 64 } }))
@@ -455,7 +491,9 @@ describe('aeterna_invkit self-tests', function()
             local w = ST.newPhoneWatch('phone_no_item')
             assert.is_false(w.observe(devices({ { 'phone', 'aaaa0003', 50 } })))
             assert.is_true(w.observe(devices({})))
-            assert.are.equal('pass', (w.verdict()))
+            local state, detail = w.verdict()
+            assert.are.equal('pass', state)
+            assert.are.equal('inventory shows no phone item', detail)
         end)
 
         it('phone_no_item fails while a phone is still carried', function()
@@ -481,7 +519,8 @@ describe('aeterna_invkit self-tests', function()
             env_guard = {}
             natives.reset({ resource = 'aeterna_invkit', side = 'server', invoker = 'aeterna_invkit' })
             natives.add_player(5, 'player5')
-            local inv = { [5] = {} }
+            natives.add_player(6, 'player6')
+            local inv = { [5] = {}, [6] = {} }
             local ox = { inv = inv, added = {}, removed = {}, removeCalls = {} }
             for i, it in ipairs(opts.carried or {}) do inv[5][i] = it end
             natives.stub_export('ox_inventory', 'Search', function(src, _, names)
@@ -528,7 +567,11 @@ describe('aeterna_invkit self-tests', function()
                 end
                 return n
             end)
-            natives.stub_export('ox_inventory', 'registerHook', function() return 1 end)
+            ox.hooks = {}
+            natives.stub_export('ox_inventory', 'registerHook', function(event, fn)
+                ox.hooks[event] = fn
+                return 1
+            end)
             natives.stub_export('ox_inventory', 'removeHooks', function() end)
             natives.stub('GetResourceState', function(name)
                 if name == 'ox_inventory' then return 'started' end
@@ -675,6 +718,74 @@ describe('aeterna_invkit self-tests', function()
             assert.is_nil(natives.last_emitted('client', 'aeterna_invkit:cl:use'))
         end)
 
+        it('item_use: another player using the same item during the test goes to ox untouched', function()
+            local env = boot({ carried = {} })
+            env.inv[6][1] = { name = ST.USE_ITEMS[1], slot = 1, count = 2, metadata = {} }
+            fireAsCore('aeterna_core:selftestStarted', 'r7-abcd', 'aeterna_invkit.item_use',
+                { kind = 'mock', side = 'client', a = 5, destructive = true })
+            natives.advance(0)
+            local verdict = env.ox.hooks.usingItem({ source = 6, item = { name = ST.USE_ITEMS[1], slot = 1, metadata = {} } })
+            assert.is_nil(verdict) -- nil = ox goes on with its own use
+            for _, e in ipairs(natives.emitted('client', 'aeterna_invkit:cl:use')) do
+                assert.are_not.equal(6, e.target)
+            end
+            assert.are.equal(2, env.inv[6][1].count)
+        end)
+
+        it('item_use: the presser using an untagged item of the same name also goes to ox', function()
+            local env = boot({ carried = { { name = ST.USE_ITEMS[1], slot = 1, count = 4, metadata = {} } } })
+            fireAsCore('aeterna_core:selftestStarted', 'r7-abcd', 'aeterna_invkit.item_use',
+                { kind = 'mock', side = 'client', a = 5, destructive = true })
+            natives.advance(0)
+            local verdict = env.ox.hooks.usingItem({ source = 5, item = { name = ST.USE_ITEMS[1], slot = 1, metadata = {} } })
+            assert.is_nil(verdict)
+            assert.is_nil(natives.last_emitted('client', 'aeterna_invkit:cl:use'))
+        end)
+
+        it('item_use: the tagged test item is taken by the test', function()
+            local env = boot()
+            fireAsCore('aeterna_core:selftestStarted', 'r7-abcd', 'aeterna_invkit.item_use',
+                { kind = 'mock', side = 'client', a = 5, destructive = true })
+            natives.advance(0)
+            local slot = env.inv[5][1]
+            local verdict = env.ox.hooks.usingItem({ source = 5, item = { name = slot.name, slot = slot.slot,
+                metadata = slot.metadata } })
+            assert.is_false(verdict)
+            assert.are.equal(5, natives.last_emitted('client', 'aeterna_invkit:cl:use').target)
+        end)
+
+        it('item_use: the delayed start asks the write guard again', function()
+            local env = boot()
+            fireAsCore('aeterna_core:selftestStarted', 'r7-abcd', 'aeterna_invkit.item_use',
+                { kind = 'mock', side = 'client', a = 5, destructive = true })
+            natives.advance(0)
+            natives.stub('AeternaCore', setmetatable({ selftest = { mayWrite = function() return false end } },
+                { __index = AeternaCore }))
+            natives.advance(ST.USE_START_DELAY_MS + 10)
+            assert.is_nil(natives.last_emitted('client', 'aeterna_invkit:cl:use'))
+        end)
+
+        it('item_use: when aeterna_invkit itself stops, the tagged item goes', function()
+            local env = boot()
+            fireAsCore('aeterna_core:selftestStarted', 'r7-abcd', 'aeterna_invkit.item_use',
+                { kind = 'mock', side = 'client', a = 5, destructive = true })
+            natives.advance(0)
+            natives.fire('onResourceStop', 'aeterna_invkit')
+            assert.are.equal(1, #env.ox.removeCalls)
+            assert.are.equal('r7-abcd', env.ox.removeCalls[1].metadata.aeterna_selftest)
+        end)
+
+        it('item_use: a used event from another resource changes nothing', function()
+            local env = boot()
+            fireAsCore('aeterna_core:selftestStarted', 'r7-abcd', 'aeterna_invkit.item_use',
+                { kind = 'mock', side = 'client', a = 5, destructive = true })
+            natives.advance(0)
+            natives.stub('GetInvokingResource', function() return 'other_res' end)
+            natives.fire('aeterna_invkit:used', 5, { owner = 'aeterna_invkit', item = ST.USE_ITEMS[1] })
+            natives.stub('GetInvokingResource', function() return 'aeterna_invkit' end)
+            assert.is_not_nil(InvkitServerSelftestHooks.useManager:getUsable(ST.USE_ITEMS[1]))
+        end)
+
         it('item_use: a selftestStarted from another resource gives nothing and registers nothing', function()
             local env = boot()
             natives.fire('aeterna_core:selftestStarted', 'r9-abcd', 'aeterna_invkit.item_use',
@@ -800,7 +911,10 @@ describe('aeterna_invkit self-tests', function()
             natives.advance(300)
             env.inv.count = 1
             natives.advance(600)
-            natives.fire_net('aeterna_invkit:cl:use', 1, { useId = 'u1', label = 'Water', duration = 1500,
+            natives.fire_net('aeterna_invkit:cl:use', 1, { useId = 'u0', label = 'Water', duration = 1500,
+                cancelable = true })
+            natives.advance(2000)
+            natives.fire_net('aeterna_invkit:cl:use', 1, { useId = 'u1', label = ST.USE_DEF.label, duration = 1500,
                 cancelable = true })
             env.inv.count = 0
             natives.advance(3000)
