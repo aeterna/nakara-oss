@@ -35,3 +35,9 @@ Under repo hard rule 5, `qbx_medical` and `ox_inventory` are touched only when `
 
 Convars:
 - `nakara_tickets_api`: Base URL of the Nakara Tickets API server (e.g. `https://tickets.example.com`).
+
+## Known issues
+
+- On FXServer the console shows `Uncaught TypeError: Invalid state: Reader released` at pairing and every 30 s (heartbeat).
+  FXServer's embedded Node logs it for every `fetch` that sends a request body; the request and its response complete
+  normally. See `docs/maintainers/live-test.md`.

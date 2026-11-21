@@ -1,20 +1,45 @@
 // FXServer resolves a relative require() against the resource root, not against the requiring file.
-function isMissingModule(err) {
-  if (!err) return false;
-  return err.code === 'MODULE_NOT_FOUND' || /^Cannot find module\b/.test(err.message || '');
+function isMissingSpecifier(err, specifier) {
+  if (!err || err.code !== 'MODULE_NOT_FOUND') return false;
+  const msg = err.message || '';
+  const suffix = specifier.startsWith('./') ? specifier.slice(1) : (specifier.startsWith('/') ? specifier : `/${specifier}`);
+  const bare = specifier.startsWith('./') ? specifier.slice(2) : specifier;
+  const winSuffix = suffix.replace(/\//g, '\\');
+  return (
+    msg.includes(`'${specifier}'`) ||
+    msg.includes(`"${specifier}"`) ||
+    msg.includes(`${suffix}'`) ||
+    msg.includes(`${suffix}"`) ||
+    msg.includes(`${winSuffix}'`) ||
+    msg.includes(`${winSuffix}"`) ||
+    msg.includes(`'${bare}'`) ||
+    msg.includes(`"${bare}"`)
+  );
 }
 
-function loadSibling(loadLocal, loadRoot) {
+function loadSibling(loadLocal, loadRoot, specifier) {
   try {
     return loadLocal();
   } catch (err) {
-    if (!isMissingModule(err)) throw err;
+    if (!isMissingSpecifier(err, specifier)) throw err;
     return loadRoot();
   }
 }
 
-const store = loadSibling(() => require('./store.js'), () => require('./server/js/store.js'));
-let config = loadSibling(() => require('../../config.json'), () => require('./config.json'));
+const store = loadSibling(() => require('./store.js'), () => require('./server/js/store.js'), './store.js');
+const players = loadSibling(() => require('./players.js'), () => require('./server/js/players.js'), './players.js');
+
+function loadConfig() {
+  if (typeof LoadResourceFile === 'function' && typeof GetCurrentResourceName === 'function') {
+    try {
+      const raw = LoadResourceFile(GetCurrentResourceName(), 'config.json');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+  }
+  return loadSibling(() => require('./config.json'), () => require('../../config.json'), './config.json');
+}
+
+let config = loadConfig();
 
 const customActions = new Map(); // actionName -> { schema, fn }
 
@@ -45,48 +70,13 @@ function getResourceExport(resourceName) {
   return null;
 }
 
-function listPlayerIds() {
-  if (typeof GetPlayers === 'function') return GetPlayers().map(String);
-  if (typeof getPlayers === 'function') return getPlayers().map(String);
-  if (typeof GetNumPlayerIndices === 'function' && typeof GetPlayerFromIndex === 'function') {
-    const ids = [];
-    const count = GetNumPlayerIndices();
-    for (let i = 0; i < count; i++) {
-      ids.push(String(GetPlayerFromIndex(i)));
-    }
-    return ids;
+function resolvePlayer(action) {
+  if (action.discordId) {
+    const raw = players.findPlayerByDiscordId(action.discordId);
+    if (raw === null || raw === undefined) return null;
+    const id = Number(raw);
+    return Number.isFinite(id) ? id : NaN;
   }
-  return [];
-}
-
-function listIdentifiers(playerId) {
-  if (typeof GetPlayerIdentifiers === 'function') return GetPlayerIdentifiers(playerId) || [];
-  if (typeof GetNumPlayerIdentifiers === 'function' && typeof GetPlayerIdentifier === 'function') {
-    const ids = [];
-    const count = GetNumPlayerIdentifiers(playerId);
-    for (let k = 0; k < count; k++) {
-      ids.push(String(GetPlayerIdentifier(playerId, k)));
-    }
-    return ids;
-  }
-  return [];
-}
-
-function findPlayerByDiscordId(targetDiscordId) {
-  if (!targetDiscordId) return null;
-
-  const players = listPlayerIds();
-  const searchPrefix = 'discord:' + targetDiscordId.toLowerCase();
-
-  for (const playerId of players) {
-    const identifiers = listIdentifiers(playerId) || [];
-    for (const idStr of identifiers) {
-      if (idStr.toLowerCase() === searchPrefix) {
-        return Number(playerId);
-      }
-    }
-  }
-
   return null;
 }
 
@@ -125,14 +115,21 @@ async function executeAction(action) {
       };
     }
   } else if (actionName === 'player.info') {
-    const playerId = findPlayerByDiscordId(action.discordId);
-    if (!playerId) {
+    const target = resolvePlayer(action);
+    if (target === null) {
       result = {
         ok: false,
         code: 'player_offline',
         message: 'Player is not online',
       };
+    } else if (!Number.isFinite(target)) {
+      result = {
+        ok: false,
+        code: 'error',
+        message: 'Invalid player ID',
+      };
     } else {
+      const playerId = target;
       const name = typeof GetPlayerName === 'function' ? GetPlayerName(playerId) : 'Unknown';
       const ping = typeof GetPlayerPing === 'function' ? GetPlayerPing(playerId) : 0;
       const ped = typeof GetPlayerPed === 'function' ? GetPlayerPed(playerId) : null;
@@ -171,14 +168,21 @@ async function executeAction(action) {
         message: `Unknown or disallowed teleport spot: ${spotName}`,
       };
     } else {
-      const playerId = findPlayerByDiscordId(action.discordId);
-      if (!playerId) {
+      const target = resolvePlayer(action);
+      if (target === null) {
         result = {
           ok: false,
           code: 'player_offline',
           message: 'Player is not online',
         };
+      } else if (!Number.isFinite(target)) {
+        result = {
+          ok: false,
+          code: 'error',
+          message: 'Invalid player ID',
+        };
       } else {
+        const playerId = target;
         const ped = typeof GetPlayerPed === 'function' ? GetPlayerPed(playerId) : null;
         if (!ped || ped === 0) {
           result = {
@@ -206,14 +210,21 @@ async function executeAction(action) {
         message: 'qbx_medical resource is not started',
       };
     } else {
-      const playerId = findPlayerByDiscordId(action.discordId);
-      if (!playerId) {
+      const target = resolvePlayer(action);
+      if (target === null) {
         result = {
           ok: false,
           code: 'player_offline',
           message: 'Player is not online',
         };
+      } else if (!Number.isFinite(target)) {
+        result = {
+          ok: false,
+          code: 'error',
+          message: 'Invalid player ID',
+        };
       } else {
+        const playerId = target;
         const qbxMedical = getResourceExport('qbx_medical');
         if (!qbxMedical || typeof qbxMedical.Revive !== 'function') {
           result = {
@@ -223,12 +234,20 @@ async function executeAction(action) {
           };
         } else {
           try {
-            qbxMedical.Revive(playerId);
-            result = {
-              ok: true,
-              code: 'done',
-              data: { playerId: Number(playerId) },
-            };
+            const reviveOk = qbxMedical.Revive(playerId);
+            if (reviveOk === false) {
+              result = {
+                ok: false,
+                code: 'error',
+                message: 'Revive failed',
+              };
+            } else {
+              result = {
+                ok: true,
+                code: 'done',
+                data: { playerId: Number(playerId) },
+              };
+            }
           } catch (err) {
             result = {
               ok: false,
@@ -273,14 +292,21 @@ async function executeAction(action) {
             message: `Count ${count} is invalid or exceeds cap of ${max}`,
           };
         } else {
-          const playerId = findPlayerByDiscordId(action.discordId);
-          if (!playerId) {
+          const target = resolvePlayer(action);
+          if (target === null) {
             result = {
               ok: false,
               code: 'player_offline',
               message: 'Player is not online',
             };
+          } else if (!Number.isFinite(target)) {
+            result = {
+              ok: false,
+              code: 'error',
+              message: 'Invalid player ID',
+            };
           } else {
+            const playerId = target;
             const oxInv = getResourceExport('ox_inventory');
             if (!oxInv || typeof oxInv.CanCarryItem !== 'function' || typeof oxInv.AddItem !== 'function') {
               result = {
@@ -345,6 +371,7 @@ async function executeAction(action) {
 module.exports = {
   executeAction,
   registerAction,
-  findPlayerByDiscordId,
+  findPlayerByDiscordId: players.findPlayerByDiscordId,
   setConfig,
+  _loadSibling: loadSibling,
 };

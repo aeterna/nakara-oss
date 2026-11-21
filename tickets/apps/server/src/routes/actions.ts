@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, inArray } from 'drizzle-orm';
 import { gameActions, tickets, categories, gameServers, auditLog, inGuild } from '@nakara-tickets/db';
 import '../bridge/staff-types.js';
 
@@ -118,6 +118,7 @@ export default async function (app: FastifyInstance) {
       }
 
       // Check repeat-confirm for give_item: within 10 minutes with same ticket, item, and confirmRepeat !== true
+      // Only count actions that may have given the item (queued, leased, done); failed/expired do not count
       if (actionName === 'player.give_item' && body.confirmRepeat !== true) {
         const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
         const recentGiveItems = await app.db
@@ -128,6 +129,7 @@ export default async function (app: FastifyInstance) {
               inGuild(gameActions, guildId),
               eq(gameActions.ticket_id, ticketId),
               eq(gameActions.action, 'player.give_item'),
+              inArray(gameActions.status, ['queued', 'leased', 'done']),
               sql`${gameActions.created_at} >= ${tenMinutesAgo}`
             )
           );

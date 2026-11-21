@@ -4,7 +4,7 @@ import {
   type Guild,
 } from 'discord.js';
 import { eq } from 'drizzle-orm';
-import { tickets, getTicket, getCategory, getSettings } from '@nakara-tickets/db';
+import { tickets, getTicket, getCategory, getSettings, ensureGuild } from '@nakara-tickets/db';
 import { acquireGatewayLock, type GatewayLockHandle } from './lock.js';
 import { createDiscordPort } from './adapter.js';
 import {
@@ -258,7 +258,31 @@ export async function startGateway(deps: StartGatewayDeps): Promise<GatewayHandl
   };
 
   client.on('guildCreate', async (guild: any) => {
-    await checkGuildAllowed(guild);
+    if (!deps.allowedGuildIds.includes(guild.id)) {
+      await checkGuildAllowed(guild);
+      return;
+    }
+    if (guild.name) {
+      try {
+        await ensureGuild(deps.db, guild.id, guild.name);
+      } catch (err) {
+        deps.log.error(`Failed to store guild name for ${guild.id}`, err);
+      }
+    }
+  });
+
+  client.on('guildUpdate', async (oldGuild: any, newGuild: any) => {
+    const guild = newGuild ?? oldGuild;
+    if (!guild?.id || !deps.allowedGuildIds.includes(guild.id)) {
+      return;
+    }
+    if (guild.name) {
+      try {
+        await ensureGuild(deps.db, guild.id, guild.name);
+      } catch (err) {
+        deps.log.error(`Failed to update guild name for ${guild.id}`, err);
+      }
+    }
   });
 
   client.on('clientReady', async () => {
@@ -271,6 +295,13 @@ export async function startGateway(deps: StartGatewayDeps): Promise<GatewayHandl
         if (!deps.allowedGuildIds.includes(id)) {
           await checkGuildAllowed(guild as any);
         } else {
+          if ((guild as any)?.name) {
+            try {
+              await ensureGuild(deps.db, id, (guild as any).name);
+            } catch (err) {
+              deps.log.error(`Failed to store guild name for ${id}`, err);
+            }
+          }
           try {
             if ((guild as any).commands?.set) {
               await (guild as any).commands.set(slashCommands);

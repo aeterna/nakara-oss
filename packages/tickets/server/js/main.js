@@ -1,81 +1,41 @@
 // FXServer resolves a relative require() against the resource root, not against the requiring file, so
 // './store.js' only exists on plain Node. Try the file-relative path first and fall back to the
 // resource-root path. Every require() argument stays a string literal for the safety scanner.
-function isMissingModule(err) {
-  if (!err) return false;
-  return err.code === 'MODULE_NOT_FOUND' || /^Cannot find module\b/.test(err.message || '');
+function isMissingSpecifier(err, specifier) {
+  if (!err || err.code !== 'MODULE_NOT_FOUND') return false;
+  const msg = err.message || '';
+  const suffix = specifier.startsWith('./') ? specifier.slice(1) : (specifier.startsWith('/') ? specifier : `/${specifier}`);
+  const bare = specifier.startsWith('./') ? specifier.slice(2) : specifier;
+  const winSuffix = suffix.replace(/\//g, '\\');
+  return (
+    msg.includes(`'${specifier}'`) ||
+    msg.includes(`"${specifier}"`) ||
+    msg.includes(`${suffix}'`) ||
+    msg.includes(`${suffix}"`) ||
+    msg.includes(`${winSuffix}'`) ||
+    msg.includes(`${winSuffix}"`) ||
+    msg.includes(`'${bare}'`) ||
+    msg.includes(`"${bare}"`)
+  );
 }
 
-function loadSibling(loadLocal, loadRoot) {
+function loadSibling(loadLocal, loadRoot, specifier) {
   try {
     return loadLocal();
   } catch (err) {
-    if (!isMissingModule(err)) throw err;
+    if (!isMissingSpecifier(err, specifier)) throw err;
     return loadRoot();
   }
 }
 
-loadSibling(() => require('./pairing.js'), () => require('./server/js/pairing.js'));
-const store = loadSibling(() => require('./store.js'), () => require('./server/js/store.js'));
-const api = loadSibling(() => require('./api.js'), () => require('./server/js/api.js'));
-const actions = loadSibling(() => require('./actions.js'), () => require('./server/js/actions.js'));
+loadSibling(() => require('./pairing.js'), () => require('./server/js/pairing.js'), './pairing.js');
+const store = loadSibling(() => require('./store.js'), () => require('./server/js/store.js'), './store.js');
+const api = loadSibling(() => require('./api.js'), () => require('./server/js/api.js'), './api.js');
+const actions = loadSibling(() => require('./actions.js'), () => require('./server/js/actions.js'), './actions.js');
+const players = loadSibling(() => require('./players.js'), () => require('./server/js/players.js'), './players.js');
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function listPlayerIds() {
-  if (typeof GetPlayers === 'function') return GetPlayers().map(String);
-  if (typeof getPlayers === 'function') return getPlayers().map(String);
-  if (typeof GetNumPlayerIndices === 'function' && typeof GetPlayerFromIndex === 'function') {
-    const ids = [];
-    const count = GetNumPlayerIndices();
-    for (let i = 0; i < count; i++) {
-      ids.push(String(GetPlayerFromIndex(i)));
-    }
-    return ids;
-  }
-  return [];
-}
-
-function listIdentifiers(playerId) {
-  if (typeof GetPlayerIdentifiers === 'function') return GetPlayerIdentifiers(playerId) || [];
-  if (typeof GetNumPlayerIdentifiers === 'function' && typeof GetPlayerIdentifier === 'function') {
-    const ids = [];
-    const count = GetNumPlayerIdentifiers(playerId);
-    for (let k = 0; k < count; k++) {
-      ids.push(String(GetPlayerIdentifier(playerId, k)));
-    }
-    return ids;
-  }
-  return [];
-}
-
-function collectOnlinePlayers() {
-  const players = listPlayerIds();
-  const list = [];
-
-  for (const playerId of players) {
-    let discordId = null;
-    const identifiers = listIdentifiers(playerId) || [];
-    for (const idStr of identifiers) {
-      if (idStr.toLowerCase().startsWith('discord:')) {
-        discordId = idStr.slice(8);
-        break;
-      }
-    }
-
-    if (discordId) {
-      const name = typeof GetPlayerName === 'function' ? GetPlayerName(playerId) : 'Unknown';
-      list.push({
-        playerId: Number(playerId),
-        discordId,
-        name,
-      });
-    }
-  }
-
-  return list;
 }
 
 async function heartbeatTick() {
@@ -84,10 +44,10 @@ async function heartbeatTick() {
     const secret = store.getSecret();
     if (!serverId || !secret) return;
 
-    const players = collectOnlinePlayers();
+    const onlineList = players.collectOnlinePlayers();
     const executedIds = store.getExecutedIds(60);
 
-    await api.sendHeartbeat(serverId, secret, { players, executedIds });
+    await api.sendHeartbeat(serverId, secret, { players: onlineList, executedIds });
   } catch (err) {
     console.error('[nakara_tickets] Heartbeat error:', err.message);
   }
@@ -165,7 +125,7 @@ if (typeof setInterval === 'function') {
 pollActionsLoop().catch(() => {});
 
 module.exports = {
-  collectOnlinePlayers,
+  collectOnlinePlayers: players.collectOnlinePlayers,
   heartbeatTick,
   stop: () => {
     pollingActive = false;

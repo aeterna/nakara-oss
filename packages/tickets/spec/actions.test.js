@@ -446,4 +446,87 @@ describe('packages/tickets actions execution (g1)', () => {
       globalThis.GetPlayers = originalGetPlayers;
     }
   });
+
+  it('params.playerId of another online player is ignored and targets the discordId owner', async () => {
+    onlinePlayers = ['1', '2'];
+    playerIdentifiers = {
+      '1': ['discord:111122223333444455'],
+      '2': ['discord:222233334444555566'],
+    };
+
+    let teleportedPed = null;
+    globalThis.GetPlayerPed = (src) => (Number(src) === 1 ? 101 : 102);
+    globalThis.SetEntityCoords = (ped) => {
+      teleportedPed = ped;
+    };
+
+    const res = await actions.executeAction({
+      id: 'act-ignore-params-playerid',
+      action: 'player.teleport',
+      discordId: '111122223333444455',
+      params: {
+        spot: 'hospital',
+        playerId: 2,
+      },
+    });
+
+    assert.equal(res.ok, true);
+    assert.equal(res.code, 'done');
+    assert.equal(teleportedPed, 101);
+  });
+
+  it('params.playerId of an online player is ignored and fails with player_offline when discordId owner is not found', async () => {
+    onlinePlayers = ['2'];
+    playerIdentifiers = {
+      '2': ['discord:222233334444555566'],
+    };
+
+    const res = await actions.executeAction({
+      id: 'act-ignore-params-offline',
+      action: 'player.teleport',
+      discordId: '999999999999999999',
+      params: {
+        spot: 'hospital',
+        playerId: 2,
+      },
+    });
+
+    assert.equal(res.ok, false);
+    assert.equal(res.code, 'player_offline');
+  });
+
+  it('action fails with invalid player ID when player lookup returns non-finite id', async () => {
+    const playersModule = require('../server/js/players.js');
+    const origFind = playersModule.findPlayerByDiscordId;
+    try {
+      playersModule.findPlayerByDiscordId = () => 'not_a_number';
+      const res = await actions.executeAction({
+        id: 'act-invalid-id',
+        action: 'player.info',
+        discordId: '111122223333444455',
+      });
+      assert.equal(res.ok, false);
+      assert.equal(res.code, 'error');
+      assert.equal(res.message, 'Invalid player ID');
+    } finally {
+      playersModule.findPlayerByDiscordId = origFind;
+    }
+  });
+
+  it('action succeeds when player lookup returns a numeric string', async () => {
+    const playersModule = require('../server/js/players.js');
+    const origFind = playersModule.findPlayerByDiscordId;
+    try {
+      playersModule.findPlayerByDiscordId = () => '1';
+      const res = await actions.executeAction({
+        id: 'act-numeric-str-id',
+        action: 'player.info',
+        discordId: '111122223333444455',
+      });
+      assert.equal(res.ok, true);
+      assert.equal(res.code, 'done');
+    } finally {
+      playersModule.findPlayerByDiscordId = origFind;
+    }
+  });
 });

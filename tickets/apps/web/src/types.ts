@@ -41,8 +41,8 @@ export interface CategoryInput {
   mode: 'thread' | 'channel';
   parentChannelId: string;
   nameTemplate?: string;
-  welcomeMessage?: string;
-  form?: FormField[];
+  welcomeMessage?: string | null;
+  form?: FormField[] | null;
   autoCloseHours?: number | null;
   maxOpenPerUser?: number;
   gameServerId?: string | null;
