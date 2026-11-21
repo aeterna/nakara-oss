@@ -7,8 +7,6 @@ local M = {}
 
 M.FAKE_WHO = 'test:camera'
 
--- `shoot_and_view` (eye, destructive) is not registered: eye tests run on the presser's client, and the spec gives
--- the client no way to open the viewfinder on the server, which the shoot gate requires.
 function M.rows(t)
     return {
         { name = 'aeterna_camera.id_and_path_guard', meta = { kind = 'headless', players = 1, destructive = false } },
@@ -19,6 +17,8 @@ function M.rows(t)
         { name = 'aeterna_camera.screenshot_detect', meta = { kind = 'headless', players = 1, destructive = false } },
         { name = 'aeterna_camera.viewfinder', meta = { kind = 'eye', players = 1, destructive = false,
             expect = t('camera.selftest.viewfinder') } },
+        { name = 'aeterna_camera.shoot_and_view', meta = { kind = 'eye', players = 1, destructive = true,
+            expect = t('camera.selftest.shoot_and_view'), skipWhen = { resources = { 'screenshot-basic' } } } },
     }
 end
 
@@ -29,23 +29,30 @@ M.VIEWFINDER_STEPS = {
     { at = 3000, action = 'close' },
 }
 
+-- shoot_and_view on the client: wait for the server's viewfinder, shoot, then wait for the gallery it opens.
+M.SHOOT_WAIT_VIEWFINDER_MS = 1500
+M.SHOOT_WAIT_GALLERY_MS = 3200
+
 local BAD_IDS = {
     '../0123456789abcdef0123456789ab', '0123456789ABCDEF0123456789ABCDEF', '0123456789abcdef0123456789abcde',
     '0123456789abcdef0123456789abcdef0', '0123456789abcdef0123456789abcd/x', '0123456789abcdef0123456789abcdeg', '',
 }
 
--- Generated ids match ^[0-9a-f]{32}$ and the guard refuses every bad form.
-function M.guard(ids, rand)
+-- Generated ids match ^[0-9a-f]{32}$, never repeat, and the guard refuses every bad form.
+function M.guard(isId, nextId)
+    local seen = {}
     for i = 1, 200 do
-        local id = ids.new(rand)
-        if type(id) ~= 'string' or #id ~= 32 or not id:find('^[0-9a-f]+$') or not ids.isId(id) then
+        local id = nextId()
+        if type(id) ~= 'string' or #id ~= 32 or not id:find('^[0-9a-f]+$') or not isId(id) then
             return false, 'generated id ' .. i .. ' does not match ^[0-9a-f]{32}$'
         end
+        if seen[id] then return false, 'generated id ' .. i .. ' repeats' end
+        seen[id] = true
     end
     for _, bad in ipairs(BAD_IDS) do
-        if ids.isId(bad) then return false, 'guard accepted a bad id' end
+        if isId(bad) then return false, 'guard accepted a bad id' end
     end
-    return true, '200 ids, ' .. #BAD_IDS .. ' bad forms refused'
+    return true, '200 distinct ids, ' .. #BAD_IDS .. ' bad forms refused'
 end
 
 -- Requests for one router, in order; the last ones push a single address over the 60-in-10-s limit.

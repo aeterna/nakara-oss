@@ -12,12 +12,14 @@ local LOCALE_KEYS = {
 local RESTORE_MS = 10000
 local UPLOAD_BPS = 200000
 local VIEWFINDER_TEST = 'aeterna_camera.viewfinder'
+local SHOOT_TEST = 'aeterna_camera.shoot_and_view'
 
 local vf = nil       -- { token, mode, count, cap, paused, capture = { ticket, hud, radar }?, session, test? }
 local gallery = nil  -- { token, ids = { [id] = true }, paused }
 local session = 0
 local lastShot = nil
 local pendingDelete = nil
+local shootTest = nil -- { runId, refused = reason? } while shoot_and_view runs here
 
 local function send(msg)
     SendNUIMessage(msg)
@@ -190,6 +192,7 @@ RegisterNetEvent('aeterna_camera:cl:shot', function(payload)
         closeGallery()
         return
     end
+    if shootTest and not data.ok then shootTest.refused = data.reason or 'refused' end
     if not vf then return end
     restoreAfterCapture()
     if data.ok then
@@ -383,7 +386,46 @@ AddEventHandler('aeterna_core:selftest', function(runId, name)
 end)
 
 AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
+    if name == SHOOT_TEST and shootTest and shootTest.runId == runId then
+        shootTest = nil
+        closeViewfinder()
+        closeGallery()
+        return
+    end
     if name ~= VIEWFINDER_TEST or testRun ~= runId then return end
     testRun = nil
     if vf and vf.test then closeViewfinder() end
+end)
+
+-- shoot_and_view: the server opened the viewfinder on selftestStarted. Shoot once, wait for the gallery the server
+-- opens after the save, then hand over to the person. The server's write guard decides whether the photo is kept.
+local function waitFor(check, ms)
+    local deadline = GetGameTimer() + ms
+    while not check() and GetGameTimer() < deadline do Wait(50) end
+    return check()
+end
+
+AddEventHandler('aeterna_core:selftest', function(runId, name)
+    if name ~= SHOOT_TEST then return end
+    if GetResourceState('screenshot-basic') ~= 'started' then
+        exports.aeterna_core:reportSelftest(runId, name, 'skip', 'needs screenshot-basic')
+        return
+    end
+    shootTest = { runId = runId }
+    CreateThread(function()
+        local mine = shootTest
+        if not waitFor(function() return vf ~= nil and not vf.paused end, ST.SHOOT_WAIT_VIEWFINDER_MS) then
+            if shootTest == mine then exports.aeterna_core:reportSelftest(runId, name, false, 'viewfinder did not open') end
+            return
+        end
+        lastShot = GetGameTimer()
+        TriggerServerEvent('aeterna_camera:sv:shoot', { mode = vf.mode })
+        waitFor(function() return gallery ~= nil or mine.refused ~= nil or shootTest ~= mine end, ST.SHOOT_WAIT_GALLERY_MS)
+        if shootTest ~= mine then return end
+        if gallery then
+            exports.aeterna_core:reportSelftest(runId, name, 'ready', 'photo taken, gallery open')
+        else
+            exports.aeterna_core:reportSelftest(runId, name, false, 'no photo: ' .. tostring(mine.refused or 'timeout'))
+        end
+    end)
 end)

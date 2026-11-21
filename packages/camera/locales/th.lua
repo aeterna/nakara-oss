@@ -22,5 +22,6 @@ Locales.th['camera.admin.usage'] = 'วิธีใช้: aeterna_camera_remove
 Locales.th['camera.admin.removed'] = 'ลบรูป {id} แล้ว'
 Locales.th['camera.admin.unknown'] = 'ไม่มีรูปรหัส {id}'
 Locales.th['camera.selftest.viewfinder'] = 'โทรศัพท์ปิดลงและกล้องเกมย้ายไปที่มุมมองของโทรศัพท์ เมื่อสลับกล้องจะเห็นหน้าตัวละครของคุณ เมื่อปิดจะกลับเข้าเกมโดยเก็บโทรศัพท์แล้ว'
+Locales.th['camera.selftest.shoot_and_view'] = 'หลังกดถ่ายจะมีข้อความ "บันทึกรูปแล้ว" แกลเลอรีแสดงรูปใหม่เป็นรูปแรก และในรูปเห็นฉากโดยไม่มีแถบควบคุม HUD หรือแผนที่'
 
 return Locales.th

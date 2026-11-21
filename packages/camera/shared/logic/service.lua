@@ -1,7 +1,7 @@
 -- service.lua -- aeterna_camera server rules: viewfinder state, the shoot gate, tickets, upload checks, saving,
 -- ownership and removal. Every native comes in through `deps`, so busted drives it with fakes:
 --   store, tickets, newId(), now() ms, clock() s, available(), writePhoto(id, bytes) -> boolean,
---   emit(name, ...), warn(msg, fields)
+--   emit(name, ...), warn(msg, fields), mayWrite(src) -> boolean (optional: the self-test write guard)
 -- cfg = { cooldownMs, maxBytes, perCharacter }
 
 CameraLogic = CameraLogic or {}
@@ -36,7 +36,7 @@ local function payloadShape(p)
 end
 
 function M.new(deps, cfg)
-    local svc = { deps = deps, cfg = cfg, open = {}, lastShot = {}, lastDiskWarn = nil }
+    local svc = { deps = deps, cfg = cfg, open = {}, lastShot = {}, lastDelete = {}, lastDiskWarn = nil }
 
     local function refuseWarn(reason)
         if reason ~= 'camera.disk_full' then return end
@@ -82,6 +82,10 @@ function M.new(deps, cfg)
         if not ok then
             refuseWarn(reason)
             return nil, reason
+        end
+        if deps.mayWrite and not deps.mayWrite(src) then
+            deps.warn('photo refused by the self-test write guard', { src = src })
+            return nil, 'camera.failed'
         end
         local id
         for _ = 1, MAX_DRAWS do
@@ -138,12 +142,18 @@ function M.new(deps, cfg)
         return true
     end
 
-    -- Only the owner's current character may delete.
+    -- Only the owner's current character may delete, at most once per cooldownMs (each delete leaves an empty
+    -- file on disk). Returns true, or false and 'camera.slow' inside the cooldown.
     function svc:delete(src, who, id)
         if not Ids.isId(id) then return false end
         local rec = deps.store:get(id)
         if not rec or rec.who ~= who then return false end
-        return self:remove(id, 'owner')
+        local now = deps.now()
+        local last = self.lastDelete[src]
+        if last and now - last < cfg.cooldownMs then return false, 'camera.slow' end
+        if not self:remove(id, 'owner') then return false end
+        self.lastDelete[src] = now
+        return true
     end
 
     function svc:getPhoto(id)
@@ -174,6 +184,7 @@ function M.new(deps, cfg)
     function svc:drop(src)
         self.open[src] = nil
         self.lastShot[src] = nil
+        self.lastDelete[src] = nil
         deps.tickets:drop(src)
     end
 

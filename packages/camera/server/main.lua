@@ -11,8 +11,15 @@ local cfg = CameraLogic.settings.check(Config, AeternaCore.log.warn)
 -- Lua 5.4 seeds math.random itself; mix the clock in without throwing that seed away.
 math.randomseed(math.random(0, 0x7FFFFFFF) ~ os.time(), math.random(0, 0x7FFFFFFF) ~ GetGameTimer())
 
+-- Tickets and photo ids come from two streams with their own seeds (ids.lua); every draw also mixes in
+-- math.random, a counter, the game timer and os.clock. Hard to guess, not a secret.
 local function rand(lo, hi) return math.random(lo, hi) end
-local function newId() return Ids.new(rand) end
+local function newStream()
+    return Ids.stream({ seed = math.random(0), rand = rand, now = GetGameTimer, clock = os.clock })
+end
+local ticketId = newStream()
+local photoId = newStream()
+local shootTests = {} -- src -> { runId, name } while shoot_and_view runs for that player
 
 local function screenshotStarted()
     return GetResourceState('screenshot-basic') == 'started'
@@ -53,17 +60,22 @@ end
 
 local function newService(perCharacter, maxTotalBytes)
     local store = Store.new({ kv = kv, json = json, perCharacter = perCharacter, maxTotalBytes = maxTotalBytes })
-    local tickets = Tickets.new({ now = GetGameTimer, newId = newId })
+    local tickets = Tickets.new({ now = GetGameTimer, newId = ticketId })
     return Service.new({
         store = store,
         tickets = tickets,
-        newId = newId,
+        newId = photoId,
         now = GetGameTimer,
         clock = os.time,
         available = screenshotStarted,
         writePhoto = writePhoto,
         emit = function(name, ...) TriggerEvent(name, ...) end,
         warn = AeternaCore.log.warn,
+        -- Only a photo taken inside shoot_and_view asks the self-test write guard.
+        mayWrite = function(src)
+            local t = shootTests[src]
+            return t == nil or AeternaCore.selftest.mayWrite(t.runId, t.name)
+        end,
     }, { cooldownMs = cfg.cooldownMs, maxBytes = cfg.maxBytes, perCharacter = perCharacter })
 end
 
@@ -111,8 +123,8 @@ end
 local function addTiles()
     if GetResourceState('aeterna_phonekit') ~= 'started' then return end
     pcall(function()
-        exports.aeterna_phonekit:addTile({ id = 'camera', label = AeternaCore.t('camera.app.camera'), icon = 'search', order = 40 })
-        exports.aeterna_phonekit:addTile({ id = 'gallery', label = AeternaCore.t('camera.app.gallery'), icon = 'star', order = 41 })
+        exports.aeterna_phonekit:addTile({ id = 'camera', label = AeternaCore.t('camera.app.camera'), icon = 'camera', order = 40 })
+        exports.aeterna_phonekit:addTile({ id = 'gallery', label = AeternaCore.t('camera.app.gallery'), icon = 'image', order = 41 })
     end)
 end
 
@@ -182,8 +194,11 @@ RegisterNetEvent('aeterna_camera:sv:delete', function(payload)
     end
     local who = whoOf(src)
     if not who then return end
-    if svc:delete(src, who, payload.id) then
+    local deleted, reason = svc:delete(src, who, payload.id)
+    if deleted then
         sendGallery(src, who)
+    elseif reason then
+        toast(src, reason, 'warning')
     else
         AeternaCore.log.debug('dropped delete of a photo the character does not own', { src = src })
     end
@@ -200,6 +215,11 @@ RegisterNetEvent('aeterna_camera:sv:upload', function(payload)
     if status == 'saved' then
         sendShot(src, { ok = true, id = a.id })
         toast(src, 'camera.saved', 'success')
+        if shootTests[src] then
+            -- shoot_and_view: the person checks the new photo in the gallery.
+            svc:close(src)
+            sendGallery(src, who)
+        end
     elseif status == 'refused' then
         AeternaCore.log.warn('refused photo upload', { src = src, reason = b })
         sendShot(src, { ok = false, reason = a })
@@ -210,6 +230,7 @@ RegisterNetEvent('aeterna_camera:sv:upload', function(payload)
 end)
 
 AddEventHandler('playerDropped', function()
+    shootTests[source] = nil
     svc:drop(source)
 end)
 
@@ -309,11 +330,11 @@ end
 local tests = {}
 
 tests.id_and_path_guard = function()
-    return ST.guard(Ids, rand)
+    return ST.guard(Ids.isId, photoId)
 end
 
 tests.http_router = function()
-    local id = newId()
+    local id = photoId()
     local bytes = Codec.tinyJpeg()
     local r = Router.new({
         now = GetGameTimer,
@@ -403,6 +424,29 @@ AddEventHandler('aeterna_core:selftest', function(runId, name, ctx)
         return
     end
     report(runId, name, ok and true or false, detail)
+end)
+
+-- shoot_and_view (eye, destructive): core announces the client test on the server first. Open the viewfinder for
+-- player A so the client half can shoot; the photo passes the write guard before it is written (mayWrite above).
+local SHOOT_TEST = PREFIX .. 'shoot_and_view'
+
+AddEventHandler('aeterna_core:selftestStarted', function(runId, name, ctx)
+    if name ~= SHOOT_TEST or type(ctx) ~= 'table' or type(ctx.a) ~= 'number' then return end
+    local who = whoOf(ctx.a)
+    if not who then return end
+    shootTests[ctx.a] = { runId = runId, name = name }
+    TriggerClientEvent('aeterna_camera:cl:viewfinder', ctx.a, svc:openViewfinder(ctx.a, who))
+end)
+
+AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
+    if name ~= SHOOT_TEST then return end
+    for src, t in pairs(shootTests) do
+        if t.runId == runId then
+            shootTests[src] = nil
+            svc:close(src)
+            svc.deps.tickets:drop(src)
+        end
+    end
 end)
 
 --------------------------------------------------------------------------------

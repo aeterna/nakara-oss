@@ -142,14 +142,14 @@ describe('aeterna_camera', function()
 
         it('draws ids of 32 lowercase hex characters, never the same twice', function()
             local nextId = stream(7)
-            local seen = {}
+            local seen, bad, dup = {}, 0, 0
             for _ = 1, 2000 do
                 local id = nextId()
-                assert.is_truthy(id:match('^[0-9a-f]+$'))
-                assert.are.equal(32, #id)
-                assert.is_nil(seen[id])
+                if #id ~= 32 or not id:match('^[0-9a-f]+$') then bad = bad + 1 end
+                if seen[id] then dup = dup + 1 end
                 seen[id] = true
             end
+            assert.are.same({ 0, 0 }, { bad, dup })
         end)
 
         it('stays distinct when math.random, the timer and the clock repeat', function()

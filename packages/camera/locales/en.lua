@@ -22,5 +22,6 @@ Locales.en['camera.admin.usage'] = 'Usage: aeterna_camera_remove <photo id>'
 Locales.en['camera.admin.removed'] = 'Photo {id} removed'
 Locales.en['camera.admin.unknown'] = 'No photo with id {id}'
 Locales.en['camera.selftest.viewfinder'] = 'The phone closes and the game camera moves to the phone\'s view; switching shows your character\'s face; close returns you to the game with the phone put away'
+Locales.en['camera.selftest.shoot_and_view'] = 'After the shutter a "Photo saved" toast shows; Gallery lists the new photo first, and it shows the scene without the overlay, HUD or radar'
 
 return Locales.en
