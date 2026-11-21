@@ -131,11 +131,13 @@ describe('aeterna_phonekit self-tests', function()
             assert.is_nil(P.skipReason('fold_keeps_screen', env))
             assert.is_nil(P.skipReason('clamp_on_unfold', env))
             env.model = 'fold'
+            assert.is_nil(P.skipReason('eye_fold_cover', env))
             assert.is_nil(P.skipReason('fold_keeps_screen', env))
             assert.is_nil(P.skipReason('ring_cover', env))
             env.cover = false
             assert.are.equal('held model does not fold', P.skipReason('fold_keeps_screen', env))
             assert.are.equal('Config.cover is false', P.skipReason('ring_cover', env))
+            assert.are.equal('cover is off', P.skipReason('eye_fold_cover', env))
         end)
     end)
 
