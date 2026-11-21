@@ -76,10 +76,10 @@ the console) can cancel it, and only they get the eye cards for role A.
 
 ## Now-testing strip
 
-While a `ped` test runs on this client, testkit's client listens to the client-local `aeterna_core:selftest` event
-and, when `ctx.kind == 'ped'` and `ctx.expect` is set, shows a one-line strip in the same lower-left spot as the eye
+While a client test other than `eye` runs on this client, testkit's client listens to the client-local `aeterna_core:selftest` event
+and, when `ctx.kind ~= 'eye'` and `ctx.expect` is set, shows a one-line strip in the same lower-left spot as the eye
 card: the test name and `ctx.expect` after `testkit.now_doing` ("Do this now:"). It hides on the client-local
-`aeterna_core:selftestEnd` for that test. A `ped` test without `expect` shows nothing. The strip never takes focus or
+`aeterna_core:selftestEnd` for that test. A test without `expect` shows nothing. The strip never takes focus or
 the cursor, so the presser can play while reading it.
 
 ## Eye-check card
