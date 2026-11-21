@@ -15,18 +15,27 @@ local function defaultDecode(text)
     return json.decode(text)
 end
 
--- Every saved place (the KVP content), never defaults.
-function L.encodeExport(places, encodeFn)
+-- Saved places (never defaults) of the registered elements in `keys`, at most maxElements of them, so the text
+-- always passes import. Returns text, or nil and 'text: max 8192 bytes' when it would be too long to import.
+function L.encodeExport(places, keys, config, encodeFn)
     local out = {}
-    if type(places) == 'table' then
-        for key, p in pairs(places) do
-            if L.parsePlaceKey(key) and type(p) == 'table' then
+    local maxEl = L.resolveMaxElements(type(config) == 'table' and config.maxElements or nil)
+    local count = 0
+    if type(places) == 'table' and type(keys) == 'table' then
+        for _, key in ipairs(keys) do
+            local p = places[key]
+            if count < maxEl and L.parsePlaceKey(key) and type(p) == 'table' then
                 out[key] = { x = p.x, y = p.y, ax = p.ax, ay = p.ay, scale = p.scale, hidden = p.hidden == true }
+                count = count + 1
             end
         end
     end
     local encode = type(encodeFn) == 'function' and encodeFn or defaultEncode
-    return L.EXPORT_PREFIX .. encode({ v = L.EXPORT_VERSION, places = out })
+    local text = L.EXPORT_PREFIX .. encode({ v = L.EXPORT_VERSION, places = out })
+    if #text > L.MAX_TEXT_BYTES then
+        return nil, 'text: max ' .. L.MAX_TEXT_BYTES .. ' bytes'
+    end
+    return text
 end
 
 local function keyPath(key)

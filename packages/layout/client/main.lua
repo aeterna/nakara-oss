@@ -39,14 +39,17 @@ local function logWarn(msg, fields)
     end
 end
 
-local function translate(key)
+local function translate(key, vars)
     if AeternaCore and type(AeternaCore.t) == 'function' then
-        return AeternaCore.t(key)
+        return AeternaCore.t(key, vars)
     end
-    if Locales and Locales.en and Locales.en[key] then
-        return Locales.en[key]
+    local str = (Locales and Locales.en and Locales.en[key]) or key
+    if type(vars) == 'table' then
+        str = str:gsub('{([%w_]+)}', function(k)
+            return vars[k] ~= nil and tostring(vars[k]) or ('{' .. k .. '}')
+        end)
     end
-    return key
+    return str
 end
 
 local function sendUi(msg)
@@ -174,7 +177,13 @@ local function sendPresets()
 end
 
 local function sendExport()
-    sendUi({ type = 'export:show', text = L.encodeExport(registry:getSavedPlaces()) })
+    local text, err = L.encodeExport(registry:getSavedPlaces(), registry:registeredKeys(), Config)
+    if not text then
+        logWarn('aeterna_layout: export refused', { err = err })
+        sendUi({ type = 'export:show', error = translate('layout.export.tooLong') })
+        return
+    end
+    sendUi({ type = 'export:show', text = text })
 end
 
 local function openEditor()
@@ -251,25 +260,51 @@ AddEventHandler('onResourceStop', function(stoppedRes)
     end
 end)
 
--- Server -> Client Net Event. Optional payload { mode = 'editor' | 'share' | 'reset' } from the menu panel (0.2).
-local OPEN_MODES = { editor = true, share = true, reset = true }
+-- Server -> Client Net Event. Optional payload from the menu panel (0.2): { mode = 'editor' | 'share' }, or
+-- { mode = 'arm', token } when the player presses Reset all and { mode = 'reset', token } after the confirm.
+-- A reset runs only with the token armed in the last 30 s, once; a local event cannot know it.
+local OPEN_MODES = { editor = false, share = false, arm = true, reset = true } -- value: carries a token
+local RESET_TOKEN_TTL_MS = 30000
+local armedReset = nil
+
+local function parseOpenPayload(payload)
+    if payload == nil then
+        return true, 'editor', nil
+    end
+    if type(payload) ~= 'table' or OPEN_MODES[payload.mode] == nil then
+        return false, 'mode: enum'
+    end
+    for k in pairs(payload) do
+        if k ~= 'mode' and not (k == 'token' and OPEN_MODES[payload.mode]) then
+            return false, tostring(k) .. ': not allowed'
+        end
+    end
+    if OPEN_MODES[payload.mode] then
+        local token = payload.token
+        if type(token) ~= 'string' or #token ~= 16 or not token:match('^%x+$') then
+            return false, 'token: pattern'
+        end
+    end
+    return true, payload.mode, payload.token
+end
 
 RegisterNetEvent('aeterna_layout:cl:open', function(payload)
-    local mode = 'editor'
-    if payload ~= nil then
-        local okKeys = type(payload) == 'table'
-        if okKeys then
-            for k in pairs(payload) do
-                if k ~= 'mode' then okKeys = false end
-            end
-        end
-        if not okKeys or not OPEN_MODES[payload.mode] then
-            logWarn('aeterna_layout:cl:open refused', { err = 'mode: enum' })
-            return
-        end
-        mode = payload.mode
+    local ok, mode, token = parseOpenPayload(payload)
+    if not ok then
+        logWarn('aeterna_layout:cl:open refused', { err = mode })
+        return
+    end
+    if mode == 'arm' then
+        armedReset = { token = token, expires = GetGameTimer() + RESET_TOKEN_TTL_MS }
+        return
     end
     if mode == 'reset' then
+        local armed = armedReset
+        if not armed or armed.token ~= token or GetGameTimer() > armed.expires then
+            logWarn('aeterna_layout: reset refused', { err = 'token: invalid' })
+            return
+        end
+        armedReset = nil
         if editorOpen then
             logWarn('aeterna_layout: reset refused', { err = 'editor: open' })
             return
@@ -386,7 +421,7 @@ RegisterNUICallback('import', function(data, cb)
     end
     if not ok then
         local message = kind == 'version' and translate('layout.import.version')
-            or AeternaCore.t('layout.import.invalid', { path = err })
+            or translate('layout.import.invalid', { path = err })
         sendUi({ type = 'import:result', ok = false, error = message })
         return
     end

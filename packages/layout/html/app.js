@@ -359,7 +359,7 @@ function createSelect(labelText) {
     return { wrap, select };
 }
 
-function openShare(text) {
+function openShare(text, error) {
     shareOpen = true;
     clearChildren(shareLayer);
 
@@ -428,6 +428,12 @@ function openShare(text) {
 
     shareLayer.appendChild(card);
     shareLayer.classList.remove('hidden');
+    if (typeof error === 'string' && error !== '') {
+        shareStatusEl.classList.add('is-error');
+        shareStatusEl.textContent = error;
+        importBox.focus();
+        return;
+    }
     exportBox.focus();
     exportBox.select();
 }
@@ -863,7 +869,7 @@ window.addEventListener('message', (event) => {
             .map((p) => ({ name: p.name, label: String(p.label || p.name) }));
         if (isOpen) renderToolbar();
     } else if (msg.type === 'export:show') {
-        if (isOpen) openShare(msg.text);
+        if (isOpen) openShare(msg.text, msg.error);
     } else if (msg.type === 'import:result') {
         showImportResult(msg);
     }

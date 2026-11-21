@@ -1094,6 +1094,15 @@ function L.createRegistry(opts)
         return self.count
     end
 
+    -- "<owner>/<id>" of every registered element, in registration order.
+    function reg:registeredKeys()
+        local out = {}
+        forEachElement(self, function(_, key)
+            out[#out + 1] = key
+        end)
+        return out
+    end
+
     function reg:get(owner, id)
         if type(owner) ~= 'string' or type(id) ~= 'string' then return nil end
         local el = self.elements[owner .. '/' .. id]

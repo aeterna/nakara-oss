@@ -29,5 +29,6 @@ Locales.th['layout.import.apply'] = 'นำเข้า'
 Locales.th['layout.import.ok'] = 'นำเข้าเลย์เอาต์แล้ว กดเสร็จสิ้นเพื่อเก็บไว้'
 Locales.th['layout.import.version'] = 'ไม่รองรับข้อความเลย์เอาต์เวอร์ชันนี้'
 Locales.th['layout.import.invalid'] = 'ข้อความนี้ไม่ใช่เลย์เอาต์ที่ถูกต้อง: {path}'
+Locales.th['layout.export.tooLong'] = 'เลย์เอาต์นี้ยาวเกินกว่าจะส่งออกเป็นข้อความ'
 
 return Locales.th

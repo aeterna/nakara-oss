@@ -89,9 +89,9 @@ Inside the editor:
 - **Enter** confirms **Done** when no toolbar button has focus.
 - **ESC** or **Cancel** restores all elements to where they were when the editor opened.
 - **Preset** select applies a preset to the session; **Grid snap** select picks Off / 8 / 16 / 32 px (kept on the player's machine); the grid shows while dragging unless snap is off or Shift is held.
-- **Export / import** shows the saved layout as one line of text (`aeterna-layout:1:…`, select it and press Ctrl+C) and takes such a line back; an import moves the stand-ins, **Done** saves and **Cancel** undoes. The text never leaves the player's machine through this resource.
+- **Export / import** shows the saved places of the elements registered now as one line of text (`aeterna-layout:1:…`, select it and press Ctrl+C) and takes such a line back; an import moves the stand-ins, **Done** saves and **Cancel** undoes. The text never leaves the player's machine through this resource.
 
-The `aeterna_uikit` menu entry opens a small panel (**Edit**, **Reset all** after a confirm, saved at once, and **Export / import**). The command and the key mapping still open the editor directly.
+The `aeterna_uikit` menu entry opens a small panel (**Edit**, **Reset all** after a confirm, saved at once, and **Export / import**). Pressing Reset all arms the client with a one-time token; the reset runs only when the confirm sends that token back within 30 s, so a local event or a replayed message cannot clear a layout. The command and the key mapping still open the editor directly.
 
 ### Keeping elements on screen (0.2)
 
@@ -115,7 +115,7 @@ What this resource is allowed to do to your server, from [`oss.json`](oss.json).
 | Convars read | none |
 | Convars written | none |
 | Server net events (accepted from clients) | none |
-| Client net events (accepted from the server) | `aeterna_layout:cl:open` (optional `{ mode = 'editor' \| 'share' \| 'reset' }`) |
+| Client net events (accepted from the server) | `aeterna_layout:cl:open` (optional `{ mode = 'editor' \| 'share' }`, or `{ mode = 'arm' \| 'reset', token }` for Reset all from the panel) |
 | NUI | yes |
 | Database tables | none (no DDL) |
 | Files written | none |

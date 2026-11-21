@@ -29,5 +29,6 @@ Locales.en['layout.import.apply'] = 'Import'
 Locales.en['layout.import.ok'] = 'Layout imported. Press Done to keep it.'
 Locales.en['layout.import.version'] = 'Unsupported layout text version'
 Locales.en['layout.import.invalid'] = 'This text is not a valid layout: {path}'
+Locales.en['layout.export.tooLong'] = 'This layout is too long to export as text'
 
 return Locales.en

@@ -75,8 +75,16 @@ AddEventHandler('aeterna_uikit:menu', function(src, data)
     openPanel(target, false)
 end)
 
--- Panel buttons (server-local event from aeterna_uikit). Reset all asks to confirm in the panel first.
-local PANEL_MODES = { edit = 'editor', share = 'share', resetConfirm = 'reset' }
+-- Panel buttons (server-local event from aeterna_uikit). Reset all asks to confirm in the panel first: pressing it
+-- arms the client with a one-time token, and resetConfirm sends that token only while the confirm row is open
+-- (at most 30 s).
+local PANEL_MODES = { edit = 'editor', share = 'share' }
+local RESET_CONFIRM_TTL_MS = 30000
+local pendingReset = {}
+
+local function newResetToken()
+    return ('%08x%08x'):format(math.random(0, 0x7fffffff), math.random(0, 0x7fffffff))
+end
 
 AddEventHandler('aeterna_uikit:action', function(src, data)
     if type(data) ~= 'table' or data.owner ~= selfName() then
@@ -87,13 +95,30 @@ AddEventHandler('aeterna_uikit:action', function(src, data)
         return
     end
     local action = data.action
+    local pending = pendingReset[target]
+    pendingReset[target] = nil
     if action == 'resetAll' then
+        local token = newResetToken()
+        pendingReset[target] = { token = token, expires = GetGameTimer() + RESET_CONFIRM_TTL_MS }
         openPanel(target, true)
+        TriggerClientEvent('aeterna_layout:cl:open', target, { mode = 'arm', token = token })
+    elseif action == 'resetConfirm' then
+        if pending and GetGameTimer() <= pending.expires then
+            closePanel(target)
+            TriggerClientEvent('aeterna_layout:cl:open', target, { mode = 'reset', token = pending.token })
+        end
     elseif action == 'back' then
         openPanel(target, false)
     elseif PANEL_MODES[action] then
         closePanel(target)
         TriggerClientEvent('aeterna_layout:cl:open', target, { mode = PANEL_MODES[action] })
+    end
+end)
+
+AddEventHandler('playerDropped', function()
+    local src = tonumber(source)
+    if src then
+        pendingReset[src] = nil
     end
 end)
 
