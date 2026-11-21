@@ -301,21 +301,22 @@ describe('aeterna_core server: client tests, MISSING and cancel (0.2)', function
         assert.are.same({ 'FAIL', 'no ring' }, { rowOf('aeterna_core.call').state, rowOf('aeterna_core.call').detail })
     end)
 
-    it('sends expect for ped and eye tests, ask only for eye, and neither for a client-side headless test', function()
+    it('sends expect for every client test that sets it (ped, eye, client-side headless and mock), ask only for eye', function()
         exports.aeterna_core:addSelftest('seat', { kind = 'ped', expect = 'Get in a vehicle', ask = 'Seated?', timeout = 500 })
         exports.aeterna_core:addSelftest('walk', { kind = 'ped', timeout = 500 })
-        exports.aeterna_core:addSelftest('echo', { side = 'client', expect = 'not sent', timeout = 500 })
+        exports.aeterna_core:addSelftest('echo', { side = 'client', expect = 'Open the map', ask = 'Map?', timeout = 500 })
+        exports.aeterna_core:addSelftest('swap', { kind = 'mock', side = 'client', expect = 'Open the inventory', timeout = 500 })
         exports.aeterna_core:addSelftest('look', { kind = 'eye', expect = 'A lamp', ask = 'Lamp?', timeout = 500 })
         exports.aeterna_core:startRun({ by = 1 })
         natives.advance(0)
-        natives.advance(500)
-        natives.advance(500)
-        natives.advance(500)
+        for _ = 1, 4 do natives.advance(500) end
         local seat = sentTo(1, 'aeterna_core.seat')[1]
         assert.are.same({ 'Get in a vehicle', nil }, { seat.expect, seat.ask })
         assert.is_nil(sentTo(1, 'aeterna_core.walk')[1].expect)
         local echo = sentTo(1, 'aeterna_core.echo')[1]
-        assert.are.same({ nil, nil }, { echo.expect, echo.ask })
+        assert.are.same({ 'Open the map', nil }, { echo.expect, echo.ask })
+        local swap = sentTo(1, 'aeterna_core.swap')[1]
+        assert.are.same({ 'mock', 'Open the inventory' }, { swap.kind, swap.expect })
         local look = sentTo(1, 'aeterna_core.look')[1]
         assert.are.same({ 'A lamp', 'Lamp?' }, { look.expect, look.ask })
     end)

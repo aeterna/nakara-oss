@@ -234,19 +234,22 @@ describe('aeterna_core client: self-test protocol', function()
         assert.are.equal('aeterna_demo', exports.aeterna_core:focusOwner())
     end)
 
-    it('c21. ctx.expect is passed for ped and eye tests that carry it, and never for other kinds', function()
+    it('c21. ctx.expect is passed for every client test that carries it (ped, eye, headless, mock)', function()
         load_client({})
         local ctxOf = {}
         AddEventHandler('aeterna_core:selftest', function(_, name, ctx) ctxOf[name] = ctx end)
         send_test({ name = 'aeterna_demo.seat', expect = 'Get in a vehicle' })
         send_test({ name = 'aeterna_demo.look', kind = 'eye', expect = 'A lamp' })
         send_test({ name = 'aeterna_demo.plain' })
-        send_test({ name = 'aeterna_demo.echo', kind = 'headless', expect = 'not for headless' })
+        send_test({ name = 'aeterna_demo.echo', kind = 'headless', expect = 'Open the map' })
+        send_test({ name = 'aeterna_demo.swap', kind = 'mock', expect = 'Open the inventory' })
         assert.are.same({ kind = 'ped', side = 'client', role = 'A', destructive = false, expect = 'Get in a vehicle' },
             ctxOf['aeterna_demo.seat'])
         assert.are.equal('A lamp', ctxOf['aeterna_demo.look'].expect)
         assert.is_nil(ctxOf['aeterna_demo.plain'].expect)
-        assert.is_nil(ctxOf['aeterna_demo.echo'].expect)
+        assert.are.equal('Open the map', ctxOf['aeterna_demo.echo'].expect)
+        assert.are.same({ kind = 'mock', side = 'client', role = 'A', destructive = false, expect = 'Open the inventory' },
+            ctxOf['aeterna_demo.swap'])
     end)
 
     it('c22. a ped test with expect still reports normally and cannot use ready', function()
