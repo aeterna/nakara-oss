@@ -31,6 +31,12 @@ Version 0.2.0 (ADR 0005 decisions 1, 2, 3, 5). Written by Claude Code - Claude O
 - The phonekit copy of the uikit spec validator accepts uikit 0.2: `tabs`, `slider`, `table`, `empty`, list `search`
   and `empty`, `detailOf` / `detailItem`, and the new `update` keys.
 - `Config.prop` (the held prop, per model with `Config.models[m].prop`).
+- Self-tests (spec § Self-tests (0.2)), registered with `aeterna_core:addSelftest` on start: 25 of the 26 rows
+  (`eye_battery_dead` is not registered: a client test has no way to make the server set 0 %). Server rows run on a
+  fake device or on the presser's phone and restore what they change; ped and eye rows open the phone through the
+  normal path, show another model or fold on the page only, and put it back on `aeterna_core:selftestEnd`. Pure
+  rules in `shared/logic/selftest.lua`, busted cases in `spec/selftest_spec.lua`. The page answers self-test probes
+  on the NUI callback `selftest`, and the client keeps the page-only test ring card away from the server.
 
 ### Changed
 

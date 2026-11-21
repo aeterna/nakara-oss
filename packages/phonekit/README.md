@@ -169,6 +169,36 @@ sha256sum -c SHA256SUMS --ignore-missing
 
 ---
 
+## Self-tests / การทดสอบตัวเอง
+
+Registered with `aeterna_core` on start; `aeterna_testkit` runs them from its menu ([spec § Self-tests (0.2)](../../docs/specs/aeterna_phonekit.md#self-tests-02)). A row whose condition does not hold reports SKIP with the reason in the last column. Destructive rows run only when `aeterna_core_allow_destructive` is on and the server is not listed publicly.
+ลงทะเบียนกับ `aeterna_core` ตอนเริ่ม และกดทดสอบได้จากเมนูของ `aeterna_testkit` แถวที่เงื่อนไขไม่ตรงจะรายงาน SKIP พร้อมเหตุผล
+
+| Name | Kind | Destructive | Checks | Skip when |
+|---|---|---|---|---|
+| `rules_loaded` | headless | n | Device mode, `Config.singleModel`, the eight models and the battery config loaded | never |
+| `models_have_apps` | headless | n | Every model has a label and draws its built-in apps (settings always) | never |
+| `battery_drain_tick` | headless | n | One minute on a fake in-memory slab with the screen on drains `standby + screen` | `Config.battery = false` |
+| `battery_zero_closes_all` | mock | y | Sets the presser's battery to 0 (saved): power off, no device, no app screen, phone closed; then sets and saves the old value | `Config.battery = false`, no presser |
+| `battery_kvp_roundtrip` | mock | y | Writes the presser's device KVP and reads it back, then writes the old value back | `Config.devices = 'items'`, no presser |
+| `stale_pulse_is_off` | headless | n | A screen pulse older than `pulseTtlSec` drains like the screen off | `Config.battery = false` |
+| `gate_items_silence_denies` | mock | n | A made-up items check nobody answers is denied with `phonekit.refused.nodevice` (the live gate is untouched) | `Config.devices = 'single'` |
+| `open_close_prop` | ped | n | Opening attaches the prop to the ped (none with `Config.animation = false`); closing removes it | presser not spawned |
+| `fold_keeps_screen` | ped | n | An app screen stays on top after fold and unfold | held model does not fold |
+| `clamp_on_unfold` | ped | n | The opened book frame stays inside the viewport | held model is not `book` |
+| `exit_contract` | ped | n | ESC closes, an open within 300 ms of the close is ignored, the bound open key closes | never |
+| `eye_model_<id>` (8) | eye | n | The person checks each model's frame, status bar and home | never |
+| `eye_book_two_pane` | eye | n | Book opened wide: list left, detail right | never |
+| `eye_fold_cover` | eye | n | Fold closed: the cover screen | never |
+| `eye_lock` | eye | n | The lock screen with one test card | `Config.lockScreen = false` |
+| `eye_control_centre` | eye | n | The control centre (opened by the test) | never |
+| `ring_cover` | eye | n | Fold closed: a test call card with Answer and Decline on the cover | held model is not `fold`, or `Config.cover = false` |
+| `contacts_hooks` | mock, client | n | `addContact` adds, `getContacts` lists it, `contactsChanged` fires once; the list is put back | no presser (GAP) |
+
+How the client rows work: they open the phone the normal way (open gate, focus), so a phone that cannot open (no phone item, a dead battery) fails the row with the refusal. To show another model or a fold they change the page only: nothing is sent to the server and nothing is saved, and the held phone comes back when `aeterna_core` ends the test. The test screens and the test call card exist only on the page; answering the test call card stops it locally. The eye cards are look-only: the card holds the cursor, so the test opens the control centre and unfolds the book itself.
+
+Not registered: `eye_battery_dead`. It is a client eye test that must set the battery to 0 on the server, and a client has no way to make the server do that (the battery is server-owned and no net event may lower or raise it). `battery_zero_closes_all` covers the server half.
+
 ## Tests
 
 From the repository root:
