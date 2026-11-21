@@ -108,20 +108,25 @@ With `Config.phone.enabled = true` and `aeterna_phonekit` set to `Config.devices
 ## Self-tests / การทดสอบตัวเอง (0.2)
 
 invkit registers these tests with `aeterna_core` on start (`aeterna_testkit` lists and runs them). A test reports
-SKIP only for the reason in the last column; a ped test with nobody to run it is GAP.
+SKIP only for the reason in the last column; a ped or client test with nobody to run it is GAP. Client tests that need
+server state are prepared by invkit's server on core's `aeterna_core:selftestStarted` and torn down on its server-side
+`aeterna_core:selftestEnd`; the result always comes from the presser's client. Every test write goes through core's
+write guard (`AeternaCore.selftest.mayWrite`) first.
 
 | Test | Kind | Runs | What it checks | SKIP when |
 |---|---|---|---|---|
 | `aeterna_invkit.stash_id` | headless | server | Stash ids for both scopes, with and without qbx; no identifier or an unknown scope gives none | never |
 | `aeterna_invkit.use_state_machine` | headless | server | A private use manager on a fake clock: done too early refused, busy while pending, done once, cancel, owner stop. No item is touched | never |
-| `aeterna_invkit.phone_item_map` | headless | server | `Config.phone.items` validates with nothing skipped and at least one item mapped | `Config.phone.enabled = false` |
+| `aeterna_invkit.phone_item_map` | headless | server | `Config.phone.items` validates with nothing skipped and at least one item mapped | `Config.phone.enabled` not `true` |
 | `aeterna_invkit.stash_open` | ped | presser | Within 50 s: sends the same request as the bound key at the presser's position; at a stash point the stash must open (ox_inventory's `invOpen` state, closed again at once), away from every point the `invkit.stash.far` refusal must come. With `Config.stash.anywhere = true` one opening is enough | ox_inventory not started, or no stash point configured |
-| `aeterna_invkit.phone_device_save` | mock, destructive | server | Gives the presser one test phone item with a fresh `phoneId`, fires `deviceSave` with battery 42 and fold `closed`, checks the item's metadata, then removes that item. Needs a presser; core skips it while its destructive gate is closed | ox_inventory not started, or `Config.phone.enabled = false` |
+| `aeterna_invkit.item_use` | mock (client), destructive | presser | The server registers a usable on the first of `water`, `burger`, `sandwich` that no resource has registered, gives the presser one tagged with the run id and starts the use. The client sees the item, one progress bar, and the item gone. The registration is dropped when `used` fires; on test end any tagged item left is removed | ox_inventory not started |
+| `aeterna_invkit.phone_two_items` | ped | presser | Within 50 s the device list invkit answers phonekit with (built from the presser's own inventory) holds a fold and a slab, each with its battery | ox_inventory or `aeterna_phonekit` not started, or `Config.phone.enabled` not `true` |
+| `aeterna_invkit.phone_drop_active` | ped | presser | Within 50 s, after two phones were carried, one leaves the device list and the other stays | same |
+| `aeterna_invkit.phone_no_item` | ped | presser | Within 50 s no phone item is carried, so invkit answers an empty list, which phonekit refuses | same |
+| `aeterna_invkit.phone_device_save` | mock, destructive | server | Gives the presser one test phone item with a fresh `phoneId`, fires `deviceSave` with battery 42 and fold `closed`, checks the item's metadata, then removes that item by its `phoneId`; restored only when the item count is back to what it was | ox_inventory not started, `Config.phone.enabled` not `true`, or nobody pressed (`needs a presser`) |
 
-Not registered in this version: `item_use`, `phone_two_items`, `phone_drop_active` and `phone_no_item` from the
-spec. `item_use` is a client mock, but giving the item and registering the usable are server actions that a client
-test cannot start without a new net event. The three phone rows are ped tests on invkit's client, which has no view
-of phonekit's screen and no channel to invkit's server.
+The three phone rows check invkit's half: the device list it would answer with. Whether phonekit's control centre,
+fold screen and "no phone" toast look right is phonekit's own check; invkit cannot see phonekit's screen.
 
 ## Commands and keys / คำสั่งและปุ่มลัด
 
