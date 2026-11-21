@@ -36,6 +36,18 @@
       "plan": "KIT02",
       "acquired": "2026-11-21T13:19:19Z",
       "expires": "2026-11-21T17:19:19Z"
+    },
+    {
+      "id": "kit02-w1-hudkit-d4295467",
+      "repo": "nakara-oss",
+      "lane": "kit02-w1-hudkit",
+      "host": "mac",
+      "scope": [
+        "packages/hudkit/**"
+      ],
+      "plan": "KIT02",
+      "acquired": "2026-11-21T13:19:22Z",
+      "expires": "2026-11-21T17:19:22Z"
     }
   ]
 }
