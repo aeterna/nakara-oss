@@ -27,6 +27,8 @@ All notable changes to `aeterna_core` are documented here. The format follows
   `aeterna_core:selftestEnd` → `(runId, name)` for every test that ends (pass, timeout, owner stopped, player left).
 - Write guard: server export `selftestMayWrite(runId, name)` and `AeternaCore.selftest.mayWrite(runId, name)`; a test
   not declared destructive that calls it is FAIL `undeclared destructive`.
+- `ped` tests may carry `expect` (what the presser must do); core sends it to the client and passes it as
+  `ctx.expect` in the client-local `aeterna_core:selftest`, for `ped` and `eye` tests. It stays optional for `ped`.
 
 ### Changed
 
