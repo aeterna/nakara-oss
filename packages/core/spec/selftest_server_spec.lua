@@ -301,6 +301,37 @@ describe('aeterna_core server: client tests, MISSING and cancel (0.2)', function
         assert.are.same({ 'FAIL', 'no ring' }, { rowOf('aeterna_core.call').state, rowOf('aeterna_core.call').detail })
     end)
 
+    it('sends expect for ped and eye tests, ask only for eye, and neither for a client-side headless test', function()
+        exports.aeterna_core:addSelftest('seat', { kind = 'ped', expect = 'Get in a vehicle', ask = 'Seated?', timeout = 500 })
+        exports.aeterna_core:addSelftest('walk', { kind = 'ped', timeout = 500 })
+        exports.aeterna_core:addSelftest('echo', { side = 'client', expect = 'not sent', timeout = 500 })
+        exports.aeterna_core:addSelftest('look', { kind = 'eye', expect = 'A lamp', ask = 'Lamp?', timeout = 500 })
+        exports.aeterna_core:startRun({ by = 1 })
+        natives.advance(0)
+        natives.advance(500)
+        natives.advance(500)
+        natives.advance(500)
+        local seat = sentTo(1, 'aeterna_core.seat')[1]
+        assert.are.same({ 'Get in a vehicle', nil }, { seat.expect, seat.ask })
+        assert.is_nil(sentTo(1, 'aeterna_core.walk')[1].expect)
+        local echo = sentTo(1, 'aeterna_core.echo')[1]
+        assert.are.same({ nil, nil }, { echo.expect, echo.ask })
+        local look = sentTo(1, 'aeterna_core.look')[1]
+        assert.are.same({ 'A lamp', 'Lamp?' }, { look.expect, look.ask })
+    end)
+
+    it('judges a ped test with expect like any ped test; an eye test with an empty expect still fails unsent', function()
+        exports.aeterna_core:addSelftest('seat', { kind = 'ped', expect = 'Get in a vehicle', timeout = 2000 })
+        exports.aeterna_core:addSelftest('blank', { kind = 'eye', expect = '' })
+        local id = exports.aeterna_core:startRun({ by = 1 })
+        natives.advance(0)
+        result(1, id, 'aeterna_core.seat', 'pass', { detail = 'seated' })
+        natives.advance(50)
+        assert.are.same({ 'PASS', 'seated' }, { rowOf('aeterna_core.seat').state, rowOf('aeterna_core.seat').detail })
+        assert.are.same({ 'FAIL', 'expect is empty' }, { rowOf('aeterna_core.blank').state, rowOf('aeterna_core.blank').detail })
+        assert.are.equal(0, #sentTo(1, 'aeterna_core.blank'))
+    end)
+
     it('waits for the eye answer after ready, and gives GAP when nobody answers in 120 s', function()
         exports.aeterna_core:addSelftest('look', { kind = 'eye', expect = 'A lamp', timeout = 2000 })
         exports.aeterna_core:addSelftest('stare', { kind = 'eye', expect = 'A door', timeout = 2000 })
