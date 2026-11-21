@@ -34,7 +34,7 @@ Camera and Gallery apps inside the AETERNA Starter Kit phone. The Camera is the 
 
 **Keep your photos when you upgrade / เก็บรูปไว้เมื่ออัปเกรด:** photos are files under `aeterna_camera/photos/` and their index is in the server's KVP database (FXServer keeps it outside resource folders). Replacing the resource folder deletes the photos: copy `photos/` aside and put it back, and keep the KVP database. / การแทนที่โฟลเดอร์ทั้งหมดจะลบรูป ให้สำรอง `photos/` ไว้ก่อน
 
-A deleted photo leaves a zero-byte file under `photos/` (the safety rules forbid deleting files from Lua); you may delete zero-byte files there while the server is stopped. / รูปที่ลบแล้วเหลือไฟล์ขนาด 0 ไบต์ ลบได้ขณะปิดเซิร์ฟเวอร์
+**Leftover files / ไฟล์ที่เหลือ:** every deleted photo leaves a zero-byte file under `photos/`, because the safety rules forbid deleting files from Lua. A player can delete at most one photo per `Config.cooldownMs`, so leftovers grow slowly; you may delete zero-byte files there while the server is stopped. / รูปที่ลบแล้วเหลือไฟล์ขนาด 0 ไบต์ทุกครั้ง (ลบได้ครั้งละหนึ่งรูปต่อ `Config.cooldownMs`) ลบไฟล์เหล่านี้ได้ขณะปิดเซิร์ฟเวอร์
 
 ## Config / การตั้งค่า
 
@@ -52,11 +52,15 @@ Shared convars read via `aeterna_core`: `aeterna_locale` (`en` or `th`), `aetern
 
 ## Photo links / ลิงก์รูป
 
-Each photo is served at `http://<server>/aeterna_camera/p/<id>.jpg`, where `<id>` is 32 random hex characters (128 bits). Ids are never sequential and never derived from the character, so players cannot guess them, but they are not a secret: **anyone holding a photo's link can open it, like an unlisted link**. There is no listing, upload or delete endpoint. More than 60 requests in 10 s from one address get `429`.
+Each photo is served at `http://<server>/aeterna_camera/p/<id>.jpg`, where `<id>` is 32 hex characters. Ids are hard to guess: they are never sequential, never derived from the character, and each draw mixes a seeded generator of its own (tickets and photo ids use separate ones) with `math.random`, a counter, the game timer and `os.clock`. They are not a secret and not cryptographic randomness: **anyone holding a photo's link can open it, like an unlisted link**. There is no listing, upload or delete endpoint. More than 60 requests in 10 s from one address get `429`.
 
 รูปแต่ละรูปเปิดได้ที่ลิงก์ที่มีรหัสสุ่ม 32 ตัวอักษร เดาไม่ได้ แต่ไม่ใช่ความลับ ใครมีลิงก์ก็เปิดดูได้
 
 The gallery loads images from `http://` + the client's `GetCurrentServerEndpoint()` with its scheme and trailing slash removed. A join through the server list or a `cfx.re` link, rather than a direct connect, has not been verified yet.
+
+Thumbnails load the full JPEG of each photo (there are no smaller copies), so a full gallery means one GET per photo. With 60 photos on screen a player sits at the 60-requests-in-10-s limit, and further images in that window answer `429` and stay blank until the gallery is opened again. / รูปย่อโหลดไฟล์ JPEG เต็มขนาด แกลเลอรีที่มีรูปมากอาจชนขีดจำกัด 60 ครั้งใน 10 วินาที
+
+**Gallery position / ตำแหน่งแกลเลอรี:** the gallery opens as a phone-sized panel at the bottom right of the screen. `aeterna_phonekit` exposes no export with the phone's current position, so the gallery does not follow a phone the player moved in the layout editor. / แกลเลอรีเปิดที่มุมขวาล่างเสมอ ไม่ตามตำแหน่งโทรศัพท์ที่ผู้เล่นย้าย
 
 ## Exports & Events / การเรียกใช้งาน
 
@@ -92,7 +96,7 @@ In the viewfinder the base game's phone controls also work: select = shutter, th
 
 ## Self-tests / การทดสอบในเกม
 
-Registered with `aeterna_core` (run from `aeterna_testkit`): `id_and_path_guard`, `http_router`, `screenshot_detect` (headless), `store_roundtrip`, `caps`, `saved_hook` (mock, test key `test:camera`, restored before they report) and `viewfinder` (eye: the test opens the viewfinder, switches to selfie, closes it, then asks). The spec's `shoot_and_view` eye test is not registered in 0.1.0.
+Registered with `aeterna_core` (run from `aeterna_testkit`): `id_and_path_guard`, `http_router`, `screenshot_detect` (headless), `store_roundtrip`, `caps`, `saved_hook` (mock, test key `test:camera`, restored before they report) `viewfinder` (eye: the test opens the viewfinder, switches to selfie, closes it, then asks) and `shoot_and_view` (eye, destructive, skipped without `screenshot-basic`: the server opens the viewfinder for the presser, the test takes one real photo after core's write guard allows it, then opens the gallery and asks). `shoot_and_view` leaves that photo in the presser's gallery; they can delete it afterwards.
 
 ## Support scope / ขอบเขตการรองรับ
 

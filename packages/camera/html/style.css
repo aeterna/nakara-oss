@@ -82,7 +82,7 @@ html, body {
     color: var(--text-2);
 }
 
-/* Gallery: a phone-sized panel at the bottom right, where the phone opens by default. */
+/* Gallery: a phone-sized panel at the bottom right; phonekit exposes no export with the phone's position. */
 .gallery {
     --s: 1;
     position: fixed;
