@@ -54,9 +54,26 @@ AddEventHandler('aeterna_core:eyeAsk', function(runId, name, info)
     card:ask(runId, name, info)
 end)
 
+local strip = Menu.createNowStrip({
+    show = function(msg)
+        SendNUIMessage(AeternaCore.themeMessage())
+        SendNUIMessage({ type = 'now:show', name = msg.name, label = t('testkit.now_doing'), expect = msg.expect })
+    end,
+    hide = function()
+        SendNUIMessage({ type = 'now:hide' })
+    end,
+})
+
+-- Any aeterna_core self-test reaching this client: a non-eye test with expect shows the now-testing strip.
+AddEventHandler('aeterna_core:selftest', function(runId, name, ctx)
+    if GetInvokingResource() ~= 'aeterna_core' or type(runId) ~= 'string' or type(name) ~= 'string' then return end
+    strip:started(runId, name, ctx)
+end)
+
 AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
     if GetInvokingResource() ~= 'aeterna_core' then return end
     card:ended(runId, name)
+    strip:ended(runId, name)
 end)
 
 AddEventHandler('aeterna_core:focusLost', function(owner, token)
@@ -87,11 +104,33 @@ RegisterNetEvent('aeterna_testkit:cl:role', function(payload)
     if ok then role = p.role end
 end)
 
-RegisterNetEvent('aeterna_testkit:cl:askEnv', function()
+-- The askEnv reply: the game build and the screen resolution, as sv:env carries them.
+local function envReply()
     local w, h = GetActiveScreenResolution()
-    TriggerServerEvent('aeterna_testkit:sv:env', {
-        gameBuild = math.tointeger(GetGameBuildNumber()) or 0, w = math.tointeger(w) or 0, h = math.tointeger(h) or 0,
-    })
+    return { gameBuild = math.tointeger(GetGameBuildNumber()) or 0, w = math.tointeger(w) or 0,
+        h = math.tointeger(h) or 0 }
+end
+
+RegisterNetEvent('aeterna_testkit:cl:askEnv', function()
+    TriggerServerEvent('aeterna_testkit:sv:env', envReply())
+end)
+
+-- Own client self-tests: env checks the askEnv reply against the sv:env schema; the eye cards need no set-up (the menu panel the
+-- run was started from is the uikit panel behind the card).
+local Selftest = TestkitLogic.selftest
+
+AddEventHandler('aeterna_core:selftest', function(runId, name)
+    if GetInvokingResource() ~= 'aeterna_core' or not Selftest.owns(RES, name) then return end
+    local ok, detail
+    if name == RES .. '.env' then
+        ok, detail = Selftest.env(AeternaCore.validate, envReply())
+    elseif name == RES .. '.eye_card' or name == RES .. '.eye_card_b' then
+        ok, detail = 'ready', ''
+    else
+        return
+    end
+    local sent, err = pcall(function() return exports.aeterna_core:reportSelftest(runId, name, ok, detail) end)
+    if not sent then AeternaCore.log.warn('reportSelftest failed', { name = name, err = tostring(err) }) end
 end)
 
 RegisterNUICallback('eyeAnswer', function(data, cb)

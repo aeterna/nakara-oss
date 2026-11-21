@@ -19,6 +19,7 @@ shared_scripts {
     'locales/en.lua',
     'locales/th.lua',
     'shared/logic/menu.lua',
+    'shared/logic/selftest.lua',
 }
 
 client_scripts {

@@ -65,7 +65,7 @@ A path that starts with `/`, contains `..`, `:` or `//`, or has another extensio
 
 ## Exports & Events / การเรียกใช้งาน
 
-None. Other resources do not talk to the loading screen, and nothing goes over the network. The client script sends only these messages to its own page with `SendLoadingScreenMessage`: `{ type: 'aeterna_loading:stage', stage: 'character' }` and `{ type: 'aeterna_loading:closing' }`.
+No exports and no net events; nothing goes over the network. The only events are the local self-test events of `aeterna_core` ([Self-tests](#self-tests--การทดสอบตัวเอง)). The client script sends only these messages to its own page with `SendLoadingScreenMessage`: `{ type: 'aeterna_loading:stage', stage: 'character' }` and `{ type: 'aeterna_loading:closing' }`.
 
 ## Commands and keys / คำสั่งและปุ่มลัด
 
@@ -81,7 +81,7 @@ None.
 
 These are deliberate and wait for the spec update ([spec § Manifest](../../docs/specs/aeterna_loading.md#manifest), [§ Stages](../../docs/specs/aeterna_loading.md#stages)):
 
-1. **Manifest: shared logic.** The spec's manifest lists only `client_script 'client/main.lua'` and `server_script 'server/main.lua'`. This package also loads `shared/logic/loading.lua` with `shared_script`, because both sides need it: the server validates `html/config.json`, and the client reads `shutdown.fallbackSeconds` and the close timing from it.
+1. **Manifest: shared logic.** The spec's manifest lists only `client_script 'client/main.lua'` and `server_script 'server/main.lua'`. This package also loads `shared/logic/loading.lua` and `shared/logic/selftest.lua` with `shared_scripts`, because both sides need them: the server validates `html/config.json`, and the client reads `shutdown.fallbackSeconds` and the close timing from it.
 2. **Manifest: Lua locales on the server only.** `locales/th.lua` and `locales/en.lua` hold only the server's `warn` line (`loading.config.bad`), so they are `server_scripts`, not shared. The page's strings are in `html/locale.json`.
 3. **Shutdown hard cap.** While the game session has not started, the client script also closes the page `shutdown.fallbackSeconds` after this resource started, so a session that never starts cannot leave the player on a manually shut-down loading screen. If `LoadingLogic` is missing or the config cannot be read, it closes after the default 30 s. Once the session starts, the spec's rule applies (close on `playerSpawned` or `fallbackSeconds` after the session started).
 4. **`tips: {}`.** Lua JSON decoders cannot tell an empty object from an empty list, so both validators treat `"tips": {}` as an empty list (the tip line is hidden). A non-empty object is refused.
@@ -113,6 +113,20 @@ sha256sum -c SHA256SUMS --ignore-missing
 ```
 
 Then read the capability table above (or `oss.json` inside the zip).
+
+## Self-tests / การทดสอบตัวเอง
+
+Registered with `aeterna_core`'s self-test registry when `aeterna_core` runs; `aeterna_testkit` runs them from its menu ([spec § Self-tests (0.2)](../../docs/specs/aeterna_loading.md#self-tests-02)).
+ลงทะเบียนกับ `aeterna_core` เมื่อมี `aeterna_core` ทำงานอยู่ และกดทดสอบได้จากเมนูของ `aeterna_testkit`
+
+| Name | Kind | Side | Checks |
+|---|---|---|---|
+| `aeterna_loading.config_valid` | headless | server | `html/config.json` reads and every field is inside its limits (FAIL names the bad fields) |
+| `aeterna_loading.local_paths_only` | headless | server | `background` and `audio.src` are empty or a file inside `html/` |
+| `aeterna_loading.shut_down` | ped | presser's client | `GetIsLoadingScreenActive()` is false |
+| `aeterna_loading.page_looked_right` | eye | presser's client | The person confirms the page showed the server name, then Map, Scripts with a percentage, then Character, and closed by itself |
+
+How it connects: `aeterna_core` is an optional edge, reached only through its local events, each carrying `owner = 'aeterna_loading'` first. The server sends `aeterna_core:selftest:add` for the four rows on start when `aeterna_core` is started, and again on every `aeterna_core:hello` (a core restart drops the registry). Results go back through `aeterna_core:selftest:report` on the side the test runs on. The package never calls an `aeterna_core` export and never lists it in `dependencies`; without `aeterna_core` the events go nowhere and the loading screen works the same. The eye card's answer comes from `aeterna_testkit` (the person presses a button), so this package never sends `aeterna_core:selftest:answer`.
 
 ## Tests
 

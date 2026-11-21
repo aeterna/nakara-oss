@@ -31,6 +31,15 @@ Version 0.2.0 (ADR 0005 decisions 1, 2, 3, 5). Written by Claude Code - Claude O
 - The phonekit copy of the uikit spec validator accepts uikit 0.2: `tabs`, `slider`, `table`, `empty`, list `search`
   and `empty`, `detailOf` / `detailItem`, and the new `update` keys.
 - `Config.prop` (the held prop, per model with `Config.models[m].prop`).
+- Self-tests (spec § Self-tests (0.2)), registered with `aeterna_core:addSelftest` on start: all 26 rows. Server rows
+  run on a fake device or on the presser's phone and restore what they change, behind `aeterna_core`'s write guard;
+  `eye_battery_dead` sets the presser's battery to 0 on `aeterna_core:selftestStarted` and restores it on
+  `aeterna_core:selftestEnd`. Ped and eye rows (timeout 15 s) open the phone through the normal path, show another
+  model or fold on the page only, and put it back on `aeterna_core:selftestEnd`. Pure rules in
+  `shared/logic/selftest.lua`, busted cases in `spec/selftest_spec.lua`. The page answers self-test probes on the NUI
+  callback `selftest`, and the client keeps the page-only test ring card away from the server.
+- The open gate's check options come from `DeviceLogic.gateCheckOptions`, shared with the gate self-test.
+- Icons `camera` and `image` in the tile icon whitelist (`shared/logic/phone.lua`, `html/icons.js`).
 
 ### Changed
 

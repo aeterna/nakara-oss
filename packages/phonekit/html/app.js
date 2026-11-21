@@ -1956,6 +1956,26 @@
         renderCover();
     }
 
+    // Self-test probes from the client script (spec § Self-tests (0.2)): press a key through the real keydown
+    // handler or open the control centre, then answer with the shell state on the `selftest` callback.
+    function selftestProbe(data) {
+        if (data.op === 'key') {
+            window.dispatchEvent(new KeyboardEvent('keydown', { key: String(data.key || ''), code: String(data.code || '') }));
+        } else if (data.op === 'cc') {
+            openCc();
+        }
+        const top = appStack[appStack.length - 1];
+        const rect = frameEl.getBoundingClientRect();
+        postNui('selftest', {
+            id: data.id,
+            screen: screenName(),
+            top: currentView === 'custom_app' && top ? top.screenId : null,
+            fold: device.fold || null,
+            x: rect.left, y: rect.top, w: rect.width, h: rect.height,
+            vw: window.innerWidth, vh: window.innerHeight,
+        });
+    }
+
     // Window message listener
     window.addEventListener('message', (event) => {
         const data = event.data;
@@ -2067,6 +2087,8 @@
             if (data.contacts) contactsData = data.contacts;
         } else if (data.type === 'layout:apply') {
             applyPlacement(data.place, data.position);
+        } else if (data.type === 'selftest') {
+            selftestProbe(data);
         }
     });
 

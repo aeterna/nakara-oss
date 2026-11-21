@@ -17,7 +17,7 @@ local ICON_NAMES = {
     'utensils', 'clock', 'calendar', 'info', 'alert-triangle', 'check',
     'x', 'plus', 'minus', 'search', 'lock', 'unlock', 'key', 'star',
     'flag', 'trash', 'log-out', 'log-in', 'chevron-right', 'chevron-left',
-    'arrow-up', 'arrow-down',
+    'arrow-up', 'arrow-down', 'camera', 'image',
 }
 
 L.ICONS = {}

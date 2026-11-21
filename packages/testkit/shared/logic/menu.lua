@@ -192,6 +192,44 @@ function M.createEyeCard(deps)
     return card
 end
 
+-- The now-testing strip: one line in the eye card's spot while a client test that is not `eye` (ped, client-side
+-- mock or headless) and carries `expect` runs on this client.
+-- It never takes focus or the cursor. deps = { show({ name, expect }), hide() }.
+function M.createNowStrip(deps)
+    local strip = { cur = nil }
+
+    function strip:isShown()
+        return self.cur ~= nil
+    end
+
+    local function close(self)
+        if not self.cur then return end
+        self.cur = nil
+        deps.hide()
+    end
+
+    -- ctx = the client-local aeterna_core:selftest context. Returns true when the strip is shown.
+    function strip:started(runId, name, ctx)
+        local c = type(ctx) == 'table' and ctx or {}
+        if c.kind == 'eye' or type(c.expect) ~= 'string' or c.expect:match('^%s*$') then
+            close(self)
+            return false
+        end
+        -- a new strip replaces the old one in place (no hide in between)
+        self.cur = { runId = runId, name = name }
+        deps.show({ name = name, expect = c.expect })
+        return true
+    end
+
+    -- aeterna_core:selftestEnd: hides the strip of that test only.
+    function strip:ended(runId, name)
+        local c = self.cur
+        if c and c.runId == runId and c.name == name then close(self) end
+    end
+
+    return strip
+end
+
 -- Console arguments: `--json`, `--only <name or prefix>`.
 function M.parseArgs(args)
     local out = { json = false }

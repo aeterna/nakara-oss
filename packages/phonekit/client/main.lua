@@ -19,6 +19,9 @@ local isPaused = false
 local lastCloseAt = -1000
 
 local layoutPlace = nil
+-- true while a self-test shows a model other than the held one (the server must not hear its folds)
+local displayOverride = false
+local lastRefused = nil
 
 -- 0.2 device state (the server owns it; the client only shows it)
 local device = {
@@ -354,21 +357,23 @@ local function closePhone()
     sendUi({ type = 'shell:close' })
 end
 
+-- Returns what it did: 'closed', 'ignored', 'dead' or 'asked' (the self-tests read it).
 local function requestOpenPhone()
     if isOpen then
         closePhone()
-        return
+        return 'closed'
     end
     -- One key press reaches both the page and the game (keepGameInput): ignore an open right after a close.
     if gameTimer() - lastCloseAt < 300 then
-        return
+        return 'ignored'
     end
     if not powerOn then
         toast('phonekit.battery.dead')
-        return
+        return 'dead'
     end
 
     TriggerServerEvent('aeterna_phonekit:sv:open')
+    return 'asked'
 end
 
 local function toggleFold()
@@ -378,7 +383,9 @@ local function toggleFold()
     if nextFold == device.fold then return end
     device.fold = nextFold
     sendUi({ type = 'fold', fold = nextFold })
-    TriggerServerEvent('aeterna_phonekit:sv:fold', { state = nextFold })
+    if not displayOverride then
+        TriggerServerEvent('aeterna_phonekit:sv:fold', { state = nextFold })
+    end
     layoutSizeChanged()
 end
 
@@ -497,6 +504,7 @@ end)
 
 RegisterNetEvent('aeterna_phonekit:cl:refused', function(data)
     local reason = (type(data) == 'table' and type(data.reason) == 'string') and data.reason or 'phonekit.refused.default'
+    lastRefused = reason
     toast(reason)
 end)
 
@@ -887,6 +895,11 @@ RegisterNUICallback('ring', function(data, cb)
         or type(data.answer) ~= 'boolean' then
         return
     end
+    if data.ringId == PhoneSelftest.RING_ID then
+        -- the self-test ring card is drawn by the page only; nothing on the server rings
+        sendUi({ type = 'ringStop', ringId = data.ringId })
+        return
+    end
     TriggerServerEvent('aeterna_phonekit:sv:ring', { ringId = data.ringId, answer = data.answer })
 end)
 
@@ -904,6 +917,373 @@ RegisterNUICallback('screen', function(data, cb)
     if isOpen and data.level == 'on' then
         pullHistory(false)
     end
+end)
+
+--------------------------------------------------------------------------------
+-- Self-tests (spec § Self-tests (0.2)): ped, eye and client mock rows. Pass rules and skips live in
+-- shared/logic/selftest.lua; this part only drives the phone and the page and reads them back.
+--------------------------------------------------------------------------------
+
+local PS = PhoneSelftest
+local selftest = nil -- the test in flight: { runId, name, touched, saved, badge, ring }
+local probes, probeSeq = {}, 0
+local contactsChangedCount = 0
+
+AddEventHandler('aeterna_phonekit:contactsChanged', function()
+    contactsChangedCount = contactsChangedCount + 1
+end)
+
+local function fromCore()
+    return type(GetInvokingResource) == 'function' and GetInvokingResource() == 'aeterna_core'
+end
+
+-- Client KVP key of an AeternaCore.kvp name (same rule as aeterna_core's kvp module).
+local function kvpDelete(name)
+    local mod = AeternaCoreLogic and AeternaCoreLogic.kvp
+    local key = mod and mod.keyFor and mod.keyFor(selfName(), name, 1) or ('aeterna_phonekit:' .. name .. ':v1')
+    DeleteResourceKvp(key)
+end
+
+local function reportTest(runId, name, ok, detail, extra)
+    local sent, err = pcall(function() return exports.aeterna_core:reportSelftest(runId, name, ok, detail, extra) end)
+    if not sent then logWarn('reportSelftest failed', { name = name, err = tostring(err) }) end
+end
+
+local function waitFor(fn, ms)
+    local deadline = gameTimer() + ms
+    while not fn() do
+        if gameTimer() >= deadline then return false end
+        Wait(50)
+    end
+    return true
+end
+
+local function pedReady()
+    if type(PlayerPedId) ~= 'function' or type(DoesEntityExist) ~= 'function' then return false end
+    local ped = PlayerPedId()
+    return ped ~= nil and ped ~= 0 and DoesEntityExist(ped) == true
+end
+
+-- Opens the phone through the normal path (server gate, focus). `fresh` closes an open phone first so the open
+-- runs from scratch (the lock screen is decided on open). Returns true, or false and the refusal.
+-- Every helper below returns at once when core has ended the test (t.ended): a timed-out test must not change the
+-- phone after endSelftest put it back.
+local function openForTest(t, fresh)
+    if t.ended then return false, 'ended' end
+    t.touched = true
+    if isOpen and fresh then closePhone() end
+    if isOpen then return true end
+    waitFor(function() return t.ended or gameTimer() - lastCloseAt >= 320 end, 1000)
+    for _ = 1, 2 do
+        if t.ended then return false, 'ended' end
+        lastRefused = nil
+        requestOpenPhone()
+        waitFor(function() return t.ended or isOpen or lastRefused ~= nil end, 1500)
+        if t.ended then
+            -- the open landed after the end: put the phone away again
+            if isOpen then closePhone() end
+            return false, 'ended'
+        end
+        if isOpen then return true end
+        if lastRefused then return false, lastRefused end
+    end
+    return false, 'timeout'
+end
+
+-- Asks the page for its state after `op` ('state', 'key', 'cc'); nil when it does not answer within 1 s.
+local function probe(t, op, extra)
+    if t.ended then return nil end
+    probeSeq = probeSeq + 1
+    local id = probeSeq
+    local msg = { type = 'selftest', op = op, id = id }
+    for k, v in pairs(extra or {}) do msg[k] = v end
+    sendUi(msg)
+    if not waitFor(function() return probes[id] ~= nil end, 1000) then return nil end
+    local r = probes[id]
+    probes[id] = nil
+    return r
+end
+
+RegisterNUICallback('selftest', function(data, cb)
+    if type(cb) == 'function' then cb({ ok = true }) end
+    local id = type(data) == 'table' and math.tointeger(tonumber(data.id)) or nil
+    if selftest and id and id >= 1 and id <= probeSeq then probes[id] = data end
+end)
+
+local function saveDisplay(t)
+    if not t.saved then
+        t.saved = { model = device.model, label = device.label, fold = device.fold, voice = device.voice,
+            color = device.color }
+    end
+end
+
+-- Shows another model on the page only; the held phone on the server is unchanged.
+local function showModel(t, model, fold)
+    if t.ended then return end
+    saveDisplay(t)
+    displayOverride = model ~= t.saved.model
+    device.model = model
+    device.label = nil
+    device.fold = D.validateFold(model, fold, Cfg.cover ~= false)
+    device.voice = D.MODELS[model].calls ~= false
+    device.color = nil
+    sendUi(deviceMessage())
+end
+
+-- Folds on the page only (no sv:fold, nothing saved), then waits out the ~260 ms fold animation.
+local function pageFold(t, fold)
+    if t.ended then return end
+    saveDisplay(t)
+    device.fold = fold
+    sendUi({ type = 'fold', fold = fold })
+    Wait(350)
+end
+
+local function showScreen(t, screenId, spec)
+    if t.ended then return end
+    sendUi({ type = 'screen:show', screenId = screenId, id = PS.APP_ID, title = translate('phonekit.selftest.screen'),
+        blocks = spec.blocks, detailOf = spec.detailOf, detailItem = spec.detailItem })
+end
+
+local function textScreen()
+    return { blocks = { { id = 'note', type = 'text', label = translate('phonekit.selftest.screen') } } }
+end
+
+local function endSelftest()
+    local t = selftest
+    selftest = nil
+    probes = {}
+    if not t then return end
+    t.ended = true
+    if t.badge then sendUi({ type = 'badge', id = 'settings', count = 0 }) end
+    if t.ring then sendUi({ type = 'ringStop', ringId = PS.RING_ID }) end
+    if t.saved then
+        device.model, device.label, device.fold = t.saved.model, t.saved.label, t.saved.fold
+        device.voice, device.color = t.saved.voice, t.saved.color
+        displayOverride = false
+        sendUi(deviceMessage())
+    end
+    if t.touched and isOpen then closePhone() end
+end
+
+local function notOpened(reason)
+    return 'fail', 'phone did not open: ' .. tostring(reason)
+end
+
+local function copyList(list)
+    local out = {}
+    for i, c in ipairs(type(list) == 'table' and list or {}) do
+        local row = {}
+        for k, v in pairs(c) do row[k] = v end
+        out[i] = row
+    end
+    return out
+end
+
+local function sameList(a, b)
+    if #a ~= #b then return false end
+    for i = 1, #a do
+        for k, v in pairs(a[i]) do if b[i][k] ~= v then return false end end
+        for k, v in pairs(b[i]) do if a[i][k] ~= v then return false end end
+    end
+    return true
+end
+
+local function eyeModel(model)
+    return function(t)
+        local ok, reason = openForTest(t)
+        if not ok then return notOpened(reason) end
+        showModel(t, model, nil)
+        return 'ready', ''
+    end
+end
+
+local CLIENT_TESTS = {
+    open_close_prop = function(t)
+        local animation = Cfg.animation and true or false
+        local ok, reason = openForTest(t, true)
+        if not ok then return PS.propResult({ opened = false, reason = reason }) end
+        waitFor(function() return PhoneAnim.prop() ~= nil end, animation and 1500 or 300)
+        local prop = PhoneAnim.prop()
+        local attached = prop ~= nil and type(IsEntityAttachedToEntity) == 'function'
+            and IsEntityAttachedToEntity(prop, PlayerPedId()) == true
+        closePhone()
+        local gone = waitFor(function()
+            return PhoneAnim.prop() == nil and not (prop and DoesEntityExist(prop))
+        end, 1000)
+        return PS.propResult({ opened = true, animation = animation, prop = prop ~= nil, attached = attached, gone = gone })
+    end,
+
+    fold_keeps_screen = function(t)
+        local ok, reason = openForTest(t)
+        if not ok then return PS.foldKept({ opened = false, reason = reason }) end
+        showScreen(t, 'selftest_a', textScreen())
+        local before = probe(t, 'state')
+        local start = device.fold
+        pageFold(t, D.toggleFold(device.model, start))
+        pageFold(t, start)
+        local after = probe(t, 'state')
+        return PS.foldKept({ opened = true, expected = 'selftest_a', before = before and before.top,
+            after = after and after.top })
+    end,
+
+    clamp_on_unfold = function(t)
+        local ok, reason = openForTest(t)
+        if not ok then return PS.clampInside({ opened = false, reason = reason }) end
+        if device.fold ~= 'closed' then pageFold(t, 'closed') end
+        pageFold(t, 'open')
+        local r = probe(t, 'state')
+        return PS.clampInside({ opened = true, fold = r and r.fold, vw = r and r.vw, vh = r and r.vh,
+            rect = r and { x = r.x, y = r.y, w = r.w, h = r.h } })
+    end,
+
+    exit_contract = function(t)
+        local ok, reason = openForTest(t)
+        if not ok then return PS.exitResult({ opened = false, reason = reason }) end
+        probe(t, 'key', { key = 'Escape', code = 'Escape' })
+        local escClosed = waitFor(function() return not isOpen end, 1000)
+        local reopenIgnored = escClosed and requestOpenPhone() == 'ignored'
+        local keyCode = openKeyCode()
+        local keyClosed = false
+        if escClosed and reopenIgnored and keyCode then
+            local reopened = openForTest(t)
+            if reopened then
+                local letter = keyCode:match('^Key(%u)$')
+                local key = letter and letter:lower() or keyCode:match('^Digit(%d)$') or keyCode
+                probe(t, 'key', { key = key, code = keyCode })
+                keyClosed = waitFor(function() return not isOpen end, 1000)
+            end
+        end
+        return PS.exitResult({ opened = true, escClosed = escClosed, reopenIgnored = reopenIgnored, keyCode = keyCode,
+            keyClosed = keyClosed })
+    end,
+
+    eye_book_two_pane = function(t)
+        local ok, reason = openForTest(t)
+        if not ok then return notOpened(reason) end
+        showModel(t, 'book', 'closed')
+        local items = {}
+        for i = 1, 3 do
+            items[i] = { id = 'i' .. i, label = translate('phonekit.selftest.item', { n = i }) }
+        end
+        showScreen(t, 'selftest_list', { blocks = { { id = 'items', type = 'list', items = items } } })
+        showScreen(t, 'selftest_detail', { detailOf = 'items', detailItem = 'i1',
+            blocks = { { id = 'note', type = 'text', label = translate('phonekit.selftest.item', { n = 1 }) } } })
+        pageFold(t, 'open')
+        return 'ready', ''
+    end,
+
+    eye_fold_cover = function(t)
+        local ok, reason = openForTest(t)
+        if not ok then return notOpened(reason) end
+        showModel(t, 'fold', 'open')
+        showScreen(t, 'selftest_a', textScreen())
+        pageFold(t, 'closed')
+        return 'ready', ''
+    end,
+
+    eye_lock = function(t)
+        -- a waiting badge before the open, so the lock screen comes up with one card
+        t.badge = true
+        sendUi({ type = 'badge', id = 'settings', count = 1 })
+        local ok, reason = openForTest(t, true)
+        if not ok then return notOpened(reason) end
+        return 'ready', ''
+    end,
+
+    eye_control_centre = function(t)
+        local ok, reason = openForTest(t)
+        if not ok then return notOpened(reason) end
+        probe(t, 'cc')
+        return 'ready', ''
+    end,
+
+    ring_cover = function(t)
+        local ok, reason = openForTest(t)
+        if not ok then return notOpened(reason) end
+        if device.fold ~= 'closed' then pageFold(t, 'closed') end
+        t.ring = true
+        sendUi({ type = 'ring', ringId = PS.RING_ID, id = PS.APP_ID, title = translate('phonekit.selftest.ring.title'),
+            body = translate('phonekit.selftest.ring.body') })
+        return 'ready', ''
+    end,
+
+    eye_battery_dead = function(t)
+        -- the server set 0 % on aeterna_core:selftestStarted, before this test reached the client
+        if not waitFor(function() return t.ended or not powerOn end, 1000) then
+            return 'fail', 'phone still powered: the server did not set 0 %'
+        end
+        if t.ended then return 'fail', 'ended' end
+        -- the open the person would try: refused on the client with the "battery dead" toast
+        requestOpenPhone()
+        return 'ready', ''
+    end,
+
+    contacts_hooks = function()
+        local before = copyList(getSavedContacts())
+        local count = contactsChangedCount
+        local found, changes = false, 0
+        local okRun, added, reason = pcall(function()
+            local a, r = contactsHook:addContact({ name = 'Self-test', number = '000-0000' })
+            for _, c in ipairs(contactsHook:getContacts()) do
+                if c.name == 'Self-test' and c.number == '000-0000' then found = true end
+            end
+            return a, r
+        end)
+        changes = contactsChangedCount - count
+        -- put the list back whatever happened above
+        local changed = not sameList(copyList(getSavedContacts()), before)
+        if changed then
+            -- an empty book had no key before: delete it rather than store an empty list
+            if #before == 0 then kvpDelete('contacts') else kvpSet('contacts', before) end
+        end
+        if changed or added then
+            TriggerEvent('aeterna_phonekit:contactsChanged')
+            sendUi({ type = 'builtin:data', contacts = getSavedContacts() })
+        end
+        local restored = sameList(copyList(getSavedContacts()), before)
+        if not okRun then
+            logWarn('phonekit self-test error', { name = 'contacts_hooks', err = tostring(added) })
+            return false, 'addContact raised an error', { restored = restored }
+        end
+        local ok, detail = PS.contactsResult({ added = added, reason = reason, found = found, changes = changes,
+            restored = restored })
+        return ok and 'mock' or false, detail, { restored = restored }
+    end,
+}
+
+AddEventHandler('aeterna_core:selftest', function(runId, name)
+    if not fromCore() then return end
+    local short = PS.shortName(selfName(), name)
+    if not short then return end
+    local model = short:match('^eye_model_(%a+)$')
+    local fn = CLIENT_TESTS[short] or (model and D.MODELS[model] and eyeModel(model))
+    if not fn then return end
+    local skip = PS.skipReason(short, { battery = Cfg.battery ~= false, mode = Cfg.devices == 'items' and 'items' or 'single',
+        lockScreen = Cfg.lockScreen == true, cover = Cfg.cover ~= false, model = device.model, ped = pedReady() })
+    if skip then
+        reportTest(runId, name, 'skip', skip)
+        return
+    end
+    endSelftest()
+    local t = { runId = runId, name = name }
+    selftest = t
+    CreateThread(function()
+        local okRun, ok, detail, extra = pcall(fn, t)
+        if selftest ~= t then return end
+        if not okRun then
+            reportTest(runId, name, 'fail', 'test error')
+            logWarn('phonekit self-test error', { name = name, err = tostring(ok) })
+            return
+        end
+        reportTest(runId, name, ok, detail, extra)
+    end)
+end)
+
+-- Core ends every test with this, reported or not: put back what the test changed.
+AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
+    if not fromCore() then return end
+    if selftest and selftest.runId == runId and selftest.name == name then endSelftest() end
 end)
 
 -- Initial layout element registration
