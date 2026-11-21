@@ -72,6 +72,18 @@
       "plan": "kit-v02",
       "acquired": "2026-11-21T15:06:54Z",
       "expires": "2026-11-21T19:06:54Z"
+    },
+    {
+      "id": "kit02-w2-site-7340bf74",
+      "repo": "nakara-oss",
+      "lane": "kit02-w2-site",
+      "host": "mac",
+      "scope": [
+        "site/**,README*.md"
+      ],
+      "plan": "kit-v02",
+      "acquired": "2026-11-21T15:07:03Z",
+      "expires": "2026-11-21T19:07:03Z"
     }
   ]
 }
