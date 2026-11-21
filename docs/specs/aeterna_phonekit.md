@@ -251,7 +251,8 @@ is started (character id for the server KVP key, [Storage](#storage-02-additions
 
 Eight models. Sizes are design px at scale 1; the shell scales the whole frame by
 `fit = min(1, (vh − 0.048 × vh) / h, (vw − 0.048 × vh) / w)` (`vw`, `vh` = NUI viewport), so a frame never clips on a
-short or narrow screen, and then by the layout scale.
+short or narrow screen. The drawn scale is `min(layout scale, fit)` (§ Layout in 0.2), where `fit` here is computed
+without the `min(1, …)` cap, so a layout scale above 1 still works when the screen has room.
 
 | Model id | Neutral name | Frame (w × h) | Folds | Home | Calls | Battery × | Rank |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -466,8 +467,10 @@ the picked row.
   lump (a power bank item), capped at 100, and works on a dead phone.
 - Shown value = ceil(pct), so 0 % appears only when the phone is dead.
 - Saved when the shown value crosses a multiple of `saveStep`, at 0, at 100, on unload, on drop and on resource stop.
-- Warnings at each `warnAt` value going down, once each, never at 0: a phonekit banner while the phone is open, an
-  `aeterna_notify` toast while it is closed.
+- Warnings at each `warnAt` value going down, never at 0: a phonekit banner while the phone is open, an
+  `aeterna_notify` toast while it is closed. Each value fires once per crossing (after a recharge above it, the next
+  drain past it warns again); when one step crosses several values at once (`setBattery` 50 → 3), only the lowest
+  crossed value is sent.
 - **At 0:** the server sends `aeterna_phonekit:cl:power { on = false }`; the client closes every phonekit surface
   (shell, cover, app screens: the app on screen gets `__close`), fires the server-local
   `aeterna_phonekit:power` → `(src, { on = false })` so add-ons end calls and viewfinders, and refuses to open with
@@ -541,7 +544,8 @@ edge from notify to phonekit, ADR 0005 decision 2).
   Folding back therefore returns the phone to where the player put it. Phonekit applies every `apply` as in 0.1.
 - Without layout (or with layout 0.1), phonekit clamps its own frame on every size change and NUI resize: from
   `Config.position` (or the last applied place), it shifts the frame inside the viewport, never saving anything.
-- In every case the drawn scale is `min(place scale, fit)`, so a frame never clips.
+- In every case the drawn scale is `min(place scale, fit)`, with `fit` uncapped at 1 here (§ Models and frames), so a
+  frame never clips and a scale above 1 still applies when it fits.
 - **Upgrade note (0.1 saved scales).** A scale a player saved in 0.1 was chosen for a 320 × 640 frame. After the
   upgrade the same scale applies to the larger 0.2 frame (a `slab` is 1.27 × taller), capped by `fit` so it stays on
   screen. Players who want the 0.1 size set the phone's scale again in the layout editor (about 0.8 of the old value).
