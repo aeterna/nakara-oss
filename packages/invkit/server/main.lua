@@ -84,8 +84,16 @@ useManager = L.createUseManager({
     end,
 })
 
-local function onOxUsingItem(src, itemName, slot)
-    if not useManager:getUsable(itemName) then
+-- Self-test gate (server/selftest.lua): while a test usable is registered, only that test's own tagged item
+-- may be taken; every other use of the same item name falls through to ox_inventory untouched.
+local useGate = nil
+
+local function onOxUsingItem(src, itemName, slot, metadata)
+    local entry = useManager:getUsable(itemName)
+    if not entry then
+        return
+    end
+    if useGate and not useGate(src, itemName, slot, metadata, entry) then
         return
     end
     useManager:startUse(src, itemName, slot)
@@ -304,4 +312,5 @@ end)
 InvkitServerSelftestHooks = {
     useManager = useManager,
     syncOxHook = syncOxHook,
+    setUseGate = function(fn) useGate = fn end,
 }

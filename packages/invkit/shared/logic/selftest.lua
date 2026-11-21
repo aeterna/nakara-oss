@@ -42,14 +42,32 @@ local ROWS = {
 local KNOWN = {}
 for _, row in ipairs(ROWS) do KNOWN[row.name] = true end
 
---- The registered rows in spec order: { { name, meta }, … }. `t(key)` translates the expect strings.
-function InvkitSelftest.definitions(t)
+-- An item name Config.phone.items maps to `model`: one ending in '_<model>' first (the generic 'phone' maps to
+-- slab too), then any, sorted; else the shipped name.
+local function itemFor(items, model)
+    local named, other = {}, {}
+    for name, m in pairs(type(items) == 'table' and items or {}) do
+        if m == model and type(name) == 'string' then
+            local list = name:sub(-(#model + 1)) == '_' .. model and named or other
+            list[#list + 1] = name
+        end
+    end
+    table.sort(named)
+    table.sort(other)
+    return named[1] or other[1] or ('phone_' .. model)
+end
+
+--- The registered rows in spec order: { { name, meta }, … }. `t(key, vars)` translates the expect strings;
+--- `cfg` (Config) names the fold and slab items in the phone_two_items instruction.
+function InvkitSelftest.definitions(t, cfg)
     t = t or function(key) return key end
+    local items = type(cfg) == 'table' and type(cfg.phone) == 'table' and cfg.phone.items or nil
+    local vars = { fold = itemFor(items, 'fold'), slab = itemFor(items, 'slab') }
     local out = {}
     for i, row in ipairs(ROWS) do
         local meta = { kind = row.kind, players = 1, destructive = row.destructive == true }
         if row.side then meta.side = row.side end
-        if row.expect then meta.expect = t('invkit.selftest.' .. row.name .. '.expect') end
+        if row.expect then meta.expect = t('invkit.selftest.' .. row.name .. '.expect', vars) end
         if row.timeout then meta.timeout = row.timeout end
         if row.needs then meta.skipWhen = { resources = { table.unpack(row.needs) } } end
         out[i] = { name = row.name, meta = meta }
@@ -304,13 +322,23 @@ function InvkitSelftest.itemUseVerdict(r)
     return 'mock', 'the item was given, its progress bar ran once and the item was removed', extra
 end
 
---- The device list invkit answers phonekit with, built from the presser's own ox_inventory slots (the client
---- view). A phone with no phoneId yet gets a stand-in id here; nothing is written.
+--- The phone items the presser's own ox_inventory shows (the client view), lowest slot first:
+--- { key, model, battery? }. key = the item's phoneId, or name@slot for a phone that has none yet, so the
+--- same phone keeps the same key between two reads. Nothing is written.
 function InvkitSelftest.devicesFrom(P, slots, map)
     if type(slots) ~= 'table' then return nil end
-    local n = 0
-    local devices = P.buildDevices(slots, map, function() n = n + 1; return n end)
-    return devices
+    local sorted = {}
+    for _, slot in ipairs(slots) do
+        if type(slot) == 'table' and map[slot.name] and tonumber(slot.slot) then sorted[#sorted + 1] = slot end
+    end
+    table.sort(sorted, function(a, b) return tonumber(a.slot) < tonumber(b.slot) end)
+    local out = {}
+    for i, slot in ipairs(sorted) do
+        local md = type(slot.metadata) == 'table' and slot.metadata or {}
+        local key = P.isPhoneId(md.phoneId) and md.phoneId or (slot.name .. '@' .. tostring(slot.slot))
+        out[i] = { key = key, model = map[slot.name], battery = type(md.battery) == 'number' and md.battery or nil }
+    end
+    return out
 end
 
 local function byModel(devices, model)
@@ -334,23 +362,32 @@ function InvkitSelftest.newPhoneWatch(name)
         if name == 'phone_two_items' then
             local fold, slab = byModel(devices, 'fold'), byModel(devices, 'slab')
             if fold and slab then
-                result = ('fold (battery %s) and slab (battery %s) both in the device list'):format(
+                result = ('inventory shows a fold (battery %s) and a slab (battery %s) phone item'):format(
                     tostring(fold.battery), tostring(slab.battery))
             end
         elseif name == 'phone_drop_active' then
             if #devices >= 2 then
-                seenTwo = {}
-                for _, d in ipairs(devices) do seenTwo[d.id] = true end
+                local now = {}
+                for _, d in ipairs(devices) do now[d.key] = true end
+                local dropped = false
+                for key in pairs(seenTwo or {}) do
+                    if not now[key] then dropped = true end
+                end
+                if dropped and next(now) ~= nil then
+                    result = 'inventory shows one phone item gone and another still carried'
+                else
+                    seenTwo = now
+                end
             elseif seenTwo and #devices >= 1 then
                 local kept = 0
-                for _, d in ipairs(devices) do if seenTwo[d.id] then kept = kept + 1 end end
+                for _, d in ipairs(devices) do if seenTwo[d.key] then kept = kept + 1 end end
                 if kept == #devices then
-                    result = 'a dropped phone left the device list; the other phone stays in it'
+                    result = 'inventory shows one phone item gone and another still carried'
                 end
             end
         elseif name == 'phone_no_item' then
             if #devices == 0 then
-                result = 'no phone carried: invkit answers an empty device list, which phonekit refuses'
+                result = 'inventory shows no phone item'
             end
         end
         return result ~= nil
@@ -363,12 +400,12 @@ function InvkitSelftest.newPhoneWatch(name)
             local missing = {}
             if not byModel(last, 'fold') then missing[#missing + 1] = 'fold' end
             if not byModel(last, 'slab') then missing[#missing + 1] = 'slab' end
-            return 'fail', 'no ' .. table.concat(missing, ' and ') .. ' phone item carried'
+            return 'fail', 'inventory shows no ' .. table.concat(missing, ' and ') .. ' phone item'
         elseif name == 'phone_drop_active' then
-            if not seenTwo then return 'fail', 'the presser never carried two phones' end
-            return 'fail', 'no phone was dropped while the other stayed'
+            if not seenTwo then return 'fail', 'inventory never showed two phones' end
+            return 'fail', 'inventory never showed one phone gone while another stayed'
         end
-        return 'fail', ('%d phone items still carried'):format(#last)
+        return 'fail', ('inventory shows %d phone items still carried'):format(#last)
     end
 
     return w

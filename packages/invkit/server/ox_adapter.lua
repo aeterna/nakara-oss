@@ -136,7 +136,7 @@ function A.parseUsingItemPayload(payload)
     if type(itemField) ~= 'table' then
         return src, nil, nil
     end
-    return src, itemField.name, tonumber(itemField.slot)
+    return src, itemField.name, tonumber(itemField.slot), itemField.metadata
 end
 
 function A.syncUsingItemHook(onUsingItemFn, itemFilter, filterCount)
@@ -154,11 +154,11 @@ function A.syncUsingItemHook(onUsingItemFn, itemFilter, filterCount)
     end
     local ok, hookId = pcall(function()
         return exports.ox_inventory:registerHook('usingItem', function(payload)
-            local src, itemName, slot = A.parseUsingItemPayload(payload)
+            local src, itemName, slot, metadata = A.parseUsingItemPayload(payload)
             if not src or type(itemName) ~= 'string' then
                 return
             end
-            return onUsingItemFn(src, itemName, slot)
+            return onUsingItemFn(src, itemName, slot, metadata)
         end, { itemFilter = itemFilter })
     end)
     if not ok then
