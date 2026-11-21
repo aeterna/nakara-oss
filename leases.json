@@ -36,6 +36,18 @@
       "plan": "kit02",
       "acquired": "2026-11-21T06:48:27Z",
       "expires": "2026-11-21T10:48:27Z"
+    },
+    {
+      "id": "kit02-e2b-5a290422",
+      "repo": "nakara-oss",
+      "lane": "kit02-e2b",
+      "host": "mac",
+      "scope": [
+        "packages/core/client/**,packages/core/import.lua,packages/core/shared/logic/focus.lua,packages/core/spec/focus_overlay_spec.lua"
+      ],
+      "plan": "kit02",
+      "acquired": "2026-11-21T06:48:31Z",
+      "expires": "2026-11-21T10:48:31Z"
     }
   ]
 }
