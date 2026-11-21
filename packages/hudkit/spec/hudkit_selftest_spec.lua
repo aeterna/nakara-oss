@@ -305,6 +305,13 @@ describe('aeterna_hudkit self-tests', function()
             assert.is_nil(steps[3].expect)
         end)
 
+        it('fails without firing anything when the presser is not in a vehicle', function()
+            local state, detail, extra = ST.seatbeltVerdict(nil, true, false)
+            assert.are.equal('fail', state)
+            assert.truthy(detail:find('vehicle', 1, true))
+            assert.is_true(extra.restored)
+        end)
+
         it('reports mock with restored only when every step matched and the state is back', function()
             local state, _, extra = ST.seatbeltVerdict({ true, false, nil, n = 3 }, true)
             assert.are.equal('mock', state)
@@ -435,6 +442,7 @@ describe('aeterna_hudkit self-tests', function()
     describe('client wrapper', function()
         local function load_client(opts)
             opts = opts or {}
+            local inVehicle = opts.inVehicle == true
             natives.reset({ side = 'client', resource = 'aeterna_hudkit', invoker = 'aeterna_hudkit' })
             natives.spy('RegisterCommand')
             natives.spy('RegisterKeyMapping')
@@ -447,7 +455,7 @@ describe('aeterna_hudkit self-tests', function()
             natives.stub('AddStateBagChangeHandler', function() return 1 end)
             natives.stub('GetPlayerServerId', function() return 7 end)
             natives.stub('LocalPlayer', { state = {} })
-            natives.stub('IsPedInAnyVehicle', function() return false end)
+            natives.stub('IsPedInAnyVehicle', function() return inVehicle end)
             local reports = {}
             natives.stub_export('aeterna_core', 'reportSelftest', function(runId, name, ok, detail, extra)
                 reports[#reports + 1] = { runId = runId, name = name, ok = ok, detail = detail, extra = extra }
@@ -463,19 +471,45 @@ describe('aeterna_hudkit self-tests', function()
             return { reports = reports, ui = ui }
         end
 
-        it('seatbelt_event reports mock with restored and leaves the icon as it found it', function()
-            local ctx = load_client()
+        local function seatbeltStates(ui, from)
+            local out = { n = 0 }
+            for i = from or 1, #ui do
+                local m = ui[i][1]
+                if type(m) == 'table' and m.type == 'hud:seatbelt' then
+                    out.n = out.n + 1
+                    out[out.n] = m.state
+                end
+            end
+            return out
+        end
+
+        it('seatbelt_event in a vehicle reads what the real handler sent: true, false, nil, then mock', function()
+            local ctx = load_client({ inVehicle = true })
+            natives.advance(500)
+            local from = #ctx.ui + 1
             natives.fire('aeterna_core:selftest', 'r2-abcd', 'aeterna_hudkit.seatbelt_event',
                 { kind = 'mock', side = 'client', role = 'A' })
-            natives.advance(2000)
+            natives.advance(0)
+            local sent = seatbeltStates(ctx.ui, from)
+            assert.are.equal(3, sent.n)
+            assert.is_true(sent[1])
+            assert.is_false(sent[2])
+            assert.is_nil(sent[3])
             assert.are.equal(1, #ctx.reports)
             assert.are.equal('mock', ctx.reports[1].ok)
             assert.is_true(ctx.reports[1].extra.restored)
-            local last
-            for _, call in ipairs(ctx.ui) do
-                if type(call[1]) == 'table' and call[1].type == 'hud:seatbelt' then last = call[1] end
-            end
-            assert.is_nil(last.state)
+        end)
+
+        it('seatbelt_event on foot fails and fires nothing', function()
+            local ctx = load_client({ inVehicle = false })
+            natives.advance(500)
+            local from = #ctx.ui + 1
+            natives.fire('aeterna_core:selftest', 'r2-abcd', 'aeterna_hudkit.seatbelt_event',
+                { kind = 'mock', side = 'client', role = 'A' })
+            natives.advance(0)
+            assert.are.equal(0, seatbeltStates(ctx.ui, from).n)
+            assert.are.equal('fail', ctx.reports[1].ok)
+            assert.truthy(ctx.reports[1].detail:find('vehicle', 1, true))
         end)
 
         it('seatbelt_event reports skip with the config reason when the icon is off', function()
