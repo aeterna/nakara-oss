@@ -68,6 +68,7 @@ Locales.th['phonekit.selftest.expect.book_two_pane'] = 'Book กางออก�
 Locales.th['phonekit.selftest.expect.fold_cover'] = 'Fold พับปิด: หน้าจอด้านนอกเล็กๆ มีเวลา แบตเตอรี่ และจำนวนที่รออยู่ เมื่อกางออกจะเห็นหน้าเดิมก่อนพับ'
 Locales.th['phonekit.selftest.expect.lock'] = 'หน้าล็อกมีการ์ดหนึ่งใบของป้ายทดสอบ ปัดขึ้นแล้วไปหน้าโฮม'
 Locales.th['phonekit.selftest.expect.control_centre'] = 'ดึงลงจากแถบสถานะแล้วเห็นขนาดตัวอักษร นาฬิกา 24 ชั่วโมง และประวัติการแจ้งเตือน โดยไม่มีไทล์สัญญาณหรือความสว่าง'
+Locales.th['phonekit.selftest.expect.battery_dead'] = 'หลังการทดสอบตั้งแบตเป็น 0 %: โทรศัพท์และแอปที่เปิดอยู่ปิดทันทีและมีแจ้งเตือน "แบตเตอรี่หมด" เปิดเครื่องไม่ได้จนกว่าการทดสอบจะคืนค่าเดิม'
 Locales.th['phonekit.selftest.expect.ring_cover'] = 'Fold พับปิด: การ์ดสายเรียกเข้าทดสอบพร้อมปุ่มรับสายและปฏิเสธบนหน้าจอด้านนอก กดรับสายแล้วส่งผลกลับโดยไม่ต้องกางเครื่อง'
 Locales.th['phonekit.selftest.ring.title'] = 'สายทดสอบ'
 Locales.th['phonekit.selftest.ring.body'] = 'ทดสอบระบบ ไม่มีใครโทรมาจริง'

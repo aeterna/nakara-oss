@@ -376,7 +376,7 @@ local function askGate(src, onDone)
             end
         end
         onDone(allowed, reason)
-    end, items and { silenceDenies = true, silenceReason = 'phonekit.refused.nodevice' } or nil)
+    end, D.gateCheckOptions(MODE))
     TriggerEvent('aeterna_phonekit:asking', src, { checkId = checkId, devices = MODE })
 end
 
@@ -1305,15 +1305,14 @@ end)
 local PS = PhoneSelftest
 
 local function reportSelftest(runId, name, ok, detail, extra)
-    pcall(function() return exports.aeterna_core:reportSelftest(runId, name, ok, detail, extra) end)
+    local sent, err = pcall(function() return exports.aeterna_core:reportSelftest(runId, name, ok, detail, extra) end)
+    if not sent then logWarn('reportSelftest failed', { name = name, err = tostring(err) }) end
 end
 
--- Core's write guard (AeternaCore.selftest.mayWrite) when this core build has it; core's destructive gate
--- has already decided before a destructive test is fired either way.
+-- Core's write guard. No guard (an aeterna_core without it) means no write.
 local function mayWrite(runId, name)
     local guard = AeternaCore and AeternaCore.selftest and AeternaCore.selftest.mayWrite
-    if type(guard) ~= 'function' then return true end
-    return guard(runId, name) == true
+    return type(guard) == 'function' and guard(runId, name) == true
 end
 
 -- The presser's loaded phone, or nil and the SKIP reason.
@@ -1330,14 +1329,14 @@ local function zeroClosesAll(runId, name, ctx)
     local src, p, dev = presserPhone(ctx)
     if not src then return 'skip', p end
     local st = p.states[dev.id]
-    if not st or st.dead then return 'skip', 'presser phone is already at 0 %' end
+    if st.dead then return 'skip', 'presser phone is already at 0 %' end
     if not mayWrite(runId, name) then return false, 'write guard refused' end
     local before = st.pct
     local ev = B.set(st, 0, batteryCfg)
     applyBatteryEvents(src, ev, false)
     local ok, detail = PS.zeroClosed({
-        dead = isDead(src), powerOff = ev.power == false, device = activeOf(p) ~= nil and not isDead(src),
-        open = badgeMgr:isPhoneOpen(src), screens = playerScreens[src] ~= nil,
+        dead = isDead(src), powerOff = ev.power == false, open = badgeMgr:isPhoneOpen(src),
+        screens = playerScreens[src] ~= nil,
     })
     applyBatteryEvents(src, B.set(st, before, batteryCfg), false)
     saveDevice(src)
@@ -1359,9 +1358,10 @@ local function kvpRoundtrip(runId, name, ctx)
         SetResourceKvp(key, raw)
         restored = GetResourceKvpString(key) == raw
     else
-        -- no saved value before: write the live state, as unload or drop would
-        saveDevice(src)
-        restored = readKvp(key) ~= nil
+        -- the key did not exist before: it does not exist after
+        DeleteResourceKvp(key)
+        local left = GetResourceKvpString(key)
+        restored = left == nil or left == ''
     end
     return ok and 'mock' or false, detail, { restored = restored, wrote = true }
 end
@@ -1377,7 +1377,7 @@ local SERVER_TESTS = {
     battery_zero_closes_all = zeroClosesAll,
     battery_kvp_roundtrip = kvpRoundtrip,
     gate_items_silence_denies = function()
-        local ok, detail = PS.silenceDenies(L)
+        local ok, detail = PS.silenceDenies(L, D.gateCheckOptions('items'))
         -- a made-up check on its own manager: the live gate never changed, so nothing is left to restore
         return ok and 'mock' or false, detail, { restored = true }
     end,
@@ -1395,6 +1395,38 @@ AddEventHandler('aeterna_core:selftest', function(runId, name, ctx)
         return
     end
     reportSelftest(runId, name, test(runId, name, ctx))
+end)
+
+-- eye_battery_dead is a client eye test that needs the server half: core fires selftestStarted before it sends the
+-- test to the presser, so the battery is at 0 (saved, power off) when the card asks; selftestEnd puts it back.
+local deadPrepared = {} -- ['runId|name'] = { src, before }
+
+local function fromCore()
+    return type(GetInvokingResource) == 'function' and GetInvokingResource() == 'aeterna_core'
+end
+
+AddEventHandler('aeterna_core:selftestStarted', function(runId, name, ctx)
+    if not fromCore() or PS.shortName(selfName(), name) ~= 'eye_battery_dead' or not batteryCfg then return end
+    local src, p, dev = presserPhone(ctx)
+    if not src then return end
+    local st = p.states[dev.id]
+    if st.dead or not mayWrite(runId, name) then return end
+    deadPrepared[tostring(runId) .. '|' .. name] = { src = src, before = st.pct }
+    applyBatteryEvents(src, B.set(st, 0, batteryCfg), false)
+end)
+
+AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
+    if not fromCore() then return end
+    local key = tostring(runId) .. '|' .. tostring(name)
+    local prep = deadPrepared[key]
+    if not prep then return end
+    deadPrepared[key] = nil
+    local p = players[prep.src]
+    local dev = activeOf(p)
+    local st = dev and p.states[dev.id]
+    if not st then return end
+    applyBatteryEvents(prep.src, B.set(st, prep.before, batteryCfg), false)
+    saveDevice(prep.src)
 end)
 
 for _, r in ipairs(PS.rows(selfName(), translate, function(id) return modelInfo(id).label end)) do

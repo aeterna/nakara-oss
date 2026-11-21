@@ -68,6 +68,7 @@ Locales.en['phonekit.selftest.expect.book_two_pane'] = 'Book opened wide: list o
 Locales.en['phonekit.selftest.expect.fold_cover'] = 'Fold closed: a small cover screen with time, battery and the waiting count; opening it shows the same screen as before'
 Locales.en['phonekit.selftest.expect.lock'] = 'Lock screen with one card for a test badge; swipe up reaches home'
 Locales.en['phonekit.selftest.expect.control_centre'] = 'Pulling down from the status bar shows text size, 24-hour clock and the notification history, and no signal or brightness tiles'
+Locales.en['phonekit.selftest.expect.battery_dead'] = 'After the test sets 0 %: the phone and any app on it close at once and a "battery dead" toast shows; opening is refused until the test restores the value'
 Locales.en['phonekit.selftest.expect.ring_cover'] = 'Fold closed: an incoming test card with Answer and Decline on the cover; Answer reports back without opening the phone'
 Locales.en['phonekit.selftest.ring.title'] = 'Test call'
 Locales.en['phonekit.selftest.ring.body'] = 'Self-test: nobody is calling'

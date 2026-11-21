@@ -7,8 +7,8 @@ local P = PhoneSelftest
 
 P.MODEL_ORDER = { 'keypad', 'burner', 'qwerty', 'slab', 'fold', 'pro', 'book', 'pad' }
 P.BUILTINS = { 'calculator', 'notes', 'contacts', 'settings' }
--- Rows of the spec table this package cannot build as written (reported, not registered).
-P.NOT_BUILT = { 'eye_battery_dead' }
+-- Rows that open the phone (server gate, focus, prop, page round trips) get 15 s instead of core's 5 s.
+P.OPEN_TIMEOUT = 15000
 -- Page-only ids the client tests draw with; nothing on the server knows them.
 P.APP_ID = 'aeterna_phonekit_selftest'
 P.RING_ID = 'selftest'
@@ -24,10 +24,12 @@ function P.rows(owner, t, labelOf)
         out[#out + 1] = { name = owner .. '.' .. id, meta = meta }
     end
     local function plain(kind, destructive)
-        return { kind = kind, players = 1, destructive = destructive == true }
+        return { kind = kind, players = 1, destructive = destructive == true,
+            timeout = kind == 'ped' and P.OPEN_TIMEOUT or nil }
     end
-    local function eye(key, vars)
-        return { kind = 'eye', players = 1, destructive = false, expect = t('phonekit.selftest.expect.' .. key, vars) }
+    local function eye(key, vars, destructive)
+        return { kind = 'eye', players = 1, destructive = destructive == true, timeout = P.OPEN_TIMEOUT,
+            expect = t('phonekit.selftest.expect.' .. key, vars) }
     end
     row('rules_loaded', plain('headless'))
     row('models_have_apps', plain('headless'))
@@ -47,6 +49,7 @@ function P.rows(owner, t, labelOf)
     row('eye_fold_cover', eye('fold_cover'))
     row('eye_lock', eye('lock'))
     row('eye_control_centre', eye('control_centre'))
+    row('eye_battery_dead', eye('battery_dead', nil, true))
     row('ring_cover', eye('ring_cover'))
     row('contacts_hooks', { kind = 'mock', side = 'client', players = 1, destructive = false })
     return out
@@ -61,7 +64,7 @@ end
 -- env = { battery, mode, lockScreen, cover, model (held), ped }. Returns the SKIP reason or nil.
 function P.skipReason(short, env)
     if not env.battery and (short == 'battery_drain_tick' or short == 'battery_zero_closes_all'
-        or short == 'stale_pulse_is_off') then
+        or short == 'stale_pulse_is_off' or short == 'eye_battery_dead') then
         return 'Config.battery is false'
     end
     if short == 'battery_kvp_roundtrip' and env.mode == 'items' then return "Config.devices is 'items'" end
@@ -148,12 +151,12 @@ function P.stalePulse(B, cfg)
     return true, ('stale pulse drained %s %%/min, as off'):format(num(100 - stale))
 end
 
--- A made-up items-mode check that nobody answers: the timeout must deny with nodevice. The live gate is untouched.
-function P.silenceDenies(L)
+-- A made-up check that nobody answers, built with `options` (the live gate's DeviceLogic.gateCheckOptions('items')):
+-- the timeout must deny with nodevice. The live gate is untouched.
+function P.silenceDenies(L, options)
     local mgr = L.createOpeningCheckManager({})
     local got
-    local id = mgr:createCheck(0, function(_, allowed, reason) got = { allowed = allowed, reason = reason } end,
-        { silenceDenies = true, silenceReason = 'phonekit.refused.nodevice' })
+    local id = mgr:createCheck(0, function(_, allowed, reason) got = { allowed = allowed, reason = reason } end, options)
     mgr:handleTimeout(id)
     if not got then return false, 'the check never resolved' end
     if got.allowed ~= false then return false, 'silence allowed the phone' end
@@ -161,11 +164,10 @@ function P.silenceDenies(L)
     return true, 'silence denied with phonekit.refused.nodevice'
 end
 
--- r = { dead, device (device() still returns one), open (phone open on the server), screens, powerOff }
+-- r = { dead, open (phone open on the server), screens, powerOff }. A dead phone has no device() by definition.
 function P.zeroClosed(r)
     if not r.dead then return false, 'battery not dead at 0 %' end
     if not r.powerOff then return false, 'no power off sent' end
-    if r.device then return false, 'device() still returns a phone' end
     if r.screens then return false, 'an app screen is still open' end
     if r.open then return false, 'phone still open' end
     return true, 'at 0 %: power off, no device, no screen, phone closed'

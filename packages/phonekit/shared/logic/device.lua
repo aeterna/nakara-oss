@@ -130,6 +130,13 @@ function D.validateGateAnswer(answer)
     return true, valid
 end
 
+-- Options for the open gate's check: in items mode silence means "no phone"; nil keeps the 0.1 rules.
+-- The live gate (server askGate) and the gate_items_silence_denies self-test both build them here.
+function D.gateCheckOptions(mode)
+    if mode ~= 'items' then return nil end
+    return { silenceDenies = true, silenceReason = 'phonekit.refused.nodevice' }
+end
+
 function D.resolveMode(configDevices)
     return configDevices == 'items' and 'items' or 'single'
 end
