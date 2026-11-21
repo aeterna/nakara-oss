@@ -375,6 +375,28 @@ exports('close', function()
     return nil
 end)
 
+-- Read and set points for client/selftest.lua (same resource; nothing here crosses resources).
+RadialSelftestHooks = {
+    open = function() open('toggle') end,
+    close = close,
+    addSlot = function(slot)
+        local ok, err = clientReg:addSlot(RESOURCE, slot, 'client')
+        if ok then refresh() end
+        return ok, err
+    end,
+    removeSlot = function(id)
+        local ok = clientReg:removeSlot(RESOURCE, id, 'client')
+        if ok then refresh() end
+        return ok
+    end,
+    state = function()
+        if not menu then return { type = 'state', open = false } end
+        local hovered = L.slotAt(menu.ring, menu.hover)
+        return { type = 'state', open = true, parentId = menu.parent and menu.parent.id or nil,
+            hoverId = hovered and hovered.id or nil }
+    end,
+}
+
 -- Ask for the server slots; ask once more if the first answer is lost (sv:hello allows 2 per 5 s).
 CreateThread(function()
     TriggerServerEvent('aeterna_radial:sv:hello')
