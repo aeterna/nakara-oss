@@ -29,5 +29,6 @@ Locales.en['testkit.report.saved'] = 'Report saved to reports/latest.md and repo
 Locales.en['testkit.report.footer'] = 'No player names, identifiers, IPs, convar values or paths.'
 Locales.en['testkit.selftest.expect.card'] = "A card in the lower left corner with a question and three buttons: Pass, Doesn't match, Skip. A uikit panel opened behind it stays open"
 Locales.en['testkit.selftest.expect.card_b'] = 'Player B sees the same card, headed "as player B"'
+Locales.en['testkit.now_doing'] = 'Do this now:'
 
 return Locales.en

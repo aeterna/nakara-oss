@@ -29,5 +29,6 @@ Locales.th['testkit.report.saved'] = 'บันทึกรายงานที
 Locales.th['testkit.report.footer'] = 'ไม่มีชื่อผู้เล่น ตัวระบุ IP ค่า convar หรือ path'
 Locales.th['testkit.selftest.expect.card'] = 'การ์ดที่มุมซ้ายล่าง มีคำถามและปุ่มสามปุ่ม: ผ่าน, ไม่ตรง, ข้าม แผง uikit ที่เปิดอยู่ด้านหลังยังเปิดค้างไว้'
 Locales.th['testkit.selftest.expect.card_b'] = 'ผู้เล่น B เห็นการ์ดเดียวกัน โดยหัวการ์ดเขียนว่า "ในบทผู้เล่น B"'
+Locales.th['testkit.now_doing'] = 'ทำตอนนี้:'
 
 return Locales.th

@@ -122,6 +122,11 @@ sha256sum -c SHA256SUMS --ignore-missing
 
 Then read the capability table above (or `oss.json` inside the zip).
 
+## Now-testing strip / แถบกำลังทดสอบ
+
+While a `ped` test that carries an `expect` line runs on your client, a one-line strip in the lower left (where the eye card sits) shows the test name and "Do this now:" with that line. It never takes focus or the cursor, so you keep playing while you read it, and it goes away when `aeterna_core` ends the test. A `ped` test without `expect` shows nothing.
+ระหว่างที่การทดสอบแบบ `ped` ที่มีข้อความ `expect` ทำงานบนเครื่องของคุณ จะมีแถบหนึ่งบรรทัดที่มุมซ้ายล่างบอกชื่อการทดสอบและ "ทำตอนนี้:" ตามด้วยสิ่งที่ต้องทำ แถบนี้ไม่แย่งเคอร์เซอร์หรือคีย์บอร์ด และหายไปเมื่อการทดสอบจบ
+
 ## Self-tests / การทดสอบตัวเอง
 
 Registered with `aeterna_core` on start like every kit package, and run from this menu ([spec § Self-tests](../../docs/specs/aeterna_testkit.md#self-tests)).

@@ -54,9 +54,26 @@ AddEventHandler('aeterna_core:eyeAsk', function(runId, name, info)
     card:ask(runId, name, info)
 end)
 
+local strip = Menu.createNowStrip({
+    show = function(msg)
+        SendNUIMessage(AeternaCore.themeMessage())
+        SendNUIMessage({ type = 'now:show', name = msg.name, label = t('testkit.now_doing'), expect = msg.expect })
+    end,
+    hide = function()
+        SendNUIMessage({ type = 'now:hide' })
+    end,
+})
+
+-- Any aeterna_core self-test reaching this client: a ped test with expect shows the now-testing strip.
+AddEventHandler('aeterna_core:selftest', function(runId, name, ctx)
+    if GetInvokingResource() ~= 'aeterna_core' or type(runId) ~= 'string' or type(name) ~= 'string' then return end
+    strip:started(runId, name, ctx)
+end)
+
 AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
     if GetInvokingResource() ~= 'aeterna_core' then return end
     card:ended(runId, name)
+    strip:ended(runId, name)
 end)
 
 AddEventHandler('aeterna_core:focusLost', function(owner, token)

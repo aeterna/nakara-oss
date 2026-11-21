@@ -101,6 +101,38 @@ body {
     border-color: var(--track);
 }
 
+/* Now-testing strip: one line in the eye card's spot; it ignores the mouse so the game keeps it. */
+.now {
+    position: fixed;
+    left: 24px;
+    bottom: 24px;
+    max-width: 560px;
+    box-sizing: border-box;
+    padding: 8px 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-l);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+}
+
+.now-name {
+    color: var(--text-3);
+    margin-right: 8px;
+}
+
+.now-label {
+    color: var(--text-2);
+    margin-right: 4px;
+}
+
+.now-expect {
+    font-weight: 600;
+}
+
 @keyframes eye-enter {
     from {
         opacity: 0;
