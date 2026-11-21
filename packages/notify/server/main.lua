@@ -262,3 +262,20 @@ RegisterCommand('aeterna_announce_countdown', function(src, args, rawCommand)
     end
     return ok, errKey, msgOrRes
 end, false)
+
+-- Self-tests (0.2): register every row with aeterna_core and answer the server-side headless ones.
+local Selftests = NotifySelftests
+
+pcall(function()
+    Selftests.register(function(name, meta)
+        return exports.aeterna_core:addSelftest(name, meta)
+    end, translate)
+end)
+
+AddEventHandler('aeterna_core:selftest', function(runId, name)
+    local short = Selftests.shortName(name)
+    if not short then return end
+    local ok, detail = Selftests.run(short, L)
+    if ok == nil then return end
+    exports.aeterna_core:reportSelftest(runId, name, ok, detail)
+end)

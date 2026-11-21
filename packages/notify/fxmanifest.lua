@@ -21,6 +21,7 @@ shared_scripts {
     'shared/logic/actions.lua',
     'shared/logic/countdown.lua',
     'shared/logic/history.lua',
+    'shared/logic/selftests.lua',
 }
 
 client_scripts {
