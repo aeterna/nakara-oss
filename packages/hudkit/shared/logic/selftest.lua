@@ -223,9 +223,13 @@ function HudSelftest.seatbeltSteps()
     }
 end
 
---- observed[i] = icon state hudkit sent after step i; restored = the state before the test is back.
-function HudSelftest.seatbeltVerdict(observed, restored)
+--- observed[i] = icon state hudkit's own handler sent after step i; restored = the state before the test is
+--- back; inVehicle = false: the presser was on foot, so nothing was fired (the spec runs it in a vehicle).
+function HudSelftest.seatbeltVerdict(observed, restored, inVehicle)
     local extra = { restored = restored == true }
+    if inVehicle == false then
+        return 'fail', 'needs the presser in a vehicle', extra
+    end
     for i, step in ipairs(HudSelftest.seatbeltSteps()) do
         local got = observed and observed[i]
         if got ~= step.expect then

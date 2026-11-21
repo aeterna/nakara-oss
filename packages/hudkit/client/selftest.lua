@@ -59,20 +59,24 @@ local function voiceWatch(runId, name)
     report(runId, name, watch.verdict())
 end
 
+-- Fires the three payloads through hudkit's own event handler while the presser sits in a vehicle and reads
+-- the icon state that handler sent to the page; then puts the previous state and owner back.
 local function seatbeltEvent(runId, name)
+    if not hooks.isInVehicle() then
+        report(runId, name, ST.seatbeltVerdict(nil, true, false))
+        return
+    end
     local before = hooks.seatbelt.snapshot()
     local observed = { n = 3 }
     for i, step in ipairs(ST.seatbeltSteps()) do
         TriggerEvent('aeterna_hudkit:seatbelt', step.payload)
-        -- What the vehicle part shows while seated, whatever the presser is doing now.
-        hooks.sendSeatbelt(true, true)
         observed[i] = hooks.lastSeatbelt()
     end
     hooks.seatbelt.restore(before)
     local inVeh = hooks.isInVehicle()
-    hooks.sendSeatbelt(inVeh, true)
+    hooks.sendSeatbelt(inVeh)
     local restored = hooks.seatbelt.same(before) and hooks.lastSeatbelt() == hooks.seatbelt.display(inVeh)
-    report(runId, name, ST.seatbeltVerdict(observed, restored))
+    report(runId, name, ST.seatbeltVerdict(observed, restored, true))
 end
 
 local function minimapFollows(runId, name)
