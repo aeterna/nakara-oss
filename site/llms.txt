@@ -19,12 +19,11 @@ Every resource package declares its capabilities in oss.json (validated against 
 - nakara_rongroi (Rongroi Server Kit): Server-side kit for aeterna-rongroi.
   Link: https://github.com/aeterna/nakara-oss/releases?q=nakara_rongroi
 
+- Nakara Tickets (nakara_tickets + server image ghcr.io/aeterna/nakara-tickets:0.1.0): self-hosted Discord ticket system with a Thai/English dashboard and staff actions in game over a bridge that opens no port.
+  Link: https://github.com/aeterna/nakara-oss/releases/tag/nakara-tickets%400.1.0
+
 - AETERNA Starter Kit (aeterna_core, aeterna_uikit, aeterna_notify, aeterna_layout, aeterna_hudkit, aeterna_phonekit, aeterna_invkit): MIT base resources for Qbox servers.
   Link: https://aeterna.github.io/nakara-oss/en/starter-kit/
-
-## Packages in Development
-
-- Nakara Tickets: Discord ticket system with in-game actions over a port-less bridge.
 
 ## What the Scanner Cannot Catch
 

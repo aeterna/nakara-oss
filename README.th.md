@@ -11,7 +11,7 @@
 [![Capabilities](https://img.shields.io/badge/oss.json-checked_on_every_PR-6a4fe0?style=flat-square)](packages/devkit/docs/safety.md)
 [![License](https://img.shields.io/badge/License-MIT-2b8a3e?style=flat-square)](LICENSE)
 
-**[เว็บไซต์](https://aeterna.github.io/nakara-oss/) · [ตรวจสคริปต์ก่อนลง](#ตรวจสคริปต์ก่อนลง) · [Trust Architecture](#️-trust-architecture) · [สิ่งที่ scanner จับไม่ได้](#สิ่งที่-scanner-จับไม่ได้)**
+**[เว็บไซต์](https://aeterna.github.io/nakara-oss/) · [สคริปต์ที่แจก](#สคริปต์ที่แจก) · [ตรวจสคริปต์ก่อนลง](#ตรวจสคริปต์ก่อนลง) · [Trust Architecture](#️-trust-architecture) · [สิ่งที่ scanner จับไม่ได้](#สิ่งที่-scanner-จับไม่ได้)**
 
 </div>
 
@@ -19,18 +19,40 @@ resource และเครื่องมือ FiveM แบบ open-source จ
 `oss.json` ว่าจะแตะอะไรได้บ้าง ทุก PR ถูกสแกนหาโค้ดอันตราย และทุก release build ใน CI พร้อม
 provenance attestation คุณจึงตรวจซ้ำได้เองทั้งหมด
 
-## มีอะไรบ้าง
+## สคริปต์ที่แจก
 
-| ชิ้น | ทำอะไร | สถานะ |
+ทุกชิ้นข้างล่างใช้ฟรี (MIT) ประกาศใน `oss.json` ว่าแตะอะไรได้บ้าง และแจกเป็นไฟล์ release ที่ CI build
+พร้อม provenance attestation
+
+### Resource สำหรับ FiveM
+
+| สคริปต์ | ทำอะไร | release ล่าสุด |
 |---|---|---|
-| [`devkit`](packages/devkit) · npm `@aeterna_game/fivem-devkit` | หาโค้ดอันตรายและ bug ที่ runtime ไม่เตือน ใน Lua/JS ของ FiveM ของใครก็ได้ พร้อม busted test harness | ✅ ออกแล้ว · `npx @aeterna_game/fivem-devkit check` |
-| [`cargen-fix`](packages/cargen-fix) · resource `nakara_cargen_fix` | กัน crash `CNetworkCarGenWorldStateData Pool Full` ฝั่ง client และอธิบายว่าทำไมวิธี `GAMECONFIG_FILE` ที่แชร์กันใช้ไม่ได้ ([สิ่งที่ตรวจแล้ว](packages/cargen-fix/README.md#what-we-have-verified)) | ✅ ออกแล้ว · [Releases](https://github.com/aeterna/nakara-oss/releases?q=nakara_cargen_fix) |
-| [`tickets`](packages/tickets) · resource `nakara_tickets` | ระบบ ticket บน Discord ที่ host เอง ต่อเข้าเกมได้ (ต่อออกอย่างเดียว ไม่เปิด port) | 🚧 กำลังพัฒนา · ยังไม่มี release |
-| [`launcher`](docs/adr/0002-aeterna-game-launcher.md) | launcher ของ server คุณเอง เขียนด้วย Rust | 🚧 กำลังพัฒนา · ยังไม่มี release |
-| [`rongroi`](packages/rongroi) · resource `nakara_rongroi` | ฝั่ง server ของ [aeterna-rongroi](https://github.com/aeterna/aeterna-rongroi) | 🚧 กำลังพัฒนา · ยังไม่มี release |
+| [`nakara_tickets`](packages/tickets) + [server](tickets/deploy/README.md) | ระบบตั๋ว Discord ที่ host เอง: ตั๋วเป็น private thread · dashboard เว็บไทย/อังกฤษ · ทีมงานสั่งในเกมได้ (ดูข้อมูลผู้เล่น วาร์ป ชุบ ให้ไอเทม) ผ่าน bridge ที่ไม่เปิด port | [`nakara-tickets@0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/nakara-tickets%400.1.0) · image `ghcr.io/aeterna/nakara-tickets:0.1.0` |
+| [`nakara_cargen_fix`](packages/cargen-fix) | กัน crash `CNetworkCarGenWorldStateData Pool Full` ฝั่ง client และอธิบายว่าทำไมวิธี `GAMECONFIG_FILE` ที่แชร์กันใช้ไม่ได้ ([สิ่งที่ตรวจแล้ว](packages/cargen-fix/README.md#what-we-have-verified)) | [`nakara_cargen_fix@1.0.0`](https://github.com/aeterna/nakara-oss/releases/tag/nakara_cargen_fix%401.0.0) |
+| [`nakara_rongroi`](packages/rongroi) | ฝั่ง server ของ [aeterna-rongroi](https://github.com/aeterna/aeterna-rongroi) | [`nakara_rongroi@0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/nakara_rongroi%400.1.0) |
 
-ดาวน์โหลดจาก **release asset** เท่านั้น ไม่ใช่ ZIP ของ repo เพราะใน repo มีเทสต์และเครื่องมือที่
-server ไม่ต้องใช้
+### AETERNA Starter Kit · ชุดพื้นฐาน 7 ตัว ([คู่มือ](https://aeterna.github.io/nakara-oss/starter-kit/))
+
+| สคริปต์ | ทำอะไร | release ล่าสุด |
+|---|---|---|
+| [`aeterna_core`](packages/core) | ฐานร่วม: log · event bus ในเครื่อง · ตัวช่วยข้อความภาษาไทย · ค้นข้อความตามภาษา | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_core%400.1.0) |
+| [`aeterna_uikit`](packages/uikit) | panel UI ที่ server คุม · prompt (`confirm` `input` `progress` `skillCheck`) · เมนูร่วม | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_uikit%400.1.0) |
+| [`aeterna_notify`](packages/notify) | toast · banner ประกาศทั้งเซิร์ฟ · การ์ดข้อความประจำวัน | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_notify%400.1.0) |
+| [`aeterna_invkit`](packages/invkit) | stash ส่วนตัว · การใช้ไอเทมที่ server ตรวจ บน `ox_inventory` | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_invkit%400.1.0) |
+| [`aeterna_layout`](packages/layout) | ตัวจัดวาง HUD · เก็บ layout ไว้ที่เครื่องผู้เล่น | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_layout%400.1.0) |
+| [`aeterna_phonekit`](packages/phonekit) | โทรศัพท์แบบประกอบแอปได้ มีแอปพื้นฐาน และ API สำหรับเขียนแอปเอง | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_phonekit%400.1.0) |
+| [`aeterna_hudkit`](packages/hudkit) | HUD ผู้เล่น: แถบสถานะ · หน้าปัดรถ · ชื่อถนนและเข็มทิศ · minimap | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_hudkit%400.1.0) |
+
+### เครื่องมือ
+
+| เครื่องมือ | ทำอะไร | release ล่าสุด |
+|---|---|---|
+| [`fivem-devkit`](packages/devkit) · npm `@aeterna_game/fivem-devkit` | หาโค้ดอันตรายและ bug ที่ runtime ไม่เตือน ใน Lua/JS ของ FiveM ของใครก็ได้ พร้อม busted test harness | [npm](https://www.npmjs.com/package/@aeterna_game/fivem-devkit) · `npx @aeterna_game/fivem-devkit check` |
+| [AETERNA Game Launcher](docs/adr/0002-aeterna-game-launcher.md) | launcher ของ server คุณเอง เขียนด้วย Rust · [ติดตั้ง](launcher/docs/install.md) · [สำหรับเจ้าของ server](launcher/docs/server-owners.md) | [`launcher-v0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/launcher-v0.1.0) |
+
+โหลด **ไฟล์ release** ไม่ใช่ ZIP ของทั้ง repo เพราะใน repo มีเทสต์และเครื่องมือที่ server ไม่ต้องใช้ ·
+release ทั้งหมด: [Releases](https://github.com/aeterna/nakara-oss/releases)
 
 ## ตรวจสคริปต์ก่อนลง
 

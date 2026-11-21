@@ -107,10 +107,12 @@ section.sec{padding-block:112px 0}
 .card .foot{font-size:13px;color:var(--muted);margin-top:auto}
 .dev{margin-top:16px;border:1px solid var(--line);border-radius:16px;overflow:hidden}
 .dev-row{display:grid;grid-template-columns:220px 1fr auto;gap:16px;align-items:center;padding:16px 24px;border-top:1px solid var(--line);font-size:15px}
-.dev-row:first-child{border-top:0}
+.dev-row:first-child,.dev-group:first-child{border-top:0}
+.dev-group{margin:0;padding:10px 24px;border-top:1px solid var(--line);font-size:13px;color:var(--muted);background:var(--surface)}
 .dev-row b{font-weight:500;font-family:var(--f-display)}
 .dev-row span{color:var(--text2)}
 .chip-dev{font-size:12px;color:var(--muted);border:1px solid var(--line2);border-radius:999px;padding:2px 10px;white-space:nowrap}
+.dev-row a.chip-rel{text-decoration:none}
 .dev-row .chip-rel{font-size:12px;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:2px 10px;white-space:nowrap}
 
 /* trust */
