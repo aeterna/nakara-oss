@@ -173,7 +173,7 @@ where client tests are GAP). Spec: `docs/specs/aeterna_notify.md` § Self-tests 
 | `countdown_clock` | headless | 9 and 3601 seconds refused, `busy`, marks above `seconds` dropped, the banner at a mark, the end event once, cancel by the owner only, `mm:ss` |
 | `toast_types` | eye | Four toasts, one per type, for 15 s |
 | `stack_merge` | eye | Six identical toasts |
-| `action_press` | ped | A toast with two buttons is pressed through the handler of `+aeterna_notify_action1`; the test receives the first id and the toast closes |
+| `action_press` | ped | A toast with two buttons; the test presses its first action through the function the key mappings and the mouse use, receives the first id, and the toast closes |
 | `sound_plays` | eye | Each type with the player's setting treated as on, then as off (the stored setting is not changed). SKIP when `Config.sound.enabled = false` |
 | `countdown_banner` | eye | A 30-second banner on this client only, shown again at the marks and hidden at zero; no server countdown starts |
 | `history_pull` | headless (client) | The history logic on a fresh instance and the shape of what the export returns. SKIP when `Config.history.max = 0` |

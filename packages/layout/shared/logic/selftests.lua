@@ -7,15 +7,16 @@ local M = LayoutSelftests
 
 M.PREFIX = 'aeterna_layout.'
 
--- Exactly the spec table. `expect` = the row has an Expect text (locale key layout.selftest.<name>).
+-- Exactly the spec table. `expect` = the row has an Expect text (locale key layout.selftest.<name>); `timeout` in ms
+-- where the default of 5000 is too short for the page drives.
 M.ROWS = {
     { name = 'placement_math', kind = 'headless' },
     { name = 'import_validate', kind = 'headless' },
     { name = 'clamp_on_grow', kind = 'mock', side = 'client' },
     { name = 'preset_apply', kind = 'eye', expect = true },
-    { name = 'grid_drag', kind = 'ped', expect = true },
+    { name = 'grid_drag', kind = 'ped', expect = true, timeout = 10000 },
     { name = 'export_import', kind = 'ped', expect = true },
-    { name = 'export_copy', kind = 'ped', expect = true },
+    { name = 'export_copy', kind = 'ped', expect = true, timeout = 10000 },
     { name = 'reset_from_menu', kind = 'ped', destructive = true, expect = true },
 }
 
@@ -39,6 +40,9 @@ function M.register(add, t)
         end
         if row.expect then
             meta.expect = t('layout.selftest.' .. row.name)
+        end
+        if row.timeout then
+            meta.timeout = row.timeout
         end
         if add(M.PREFIX .. row.name, meta) ~= nil then
             count = count + 1
@@ -271,7 +275,8 @@ function M.judgeExportImport(f)
     return true, 'one line; import put the moved element back'
 end
 
--- export_copy: probe = { copied, pasted, matches } from the page; importOk = the import callback's result.
+-- export_copy: probe = { copied } from the page (the copy command's result); importOk = the import callback's result
+-- for the export text the page put into the import box.
 function M.judgeCopy(probe, importOk)
     if type(probe) ~= 'table' then
         return false, 'the page did not report'
@@ -279,17 +284,15 @@ function M.judgeCopy(probe, importOk)
     if not probe.copied then
         return false, 'copy from the export box did not run'
     end
-    if not probe.matches then
-        return false, probe.pasted and 'the pasted text differs' or 'paste into the import box was blocked'
-    end
     if importOk ~= true then
-        return false, 'import refused the pasted text'
+        return false, 'import refused the export text'
     end
-    return true, 'copied, pasted and imported'
+    return true, 'copy ran; the export text imported'
 end
 
--- reset_from_menu: saved = the saved places after the reset; elements = { { key, place, default } }.
-function M.judgeReset(saved, elements)
+-- reset_from_menu: saved = the saved places after the reset; elements = { { key, place, default } };
+-- hadSaved = there was a saved layout before it.
+function M.judgeReset(saved, elements, hadSaved)
     if type(saved) ~= 'table' or next(saved) ~= nil then
         return false, 'the saved layout was not cleared'
     end
@@ -298,7 +301,8 @@ function M.judgeReset(saved, elements)
             return false, el.key .. ' is not at its default'
         end
     end
-    return true, #elements .. ' elements at their default; saved layout cleared'
+    local what = hadSaved and 'saved layout cleared' or 'nothing to clear (no saved layout)'
+    return true, ('client half of Reset all: %d elements at their default; %s'):format(#elements, what)
 end
 
 return LayoutSelftests

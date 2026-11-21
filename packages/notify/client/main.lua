@@ -885,7 +885,8 @@ function CLIENT_TESTS.countdown_banner(st)
     end)
 end
 
--- Presses action 1 through the handler of the +aeterna_notify_action1 key mapping.
+-- Presses action 1 of the test toast itself, through the function the key mappings and the mouse use, so a newer
+-- toast with actions cannot take the press.
 function CLIENT_TESTS.action_press(st)
     local item = testToast(st, {
         id = 'st_action',
@@ -903,7 +904,12 @@ function CLIENT_TESTS.action_press(st)
     CreateThread(function()
         Wait(PRESS_WAIT_MS)
         if st.ended then return end
-        pressNewest(1)
+        if getToastQueue():findAction('st_action', 'first', nowMs()) ~= item then
+            reportSelftest(st.runId, st.name, 'fail', 'the test toast left the screen before the press')
+            endSelftest()
+            return
+        end
+        pressAction(item, 'first')
         local onScreen = getToastQueue():findAction('st_action', 'first', nowMs()) ~= nil
         local ok, detail = Selftests.judgeActionPress(st.received, onScreen, 'first')
         reportSelftest(st.runId, st.name, ok and 'pass' or 'fail', detail)

@@ -372,12 +372,17 @@ RegisterNUICallback('reset', function(data, cb)
     end
 end)
 
+-- A self-test's editor session is never saved: Done acts as Cancel there.
 RegisterNUICallback('done', function(data, cb)
     if type(cb) == 'function' then cb({ ok = true }) end
     if not acceptsInput() then return end
     local ok = L.validateEmptyCallback(data, logWarn)
     if not ok then return end
-    registry:commitSession()
+    if selftest and selftest.editor then
+        registry:cancelSession()
+    else
+        registry:commitSession()
+    end
     closeEditor(true)
 end)
 
@@ -409,6 +414,10 @@ RegisterNUICallback('snap', function(data, cb)
     if not acceptsInput() then return end
     local ok, _, clean = L.validateSnapCallback(data, Config, logWarn)
     if not ok then return end
+    if selftest and selftest.editor then
+        testSnap = clean.step -- shown for the rest of the test, never saved
+        return
+    end
     snapStep = clean.step
     savePrefs({ snap = snapStep })
 end)
@@ -638,8 +647,11 @@ function CLIENT_TESTS.grid_drag(st)
                 break
             end
             Wait(MOVE_SETTLE_MS)
+            if st.ended then return end
             local el = registry:get(resName(), def.id)
-            if st.ended or not el then return end
+            if not el then
+                return finish(st, false, 'the test element is no longer registered')
+            end
             local left, top = Selftests.leftTop(el.place, def.w, def.h, screen.w, screen.h)
             landed[#landed + 1] = { grid = st.probe.grid == true, left = left, top = top }
         end
@@ -655,7 +667,11 @@ function CLIENT_TESTS.export_import(st)
     local def = Selftests.centerDef('st_share', translate('layout.selftest.element'))
     addTestElement(st, def)
     if not openTestEditor(st) then return end
-    local before = registry:get(resName(), def.id).place
+    local start = registry:get(resName(), def.id)
+    if not start then
+        return finish(st, false, 'the test element was refused')
+    end
+    local before = start.place
     local text = L.encodeExport(registry:getSavedPlaces(), registry:registeredKeys(), Config)
     sendExport()
     CreateThread(function()
@@ -665,22 +681,25 @@ function CLIENT_TESTS.export_import(st)
         registry:move({ owner = resName(), id = def.id, x = 0.25, y = 0.25, ax = 0, ay = 0, scale = 1 })
         local pageText = st.probe and st.probe.text or nil
         local importOk = pageText ~= nil and applyImport(true, nil, pageText)
+        local after = registry:get(resName(), def.id)
+        if not after then
+            return finish(st, false, 'the test element is no longer registered')
+        end
         finish(st, Selftests.judgeExportImport({
-            text = text, pageText = pageText, importOk = importOk, before = before,
-            after = registry:get(resName(), def.id).place,
+            text = text, pageText = pageText, importOk = importOk, before = before, after = after.place,
         }))
     end)
 end
 
--- The page copies from the export box, pastes into the import box and presses Import.
+-- The page runs the copy command on the export box, puts the export text into the import box from code (a paste
+-- needs clipboard read access the page does not have) and presses Import.
 function CLIENT_TESTS.export_copy(st)
     if not openTestEditor(st) then return end
     sendExport()
     CreateThread(function()
         Wait(RENDER_WAIT_MS)
         st.imported = nil
-        driveAndWait(st, { op = 'copy' })
-        if st.probe and st.probe.matches then
+        if driveAndWait(st, { op = 'copy' }) then
             waitFor(st, function() return st.imported ~= nil end, DRIVE_WAIT_MS)
         end
         finish(st, Selftests.judgeCopy(st.probe, st.imported))
@@ -693,6 +712,7 @@ function CLIENT_TESTS.reset_from_menu(st)
     if editorOpen then
         return finish(st, false, 'the layout editor is open; close it and run again')
     end
+    local hadSaved = next(registry:getSavedPlaces()) ~= nil
     local backup = L.encodeExport(registry:getSavedPlaces(), registry:registeredKeys(), Config)
     if backup then
         print(translate('layout.selftest.backup', { text = backup }))
@@ -702,11 +722,13 @@ function CLIENT_TESTS.reset_from_menu(st)
     TriggerEvent('aeterna_layout:cl:open', { mode = 'reset', token = token })
     local elements = {}
     for _, el in ipairs(registry:listElements()) do
-        elements[#elements + 1] = {
-            key = el.owner .. '/' .. el.id, place = registry:get(el.owner, el.id).place, default = el.defaultPlace,
-        }
+        local cur = registry:get(el.owner, el.id)
+        if not cur then
+            return finish(st, false, el.owner .. '/' .. el.id .. ' is no longer registered', { wrote = true })
+        end
+        elements[#elements + 1] = { key = el.owner .. '/' .. el.id, place = cur.place, default = el.defaultPlace }
     end
-    local ok, detail = Selftests.judgeReset(registry:getSavedPlaces(), elements)
+    local ok, detail = Selftests.judgeReset(registry:getSavedPlaces(), elements, hadSaved)
     finish(st, ok, detail, { wrote = true })
 end
 
@@ -725,13 +747,13 @@ AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
     end
 end)
 
--- The page's report after a drive: { op, grid } (drag), { op, text } (export) or { op, copied, pasted, matches }.
+-- The page's report after a drive: { op, grid } (drag), { op, text } (export) or { op, copied } (copy).
 RegisterNUICallback('selftestProbe', function(data, cb)
     if type(cb) == 'function' then cb({ ok = true }) end
     local st = selftest
     if not st or st.probe or type(data) ~= 'table' or data.op ~= st.driveOp then return end
     local probe = {}
-    for _, k in ipairs({ 'grid', 'copied', 'pasted', 'matches' }) do
+    for _, k in ipairs({ 'grid', 'copied' }) do
         probe[k] = data[k] == true
     end
     if type(data.text) == 'string' and #data.text <= L.MAX_TEXT_BYTES then

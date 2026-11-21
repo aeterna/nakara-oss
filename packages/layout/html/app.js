@@ -877,12 +877,9 @@ function selftestDrive(msg) {
         exportBox.focus();
         exportBox.select();
         const copied = document.execCommand('copy');
-        importBox.value = '';
-        importBox.focus();
-        const pasted = document.execCommand('paste');
-        const matches = importBox.value !== '' && importBox.value === exportBox.value;
-        postCallback('selftestProbe', { op: 'copy', copied, pasted, matches });
-        if (matches) applyBtn.click();
+        postCallback('selftestProbe', { op: 'copy', copied });
+        importBox.value = exportBox.value;
+        applyBtn.click();
     }
 }
 

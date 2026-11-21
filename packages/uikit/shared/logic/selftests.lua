@@ -366,6 +366,17 @@ function M.judgeSlider(result, probe)
     return true, 'one arrow step: shown ' .. want .. ', owner got ' .. want
 end
 
+-- overlay_pauses, after the eye card closes: facts = { paused = boolean, panelOpen = boolean }.
+function M.judgeResume(facts)
+    if facts.paused then
+        return false, 'the panel is still paused after focus came back'
+    end
+    if not facts.panelOpen then
+        return false, 'the panel closed while the card was up'
+    end
+    return true, 'the panel is open and takes input again'
+end
+
 -- focus_lost_closes: facts = { panelOpen = boolean, close = what the owner received or nil }.
 function M.judgeFocusLost(facts)
     if facts.panelOpen then

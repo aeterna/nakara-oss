@@ -40,7 +40,7 @@ Locales.th['uikit.selftest.empty_body'] = 'สถานะว่างมีห�
 Locales.th['uikit.selftest.ok'] = 'ตกลง'
 Locales.th['uikit.selftest.motion_hint'] = 'แผงนี้จะปิดและเปิดใหม่ทุกสองวินาที'
 Locales.th['uikit.selftest.focus_hint'] = 'แผงนี้จะปิดเมื่อเสียโฟกัส'
-Locales.th['uikit.selftest.paused_hint'] = 'กดปุ่มหลังจากตอบการ์ดแล้ว'
+Locales.th['uikit.selftest.paused_hint'] = 'ระหว่างที่การ์ดแสดงอยู่ การคลิกที่นี่จะไม่มีผล หลังตอบการ์ดแล้ว ปุ่มจะใช้งานได้อีกครั้ง'
 Locales.th['uikit.selftest.press'] = 'กด'
 Locales.th['uikit.selftest.pressed'] = 'กดแล้ว {n} ครั้ง'
 

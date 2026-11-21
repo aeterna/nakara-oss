@@ -234,6 +234,9 @@ end)
 AddEventHandler('aeterna_core:focusResumed', function(owner, token)
     if not isOurFocusEvent(owner, token) or not paused then return end
     setPaused(false)
+    if selftest and selftest.onResumed then
+        selftest.onResumed()
+    end
 end)
 
 -- Focus loss handler from aeterna_core (a real loss closes even while paused)
@@ -705,6 +708,16 @@ function CLIENT_TESTS.overlay_pauses(st)
             { blocks = { info = { label = translate('uikit.selftest.pressed', { n = presses }) } } })
         if ok then
             sendUi({ type = 'panel:update', panelId = st.panelId, patch = patch })
+        end
+    end
+    -- The person judges the card; this log line records what the panel did when the card let go of focus.
+    st.onResumed = function()
+        local ok, detail = Selftests.judgeResume({
+            paused = paused,
+            panelOpen = currentPanel ~= nil and currentPanel.panelId == st.panelId,
+        })
+        if AeternaCore and AeternaCore.log and type(AeternaCore.log.info) == 'function' then
+            AeternaCore.log.info('overlay_pauses: focus resumed', { result = ok and 'pass' or 'fail', detail = detail })
         end
     end
     reportSelftest(st.runId, st.name, 'ready', 'panel open')

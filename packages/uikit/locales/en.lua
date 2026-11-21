@@ -40,7 +40,7 @@ Locales.en['uikit.selftest.empty_body'] = 'This is what an empty state looks lik
 Locales.en['uikit.selftest.ok'] = 'OK'
 Locales.en['uikit.selftest.motion_hint'] = 'This panel closes and opens again every two seconds'
 Locales.en['uikit.selftest.focus_hint'] = 'This panel closes when focus is lost'
-Locales.en['uikit.selftest.paused_hint'] = 'Press the button after you answer the card'
+Locales.en['uikit.selftest.paused_hint'] = 'Clicks here do nothing while the card is up; after you answer it, the button works again'
 Locales.en['uikit.selftest.press'] = 'Press'
 Locales.en['uikit.selftest.pressed'] = 'Pressed {n} times'
 

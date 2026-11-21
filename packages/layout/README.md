@@ -144,11 +144,13 @@ where client tests are GAP). Spec: `docs/specs/aeterna_layout.md` § Self-tests 
 | `preset_apply` | eye | The editor alternates every 3 s between `compact` and Cancel |
 | `grid_drag` | ped | The page drags a test element without and with Shift: grid shown and on it, then no grid and off it |
 | `export_import` | ped | The export box holds one line; a moved test element goes back after importing it |
-| `export_copy` | ped | The page copies from the export box, pastes into the import box and presses Import |
-| `reset_from_menu` | ped, destructive | Clears the presser's saved layout through the client half of Reset all; every element is at its default |
+| `export_copy` | ped | The page runs the copy command on the export box, puts the export text into the import box from code and presses Import |
+| `reset_from_menu` | ped, destructive | Clears the presser's saved layout through the client half of Reset all (the server's panel and token are not exercised); every element is at its default |
 
-Client tests use test elements owned by `aeterna_layout`, refuse to run while the player has the editor open, and
-cancel the editor session they opened, so nothing they move is saved. `reset_from_menu` runs only when
+Client tests use test elements owned by `aeterna_layout` and refuse to run while the player has the editor open.
+While a test holds the editor, Done acts as Cancel and a snap pick is shown but not saved, and the test cancels the
+session when it ends, so no test except `reset_from_menu` writes the saved layout or the snap preference.
+`grid_drag` and `export_copy` have a 10 s timeout for the page drives. `reset_from_menu` runs only when
 `aeterna_core_allow_destructive` is on and the server is not listed publicly; it prints the layout as import text to
 the F8 console before it clears it.
 
