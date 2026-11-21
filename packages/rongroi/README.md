@@ -66,6 +66,10 @@ a tick for about 30 ms against about 8 ms for a small file (ADR 0001 section 4).
 on Enhanced. On that edition a deleted case leaves empty files named by a random ticket or a hash, with no player
 data in them, since no FiveM call deletes a file. KVP deletes are real deletes.
 
+If the folder was replaced anyway, the Kit notices at start: it keeps the number of stored cases in KVP, which survives
+the folder, logs `stored reports missing: expected <n>, found <m>` and shows a banner in the staff panel. The reports
+cannot be recovered from the server; the banner's button removes the leftover entries and clears the warning.
+
 ## Retention
 
 A sweep at start and every hour removes cases older than the setting in KVP `rongroi:settings:retentionDays`:

@@ -314,18 +314,24 @@ a second transport, the Rongroi Relay, and an `rr2.` code. This section is what 
    slices.
 4. **Report storage survives an update.** On Enhanced the files live in `<resource>/cache/rongroi-reports/`.
    Updating the Kit by replacing its folder, which a txAdmin recipe or a drop-in install does, deletes every stored
-   report and case file while the index in KVP still names them.
+   report and case file and the index pages with them (the file backend keeps `index-<n>` in the same folder), so the
+   Kit starts with no cases and no message.
    - **Spike S7 (2026-11-21, kit-test, FXServer Enhanced b177):** a data-only resource does not work.
      `SaveResourceFile` with another resource's name returned `false` and `LoadResourceFile` returned `null`, whether
      that resource was started or only loaded; with the Kit's own name both worked (64 KiB and Thai text came back
      identical); a missing resource throws "Resource … not found". Legacy was not tested.
    - **Decision:** files stay in the Kit's folder. The release zip ships `cache/rongroi-reports/` with only `.gitkeep`,
-     the README and the update notes say to keep `cache/` when replacing the folder, and an update script for Windows
-     and Linux copies everything except `cache/`.
-   - **Start check:** at start the Kit reads the file index and checks that each indexed case file loads. If any is
-     missing it logs one line with the count and shows a banner in the staff panel ("N stored reports are missing;
-     the Kit folder was probably replaced without `cache/`"). It never deletes index entries by itself; staff can clear
-     them from the panel.
+     and the README and update notes say to keep `cache/` when replacing the folder. An update script that copies
+     everything except `cache/` is a later lane, not part of A0.
+   - **Start check (A0, built 2026-11-21):** on Enhanced the Kit keeps the index total in KVP
+     (`rongroi:filestore:entries`), which survives a folder replace. At start, when the stored total is larger than the
+     index it loaded, it logs one line with both numbers and shows a banner in the staff panel ("N stored reports are
+     missing; the Kit folder was probably replaced without `cache/`"). A loss found at start stays in the stored total
+     after later writes, so one new case does not hide it. An index entry whose case file reads empty does not raise the
+     warning: section 4 designs that state for a failed or interrupted case write. Staff clear the warning with "Remove
+     the missing entries", which drops entries without a case file and resets the total. The Kit never does this by
+     itself. Measured on kit-test (FXServer Enhanced b177): 3 cases, files removed, restart ⇒ "expected 3, found 0";
+     one more case and a restart ⇒ "expected 4, found 1".
 5. **Renaming the resource is not supported in Kit 0.2.** The X25519 private key, the settings and, on Legacy, the
    cases live in Resource KVP, which belongs to the resource name; a renamed resource starts with a new key and loses
    them. The ACE `nakara_rongroi.staff`, `exports.nakara_rongroi` and the `nakara_rongroi:*` events also keep the name.
