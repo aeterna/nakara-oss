@@ -16,6 +16,7 @@ All notable changes to `aeterna_hudkit` are documented here. The format follows
 - NUI messages `hud:compass`, `hud:voice`, `hud:seatbelt`; `settings:open` / `settings:apply` carry `barStyle` and the compass span; `ready` reports `compass` and `voice` sizes.
 - Locale keys for bar style, compass, voice and seatbelt (en, th).
 - Self-tests registered with `aeterna_core` on start: `values_mapping`, `compass_math` (server), `bar_style` (eye), `compass_tape`, `voice_indicator`, `voice_radio`, `minimap_follows` (ped) and `seatbelt_event` (client mock; needs the presser in a vehicle and reads what the real handler sent), with their expect strings in en and th; `SeatbeltLogic` gains `snapshot`, `restore` and `same` so the mock puts the previous state back. Agent: Claude Code - Claude Opus 5.5 (agent engineer).
+- Self-test event handlers accept only `aeterna_core` as the invoking resource. Agent: Claude Code - Claude Opus 5.5 (agent engineer).
 - Self-test instructions as `expect` for `voice_indicator`, `voice_radio` and `seatbelt_event` (en, th). Agent: Claude Code - Claude Opus 5.5 (agent engineer).
 
 ### Changed

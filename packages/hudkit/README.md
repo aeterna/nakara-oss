@@ -118,6 +118,8 @@ only for the reason in the last column; a ped or eye test with nobody to run it 
 
 The voice rows and `seatbelt_event` carry a short instruction as `expect` ("Talk into your microphone, then change your voice range"); `aeterna_testkit` shows a ped row's instruction while it runs.
 
+Self-test events are accepted only from `aeterna_core` (the invoking resource), so no other resource can start a test or its server preparation.
+
 | Test | Kind | Runs | What it checks | SKIP when |
 |---|---|---|---|---|
 | `aeterna_hudkit.values_mapping` | headless | server | Health 100–200 → 0–100 %, km/h and mph, gear text, heading sectors, identical values send nothing | never |

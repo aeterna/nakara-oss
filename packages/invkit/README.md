@@ -115,6 +115,8 @@ write guard (`AeternaCore.selftest.mayWrite`) first.
 
 `stash_open` and the three phone rows carry a short instruction as `expect` ("Carry two phone items, then drop one of them"); `aeterna_testkit` shows it while the row runs.
 
+Self-test events are accepted only from `aeterna_core` (the invoking resource), so no other resource can start a test or its server preparation. When `aeterna_core` stops mid-test, the server removes its tagged test item and the test usable.
+
 | Test | Kind | Runs | What it checks | SKIP when |
 |---|---|---|---|---|
 | `aeterna_invkit.stash_id` | headless | server | Stash ids for both scopes, with and without qbx; no identifier or an unknown scope gives none | never |

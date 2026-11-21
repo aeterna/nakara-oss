@@ -119,6 +119,8 @@ While the menu is open the player keeps walking and driving; camera look and wea
 radial registers these tests with `aeterna_core` on start (`aeterna_testkit` lists and runs them). A ped or eye test
 with nobody to run it is GAP.
 
+Self-test events are accepted only from `aeterna_core` (the invoking resource), so no other resource can start a test or its server preparation. When `aeterna_core` stops mid-test, the server drops its temporary slot.
+
 | Test | Kind | Runs | What it checks |
 |---|---|---|---|
 | `aeterna_radial.registry` | headless | server | A private registry: add, replace, `maxPerOwner`, `maxTotal`, a child of a child and a cross-owner parent refused, owner stop removes only its slots and flags |
