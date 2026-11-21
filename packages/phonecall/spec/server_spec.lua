@@ -28,6 +28,8 @@ local function boot(gamename, pmaStarted, opts)
         return 'license:' .. tostring(src)
     end)
     natives.stub('IsPlayerAceAllowed', function() return false end)
+    local invoker = { name = 'aeterna_core' } -- core's local events come from aeterna_core unless a test says otherwise
+    natives.stub('GetInvokingResource', function() return invoker.name end)
     local commands = {}
     natives.stub('RegisterCommand', function(name, fn) commands[name] = fn end)
     local voice = { create = 0, add = {}, remove = {}, delete = {} }
@@ -95,7 +97,7 @@ local function boot(gamename, pmaStarted, opts)
     })
     natives.advance(0)
     return { res = res, commands = commands, kit = kit, voice = voice, pmaCalls = pmaCalls, selftests = selftests,
-        reports = reports, mayWriteCalls = mayWriteCalls }
+        reports = reports, mayWriteCalls = mayWriteCalls, invoker = invoker }
 end
 
 local function as(src, name, ...)
@@ -440,6 +442,36 @@ describe('aeterna_phonecall server', function()
             natives.fire_net('aeterna_phonecall:sv:hangup', 1)
             openApp(1, 'phone')
             assert.are.equal('Number', blockById(lastSpec(w.kit, 1, 'phone'), 'number').label)
+        end)
+
+        it('ignores core self-test events fired by any other resource', function()
+            local w = boot('gta5enhanced', false, { mayWrite = true })
+            local ctx = { kind = 'eye', side = 'client', a = 1, b = 2, destructive = true }
+            w.invoker.name = 'evil_resource'
+            natives.fire('aeterna_core:selftestStarted', 'r1', 'aeterna_phonecall.sms_ab', ctx)
+            natives.fire('aeterna_core:selftest', 'r1', 'aeterna_phonecall.voice_detect', { side = 'server' })
+            natives.advance(600)
+            assert.is_nil(natives.get_kvp('aeterna_phonecall:sms:v1:' .. LIC2))
+            assert.are.equal(0, #w.kit.notified)
+            assert.is_nil(w.reports['aeterna_phonecall.voice_detect'])
+
+            -- a fake selftestEnd does not cancel a real test
+            w.invoker.name = 'aeterna_core'
+            natives.fire('aeterna_core:selftestStarted', 'r2', 'aeterna_phonecall.sms_ab', ctx)
+            w.invoker.name = 'evil_resource'
+            natives.fire('aeterna_core:selftestEnd', 'r2', 'aeterna_phonecall.sms_ab')
+            natives.advance(600)
+            assert.are.equal(1, #w.kit.notified)
+        end)
+
+        it('aeterna_core stopping clears the two-player test state', function()
+            local w = boot('gta5enhanced', false, { mayWrite = true })
+            natives.fire('aeterna_core:selftestStarted', 'r1', 'aeterna_phonecall.sms_ab',
+                { kind = 'eye', side = 'client', a = 1, b = 2, destructive = true })
+            natives.fire('onResourceStop', 'aeterna_core')
+            natives.advance(600)
+            assert.are.equal(0, #w.kit.notified)
+            assert.is_nil(natives.get_kvp('aeterna_phonecall:sms:v1:' .. LIC2))
         end)
 
         it('no longer accepts a selftest net event from clients', function()
