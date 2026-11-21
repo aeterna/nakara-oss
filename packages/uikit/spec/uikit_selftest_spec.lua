@@ -225,6 +225,20 @@ describe('aeterna_uikit self-tests: client test panels and judges', function()
         assert.is_false((S.judgeSlider(good, nil)))
     end)
 
+    it('judgeResume passes only when the panel works again and is still open', function()
+        local _, S = loadModules()
+        assert.is_true((S.judgeResume({ paused = false, panelOpen = true })))
+        assert.is_false((S.judgeResume({ paused = true, panelOpen = true })))
+        assert.is_false((S.judgeResume({ paused = false, panelOpen = false })))
+    end)
+
+    it('the overlay_pauses hint says clicks do nothing while the card is up', function()
+        loadModules()
+        assert.matches('do nothing', Locales.en['uikit.selftest.paused_hint'], 1, true)
+        assert.matches('card', Locales.en['uikit.selftest.paused_hint'], 1, true)
+        assert.matches('การ์ด', Locales.th['uikit.selftest.paused_hint'], 1, true)
+    end)
+
     it('judgeFocusLost passes only when the panel closed and the owner got __close', function()
         local _, S = loadModules()
         assert.is_true((S.judgeFocusLost({ panelOpen = false, close = { action = '__close' } })))
@@ -332,6 +346,24 @@ describe('aeterna_uikit self-tests: wrappers', function()
             assert.is_truthy(lastUi('panel:open'))
             natives.fire('aeterna_core:selftestEnd', 'r1-abcd', 'aeterna_uikit.panel_every_block')
             assert.is_truthy(lastUi('panel:close'))
+        end)
+
+        it('overlay_pauses logs whether the panel works again when focus resumes', function()
+            loadClient()
+            local infos = {}
+            natives.stub('AeternaCore', {
+                log = { info = function(msg, fields) infos[#infos + 1] = { msg = msg, fields = fields } end,
+                    warn = function() end, debug = function() end },
+                requestFocus = function() return 'tok_1' end,
+                releaseFocus = function() return true end,
+            })
+            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.overlay_pauses', { kind = 'eye', side = 'client' })
+            natives.advance(100)
+            natives.fire('aeterna_core:focusPaused', 'aeterna_uikit', 'tok_1')
+            natives.fire('aeterna_core:focusResumed', 'aeterna_uikit', 'tok_1')
+            assert.are.equal(1, #infos)
+            assert.matches('resum', infos[1].msg)
+            assert.are.equal('pass', infos[1].fields.result)
         end)
 
         it('ignores tests of other resources', function()

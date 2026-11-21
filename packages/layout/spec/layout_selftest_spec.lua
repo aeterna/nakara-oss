@@ -40,15 +40,15 @@ local function broken(L, name, fn)
     return setmetatable({ [name] = fn }, { __index = L })
 end
 
--- name, kind, side, destructive, has Expect
+-- name, kind, side, destructive, has Expect, timeout (nil = core's default)
 local SPEC_ROWS = {
     { 'placement_math', 'headless', 'server', false, false },
     { 'import_validate', 'headless', 'server', false, false },
     { 'clamp_on_grow', 'mock', 'client', false, false },
     { 'preset_apply', 'eye', 'client', false, true },
-    { 'grid_drag', 'ped', 'client', false, true },
+    { 'grid_drag', 'ped', 'client', false, true, 10000 },
     { 'export_import', 'ped', 'client', false, true },
-    { 'export_copy', 'ped', 'client', false, true },
+    { 'export_copy', 'ped', 'client', false, true, 10000 },
     { 'reset_from_menu', 'ped', 'client', true, true },
 }
 
@@ -67,7 +67,7 @@ describe('aeterna_layout self-tests: rows', function()
             assert.are.equal(row[3], fields.side, row[1])
             assert.are.equal(1, fields.players, row[1])
             assert.are.equal(row[4], fields.destructive, row[1])
-            assert.are.equal(5000, fields.timeout, row[1])
+            assert.are.equal(row[6] or 5000, fields.timeout, row[1])
             assert.is_nil(fields.ask, row[1])
             assert.is_nil(fields.skipWhen, row[1])
             if row[5] then
@@ -188,12 +188,12 @@ describe('aeterna_layout self-tests: client judges', function()
         assert.is_false((S.judgeExportImport(with('after', { x = 0.4, y = 0.5, ax = 0.5, ay = 0.5, scale = 1, hidden = false }))))
     end)
 
-    it('judgeCopy needs a copy, a matching paste and an accepted import', function()
+    it('judgeCopy needs the copy command to run and the import to accept the text', function()
         local _, S = loadModules()
-        assert.is_true((S.judgeCopy({ copied = true, pasted = true, matches = true }, true)))
-        assert.is_false((S.judgeCopy({ copied = false, pasted = true, matches = true }, true)))
-        assert.is_false((S.judgeCopy({ copied = true, pasted = false, matches = false }, nil)))
-        assert.is_false((S.judgeCopy({ copied = true, pasted = true, matches = true }, false)))
+        assert.is_true((S.judgeCopy({ copied = true }, true)))
+        assert.is_false((S.judgeCopy({ copied = false }, true)))
+        assert.is_false((S.judgeCopy({ copied = true }, nil)))
+        assert.is_false((S.judgeCopy({ copied = true }, false)))
         assert.is_false((S.judgeCopy(nil, nil)))
     end)
 
@@ -204,6 +204,20 @@ describe('aeterna_layout self-tests: client judges', function()
         assert.is_true((S.judgeReset({}, { { key = 'a/b', place = d, default = d } })))
         assert.is_false((S.judgeReset({ ['a/b'] = moved }, { { key = 'a/b', place = d, default = d } })))
         assert.is_false((S.judgeReset({}, { { key = 'a/b', place = moved, default = d } })))
+    end)
+
+    it('judgeReset says it ran the client half, and says so when there was nothing to clear', function()
+        local _, S = loadModules()
+        local d = { x = 0.1, y = 0.9, ax = 0, ay = 1, scale = 1, hidden = false }
+        local els = { { key = 'a/b', place = d, default = d } }
+        local ok, detail = S.judgeReset({}, els, false)
+        assert.is_true(ok)
+        assert.matches('nothing to clear', detail, 1, true)
+        assert.matches('client half', detail, 1, true)
+        local ok2, detail2 = S.judgeReset({}, els, true)
+        assert.is_true(ok2)
+        assert.matches('client half', detail2, 1, true)
+        assert.is_nil(detail2:find('nothing to clear', 1, true))
     end)
 end)
 
@@ -319,6 +333,57 @@ describe('aeterna_layout self-tests: wrappers', function()
             natives.fire('aeterna_core:selftestEnd', 'r1-abcd', 'aeterna_layout.preset_apply')
             assert.are.equal(1, #h.sent('editor:close'))
             assert.is_nil(natives.get_kvp('aeterna_layout:places:v1'))
+        end)
+
+        it('Done while a self-test holds the editor acts as Cancel and saves nothing; the snap pick is not saved', function()
+            loadClient()
+            h.cb('screen', { w = 1920, h = 1080 })
+            fire('preset_apply', 'eye')
+            natives.advance(100)
+            h.cb('snap', { step = 16 })
+            h.cb('done', {})
+            assert.are.equal(1, #h.sent('editor:close'))
+            assert.is_nil(natives.get_kvp('aeterna_layout:places:v1'))
+            assert.is_nil(natives.get_kvp('aeterna_layout:prefs:v1'))
+        end)
+
+        it('export_import fails, without an error, when its test element is gone', function()
+            loadClient()
+            h.cb('screen', { w = 1920, h = 1080 })
+            fire('export_import', 'ped')
+            natives.advance(100)
+            natives.stub('GetInvokingResource', function() return 'aeterna_layout' end)
+            natives.fire('aeterna_layout:remove', 'st_share')
+            natives.stub('GetInvokingResource', function() return nil end)
+            natives.advance(400)
+            local shown = h.sent('export:show')
+            h.cb('selftestProbe', { op = 'export', text = shown[#shown].text })
+            natives.advance(500)
+            assert.are.equal(1, #reports)
+            assert.are.equal('fail', reports[1].ok)
+        end)
+
+        it('export_copy passes on the copy command and the import of the text set from code', function()
+            loadClient()
+            h.cb('screen', { w = 1920, h = 1080 })
+            fire('export_copy', 'ped')
+            natives.advance(500)
+            local drive = h.sent('selftest:drive')
+            assert.are.equal('copy', drive[#drive].op)
+            local shown = h.sent('export:show')
+            h.cb('selftestProbe', { op = 'copy', copied = true })
+            h.cb('import', { text = shown[#shown].text })
+            natives.advance(500)
+            assert.are.equal('pass', reports[1].ok, reports[1].detail)
+            assert.is_nil(natives.get_kvp('aeterna_layout:places:v1'))
+        end)
+
+        it('reset_from_menu says nothing to clear when there is no saved layout', function()
+            loadClient()
+            fire('reset_from_menu', 'ped')
+            natives.advance(100)
+            assert.are.equal('pass', reports[1].ok)
+            assert.matches('nothing to clear', reports[1].detail, 1, true)
         end)
 
         it('reset_from_menu clears the saved layout and reports a declared write', function()
