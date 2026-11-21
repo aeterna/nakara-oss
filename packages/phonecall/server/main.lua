@@ -981,7 +981,13 @@ local SERVER_TESTS = {
     end,
 }
 
+-- Core's self-test events are local events any resource could fire; only aeterna_core's count.
+local function fromCore()
+    return GetInvokingResource() == 'aeterna_core'
+end
+
 AddEventHandler('aeterna_core:selftest', function(runId, name, ctx)
+    if not fromCore() then return end
     if type(name) ~= 'string' or name:sub(1, #PREFIX) ~= PREFIX then return end
     if type(ctx) == 'table' and ctx.side ~= nil and ctx.side ~= 'server' then return end
     local short = name:sub(#PREFIX + 1)
@@ -1037,6 +1043,7 @@ local function selftestPair(runId, name, a, b)
 end
 
 AddEventHandler('aeterna_core:selftestStarted', function(runId, name, ctx)
+    if not fromCore() then return end
     local pair = tracker:start(runId, name, ctx)
     if not pair then return end
     SetTimeout(500, function()
@@ -1045,7 +1052,13 @@ AddEventHandler('aeterna_core:selftestStarted', function(runId, name, ctx)
 end)
 
 AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
+    if not fromCore() then return end
     tracker:finish(runId, name)
+end)
+
+-- A core restart drops its runs, so nothing set up for them may still fire.
+AddEventHandler('onResourceStop', function(name)
+    if name == 'aeterna_core' then tracker.items = {} end
 end)
 
 local function registerSelftests()

@@ -119,7 +119,13 @@ local function onCallState(data)
     end
 end
 
+-- Core's self-test events are local events any resource could fire; only aeterna_core's count.
+local function fromCore()
+    return GetInvokingResource() == 'aeterna_core'
+end
+
 AddEventHandler('aeterna_core:selftest', function(runId, name, ctx)
+    if not fromCore() then return end
     if type(name) ~= 'string' or name:sub(1, #PREFIX) ~= PREFIX then return end
     local role = type(ctx) == 'table' and ctx.role or 'A'
     local short = name:sub(#PREFIX + 1)
@@ -144,6 +150,7 @@ AddEventHandler('aeterna_core:selftest', function(runId, name, ctx)
 end)
 
 AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
+    if not fromCore() then return end
     local p = pending[name]
     if not p or p.runId ~= runId then return end
     pending[name] = nil
@@ -181,6 +188,7 @@ AeternaCore.key('+aeterna_phonecall_answer', 'phonecall.key.answer')
 AeternaCore.key('+aeterna_phonecall_hangup', 'phonecall.key.hangup')
 
 AddEventHandler('onResourceStop', function(name)
+    if name == 'aeterna_core' then pending = {} end
     if name == GetCurrentResourceName() and earOn then
         StopAnimTask(PlayerPedId(), EAR_DICT, EAR_ANIM, 1.0)
     end
