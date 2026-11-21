@@ -223,8 +223,12 @@ describe('aeterna_uikit 0.2', function()
             local ok, err = L.validateSpec(spec({ listBlock(51, nil) }))
             assert.is_false(ok)
             assert.is_truthy(err and err:match('^blocks%[1%]%.items:'))
-            local okFalse = L.validateSpec(spec({ listBlock(51, false) }))
-            assert.is_false(okFalse)
+        end)
+
+        it('fails search = false (only true or a table is allowed)', function()
+            local ok, err = L.validateSpec(spec({ listBlock(2, false) }))
+            assert.is_false(ok)
+            assert.is_truthy(err and err:match('^blocks%[1%]%.search:'))
         end)
 
         it('fails a placeholder over 40 characters', function()
@@ -351,6 +355,11 @@ describe('aeterna_uikit 0.2', function()
             assert.is_false((pm:update(1, pid, { blocks = { vol = { value = 105 } } })))
             assert.is_false((pm:update(1, pid, { blocks = { vol = { value = -5 } } })))
             assert.is_false((pm:update(1, pid, { blocks = { vol = { value = 52 } } })))
+        end)
+
+        it('refuses disabled on table and tabs patches', function()
+            assert.is_false((pm:update(1, pid, { blocks = { log = { disabled = true } } })))
+            assert.is_false((pm:update(1, pid, { blocks = { tabs = { disabled = true } } })))
         end)
 
         it('refuses an unknown tab value, bad rows, and row ids that collide', function()
@@ -481,6 +490,31 @@ describe('aeterna_uikit 0.2', function()
             nuiCallbacks.promptResult({ kind = 'confirm', value = true }, function() end)
             natives.advance(20)
             assert.is_true(answer)
+        end)
+
+        local function pausedMessages()
+            local out = {}
+            for i = 1, #nuiMessages do
+                local m = nuiMessages[i][1]
+                if type(m) == 'table' and m.type == 'focus:paused' then out[#out + 1] = m.paused end
+            end
+            return out
+        end
+
+        it('tells the page when it is paused and resumed', function()
+            natives.fire('aeterna_core:focusPaused', 'aeterna_uikit', 'tok_1')
+            natives.fire('aeterna_core:focusResumed', 'aeterna_uikit', 'tok_1')
+            assert.are.same({ true, false }, pausedMessages())
+        end)
+
+        it('a new panel after a pause that never resumed is not paused', function()
+            natives.fire('aeterna_core:focusPaused', 'aeterna_uikit', 'tok_1')
+            natives.fire_net('aeterna_uikit:cl:open', 1, { panelId = 'p2', title = 'Second', size = 'md', blocks = {} })
+            local before = countActions()
+            nuiCallbacks.panelAction({ panelId = 'p2', action = 'ok', values = {} }, function() end)
+            assert.are.equal(before + 1, countActions())
+            local states = pausedMessages()
+            assert.is_false(states[#states])
         end)
 
         it('still fires __close on a real focus loss, also while paused', function()
