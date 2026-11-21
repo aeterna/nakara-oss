@@ -91,6 +91,34 @@ describe('aeterna_testkit', function()
             assert.are.equal('build v1.0.0.13068', S.scrub('build v1.0.0.13068', {}, clean))
         end)
 
+        it('replaces a discord snowflake id', function()
+            assert.are.equal('by [id] now', S.scrub('by discord:123456789012345678 now', {}, clean))
+        end)
+
+        it('replaces an unknown <letters>: prefix followed by 15 or more digits', function()
+            assert.are.equal('id [id]', S.scrub('id newsvc:123456789012345', {}, clean))
+            assert.are.equal('id other:12345678901234', S.scrub('id other:12345678901234', {}, clean))
+        end)
+
+        it('leaves resource-style names, step labels and times unchanged', function()
+            assert.are.equal('aeterna_core:foo', S.scrub('aeterna_core:foo', {}, clean))
+            assert.are.equal('step 3: x', S.scrub('step 3: x', {}, clean))
+            assert.are.equal('at 12:30', S.scrub('at 12:30', {}, clean))
+        end)
+
+        it('replaces paths after (, = and @, and in stack frames', function()
+            assert.are.equal('open ([path]) failed', S.scrub('open (/srv/fx/a.cfg) failed', {}, clean))
+            assert.are.equal('file=[path] bad', S.scrub('file=/home/u/x.lua bad', {}, clean))
+            assert.are.equal('file=[path] bad', S.scrub('file=C:\\srv\\x.lua bad', {}, clean))
+            assert.are.equal('error at [path] boom', S.scrub('error at @aeterna_demo/server/main.lua:12: boom', {}, clean))
+        end)
+
+        it('skips names shorter than 3 characters and matches whole words only', function()
+            assert.are.equal('Bo ate a box', S.scrub('Bo ate a box', { A = 'Bo' }, clean))
+            assert.are.equal('A met Annabel', S.scrub('Ann met Annabel', { A = 'Ann' }, clean))
+            assert.are.equal('ok A.', S.scrub('ok Ann.', { A = 'Ann' }, clean))
+        end)
+
         it('cuts to 300 visible characters and drops control characters', function()
             local out = S.scrub(string.rep('a', 310) .. '\n', {}, clean)
             assert.are.equal(300, utf8.len(out))
@@ -409,12 +437,15 @@ describe('aeterna_testkit', function()
     end)
 
     describe('8. console guard (server/main.lua under the harness)', function()
-        local commands, starts, saved, warnings, printed, realPrint
+        local commands, restricted, starts, saved, warnings, printed, realPrint, panels
 
         before_each(function()
-            natives.reset({ resource = 'aeterna_testkit', side = 'server', players = { [1] = 'Somchai' } })
-            commands, starts, saved, warnings, printed = {}, {}, {}, {}, {}
-            natives.spy('RegisterCommand', function(name, fn) commands[name] = fn end)
+            natives.reset({ resource = 'aeterna_testkit', side = 'server', players = { [1] = 'Somchai', [2] = 'Malee' } })
+            commands, restricted, starts, saved, warnings, printed, panels = {}, {}, {}, {}, {}, {}, 0
+            natives.spy('RegisterCommand', function(name, fn, isRestricted)
+                commands[name] = fn
+                restricted[name] = isRestricted
+            end)
             natives.stub('GetNumResources', function() return 2 end)
             natives.stub('GetResourceByFindIndex', function(i) return ({ [0] = 'aeterna_core', [1] = 'aeterna_testkit' })[i] end)
             natives.stub('GetResourceState', function() return 'started' end)
@@ -433,15 +464,23 @@ describe('aeterna_testkit', function()
                     local s = (Locales and Locales.en and Locales.en[k]) or k
                     return (s:gsub('{(%w+)}', function(v) return vars and vars[v] ~= nil and tostring(vars[v]) or '{' .. v .. '}' end))
                 end,
-                can = function(src) return tonumber(src) == 0 end,
+                can = function(src) return tonumber(src) == 0 or tonumber(src) == 1 end,
                 rateLimit = function() return true end,
                 validate = function(v) return true, nil, v end,
                 text = coreText(),
             })
             natives.stub_export('aeterna_uikit', 'addMenuEntry', function() return true end)
+            natives.stub_export('aeterna_uikit', 'open', function()
+                panels = panels + 1
+                return 'p' .. panels
+            end)
+            natives.stub_export('aeterna_uikit', 'update', function() return true end)
+            natives.stub_export('aeterna_core', 'listSelftests', function() return {} end)
+            natives.stub_export('aeterna_core', 'runStatus', function() return nil end)
             natives.stub_export('aeterna_core', 'busy', function() return nil end)
             natives.stub_export('aeterna_core', 'startRun', function(opts)
                 starts[#starts + 1] = opts
+                if #starts > 1 then return 'r' .. #starts .. '-abcd' end
                 natives.fire('aeterna_core:runProgress', 'r1-abcd', {
                     name = 'aeterna_core.core', suite = 'aeterna_core', kind = 'headless', players = 1,
                     destructive = false, state = 'PASS', ok = true, detail = 'ok', ms = 2,
@@ -470,6 +509,41 @@ describe('aeterna_testkit', function()
             for _, w in ipairs(warnings) do
                 assert.is_nil((w.msg .. tostring(w.fields and w.fields.src)):find('Somchai', 1, true))
             end
+        end)
+
+        it('registers the console command restricted, and no sv:invite net event', function()
+            resource.load_resource(DIR, 'server')
+            assert.is_true(restricted.aeterna_testkit_run)
+            assert.is_true(natives.is_net_event('aeterna_testkit:sv:open'))
+            assert.is_false(natives.is_net_event('aeterna_testkit:sv:invite'))
+        end)
+
+        it('clears the run, releases player B and resets roles when aeterna_core stops mid-run', function()
+            resource.load_resource(DIR, 'server')
+            local function act(panelId, action, values)
+                natives.fire('aeterna_uikit:action', 1, { owner = 'aeterna_testkit', panelId = panelId, action = action,
+                    values = values or {} })
+            end
+            natives.fire_net('aeterna_testkit:sv:open', 1)
+            act('p1', 'invite')
+            act('p2', 'send', { target = 2 })
+            assert.are.equal(2, natives.last_emitted('client', 'aeterna_testkit:cl:invite').target)
+            natives.fire_net('aeterna_testkit:sv:inviteAnswer', 2, { accept = true })
+            act('p3', 'run')
+            assert.are.equal(1, #starts)
+            assert.are.equal(2, starts[1].b)
+
+            natives.fire('onResourceStop', 'aeterna_core')
+            local last = {}
+            for _, e in ipairs(natives.emitted('client', 'aeterna_testkit:cl:role')) do last[e.target] = e.args[1].role end
+            assert.are.equal('none', last[1])
+            assert.are.equal('none', last[2])
+
+            commands.aeterna_testkit_run(0, {}, 'aeterna_testkit_run')
+            assert.are.equal(2, #starts)
+            act('p3', 'invite')
+            act('p4', 'send', { target = 2 })
+            assert.are.equal(2, #natives.emitted('client', 'aeterna_testkit:cl:invite'))
         end)
 
         it('--json from the console prints the report as one line and saves both files', function()
