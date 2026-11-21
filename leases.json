@@ -96,6 +96,18 @@
       "plan": "KIT02",
       "acquired": "2026-11-21T13:21:17Z",
       "expires": "2026-11-21T17:21:17Z"
+    },
+    {
+      "id": "rongroi-a0-8843707d",
+      "repo": "nakara-oss",
+      "lane": "rongroi-a0",
+      "host": "mac",
+      "scope": [
+        "packages/rongroi/**"
+      ],
+      "plan": "rongroi-easy-plugin",
+      "acquired": "2026-11-21T14:43:59Z",
+      "expires": "2026-11-21T18:43:59Z"
     }
   ]
 }
