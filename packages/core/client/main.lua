@@ -192,7 +192,7 @@ AddEventHandler('aeterna_core:cl:selftest', function(payload)
     if flights[key] then return end
     flights[key] = { kind = p.kind, role = p.role, expect = p.expect or '', ask = p.ask }
     local ctx = { kind = p.kind, side = 'client', role = p.role, destructive = p.destructive }
-    if (p.kind == 'eye' or p.kind == 'ped') and p.expect ~= nil and p.expect ~= '' then ctx.expect = p.expect end
+    if p.expect ~= nil and p.expect ~= '' then ctx.expect = p.expect end
     TriggerEvent('aeterna_core:selftest', p.runId, p.name, ctx)
 end)
 

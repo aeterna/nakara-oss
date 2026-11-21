@@ -229,7 +229,7 @@ local function runOnClients(run, item)
     for role, src in pairs(item.roles) do
         TriggerClientEvent('aeterna_core:cl:selftest', src, {
             runId = run.id, name = item.name, kind = item.kind, role = role, timeout = item.timeout,
-            destructive = item.destructive, expect = (item.kind == 'eye' or item.kind == 'ped') and item.expect or nil,
+            destructive = item.destructive, expect = item.expect,
             ask = item.kind == 'eye' and item.ask or nil,
         })
     end
