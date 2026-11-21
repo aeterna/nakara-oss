@@ -1,0 +1,29 @@
+{
+  "description": "Envelope v2 test vector (aeterna-rongroi ADR 0097 section 4). Fixed inputs; test keys only (the v1 vector keys), not a Server Kit key. Server Kit, Connect and @aeterna/rongroi-envelope all test against this file.",
+  "kit": {
+    "privateKey": "PoCIecWmY6a-HIbJnUVbxlj1KUmHU-uJ-nrjyZLkVjw",
+    "publicKey": "ovol0Vile5zOPb8MVWv4hi3YXxnWwdhDWs2VxaLj5yA"
+  },
+  "ephemeral": {
+    "privateKey": "WFRdTLA_3ztH3Cwka4mYi_1vP8Ds3FTpyWW4tq75VQA",
+    "publicKey": "Uw7I0S2JC8TxzsQ_BZ3OBp1ixLRS6Xn1xupds1t9i3c"
+  },
+  "iv": "eV8Kp3Qz1sLm4NwR",
+  "plaintext": "{\"schema\":2,\"nonce\":\"vector-nonce-01\",\"note\":\"test vector, not a report\"}",
+  "binding": {
+    "base_path": "aeterna-test",
+    "policy_hash": "0123456789abcdef",
+    "server_origin": "https://relay.example.org",
+    "ticket": "7a1c9e3f5b2d8a4c6e0f1b3d5a7c9e2f",
+    "transport": "relay"
+  },
+  "aad": "{\"base_path\":\"aeterna-test\",\"policy_hash\":\"0123456789abcdef\",\"server_origin\":\"https://relay.example.org\",\"ticket\":\"7a1c9e3f5b2d8a4c6e0f1b3d5a7c9e2f\",\"transport\":\"relay\"}",
+  "sharedSecret": "c6GpoLMjQEdUs79PIb1gm_eFaLfLBMmCn-EMlyhTXng",
+  "derivedKey": "IUWbNF-ktlIj8JcaGoYuzgWbo573z54rfg0swJa1AGQ",
+  "envelope": {
+    "v": 2,
+    "epk": "Uw7I0S2JC8TxzsQ_BZ3OBp1ixLRS6Xn1xupds1t9i3c",
+    "iv": "eV8Kp3Qz1sLm4NwR",
+    "ct": "MXYgz-LQt8bQVm-Ik_eMSl96xqLOxDWAUItW1bysOv0riVqUMVSpzt4y10-rs1T2SjCPjKk-nSuTN95tjYQUgJXUo1L8EcM5mh9Eqe4w2kZH94O6ey2Q_1c"
+  }
+}
