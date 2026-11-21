@@ -8,7 +8,8 @@
     "packages/devkit",
     "packages/rongroi",
     "packages/tickets",
-    "sdk/rongroi-envelope"
+    "sdk/rongroi-envelope",
+    "relay"
   ],
   "engines": {
     "node": ">=22"
