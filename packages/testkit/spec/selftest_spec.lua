@@ -455,6 +455,55 @@ describe('aeterna_testkit now-testing strip', function()
         assert.are.equal('now:hide', nui[#nui].type)
     end)
 
+    local function bootCardClient()
+        natives.reset({ resource = OWNER, side = 'client' })
+        local nui, released = {}, {}
+        natives.spy('SendNUIMessage', function(msg) nui[#nui + 1] = msg end)
+        natives.spy('RegisterNUICallback')
+        natives.spy('RegisterKeyMapping')
+        natives.spy('RegisterCommand')
+        natives.stub('GetInvokingResource', function() return 'aeterna_core' end)
+        natives.stub('AeternaCore', {
+            log = { debug = function() end, info = function() end, warn = function() end, error = function() end },
+            t = function(k) return k end,
+            key = function() end,
+            validate = function(v) return true, nil, v end,
+            requestFocus = function() return 'tok' end,
+            releaseFocus = function(tok) released[#released + 1] = tok return true end,
+            themeMessage = function() return { type = 'aeterna:theme' } end,
+        })
+        resource.load_resource(DIR, 'client')
+        return nui, released
+    end
+
+    local function count(nui, kind)
+        local n = 0
+        for _, m in ipairs(nui) do if m.type == kind then n = n + 1 end end
+        return n
+    end
+
+    it('focusLost from another resource does not close the eye card', function()
+        local nui, released = bootCardClient()
+        natives.fire('aeterna_core:eyeAsk', 'r1-abcd', 'aeterna_x.a', { ask = 'a', expect = 'b', role = 'A' })
+        natives.stub('GetInvokingResource', function() return 'other' end)
+        natives.fire('aeterna_core:focusLost', OWNER, 'tok', 'preempted')
+        assert.are.equal(0, count(nui, 'eye:hide'))
+        assert.are.same({}, released)
+        natives.stub('GetInvokingResource', function() return 'aeterna_core' end)
+        natives.fire('aeterna_core:focusLost', OWNER, 'tok', 'preempted')
+        assert.are.equal(1, count(nui, 'eye:hide'))
+    end)
+
+    it('aeterna_core stopping closes the eye card and the strip', function()
+        local nui, released = bootCardClient()
+        natives.fire('aeterna_core:eyeAsk', 'r1-abcd', 'aeterna_x.a', { ask = 'a', expect = 'b', role = 'A' })
+        natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_x.p', { kind = 'ped', expect = 'Do it' })
+        natives.fire('onResourceStop', 'aeterna_core')
+        assert.are.equal(1, count(nui, 'eye:hide'))
+        assert.are.equal(1, count(nui, 'now:hide'))
+        assert.are.same({ 'tok' }, released)
+    end)
+
     it('has testkit.now_doing in Thai and English', function()
         natives.reset()
         assert(loadfile(DIR .. '/locales/en.lua'))()

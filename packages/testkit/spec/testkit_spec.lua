@@ -30,6 +30,14 @@ local function sortedKeys(t)
     return out
 end
 
+-- Runs `fn` with aeterna_core as the invoking resource, as for events core fires.
+local function asCore(fn)
+    natives.stub('GetInvokingResource', function() return 'aeterna_core' end)
+    local ok, err = pcall(fn)
+    natives.stub('GetInvokingResource', function() return nil end)
+    if not ok then error(err, 0) end
+end
+
 local function sampleInput(rows)
     return {
         runId = 'r1k-4f2a', startedAt = '2026-11-21T14:02:11Z', ms = 184230, by = 'menu', playerB = true,
@@ -481,10 +489,12 @@ describe('aeterna_testkit', function()
             natives.stub_export('aeterna_core', 'startRun', function(opts)
                 starts[#starts + 1] = opts
                 if #starts > 1 then return 'r' .. #starts .. '-abcd' end
-                natives.fire('aeterna_core:runProgress', 'r1-abcd', {
-                    name = 'aeterna_core.core', suite = 'aeterna_core', kind = 'headless', players = 1,
-                    destructive = false, state = 'PASS', ok = true, detail = 'ok', ms = 2,
-                })
+                asCore(function()
+                    natives.fire('aeterna_core:runProgress', 'r1-abcd', {
+                        name = 'aeterna_core.core', suite = 'aeterna_core', kind = 'headless', players = 1,
+                        destructive = false, state = 'PASS', ok = true, detail = 'ok', ms = 2,
+                    })
+                end)
                 return 'r1-abcd'
             end)
             realPrint = print
@@ -546,16 +556,31 @@ describe('aeterna_testkit', function()
             assert.are.equal(2, #natives.emitted('client', 'aeterna_testkit:cl:invite'))
         end)
 
+        it('runProgress and runDone with no invoking resource are ignored', function()
+            resource.load_resource(DIR, 'server')
+            commands.aeterna_testkit_run(0, { '--json' }, 'aeterna_testkit_run --json')
+            local before = #printed
+            natives.stub('GetInvokingResource', function() return nil end)
+            natives.fire('aeterna_core:runProgress', 'r1-abcd', { name = 'aeterna_core.x', suite = 'aeterna_core',
+                state = 'PASS', ok = true, detail = 'ok', ms = 1 })
+            natives.fire('aeterna_core:runDone', 'r1-abcd', { counts = {}, ok = true, cancelled = false, ms = 1,
+                destructive = 'off' })
+            assert.are.equal(before, #printed)
+            assert.is_nil(saved['reports/latest.json'])
+        end)
+
         it('--json from the console prints the report as one line and saves both files', function()
             resource.load_resource(DIR, 'server')
             commands.aeterna_testkit_run(0, { '--json', '--only', 'aeterna_core' }, 'aeterna_testkit_run --json --only aeterna_core')
             assert.are.equal(1, #starts)
             assert.are.equal(0, starts[1].by)
             assert.are.same({ 'aeterna_core' }, starts[1].only)
-            natives.fire('aeterna_core:runDone', 'r1-abcd', {
-                counts = { PASS = 1, FAIL = 0, SKIP = 0, GAP = 0, MOCK = 0, MISSING = 0 }, ok = true,
-                cancelled = false, ms = 1200, destructive = 'off',
-            })
+            asCore(function()
+                natives.fire('aeterna_core:runDone', 'r1-abcd', {
+                    counts = { PASS = 1, FAIL = 0, SKIP = 0, GAP = 0, MOCK = 0, MISSING = 0 }, ok = true,
+                    cancelled = false, ms = 1200, destructive = 'off',
+                })
+            end)
             local jsonLines = {}
             for _, p in ipairs(printed) do
                 if p:sub(1, 1) == '{' then jsonLines[#jsonLines + 1] = p end

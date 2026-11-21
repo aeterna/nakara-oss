@@ -208,6 +208,11 @@ function M.createNowStrip(deps)
         deps.hide()
     end
 
+    -- aeterna_core or this resource stopped: no selftestEnd will come.
+    function strip:close()
+        close(self)
+    end
+
     -- ctx = the client-local aeterna_core:selftest context. Returns true when the strip is shown.
     function strip:started(runId, name, ctx)
         local c = type(ctx) == 'table' and ctx or {}

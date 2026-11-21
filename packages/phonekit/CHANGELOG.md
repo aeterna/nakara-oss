@@ -40,6 +40,10 @@ Version 0.2.0 (ADR 0005 decisions 1, 2, 3, 5). Written by Claude Code - Claude O
   callback `selftest`, and the client keeps the page-only test ring card away from the server.
 - The open gate's check options come from `DeviceLogic.gateCheckOptions`, shared with the gate self-test.
 - Icons `camera` and `image` in the tile icon whitelist (`shared/logic/phone.lua`, `html/icons.js`).
+- Every `aeterna_core` client-local and server-local event phonekit handles (`focusLost`, `focusPaused`,
+  `focusResumed`, `selftest`, `selftestStarted`, `selftestEnd`) is accepted only when `aeterna_core` fired it.
+  Commit c4087fba said this already held for every core handler; the three focus handlers were missed there and are
+  covered now.
 
 ### Changed
 

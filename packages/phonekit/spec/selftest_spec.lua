@@ -505,6 +505,23 @@ describe('aeterna_phonekit self-tests under the harness', function()
             return natives.get_kvp('aeterna_phonekit:device:v1:lic:license:abc'):match('"battery":([%d%.]+)')
         end
 
+        it('eye_battery_dead: selftestEnd restores the device that was zeroed, even after a switch', function()
+            local api = bootServer({ devices = 'items', models = {}, battery = {}, apps = {} })
+            natives.fire_net('aeterna_phonekit:sv:open', 1)
+            local ask = natives.last_emitted('local', 'aeterna_phonekit:asking')
+            natives.fire('aeterna_phonekit:answer', ask.args[2].checkId,
+                { allow = true, devices = { { id = 'A', model = 'slab', battery = 80 }, { id = 'B', model = 'keypad', battery = 50 } } })
+            assert.are.equal('A', api.device(1).id)
+            natives.fire('aeterna_core:selftestStarted', 'r1-abcd', OWNER .. '.eye_battery_dead',
+                { kind = 'eye', side = 'client', a = 1, destructive = true })
+            assert.are.equal(0, api.battery(1))
+            natives.fire_net('aeterna_phonekit:sv:device', 1, { id = 'B' })
+            natives.fire('aeterna_core:selftestEnd', 'r1-abcd', OWNER .. '.eye_battery_dead')
+            assert.are.equal(50, api.battery(1))
+            natives.fire_net('aeterna_phonekit:sv:device', 1, { id = 'A' })
+            assert.are.equal(80, api.battery(1))
+        end)
+
         it('eye_battery_dead: a drop mid-test saves the old value, not 0', function()
             local api = bootServer()
             prepareDead(api)
@@ -709,6 +726,7 @@ describe('aeterna_phonekit self-tests under the harness', function()
 
         it('contacts_hooks deletes the contacts key again when the list was empty', function()
             bootClient()
+            assert(loadfile(DIR .. '/../core/shared/logic/kvp.lua'))()
             local deleted = {}
             natives.stub('DeleteResourceKvp', function(k) deleted[#deleted + 1] = k kvp.contacts = nil end)
             runClient('contacts_hooks', 'mock')
@@ -718,6 +736,33 @@ describe('aeterna_phonekit self-tests under the harness', function()
             assert.is_true(r.extra.restored)
             assert.are.same({ 'aeterna_phonekit:contacts:v1' }, deleted)
             assert.is_nil(kvp.contacts)
+        end)
+
+        it('focus events from another resource are ignored', function()
+            bootClient()
+            natives.fire('aeterna_phonekit:cl:open', { apps = {} })
+            local closes = #natives.emitted('server', 'aeterna_phonekit:sv:close')
+            natives.stub('GetInvokingResource', function() return 'other' end)
+            natives.fire('aeterna_core:focusPaused', OWNER, 'tok')
+            natives.fire('aeterna_core:focusResumed', OWNER, 'tok')
+            natives.fire('aeterna_core:focusLost', OWNER, 'tok', 'preempted')
+            for _, m in ipairs(nui) do assert.is_false(m.type == 'paused', 'paused from another resource') end
+            assert.are.equal(closes, #natives.emitted('server', 'aeterna_phonekit:sv:close'))
+            natives.stub('GetInvokingResource', function() return 'aeterna_core' end)
+            natives.fire('aeterna_core:focusLost', OWNER, 'tok', 'preempted')
+            assert.are.equal(closes + 1, #natives.emitted('server', 'aeterna_phonekit:sv:close'))
+        end)
+
+        it('kvpDelete builds the key with aeterna_core\'s keyFor', function()
+            bootClient()
+            local deleted = {}
+            -- core's kvp module, as import.lua loads it into every kit resource; keyFor answers a marked key
+            assert(loadfile(DIR .. '/../core/shared/logic/kvp.lua'))()
+            _G.AeternaCoreLogic.kvp.keyFor = function(res, name, v) return 'K|' .. res .. '|' .. name .. '|' .. v end
+            natives.stub('DeleteResourceKvp', function(k) deleted[#deleted + 1] = k kvp.contacts = nil end)
+            runClient('contacts_hooks', 'mock')
+            natives.advance(100)
+            assert.are.same({ 'K|aeterna_phonekit|contacts|1' }, deleted)
         end)
 
         it('selftestEnd from another resource does not end a test', function()

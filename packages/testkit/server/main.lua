@@ -310,7 +310,7 @@ end
 
 AddEventHandler('aeterna_core:runProgress', function(runId, row)
     local inv = GetInvokingResource()
-    if (inv and inv ~= 'aeterna_core') or not current or type(row) ~= 'table' or type(runId) ~= 'string' then return end
+    if inv ~= 'aeterna_core' or not current or type(row) ~= 'table' or type(runId) ~= 'string' then return end
     if current.id == nil then current.id = runId end
     if runId ~= current.id then return end
     local r = {
@@ -331,7 +331,7 @@ end)
 
 AddEventHandler('aeterna_core:runDone', function(runId, summary)
     local inv = GetInvokingResource()
-    if inv and inv ~= 'aeterna_core' then return end
+    if inv ~= 'aeterna_core' then return end
     if current and current.id ~= nil and current.id == runId then finish(summary) end
     throttle:final(GetGameTimer())
     refreshAll()
