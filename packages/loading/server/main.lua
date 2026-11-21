@@ -31,7 +31,9 @@ local function registerSelftests()
 end
 
 if GetResourceState('aeterna_core') == 'started' then registerSelftests() end
-AddEventHandler('aeterna_core:hello', registerSelftests)
+AddEventHandler('aeterna_core:hello', function()
+    if GetInvokingResource() == 'aeterna_core' then registerSelftests() end
+end)
 
 AddEventHandler('aeterna_core:selftest', function(runId, name)
     if GetInvokingResource() ~= 'aeterna_core' or not LoadingSelftest.owns(RESOURCE, name) then return end
