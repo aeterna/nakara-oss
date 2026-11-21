@@ -8,8 +8,9 @@ Server-owned UI panels, client prompts (`confirm`, `input`, `progress`, `skillCh
 
 ## What it does / การทำงาน
 
-- **Server-owned panels (แผงข้อมูลฝั่งเซิร์ฟเวอร์):** The server sends a validated spec (`sm` / `md` / `lg`, up to 40 blocks: `text`, `list`, `field`, `toggle`, `select`, `progress`, `divider`, `buttons`). The client renders it in the Asphalt theme and returns only button/list actions and validated field values from that spec via the server-local event `aeterna_uikit:action`.
-- **Client prompts (หน้าต่างโต้ตอบฝั่งผู้เล่น):** `confirm`, `input`, `progress`, `skillCheck`, and `keyHints` / `clearKeyHints`. Focus is acquired and released through `aeterna_core`; losing focus automatically cancels the active panel or prompt.
+- **Server-owned panels (แผงข้อมูลฝั่งเซิร์ฟเวอร์):** The server sends a validated spec (`sm` / `md` / `lg`, up to 40 blocks: `text`, `list`, `field`, `toggle`, `select`, `progress`, `divider`, `buttons`, and since 0.2 `tabs`, `slider`, `table`, `empty`). The client renders it in the active theme and returns only button/list actions and validated field values from that spec via the server-local event `aeterna_uikit:action`.
+- **0.2 blocks (บล็อกใหม่ใน 0.2):** `tabs` (2–6 tabs, one per spec; any block may carry `tab = '<tab id>'`; with `report = true` a switch fires an action with the tab id), `slider` (`min`, `max`, `step`, `value`, `unit?`; arrows one step, Page Up / Page Down ten steps, Home / End), `table` (≤ 6 columns, ≤ 50 rows, `selectable = true` turns row ids into actions), `empty` (icon, label, body, one optional action button). `list` accepts `search = true | { placeholder }` (up to 200 items with search, 50 without) and `list`/`table` accept `empty = { icon?, label, body? }`. Top-level `detailOf` / `detailItem` mark a screen as the detail of a list item; uikit's own window ignores them. Panels and prompts fade in and out, with no movement under reduced motion; text sizes follow the theme type tokens.
+- **Client prompts (หน้าต่างโต้ตอบฝั่งผู้เล่น):** `confirm`, `input`, `progress`, `skillCheck`, and `keyHints` / `clearKeyHints`. Focus is acquired and released through `aeterna_core`; losing focus automatically cancels the active panel or prompt. Since 0.2, a focus overlay from another resource only pauses them: the panel or prompt stays on screen and ignores input until the overlay releases (a progress bar keeps running, a skill check's marker stops).
 - **Shared menu (เมนูรวม):** Other resources register menu entries with optional ACE permission filters via `addMenuEntry`. Entries are automatically removed if the owning resource stops.
 - **Deliberate limits (ขอบเขตที่จำกัดไว้):** No drag-and-drop layout editor (handled by `aeterna_layout`), no toast notifications (`aeterna_notify`), and no world markers or 3D text.
 
@@ -39,7 +40,7 @@ Shared convars read via `aeterna_core`: `aeterna_locale` (`en` or `th`, set with
 | Export | Returns | Description |
 |---|---|---|
 | `exports.aeterna_uikit:open(src, spec)` | `panelId` or `nil, err` | Validates `spec` and opens a panel for player `src` (replacing any open panel with reason `replaced`). |
-| `exports.aeterna_uikit:update(src, panelId, patch)` | `boolean` | Updates `label`, `value`, `items`, or `disabled` on blocks of an open panel. |
+| `exports.aeterna_uikit:update(src, panelId, patch)` | `boolean` | Updates `label`, `value`, `items`, or `disabled` on blocks of an open panel; since 0.2 also `rows` (table), `value` of `tabs` and `slider` (refused out of range or off the step grid), and `empty` (list, table). |
 | `exports.aeterna_uikit:close(src, panelId?)` | `boolean` | Closes the open panel for `src`. |
 | `exports.aeterna_uikit:isOpen(src)` | `panelId` or `nil` | Returns the currently open `panelId` for `src`. |
 | `exports.aeterna_uikit:addMenuEntry(entry)` | `boolean` | Registers `{ id, label, icon?, order?, group?, ace? }` for the calling resource. |
