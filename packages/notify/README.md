@@ -16,8 +16,8 @@ Toast notifications (with action buttons), server-wide announcement and countdow
 - **Merging and lifetime bar (รวม Toast ซ้ำ และแถบเวลา, 0.2):** Identical toasts (same owner, `type`, `title`, `description`) show as one toast with `×n` (`×99+` above 99) that keeps its place and restarts its timer. A 2 px bar shows the time left and is not drawn under reduced motion.
 - **Sound (เสียง, 0.2):** Off unless the server owner sets `Config.sound.enabled = true`; then each player toggles it with `aeterna_notify_sound` (stored in client KVP `aeterna_notify:settings:v1`). Announcements and the MOTD make no sound. No sound files ship; base-game frontend sounds are used.
 - **Countdown announcements (ประกาศนับถอยหลัง, 0.2):** `announceCountdown` or `aeterna_announce_countdown` shows a `mm:ss` banner that comes back at each mark in `Config.countdown.marks` and fires `aeterna_notify:countdownEnd` at zero. What happens at zero (a restart, a kick) is your own resource's job.
-- **History (ประวัติการแจ้งเตือน, 0.2):** The client export `history(limit?)` returns recent toasts and banners (memory only, empty after a reconnect), and `aeterna_notify:added` fires for each new or updated entry, so a phone app can read it. notify never calls the reader.
-- **Deliberate limits (ขอบเขตที่จำกัดไว้):** No phone notifications of its own (`aeterna_phonekit` pulls the history), no Discord relays, and no scheduled announcements other than the countdown.
+- **History (ประวัติการแจ้งเตือน, 0.2):** The client export `history(limit?)` returns recent toasts and banners (memory only, empty after a reconnect), and `aeterna_notify:added` fires for each new or updated entry, so other resources can read the history. notify never calls the reader.
+- **Deliberate limits (ขอบเขตที่จำกัดไว้):** No phone notifications of its own (other resources can read the history), no Discord relays, and no scheduled announcements other than the countdown.
 
 ## Install / การติดตั้ง
 
@@ -82,10 +82,10 @@ Shared convars read via `aeterna_core`: `aeterna_locale` (`en` or `th`, set with
 | `exports.aeterna_notify:notify(opts)` | `toastId` or `false, err` | Shows a toast (`{ id?, title, description?, type = 'info'\|'success'\|'warning'\|'error', duration?, icon?, actions?, sound?, history?, merge? }`). |
 | `exports.aeterna_notify:clear(id?)` | `boolean` | Removes one toast by `id`, or clears all toasts when `id` is omitted. |
 | `exports.aeterna_notify:showMotd()` | `boolean` | Shows the MOTD card if enabled, valid, and not already dismissed for the current `version`. |
-| `exports.aeterna_notify:history(limit?)` | `table` | Newest entries first, at most `limit` (`1–50`, default `50`): `{ id, owner, kind = 'toast'\|'announce'\|'countdown', type, title, description, icon, count, at }`. `at` is in seconds. Actions are never kept. |
+| `exports.aeterna_notify:history(limit?)` | `table` | Newest entries first, at most `limit` (`1–50`, default `50`): `{ id, owner, kind = 'toast'\|'announce'\|'countdown', type, title, description, icon, count, at }`. `id` is the toast's own `id` when given, otherwise `c:<toastId>` for a client-made toast and `s:<toastId>` for a server-made one. `at` is in seconds. Actions are never kept. |
 | `exports.aeterna_notify:clearHistory()` | `nil` | Empties the history. |
 
-0.2 toast fields: `actions` = 1–2 `{ id, label, variant? }` (`id` ≤ 32 matching `^[%w_%-]+$` and unique, `label` ≤ 20, `variant` `primary` or `secondary`, default `secondary`; a third entry, a bad id or an over-long label drops all actions with one `warn`); `sound`, `history`, `merge` are booleans, default `true`. `toastId` is the toast's `id` when given, otherwise `t` + a base-36 counter.
+0.2 toast fields: `actions` = 1–2 `{ id, label, variant? }` (`id` ≤ 32 matching `^[%w_%-]+$` and unique, `label` ≤ 20, `variant` `primary` or `secondary`, default `secondary`; a third entry, a bad id or an over-long label drops all actions with one `warn`); `sound`, `history`, `merge` are booleans, default `true`. `toastId` is the toast's `id` when given, otherwise `t` + a base-36 counter. A toast with `actions` and an `id` longer than 24 characters is refused with `id: maxLen 24 with actions` (a press carries at most 24).
 
 ```lua
 local toastId = exports.aeterna_notify:notify({
@@ -105,14 +105,14 @@ end)
 | `exports.aeterna_notify:notify(src, opts)` | `true, nil, clean` or `false, err` | Sends a toast to one player `src` (`src = -1` is refused; use `announce`). `clean.toastId` holds the toast's id (0.2). |
 | `exports.aeterna_notify:announce(opts)` | `boolean` | Broadcasts or queues a server-wide banner (`{ title, body?, duration = 8000, by? }`). |
 | `exports.aeterna_notify:announceCountdown(opts)` | `countdownId` or `nil, err` | `{ title, body?, seconds, by?, marks? }`: `title` ≤ 80, `body` ≤ 200, `by` ≤ 32, `seconds` `10–3600`, `marks` up to 8 whole seconds below `seconds` (default `Config.countdown.marks`). One at a time: a second returns `nil, 'busy'`. |
-| `exports.aeterna_notify:cancelCountdown(countdownId)` | `boolean` | Hides it for everyone and fires `aeterna_notify:countdownEnd` with `cancelled = true`. |
+| `exports.aeterna_notify:cancelCountdown(countdownId)` | `boolean` | Hides it for everyone and fires `aeterna_notify:countdownEnd` with `cancelled = true`. Only the resource that started the countdown may cancel it (a countdown from `aeterna_announce_countdown` belongs to notify). When that resource stops, or notify stops, the countdown ends the same way. |
 
 ### Events
 
 | Event | Side | Payload |
 |---|---|---|
 | `aeterna_notify:action` | client-local | `({ owner, toastId, action })` for a toast made by the client export; `owner` is the resource that called it, so filter on `owner == GetCurrentResourceName()` |
-| `aeterna_notify:action` | server-local | `(src, { owner, toastId, action })` for a toast made by the server export. The server checks the toast was sent to that player, the action is one of its ids, and the press came within `duration` + 2000 ms; each toast answers once, and at most 8 open action toasts are kept per player |
+| `aeterna_notify:action` | server-local | `(src, { owner, toastId, action })` for a toast made by the server export. The server checks the toast was sent to that player, the action is one of its ids, and the press came within `duration` + 2000 ms; each toast answers once. Open action toasts are kept per owner resource + `toastId`, at most 8 per player per owner, so one resource never replaces another's; resending the same `id` without actions drops that owner's record |
 | `aeterna_notify:countdownEnd` | server-local | `({ countdownId, cancelled })` |
 | `aeterna_notify:added` | client-local | a history entry, for every new or updated entry |
 
