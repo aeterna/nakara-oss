@@ -60,6 +60,18 @@
       "plan": "KIT02",
       "acquired": "2026-11-21T13:19:26Z",
       "expires": "2026-11-21T17:19:26Z"
+    },
+    {
+      "id": "kit02-w1-loading-41237226",
+      "repo": "nakara-oss",
+      "lane": "kit02-w1-loading",
+      "host": "mac",
+      "scope": [
+        "packages/loading/**"
+      ],
+      "plan": "KIT02",
+      "acquired": "2026-11-21T13:19:29Z",
+      "expires": "2026-11-21T17:19:29Z"
     }
   ]
 }
