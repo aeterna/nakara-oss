@@ -137,6 +137,13 @@ describe('aeterna_loading self-tests', function()
             assert.are.equal(8, #adds())
         end)
 
+        it('ignores a hello that aeterna_core did not fire', function()
+            boot('stopped', defaults())
+            natives.stub('GetInvokingResource', function() return 'someone_else' end)
+            natives.fire('aeterna_core:hello')
+            assert.are.equal(0, #adds())
+        end)
+
         it('reports config_valid and local_paths_only through aeterna_core:selftest:report with owner', function()
             boot('started', defaults())
             natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_loading.config_valid', { kind = 'headless' })
