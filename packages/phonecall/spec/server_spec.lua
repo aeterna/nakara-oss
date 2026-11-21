@@ -7,7 +7,7 @@ local resource = require('helpers.resource')
 local HERE = debug.getinfo(1, 'S').source:match('^@(.*)/[^/]*$') or '.'
 local DIR = HERE .. '/..'
 
--- opts = { qbx = true, createResult = n, ringError = 'busy', mayWrite = boolean }
+-- opts = { qbx = true, createResult = n, ringError = 'busy', mayWrite = boolean, noLicense = { [src] = true } }
 local function boot(gamename, pmaStarted, opts)
     local o = opts or {}
     natives.reset({
@@ -23,7 +23,10 @@ local function boot(gamename, pmaStarted, opts)
         if name == 'aeterna_phonekit' or name == 'aeterna_core' then return 'started' end
         return 'missing'
     end)
-    natives.stub('GetPlayerIdentifierByType', function(src) return 'license:' .. tostring(src) end)
+    natives.stub('GetPlayerIdentifierByType', function(src)
+        if o.noLicense and o.noLicense[src] then return nil end
+        return 'license:' .. tostring(src)
+    end)
     natives.stub('IsPlayerAceAllowed', function() return false end)
     local commands = {}
     natives.stub('RegisterCommand', function(name, fn) commands[name] = fn end)
@@ -362,6 +365,8 @@ describe('aeterna_phonecall server', function()
 
         it('call_busy and call_ab write no call log; selftestEnd clears the test before its delayed start', function()
             local w = boot('gta5enhanced')
+            openApp(1, 'phone') -- call tests use the numbers the players already have
+            openApp(2, 'phone')
             local ctx = { kind = 'ped', side = 'client', a = 1, b = 2, destructive = false }
             natives.fire('aeterna_core:selftestStarted', 'r1', 'aeterna_phonecall.call_busy', ctx)
             natives.advance(600)
@@ -382,6 +387,57 @@ describe('aeterna_phonecall server', function()
             natives.fire('aeterna_core:selftestEnd', 'r2', 'aeterna_phonecall.call_ab')
             natives.advance(600)
             assert.are.equal(rings, #w.kit.rings)
+        end)
+
+        it('call tests write no number: without one, both players get the set-up failure', function()
+            local w = boot('gta5enhanced')
+            local ctx = { kind = 'eye', side = 'client', a = 1, b = 2, destructive = false }
+            natives.fire('aeterna_core:selftestStarted', 'r1', 'aeterna_phonecall.call_ab', ctx)
+            natives.advance(600)
+            assert.is_nil(natives.get_kvp('aeterna_phonecall:number:v1:' .. LIC1))
+            assert.is_nil(natives.get_kvp('aeterna_phonecall:number:v1:' .. LIC2))
+            assert.are.equal('st-nonumber', stateTo(1).callId)
+            assert.are.equal('st-nonumber', stateTo(2).callId)
+            assert.are.equal(0, #w.kit.rings)
+        end)
+
+        it('a player with no session gets the set-up failure instead of a silent timeout', function()
+            boot('gta5enhanced', false, { noLicense = { [2] = true }, mayWrite = true })
+            local ctx = { kind = 'eye', side = 'client', a = 1, b = 2, destructive = true }
+            natives.fire('aeterna_core:selftestStarted', 'r1', 'aeterna_phonecall.sms_ab', ctx)
+            natives.advance(600)
+            assert.are.equal('st-nosession', stateTo(1).callId)
+            assert.is_nil(natives.get_kvp('aeterna_phonecall:number:v1:' .. LIC1))
+        end)
+
+        it('sms_ab assigns numbers only after mayWrite', function()
+            boot('gta5enhanced', false, { mayWrite = false })
+            natives.fire('aeterna_core:selftestStarted', 'r1', 'aeterna_phonecall.sms_ab',
+                { kind = 'eye', side = 'client', a = 1, b = 2, destructive = true })
+            natives.advance(600)
+            assert.is_nil(natives.get_kvp('aeterna_phonecall:number:v1:' .. LIC1))
+            assert.is_nil(natives.get_kvp('aeterna_phonecall:number:v1:' .. LIC2))
+        end)
+
+        it('the next dial puts the dialer label back after a refusal', function()
+            local w = boot('gta5enhanced')
+            openApp(2, 'phone')
+            local numB = w.res.exports.getNumber(2)
+            openApp(1, 'phone')
+            local _, homeId = lastSpec(w.kit, 1, 'phone')
+            act(1, homeId, 'call', { number = '5559999' })
+            assert.are.equal('Number not available', w.kit.updates[#w.kit.updates].patch.blocks.number.label)
+            natives.advance(3100)
+            act(1, homeId, 'call', { number = numB })
+            local restored = false
+            for _, u in ipairs(w.kit.updates) do
+                local b = u.screenId == homeId and u.patch.blocks and u.patch.blocks.number
+                if b and b.label == 'Number' then restored = true end
+            end
+            assert.is_true(restored)
+            -- a fresh dialer is drawn with the plain label
+            openApp(1, 'phone')
+            assert.are.equal('Number', blockById(lastSpec(w.kit, 1, 'phone'), 'number').label)
         end)
 
         it('no longer accepts a selftest net event from clients', function()

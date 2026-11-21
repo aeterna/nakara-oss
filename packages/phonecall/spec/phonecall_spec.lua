@@ -867,6 +867,21 @@ describe('aeterna_phonecall', function()
             assert.are.equal('skip', T.callOutcome('call_busy', 'A', { state = 'ended', reason = 'voice_off' }))
         end)
 
+        it('a set-up failure the server sends as a call state becomes a visible fail detail', function()
+            assert.are.equal('open the phone once first', T.setupFailure('st-nonumber'))
+            assert.are.equal('a player has no character loaded', T.setupFailure('st-nosession'))
+            assert.is_nil(T.setupFailure('c1'))
+            assert.is_nil(T.setupFailure(nil))
+            local st = { callId = 'st-nonumber', state = 'ended', reason = 'unavailable' }
+            local s1, d1 = T.callOutcome('call_ab', 'B', st)
+            assert.are.equal('fail', s1)
+            assert.are.equal('open the phone once first', d1)
+            local s2, d2 = T.callOutcome('call_busy', 'B', { callId = 'st-nosession', state = 'ended',
+                reason = 'unavailable' })
+            assert.are.equal('fail', s2)
+            assert.are.equal('a player has no character loaded', d2)
+        end)
+
         it('tracks two-player tests from selftestStarted until selftestEnd', function()
             local tr = T.createTracker()
             local ctx = { kind = 'eye', side = 'client', a = 1, b = 2, destructive = true }
