@@ -339,7 +339,7 @@ export const Tickets: React.FC<TicketsProps> = ({ guildId, locale }) => {
             {loading && ticketsList.length === 0 ? (
               <div className="empty-state">{t('loading', locale)}</div>
             ) : ticketsList.length === 0 ? (
-              <div className="empty-state">{t('noMessages', locale)}</div>
+              <div className="empty-state">{t('noTickets', locale)}</div>
             ) : (
               <div>
                 <table className="table">

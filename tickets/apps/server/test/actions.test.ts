@@ -142,6 +142,58 @@ describe('actions API acceptance tests (g2)', () => {
     expect(body4.params).toEqual({ item: 'water', count: 1 });
   });
 
+  it('repeat-confirm: failed earlier give_item → no repeat_confirm; done one → repeat_confirm', async () => {
+    const app = createTestApp();
+
+    const postAction = async (payload: any) => {
+      return app.inject({
+        method: 'POST',
+        url: `/api/v1/guilds/${guildId}/tickets/${ticketId}/actions`,
+        headers: { 'content-type': 'application/json' },
+        payload,
+      });
+    };
+
+    // 1. Earlier give_item that failed
+    await db.insert(schema.gameActions).values({
+      guild_id: guildId,
+      ticket_id: ticketId,
+      server_id: serverId,
+      action: 'player.give_item',
+      params: { item: 'medkit', count: 1 },
+      status: 'failed',
+      requested_by: 'staff-1',
+      expires_at: new Date(Date.now() + 60 * 1000),
+    });
+
+    // Failed earlier give_item must not trigger repeat_confirm -> 202
+    const resFailed = await postAction({
+      action: 'player.give_item',
+      params: { item: 'medkit', count: 1 },
+    });
+    expect(resFailed.statusCode).toBe(202);
+
+    // 2. Earlier give_item that completed (done)
+    await db.insert(schema.gameActions).values({
+      guild_id: guildId,
+      ticket_id: ticketId,
+      server_id: serverId,
+      action: 'player.give_item',
+      params: { item: 'armor', count: 1 },
+      status: 'done',
+      requested_by: 'staff-1',
+      expires_at: new Date(Date.now() + 60 * 1000),
+    });
+
+    // Done earlier give_item triggers repeat_confirm -> 409
+    const resDone = await postAction({
+      action: 'player.give_item',
+      params: { item: 'armor', count: 1 },
+    });
+    expect(resDone.statusCode).toBe(409);
+    expect(resDone.json().code).toBe('repeat_confirm');
+  });
+
   it('item 17: player.give_item count must be an integer from 1 to 1000', async () => {
     const app = createTestApp();
 

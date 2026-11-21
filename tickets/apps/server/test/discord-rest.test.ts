@@ -162,4 +162,33 @@ describe('discord-rest (w2)', () => {
     });
     expect(ch).toEqual({ id: 'ch-or-msg-1', guild_id: 'guild-1', type: 0 });
   });
+
+  it('supports listGuildChannels and listGuildRoles', async () => {
+    const calls: Array<{ url: string; method: string }> = [];
+    const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      calls.push({ url, method: init?.method ?? 'GET' });
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => [{ id: 'item-1' }],
+      };
+    });
+
+    const rest = createDiscordRest({ token, fetchImpl: mockFetch as any });
+
+    const channels = await rest.listGuildChannels('guild-123');
+    expect(calls[0]).toEqual({
+      url: 'https://discord.com/api/v10/guilds/guild-123/channels',
+      method: 'GET',
+    });
+    expect(channels).toEqual([{ id: 'item-1' }]);
+
+    const roles = await rest.listGuildRoles('guild-123');
+    expect(calls[1]).toEqual({
+      url: 'https://discord.com/api/v10/guilds/guild-123/roles',
+      method: 'GET',
+    });
+    expect(roles).toEqual([{ id: 'item-1' }]);
+  });
 });

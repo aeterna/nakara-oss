@@ -1,0 +1,5 @@
+# tickets W3b L4 — panel designer defaults follow the dashboard language
+Repo nakara-oss, project `tickets/` (own npm project: Fastify server `apps/server`, React SPA `apps/web`, packages `db` `discord` `core`; vitest). Write the failing test first, then the fix. Use your file editing tools only; do not run shell commands (build/test run after you). Edit only files in the scope. No real secrets in code or tests. User-visible web text goes in the i18n files with both Thai and English. Keep the change to this task.
+
+In `apps/web/src/pages/Panels.tsx` a new panel starts with English default title, description and button labels even when the dashboard language is Thai. Defaults for a NEW panel must come from the current locale (Thai text when locale is `th`, English when `en`), via `apps/web/src/i18n/panels.ts`. Saved panels are never changed. Changing the dashboard language while creating a new, untouched panel may switch the defaults; never overwrite text the user typed.
+Tests: `apps/web/test/panels.test.tsx` — new panel in `th` shows Thai defaults, in `en` English; editing an existing panel keeps its saved text.

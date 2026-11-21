@@ -13,6 +13,22 @@ export interface TicketActionsProps {
   locale: Locale;
 }
 
+function formatActionValue(val: unknown): string {
+  if (typeof val === 'number') {
+    return Number.isInteger(val) ? String(val) : val.toFixed(2);
+  }
+  if (typeof val === 'string' || typeof val === 'boolean') {
+    return String(val);
+  }
+  if (val === null || val === undefined) {
+    return '';
+  }
+  if (typeof val === 'object') {
+    return JSON.stringify(val);
+  }
+  return String(val);
+}
+
 export const TicketActions: React.FC<TicketActionsProps> = ({ guildId, ticketId, locale }) => {
   const [actions, setActions] = useState<GameAction[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -251,22 +267,43 @@ export const TicketActions: React.FC<TicketActionsProps> = ({ guildId, ticketId,
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
-                  alignItems: 'center',
+                  alignItems: 'flex-start',
                   padding: '0.5rem 0',
                   borderBottom: '1px solid rgba(255,255,255,0.1)',
                 }}
               >
                 <div>
-                  <strong>{act.action}</strong>
-                  {act.params && Object.keys(act.params).length > 0 && (
-                    <span style={{ marginLeft: '0.5rem', opacity: 0.8 }}>
-                      ({JSON.stringify(act.params)})
-                    </span>
-                  )}
-                  {act.result && (
-                    <span style={{ marginLeft: '0.5rem', opacity: 0.8 }}>
-                      {act.result.ok ? '✅' : '❌'} [{act.result.code}]
-                    </span>
+                  <div>
+                    <strong>{act.action}</strong>
+                    {act.params && Object.keys(act.params).length > 0 && (
+                      <span style={{ marginLeft: '0.5rem', opacity: 0.8 }}>
+                        ({JSON.stringify(act.params)})
+                      </span>
+                    )}
+                    {act.result && (
+                      <span style={{ marginLeft: '0.5rem', opacity: 0.8 }}>
+                        {act.result.ok ? '✅' : '❌'} [{act.result.code}]
+                      </span>
+                    )}
+                  </div>
+                  {act.status === 'done' && act.result?.data && Object.keys(act.result.data).length > 0 && (
+                    <div
+                      className="action-result-data"
+                      style={{
+                        marginTop: '0.5rem',
+                        fontSize: '0.85rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.25rem',
+                      }}
+                    >
+                      {Object.entries(act.result.data).map(([key, val]) => (
+                        <div key={key}>
+                          <span style={{ opacity: 0.7, marginRight: '0.5rem' }}>{key}:</span>
+                          <span>{formatActionValue(val)}</span>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
                 <div>

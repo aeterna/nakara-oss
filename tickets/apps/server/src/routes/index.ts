@@ -6,6 +6,7 @@ import blocks from './blocks.js';
 import bridge from './bridge.js';
 import categories from './categories.js';
 import data from './data.js';
+import discordLookup from './discord-lookup.js';
 import gameServers from './game-servers.js';
 import me from './me.js';
 import panels from './panels.js';
@@ -18,7 +19,7 @@ import tickets from './tickets.js';
 export default async function (app: FastifyInstance) {
   for (const plugin of [
     actions, audit, auth, blocks, bridge, categories, data,
-    gameServers, me, panels, settings, stats, system, tags, tickets,
+    discordLookup, gameServers, me, panels, settings, stats, system, tags, tickets,
   ]) {
     app.register(plugin);
   }

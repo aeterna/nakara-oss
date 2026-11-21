@@ -1,0 +1,8 @@
+# tickets W3b L3 — game servers refresh, tickets empty state, info result
+Repo nakara-oss, project `tickets/` (own npm project: Fastify server `apps/server`, React SPA `apps/web`, packages `db` `discord` `core`; vitest). Write the failing test first, then the fix. Use your file editing tools only; do not run shell commands (build/test run after you). Edit only files in the scope. No real secrets in code or tests. User-visible web text goes in the i18n files with both Thai and English. Keep the change to this task.
+
+Found in the live test (2026-11-20):
+1. `apps/web/src/pages/GameServers.tsx`: after `nakara_tickets pair <code>` succeeds on the game server, the list does not show the new server until a manual reload. While a pair code is shown, refresh the list every 5 s; stop when the code expires, when a new server appears (then hide the code banner), or on unmount.
+2. `apps/web/src/pages/Tickets.tsx`: an empty ticket list shows "ยังไม่มีข้อความ" (no messages). It must say no tickets (Thai "ยังไม่มีทิกเก็ต", English "No tickets yet") with its own i18n key; the message-thread empty state keeps "ยังไม่มีข้อความ".
+3. `apps/web/src/components/TicketActions.tsx`: the result data of a finished `player.info` action is never shown. When an action is done and its result has data, show it as a readable key/value list (name, identifiers, coords, health etc. — whatever fields arrive; numbers rounded to 2 decimals; unknown nested values as compact JSON). Use `textContent`-safe React rendering only.
+Tests: `apps/web/test/servers.test.tsx` (fake timers: list refreshes during pairing and stops after), `apps/web/test/tickets.test.tsx` (empty list text), `apps/web/test/actions.test.tsx` (info result rendered).

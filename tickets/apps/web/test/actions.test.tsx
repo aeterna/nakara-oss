@@ -116,4 +116,57 @@ describe('TicketActions component acceptance tests (g4)', () => {
     expect(secondBody.params).toEqual({ item: 'bandage', count: 3 });
     expect(secondBody.confirmRepeat).toBe(true);
   });
+
+  it('renders readable key/value list for finished player.info action with result data', async () => {
+    const doneAction = {
+      id: 'action-done-1',
+      ticketId,
+      serverId: 'server-1',
+      action: 'player.info',
+      status: 'done' as const,
+      requestedBy: 'staff-1',
+      result: {
+        ok: true,
+        code: 'ok',
+        data: {
+          name: 'PlayerOne',
+          health: 100,
+          ping: 25.456,
+          coords: { x: 100.25, y: -200.5, z: 30 },
+          identifiers: ['license:abc', 'discord:123'],
+        },
+      },
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date().toISOString(),
+    };
+
+    globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (url.includes(`/api/v1/guilds/${guildId}/tickets/${ticketId}/actions`)) {
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => [doneAction],
+        };
+      }
+      return { ok: false, status: 404 };
+    }) as any;
+
+    render(<TicketActions guildId={guildId} ticketId={ticketId} locale="en" />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/player\.info/)).toBeDefined();
+    });
+
+    expect(screen.getByText(/name:/i)).toBeDefined();
+    expect(screen.getByText('PlayerOne')).toBeDefined();
+    expect(screen.getByText(/health:/i)).toBeDefined();
+    expect(screen.getByText('100')).toBeDefined();
+    expect(screen.getByText(/ping:/i)).toBeDefined();
+    expect(screen.getByText('25.46')).toBeDefined();
+    expect(screen.getByText(/coords:/i)).toBeDefined();
+    expect(screen.getByText('{"x":100.25,"y":-200.5,"z":30}')).toBeDefined();
+    expect(screen.getByText(/identifiers:/i)).toBeDefined();
+    expect(screen.getByText('["license:abc","discord:123"]')).toBeDefined();
+  });
 });
