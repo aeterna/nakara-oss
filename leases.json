@@ -2,18 +2,6 @@
   "version": 1,
   "leases": [
     {
-      "id": "kit02-w1-phonekit-ad19872a",
-      "repo": "nakara-oss",
-      "lane": "kit02-w1-phonekit",
-      "host": "mac",
-      "scope": [
-        "packages/phonekit/**"
-      ],
-      "plan": "KIT02",
-      "acquired": "2026-11-21T13:21:17Z",
-      "expires": "2026-11-21T17:21:17Z"
-    },
-    {
       "id": "rongroi-a0-8843707d",
       "repo": "nakara-oss",
       "lane": "rongroi-a0",
