@@ -1,17 +1,28 @@
 -- aeterna_loading client: tells its own loadscreen page when the Character stage starts, and closes the page
 -- on playerSpawned or after shutdown.fallbackSeconds, unless something else (a framework) already closed it.
+-- With loadscreen_manual_shutdown nothing else is guaranteed to close the page, so every failure below
+-- (missing logic, unreadable config, a session that never starts) still ends in a close.
 
 local RESOURCE = GetCurrentResourceName()
+local DEFAULT_FALLBACK_SECONDS = 30 -- the spec's default for shutdown.fallbackSeconds
+local resourceStartedAt = GetGameTimer()
 
-local function readConfig()
+local function readFallbackSeconds()
     local raw = LoadResourceFile(RESOURCE, 'html/config.json')
-    if type(raw) ~= 'string' then return nil end
-    local ok, decoded = pcall(json.decode, raw)
-    if ok then return decoded end
-    return nil
+    local decoded = nil
+    if type(raw) == 'string' then
+        local ok, value = pcall(json.decode, raw)
+        if ok then decoded = value end
+    end
+    local cfg = LoadingLogic.validateConfig(decoded)
+    return cfg.shutdown.fallbackSeconds
 end
 
-local cfg = LoadingLogic.validateConfig(readConfig())
+local okConfig, fallbackSeconds = pcall(readFallbackSeconds)
+if not okConfig or type(fallbackSeconds) ~= 'number' then
+    fallbackSeconds = DEFAULT_FALLBACK_SECONDS
+end
+
 local spawned = false
 
 AddEventHandler('playerSpawned', function()
@@ -22,9 +33,18 @@ local function send(msg)
     SendLoadingScreenMessage(json.encode(msg))
 end
 
+-- Hard cap from resource start while the session has not started; from the session start after it did.
+local function closeDue(sessionStartedAt, now)
+    local ok, due = pcall(function()
+        return LoadingLogic.closeDue(resourceStartedAt, sessionStartedAt, now, fallbackSeconds)
+    end)
+    if ok then return due end
+    return now - (sessionStartedAt or resourceStartedAt) >= fallbackSeconds * 1000
+end
+
 local function closePage()
     if not GetIsLoadingScreenActive() then return end
-    send({ type = 'aeterna_loading:closing' })
+    pcall(send, { type = 'aeterna_loading:closing' })
     Wait(1000) -- the page fades its audio out over 1 s
     if GetIsLoadingScreenActive() then
         ShutdownLoadingScreen()
@@ -33,14 +53,16 @@ local function closePage()
 end
 
 CreateThread(function()
-    while not NetworkIsSessionStarted() do
-        Wait(250)
-    end
-    send({ type = 'aeterna_loading:stage', stage = 'character' })
-
-    local startedAt = GetGameTimer()
-    while not spawned and not LoadingLogic.fallbackDue(startedAt, GetGameTimer(), cfg.shutdown.fallbackSeconds) do
-        Wait(250)
-    end
+    local sessionStartedAt = nil
+    pcall(function()
+        while not spawned do
+            if sessionStartedAt == nil and NetworkIsSessionStarted() then
+                sessionStartedAt = GetGameTimer()
+                send({ type = 'aeterna_loading:stage', stage = 'character' })
+            end
+            if closeDue(sessionStartedAt, GetGameTimer()) then return end
+            Wait(250)
+        end
+    end)
     closePage()
 end)

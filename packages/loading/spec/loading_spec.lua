@@ -373,7 +373,7 @@ describe('aeterna_loading', function()
             start_client()
             natives.advance(20000)
             sessionStarted = true
-            natives.advance(48000) -- 20 s + 28 s: not yet
+            natives.advance(28000) -- session at 20 s, now 48 s: not yet
             assert.are.equal(0, #nuiShutdowns)
             natives.advance(4000)
             assert.is_true(closed())

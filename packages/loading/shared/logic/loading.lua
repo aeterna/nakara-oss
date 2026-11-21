@@ -59,6 +59,7 @@ local function optionalPath(exts)
     return function(v) return v == '' or L.isLocalPath(v, exts) end
 end
 
+-- A list. Lua JSON decoders cannot tell {} from [], so an empty object counts as an empty list (same in logic.js).
 local function tipsOk(v)
     if type(v) ~= 'table' then return false end
     local n = 0
@@ -265,6 +266,14 @@ end
 function L.fallbackDue(sessionStartedAt, now, fallbackSeconds)
     if sessionStartedAt == nil then return false end
     return now - sessionStartedAt >= fallbackSeconds * 1000
+end
+
+--- True when the client script should close the page: `fallbackSeconds` after the session started, or, while
+--- the session has not started, `fallbackSeconds` after the resource started (hard cap, so a session that never
+--- starts cannot leave the player on a manually shut-down loading screen).
+function L.closeDue(resourceStartedAt, sessionStartedAt, now, fallbackSeconds)
+    if sessionStartedAt ~= nil then return L.fallbackDue(sessionStartedAt, now, fallbackSeconds) end
+    return L.fallbackDue(resourceStartedAt, now, fallbackSeconds)
 end
 
 return L

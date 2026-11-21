@@ -45,7 +45,9 @@
 
   const optionalPath = (exts) => (v) => v === '' || isLocalPath(v, exts);
   const rangeOk = (lo, hi) => (v) => isNumber(v) && v >= lo && v <= hi;
-  const tipsOk = (v) => Array.isArray(v) && v.length <= 30 && v.every((tip) => textOk(tip, 1, 160));
+  // A list. Lua JSON decoders cannot tell {} from [], so an empty object counts as an empty list (same in loading.lua).
+  const isEmptyObject = (v) => isObject(v) && Object.keys(v).length === 0;
+  const tipsOk = (v) => isEmptyObject(v) || (Array.isArray(v) && v.length <= 30 && v.every((tip) => textOk(tip, 1, 160)));
 
   // Field name, path into the config, check. Order is the order of the spec's table.
   const FIELDS = [
@@ -78,7 +80,7 @@
       if (check(v)) {
         let target = config;
         for (const key of path.slice(0, -1)) target = target[key];
-        target[path[path.length - 1]] = Array.isArray(v) ? v.slice() : v;
+        target[path[path.length - 1]] = Array.isArray(v) ? v.slice() : isEmptyObject(v) ? [] : v;
       } else {
         errors.push({ field: name, reason: 'outside its limits' });
       }
