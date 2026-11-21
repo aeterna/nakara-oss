@@ -202,6 +202,13 @@ describe('aeterna_core server: runs, phases and results (0.2)', function()
         assert.is_nil(exports.aeterna_core:busy())
     end)
 
+    it('reports busy().since in whole seconds, not milliseconds', function()
+        exports.aeterna_core:addSelftest('slow', { timeout = 10000 })
+        exports.aeterna_core:startRun({ by = 0 })
+        natives.advance(4000)
+        assert.are.equal(4, exports.aeterna_core:busy().since)
+    end)
+
     it('accepts the 0.2 states and extras from reportSelftest, and refuses ready on the server', function()
         exports.aeterna_core:addSelftest('skipper')
         exports.aeterna_core:addSelftest('step')
