@@ -162,9 +162,11 @@ facts that shape the decisions below:
   from a literal prefix that matches a glob declared in `oss.json` (`photos/*`, needed by `aeterna_camera`).
 - Measured in the W0 spike on the kit-test server (Enhanced, 2026-11-21):
   - the `pma-voice` call export runs but carries no audio (decision 4);
-  - `screenshot-basic`'s server-requested capture and its upload to a resource's own HTTP handler never reach the
-    server; the client export `requestScreenshot` plus a latent server event works, so `aeterna_camera` uses that
-    with a server-issued single-use ticket (camera spec § Taking a photo);
+  - `screenshot-basic`'s server-requested capture builds a malformed URL on Enhanced, and an upload to a resource's
+    own HTTP handler is dropped: FXServer b177 closes any HTTP request with a body over about 8 KB before the
+    handler runs (it worked on b170). The client export `requestScreenshot` plus a latent server event works and uses
+    no HTTP request, so `aeterna_camera` uses that with a server-issued single-use ticket (camera spec § Taking a
+    photo);
   - `SaveResourceFile` and `LoadResourceFile` keep JPEG bytes intact;
   - a NUI page loads an image from the resource's HTTP handler over `http://` (not `https://`), once the scheme and
     trailing slash are removed from `GetCurrentServerEndpoint()`, which returned `https://127.0.0.1:30150/`;

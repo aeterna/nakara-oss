@@ -84,7 +84,8 @@ when started, else `lic:<license identifier>`, read on the server only.
 
 The server decides whether a photo may be taken and hands out a single-use ticket; the client captures its own
 screen and sends the image back with that ticket. This is the ticket model of the private phone the kit is based on,
-with a different transport (see "Why this transport" below).
+with a different transport, because the private phone's HTTP upload no longer works on current FXServer builds (see
+"Why this transport" below).
 
 1. The client checks its own cooldown and sends `aeterna_camera:sv:shoot { mode = 'back'|'selfie' }`.
 2. The server rate limits and checks that the player has the viewfinder open (it sent `cl:viewfinder` and has not
@@ -111,8 +112,8 @@ with a different transport (see "Why this transport" below).
 | Path | Result |
 | --- | --- |
 | Server export `requestClientScreenshot` | No answer, 4 of 4 tries: the client builds its upload URL as `http://` + `GetCurrentServerEndpoint()`, and on Enhanced that call returned `https://127.0.0.1:30150/`, so the URL is malformed |
-| Client export `requestScreenshotUpload` to this resource's own `SetHttpHandler` (the private phone's path), with the URL forms `https://<endpoint>`, `http://<host>` and `http://` + raw endpoint | No request reached the server in any form, 2 × 3 tries (10 s each) |
-| Client export `requestScreenshot` + `TriggerLatentServerEvent` | **Works**, 2 of 2: capture 78–106 ms, 118 619 and 320 959 characters, valid JPEG (88 945 and 240 702 bytes, 1920 × 1080) |
+| Client export `requestScreenshotUpload` to this resource's own `SetHttpHandler` (the private phone's path) | Fails on FXServer Enhanced **b177**: the server closes any HTTP request whose body is larger than about 8 KB with an empty reply, before the resource's handler runs (8 000-byte body answered, 16 000 bytes and more dropped; same result from inside the server's container, on two other b177 servers, and over the server's LAN address). A photo is 100–300 KB. The same path worked on b170. The CEF console showed `ERR_EMPTY_RESPONSE` over `http://` and `ERR_CERT_AUTHORITY_INVALID` over `https://` (the server's certificate is self-signed) |
+| Client export `requestScreenshot` + `TriggerLatentServerEvent` | **Works** and uses no HTTP request, 2 of 2: capture 78–106 ms, 118 619 and 320 959 characters, valid JPEG (88 945 and 240 702 bytes, 1920 × 1080) |
 | `SaveResourceFile` then `LoadResourceFile` of the JPEG | Byte-identical, both times. Writing into a folder that does not exist returns `false` |
 
 Not measured: whether the capture includes NUI frames (the overlay is hidden before every capture either way).
@@ -155,8 +156,11 @@ id.
 - The gallery takes focus through `aeterna_core` like the viewfinder. Under core's overlay mode it is paused, not
   closed: it stays on screen, ignores input, and resumes when focus returns (ADR 0005 decision 7).
 
-There is no server → client image transfer. (The spike's attempt to send a photo back over a latent client event
-stopped the spike server with exit 139; whether the event or the spike's own encoder caused it was not isolated.)
+There is no server → client image transfer.
+
+**HTTP handler rule (measured, b177):** `res.writeHead(status, {})` with an empty headers table stops the whole
+server (`msgpack::v1::type_error`, exit 139). Every `writeHead` in this package passes at least one header, 404
+included (`Content-Type: text/plain`). Busted case 2 checks it.
 
 ## Delete
 
@@ -283,7 +287,8 @@ busted (pure logic in `shared/logic/`):
 
 1. Base64 decode: known vectors, padding, invalid characters refused; JPEG start/end checks; size cap.
 2. Id and path guard: generated ids match `^[0-9a-f]{32}$`; the handler router answers 404 for `../`, upper-case hex,
-   31 or 33 characters, other extensions, and ids not in the index; 429 after 60 requests in 10 s.
+   31 or 33 characters, other extensions, and ids not in the index; 429 after 60 requests in 10 s; the query string is
+   split off before routing; every answer passes a non-empty headers table to `writeHead`.
 3. Index: add, per-character cap, total cap, delete frees bytes, `total` repair at start.
 4. Ownership: delete of another character's id is dropped.
 5. Shoot gate: no viewfinder open, cooldown, cap, `screenshot-basic` not started → refused with the right reason and
