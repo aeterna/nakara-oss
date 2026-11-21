@@ -1,0 +1,43 @@
+{
+  "$schema": "../../oss.schema.json",
+  "name": "phonecall",
+  "resource": "aeterna_phonecall",
+  "capabilities": {
+    "http": [],
+    "commands": [],
+    "registeredCommands": [
+      "+aeterna_phonecall_answer",
+      "-aeterna_phonecall_answer",
+      "+aeterna_phonecall_hangup",
+      "-aeterna_phonecall_hangup",
+      "aeterna_phonecall_number",
+      "aeterna_phonecall_setnumber"
+    ],
+    "convars": {
+      "read": [
+        "gamename"
+      ],
+      "write": []
+    },
+    "netEvents": {
+      "server": [
+        "aeterna_phonecall:sv:names",
+        "aeterna_phonecall:sv:answer",
+        "aeterna_phonecall:sv:hangup"
+      ],
+      "client": [
+        "aeterna_phonecall:cl:state",
+        "aeterna_phonecall:cl:askNames",
+        "aeterna_phonecall:cl:saveContact"
+      ]
+    },
+    "nui": false,
+    "db": {
+      "tables": [],
+      "ddl": false
+    },
+    "files": {
+      "write": []
+    }
+  }
+}
