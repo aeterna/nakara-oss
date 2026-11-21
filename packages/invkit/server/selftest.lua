@@ -83,6 +83,7 @@ local SERVER_TESTS = {
 }
 
 AddEventHandler('aeterna_core:selftest', function(runId, name, ctx)
+    if GetInvokingResource() ~= 'aeterna_core' then return end -- only core runs tests
     local short = ST.shortName(name)
     local test = short and SERVER_TESTS[short]
     if not test then return end
@@ -145,6 +146,7 @@ local function prepareItemUse(runId, name, src)
 end
 
 AddEventHandler('aeterna_core:selftestStarted', function(runId, name, ctx)
+    if GetInvokingResource() ~= 'aeterna_core' then return end -- only core runs tests
     if ST.shortName(name) ~= 'item_use' then return end
     local src = type(ctx) == 'table' and tonumber(ctx.a) or nil
     if not src or not A.isOxStarted() then return end
@@ -159,8 +161,7 @@ AddEventHandler('aeterna_invkit:used', function(src, data)
     end
 end)
 
-AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
-    local key = tostring(runId) .. '|' .. tostring(name)
+local function tearDown(key)
     local prep = prepared[key]
     if not prep then return end
     prepared[key] = nil
@@ -170,4 +171,15 @@ AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
     end
     unregister(prep)
     if prep.given then A.removeTagged(prep.src, prep.item, 1, tag(prep.runId)) end
+end
+
+AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
+    if GetInvokingResource() ~= 'aeterna_core' then return end -- only core runs tests
+    tearDown(tostring(runId) .. '|' .. tostring(name))
+end)
+
+-- aeterna_core stopped mid-test: no selftestEnd will come, so undo every preparation now.
+AddEventHandler('onResourceStop', function(res)
+    if res ~= 'aeterna_core' then return end
+    for key in pairs(prepared) do tearDown(key) end
 end)

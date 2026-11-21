@@ -109,6 +109,7 @@ local CLIENT_TESTS = {
 }
 
 AddEventHandler('aeterna_core:selftest', function(runId, name)
+    if GetInvokingResource() ~= 'aeterna_core' then return end -- only core runs tests
     local short = ST.shortName(name)
     local test = short and CLIENT_TESTS[short]
     if not test then return end
@@ -124,6 +125,7 @@ AddEventHandler('aeterna_core:selftest', function(runId, name)
 end)
 
 AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
+    if GetInvokingResource() ~= 'aeterna_core' then return end -- only core runs tests
     local short = ST.shortName(name)
     if not short or running[name] ~= runId then return end
     running[name] = nil

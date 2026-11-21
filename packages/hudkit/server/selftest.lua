@@ -23,6 +23,7 @@ local SERVER_TESTS = {
 }
 
 AddEventHandler('aeterna_core:selftest', function(runId, name)
+    if GetInvokingResource() ~= 'aeterna_core' then return end -- only core runs tests
     local test = SERVER_TESTS[ST.shortName(name) or '']
     if not test then return end
     local state, detail = test()

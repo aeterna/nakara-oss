@@ -13,6 +13,7 @@ local SERVER_TESTS = {
 }
 
 AddEventHandler('aeterna_core:selftest', function(runId, name)
+    if GetInvokingResource() ~= 'aeterna_core' then return end -- only core runs tests
     local test = SERVER_TESTS[ST.shortName(name) or '']
     if not test then return end
     exports.aeterna_core:reportSelftest(runId, name, test())
@@ -25,6 +26,7 @@ local hooks = RadialServerSelftestHooks
 local recheck = {} -- [runId|name] = presser src
 
 AddEventHandler('aeterna_core:selftestStarted', function(runId, name, ctx)
+    if GetInvokingResource() ~= 'aeterna_core' then return end -- only core runs tests
     if ST.shortName(name) ~= 'server_recheck' then return end
     local src = type(ctx) == 'table' and tonumber(ctx.a) or nil
     if not src then return end
@@ -41,12 +43,22 @@ AddEventHandler('aeterna_radial:select', function(src, data)
     hooks.sendSlot(src, { op = 'remove', owner = RESOURCE, id = ST.RECHECK_ID })
 end)
 
-AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
-    local key = tostring(runId) .. '|' .. tostring(name)
+local function tearDown(key)
     local src = recheck[key]
     if not src then return end
     recheck[key] = nil
     hooks.registry:removeSlot(RESOURCE, ST.RECHECK_ID, 'server')
     hooks.setPrivate(ST.RECHECK_ID, false)
     hooks.sendSlot(src, { op = 'remove', owner = RESOURCE, id = ST.RECHECK_ID })
+end
+
+AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
+    if GetInvokingResource() ~= 'aeterna_core' then return end -- only core runs tests
+    tearDown(tostring(runId) .. '|' .. tostring(name))
+end)
+
+-- aeterna_core stopped mid-test: no selftestEnd will come, so drop the test slot now.
+AddEventHandler('onResourceStop', function(res)
+    if res ~= 'aeterna_core' then return end
+    for key in pairs(recheck) do tearDown(key) end
 end)

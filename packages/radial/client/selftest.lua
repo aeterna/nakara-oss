@@ -72,6 +72,7 @@ local function serverRecheck(runId, name)
 end
 
 AddEventHandler('aeterna_core:selftest', function(runId, name)
+    if GetInvokingResource() ~= 'aeterna_core' then return end -- only core runs tests
     local short = ST.shortName(name)
     if short == 'server_recheck' then
         if hooks.inVehicle() then
@@ -89,6 +90,7 @@ AddEventHandler('aeterna_core:selftest', function(runId, name)
 end)
 
 AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
+    if GetInvokingResource() ~= 'aeterna_core' then return end -- only core runs tests
     local test = current
     if not test or test.runId ~= runId or test.name ~= name then return end
     current = nil
