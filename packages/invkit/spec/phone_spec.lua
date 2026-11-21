@@ -388,6 +388,7 @@ describe('aeterna_invkit 0.2 phone items', function()
 
         it('5g. a save from another player does not touch this player\'s phone', function()
             inv[2] = {}
+            natives.add_player(2, 'player2')
             save(2, { id = 'cafe0001', battery = 1 })
             assert.are.equal(50, inv[1][1].metadata.battery)
             assert.are.equal(0, #b.ox.writes)

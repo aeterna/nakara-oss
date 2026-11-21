@@ -14,6 +14,7 @@ P.MAX_DEVICES = 8
 P.MAX_NAME_LEN = 64
 P.MAX_ID_LEN = 64
 P.SAVE_WINDOW_MS = 5000
+P.DROP_GRACE_MS = 2000
 
 local FOLDS = { open = true, closed = true }
 
@@ -216,20 +217,25 @@ function P.applySave(metadata, save)
     return out
 end
 
-local function playerId(inventory, invType)
+-- ox_inventory keys a player inventory by the player's server id (a number); stashes and drops use
+-- strings. Only an integer that `isPlayer` confirms is taken, so a numeric stash name never is.
+local function playerId(inventory, invType, isPlayer)
     if invType ~= nil and invType ~= 'player' then
         return nil
     end
-    local id = tonumber(inventory)
-    if id and id > 0 and id == math.floor(id) then
-        return id
+    if type(inventory) ~= 'number' or inventory <= 0 or inventory ~= math.floor(inventory) then
+        return nil
     end
-    return nil
+    if isPlayer and not isPlayer(inventory) then
+        return nil
+    end
+    return inventory
 end
 
 --- Players to notify for an ox_inventory hook report. `event` is 'swapItems' or 'createItem'.
---- Returns a list of player server ids (no duplicates); empty when no mapped item is involved.
-function P.hookTargets(event, payload, map)
+--- `isPlayer(id)` (optional) confirms a connected player. Returns a list of player server ids
+--- (no duplicates); empty when no mapped item is involved.
+function P.hookTargets(event, payload, map, isPlayer)
     local out = {}
     if type(payload) ~= 'table' then
         return out
@@ -255,10 +261,10 @@ function P.hookTargets(event, payload, map)
         end
     end
     if event == 'swapItems' then
-        add(playerId(payload.fromInventory, payload.fromType))
-        add(playerId(payload.toInventory, payload.toType))
+        add(playerId(payload.fromInventory, payload.fromType, isPlayer))
+        add(playerId(payload.toInventory, payload.toType, isPlayer))
     else
-        add(playerId(payload.inventoryId, nil))
+        add(playerId(payload.inventoryId, nil, isPlayer))
     end
     return out
 end
@@ -296,6 +302,16 @@ function P.createSaveQueue(opts)
         end
         self.lastWrite[src] = now()
         return held
+    end
+
+    --- Player ids that have held saves.
+    function q:heldSources()
+        local out = {}
+        for src, held in pairs(self.held) do
+            if next(held) ~= nil then out[#out + 1] = src end
+        end
+        table.sort(out)
+        return out
     end
 
     function q:drop(src)

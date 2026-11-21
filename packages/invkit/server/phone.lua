@@ -31,6 +31,31 @@ end
 
 local saveQueue = P.createSaveQueue({ now = now })
 local changedPending = {}
+-- src -> time until which a late deviceSave is written at once. Handler order across resources is not
+-- defined, so phonekit's last save for a leaving player can arrive after our playerDropped.
+local dropping = {}
+
+local function logDebug(msg, fields)
+    if AeternaCore and AeternaCore.log and type(AeternaCore.log.debug) == 'function' then
+        AeternaCore.log.debug(msg, fields)
+    end
+end
+
+local function isDropping(src)
+    local untilMs = dropping[src]
+    if untilMs == nil then
+        return false
+    end
+    if now() >= untilMs then
+        dropping[src] = nil
+        return false
+    end
+    return true
+end
+
+local function isPlayer(src)
+    return type(GetPlayerName) == 'function' and GetPlayerName(src) ~= nil
+end
 
 local function fireListen()
     TriggerEvent('aeterna_phonekit:listen')
@@ -44,8 +69,13 @@ local function queueDevicesChanged(src)
     end
     changedPending[src] = true
     SetTimeout(0, function()
+        if not changedPending[src] then
+            return
+        end
         changedPending[src] = nil
-        TriggerEvent('aeterna_phonekit:devicesChanged', src)
+        if not isDropping(src) and isPlayer(src) then
+            TriggerEvent('aeterna_phonekit:devicesChanged', src)
+        end
     end)
 end
 
@@ -89,7 +119,9 @@ local function writeSave(src, save, quiet)
     local slots = phoneSlots(src)
     local slot = slots and P.findById(slots, phoneMap, save.id) or nil
     if not slot then
-        if not quiet then
+        if quiet or not isPlayer(src) then
+            logDebug('phone save dropped: item not found', { src = src, id = save.id })
+        else
             TriggerEvent('aeterna_phonekit:devicesChanged', src)
         end
         return false
@@ -116,12 +148,12 @@ local function syncPhoneHooks()
     end
     return A.syncPhoneHooks({
         swapItems = function(payload)
-            for _, src in ipairs(P.hookTargets('swapItems', payload, phoneMap)) do
+            for _, src in ipairs(P.hookTargets('swapItems', payload, phoneMap, isPlayer)) do
                 queueDevicesChanged(src)
             end
         end,
         createItem = function(payload)
-            for _, src in ipairs(P.hookTargets('createItem', payload, phoneMap)) do
+            for _, src in ipairs(P.hookTargets('createItem', payload, phoneMap, isPlayer)) do
                 queueDevicesChanged(src)
             end
         end,
@@ -147,6 +179,10 @@ AddEventHandler('aeterna_phonekit:deviceSave', function(src, data)
     if not target or target <= 0 then return end
     local clean = P.cleanSave(data)
     if not clean then return end
+    if isDropping(target) then
+        writeSave(target, clean, true)
+        return
+    end
     local verdict, delay, first = saveQueue:offer(target, clean)
     if verdict == 'write' then
         writeSave(target, clean)
@@ -163,11 +199,26 @@ AddEventHandler('onResourceStart', function(resName)
     end
 end)
 
+AddEventHandler('onResourceStop', function(resName)
+    if not enabled or type(GetCurrentResourceName) ~= 'function' or resName ~= GetCurrentResourceName() then
+        return
+    end
+    for _, src in ipairs(saveQueue:heldSources()) do
+        flushHeld(src, true)
+    end
+end)
+
 AddEventHandler('playerDropped', function()
     local src = tonumber(source)
     if not src then return end
     if enabled then
         flushHeld(src, true)
+        dropping[src] = now() + P.DROP_GRACE_MS
+        SetTimeout(P.DROP_GRACE_MS, function()
+            if dropping[src] and now() >= dropping[src] then
+                dropping[src] = nil
+            end
+        end)
     end
     saveQueue:drop(src)
     changedPending[src] = nil
