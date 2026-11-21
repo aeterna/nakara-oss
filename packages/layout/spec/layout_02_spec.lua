@@ -312,29 +312,54 @@ describe('aeterna_layout 0.2', function()
             L = load_logic()
         end)
 
-        it('starts with the prefix, holds only saved places, and round-trips through import', function()
+        it('starts with the prefix, holds only saved places of registered elements, and round-trips through import', function()
             local saved = { ['aeterna_hudkit/status'] = { x = 0.17, y = 0.97, ax = 0, ay = 1, scale = 0.85, hidden = false },
                             ['aeterna_notify/toasts'] = { x = 0.98, y = 0.02, ax = 1, ay = 0, scale = 1, hidden = true } }
             local reg = newRegistry(L, { initialPlaces = saved })
             reg:add('aeterna_hudkit', def({ id = 'status' }))
             reg:add('aeterna_hudkit', def({ id = 'vehicle' }))
 
-            local text = L.encodeExport(reg:getSavedPlaces())
+            local text = L.encodeExport(reg:getSavedPlaces(), reg:registeredKeys(), CFG)
             assert.are.equal('aeterna-layout:1:', text:sub(1, 17))
             local body = json.decode(text:sub(18))
             assert.are.equal(1, body.v)
             local keys = {}
             for k in pairs(body.places) do keys[#keys + 1] = k end
             table.sort(keys)
-            assert.are.same({ 'aeterna_hudkit/status', 'aeterna_notify/toasts' }, keys)
+            assert.are.same({ 'aeterna_hudkit/status' }, keys)
 
             local ok, err, places = L.decodeImport(text, CFG)
             assert.is_true(ok, tostring(err))
-            assert.are.same(saved, places)
+            assert.are.same({ ['aeterna_hudkit/status'] = saved['aeterna_hudkit/status'] }, places)
+        end)
+
+        it('caps the export at maxElements keys', function()
+            local p = { x = 0.1, y = 0.1, ax = 0, ay = 0, scale = 1, hidden = false }
+            local saved = { ['r/a'] = p, ['r/b'] = p, ['r/c'] = p }
+            local text = L.encodeExport(saved, { 'r/a', 'r/b', 'r/c' }, { maxElements = 2 })
+            local body = json.decode(text:sub(18))
+            local n = 0
+            for _ in pairs(body.places) do n = n + 1 end
+            assert.are.equal(2, n)
+            assert.is_table(body.places['r/a'])
+            assert.is_table(body.places['r/b'])
+        end)
+
+        it('refuses an export whose text would exceed 8192 bytes', function()
+            local owner = string.rep('o', 64)
+            local saved, keys = {}, {}
+            for i = 1, 64 do
+                local key = owner .. '/' .. string.rep('i', 29) .. ('%03d'):format(i)
+                saved[key] = { x = 0.123456789, y = 0.987654321, ax = 0.5, ay = 0.5, scale = 1.25, hidden = true }
+                keys[#keys + 1] = key
+            end
+            local text, err = L.encodeExport(saved, keys, CFG)
+            assert.is_nil(text)
+            assert.are.equal('text: max 8192 bytes', err)
         end)
 
         it('exports an empty layout as a valid text', function()
-            local text = L.encodeExport({})
+            local text = L.encodeExport({}, {}, CFG)
             local ok, err, places = L.decodeImport(text, CFG)
             assert.is_true(ok, tostring(err))
             assert.are.same({}, places)
@@ -429,14 +454,47 @@ describe('aeterna_layout 0.2', function()
             assert.are.equal(0.85, savedNow['aeterna_hudkit/status'].scale)
             assert.are.equal(0.17, savedNow['other_res/x'].x)
 
-            -- Export shows the saved places
+            -- Export shows the saved places of registered elements only
             natives.fire_net('aeterna_layout:cl:open', 1)
             h.cb('exportOpen', {})
             local shown = h.lastSent('export:show')
             local ok, err, places = LayoutLogic.decodeImport(shown.text, CFG)
             assert.is_true(ok, tostring(err))
-            assert.are.equal(0.17, places['other_res/x'].x)
+            assert.are.equal(0.17, places['aeterna_hudkit/status'].x)
+            assert.is_nil(places['other_res/x'])
             h.cb('cancel', {})
+        end)
+
+        it('words a refused import through the guarded translate when AeternaCore.t is missing (client)', function()
+            local h = loadClient()
+            natives.fire('aeterna_layout:add', def({ id = 'status' }))
+            natives.fire_net('aeterna_layout:cl:open', 1)
+            local t = AeternaCore.t
+            AeternaCore.t = nil
+            local ok, err = pcall(h.cb, 'import', { text = 'nope' })
+            AeternaCore.t = t
+            assert.is_true(ok, tostring(err))
+            assert.are.equal('This text is not a valid layout: text: prefix', h.lastSent('import:result').error)
+        end)
+
+        it('refuses an export over 8192 bytes with a locale message (client)', function()
+            local h = loadClient()
+            local owner = string.rep('o', 64)
+            natives.stub('GetInvokingResource', function() return owner end)
+            for i = 1, 64 do
+                natives.fire('aeterna_layout:add', def({ id = string.rep('i', 29) .. ('%03d'):format(i), w = 100, h = 50 }))
+            end
+            natives.fire_net('aeterna_layout:cl:open', 1)
+            for i = 1, 64 do
+                h.cb('moved', { owner = owner, id = string.rep('i', 29) .. ('%03d'):format(i),
+                    x = 0.123456789, y = 0.987654321, ax = 0.5, ay = 0.5, scale = 1.25 })
+            end
+            h.cb('done', {})
+            natives.fire_net('aeterna_layout:cl:open', 1)
+            h.cb('exportOpen', {})
+            local shown = h.lastSent('export:show')
+            assert.is_nil(shown.text)
+            assert.are.equal('This layout is too long to export as text', shown.error)
         end)
     end)
 
@@ -553,10 +611,37 @@ describe('aeterna_layout 0.2', function()
             natives.fire_net('aeterna_layout:cl:open', 1, { mode = 'bogus' })
             assert.are.equal(1, #h.sent('editor:open'))
 
+            local TOKEN = '0123456789abcdef'
+            local function savedRaw() return natives.get_kvp('aeterna_layout:places:v1') end
+
+            -- No token, a local event, or a token that was never armed: nothing happens
             natives.fire_net('aeterna_layout:cl:open', 1, { mode = 'reset' })
+            natives.fire('aeterna_layout:cl:open', { mode = 'reset', token = TOKEN })
+            natives.fire_net('aeterna_layout:cl:open', 1, { mode = 'reset', token = TOKEN })
+            assert.are.equal(saved, savedRaw())
+
+            -- Armed by the server, a wrong token does nothing, the right one resets once
+            natives.fire_net('aeterna_layout:cl:open', 1, { mode = 'arm', token = TOKEN })
+            natives.fire_net('aeterna_layout:cl:open', 1, { mode = 'reset', token = 'fedcba9876543210' })
+            assert.are.equal(saved, savedRaw())
+            natives.fire_net('aeterna_layout:cl:open', 1, { mode = 'reset', token = TOKEN })
             assert.are.equal(0.5, natives.last_emitted('local', 'aeterna_layout:apply').args[3].x)
-            assert.are.same({}, json.decode(natives.get_kvp('aeterna_layout:places:v1')))
+            assert.are.same({}, json.decode(savedRaw()))
             assert.are.equal(1, #h.sent('editor:open'))
+
+            -- A replayed token does nothing
+            natives.fire_net('aeterna_layout:cl:open', 1)
+            h.cb('moved', { owner = 'aeterna_hudkit', id = 'status', x = 0.3, y = 0.3, ax = 0, ay = 0, scale = 1 })
+            h.cb('done', {})
+            local after = savedRaw()
+            natives.fire_net('aeterna_layout:cl:open', 1, { mode = 'reset', token = TOKEN })
+            assert.are.equal(after, savedRaw())
+
+            -- A token older than 30 s does nothing
+            natives.fire_net('aeterna_layout:cl:open', 1, { mode = 'arm', token = 'aaaaaaaaaaaaaaaa' })
+            natives.advance(30001)
+            natives.fire_net('aeterna_layout:cl:open', 1, { mode = 'reset', token = 'aaaaaaaaaaaaaaaa' })
+            assert.are.equal(after, savedRaw())
         end)
     end)
 
@@ -610,18 +695,57 @@ describe('aeterna_layout 0.2', function()
             act('share')
             assert.are.same({ mode = 'share' }, natives.last_emitted('client', 'aeterna_layout:cl:open').args[1])
 
-            local sends = #natives.emitted('client', 'aeterna_layout:cl:open')
+            local function sends() return #natives.emitted('client', 'aeterna_layout:cl:open') end
+
+            -- resetConfirm without an open confirm row does nothing
+            local n = sends()
+            act('resetConfirm')
+            assert.are.equal(n, sends())
+
+            -- Reset all opens the confirm row and arms the client with a one-time token
             act('resetAll')
-            assert.are.equal(sends, #natives.emitted('client', 'aeterna_layout:cl:open'))
             assert.are.same({ 'resetConfirm', 'back' }, buttonIds(h.opened[#h.opened].spec))
+            local arm = natives.last_emitted('client', 'aeterna_layout:cl:open')
+            assert.are.equal(4, arm.target)
+            assert.are.equal('arm', arm.args[1].mode)
+            assert.is_truthy(arm.args[1].token:match('^%x+$') and #arm.args[1].token == 16)
+
+            -- Back clears the flag
             act('back')
             assert.are.same({ 'edit', 'resetAll', 'share' }, buttonIds(h.opened[#h.opened].spec))
+            n = sends()
             act('resetConfirm')
-            assert.are.same({ mode = 'reset' }, natives.last_emitted('client', 'aeterna_layout:cl:open').args[1])
+            assert.are.equal(n, sends())
 
+            -- Confirm sends the token once
+            act('resetAll')
+            local token = natives.last_emitted('client', 'aeterna_layout:cl:open').args[1].token
+            act('resetConfirm')
+            assert.are.same({ mode = 'reset', token = token }, natives.last_emitted('client', 'aeterna_layout:cl:open').args[1])
+            n = sends()
+            act('resetConfirm')
+            assert.are.equal(n, sends())
+
+            -- Closing the panel clears the flag; so does a 30 s timeout
+            act('resetAll')
             act('__close')
+            n = sends()
+            act('resetConfirm')
+            assert.are.equal(n, sends())
+            act('resetAll')
+            natives.advance(30001)
+            n = sends()
+            act('resetConfirm')
+            assert.are.equal(n, sends())
+
+            -- Each source has its own flag
+            act('resetAll')
+            n = sends()
+            natives.fire('aeterna_uikit:action', 5, { owner = 'aeterna_layout', panelId = 'p2', action = 'resetConfirm', values = {} })
+            assert.are.equal(n, sends())
+
             act('unknown')
-            assert.are.equal(sends + 1, #natives.emitted('client', 'aeterna_layout:cl:open'))
+            assert.are.equal(n, sends())
         end)
 
         it('keeps the 0.1 behaviour with Config.menuPanel = false', function()
