@@ -2,18 +2,6 @@
   "version": 1,
   "leases": [
     {
-      "id": "rongroi-a0-8843707d",
-      "repo": "nakara-oss",
-      "lane": "rongroi-a0",
-      "host": "mac",
-      "scope": [
-        "packages/rongroi/**"
-      ],
-      "plan": "rongroi-easy-plugin",
-      "acquired": "2026-11-21T14:43:59Z",
-      "expires": "2026-11-21T18:43:59Z"
-    },
-    {
       "id": "kit02-w2-st-a-46c002a9",
       "repo": "nakara-oss",
       "lane": "kit02-w2-st-a",
