@@ -310,6 +310,18 @@ describe('aeterna_hudkit 0.2', function()
             assert.are.equal(1, #ctx.layoutCalls('aeterna_layout:remove', 'voice'))
         end)
 
+        it('client: a state still reading starting is picked up by the 1 s watcher', function()
+            local ctx = load_client({ voiceState = 'starting' })
+            natives.fire('onClientResourceStart', 'pma-voice')
+            assert.are.equal(0, #ctx.layoutCalls('aeterna_layout:add', 'voice'))
+            ctx.resourceState = 'started'
+            natives.advance(1100)
+            assert.are.equal(1, #ctx.layoutCalls('aeterna_layout:add', 'voice'))
+            assert.is_true(ctx.last('hud:voice').available)
+            natives.advance(2000)
+            assert.are.equal(1, #ctx.layoutCalls('aeterna_layout:add', 'voice'))
+        end)
+
         it('client: pma-voice absent at start registers nothing and sends no remove', function()
             local ctx = load_client({ voiceState = 'missing' })
             assert.are.equal(0, #ctx.layoutCalls('aeterna_layout:add', 'voice'))
@@ -405,6 +417,17 @@ describe('aeterna_hudkit 0.2', function()
             ctx.fireBag('proximity', nil)
             assert.is_nil(ctx.last('hud:voice').mode)
         end)
+
+        it('client: the metres unit comes from the locale key hudkit.unit.m', function()
+            local ctx = load_client({ voiceState = 'started', playerState = {} })
+            natives.stub('AeternaCore', {
+                log = { warn = function() end },
+                t = function(k) return (Locales.th and Locales.th[k]) or k end,
+            })
+            ctx.fireBag('proximity', { index = 4, distance = 20.0 })
+            assert.are.equal('20 ม.', ctx.last('hud:voice').mode)
+            assert.are.equal('m', Locales.en['hudkit.unit.m'])
+        end)
     end)
 
     describe('5. seatbelt (shared/logic/seatbelt.lua and client)', function()
@@ -424,6 +447,12 @@ describe('aeterna_hudkit 0.2', function()
             assert.is_true(belt.set('res_a', { on = false }))
             assert.is_false(belt.display(true))
 
+            -- nil from another resource is refused; only the owner may hide it.
+            assert.is_false(belt.set('res_other', nil))
+            assert.is_false(belt.display(true))
+            assert.is_false(belt.set(nil, { on = true }))
+            assert.is_false(belt.display(true))
+
             assert.is_true(belt.set('res_a', nil))
             assert.is_nil(belt.display(true))
 
@@ -431,7 +460,7 @@ describe('aeterna_hudkit 0.2', function()
             assert.is_true(belt.set('res_a', { on = true }))
             assert.is_false(belt.set('res_a', { on = 'yes' }))
             assert.is_false(belt.set('res_a', 'on'))
-            assert.are.equal(2, warned)
+            assert.are.equal(4, warned)
             assert.is_true(belt.display(true))
 
             -- The last resource that fired owns it; only its stop hides it.
@@ -470,6 +499,16 @@ describe('aeterna_hudkit 0.2', function()
             assert.are.equal(count, #ctx.messages('hud:seatbelt'))
             natives.fire('onResourceStop', 'belt_res')
             assert.is_nil(ctx.last('hud:seatbelt').state)
+        end)
+
+        it('client: an event with no invoking resource is refused, payload.owner is not trusted', function()
+            local ctx = load_client({ inVehicle = true })
+            natives.fire('aeterna_hudkit:seatbelt', { on = true })
+            natives.fire('aeterna_hudkit:seatbelt', { on = false, owner = 'spoofed_res' })
+            natives.advance(250)
+            for _, msg in ipairs(ctx.messages('hud:seatbelt')) do
+                assert.is_nil(msg.state)
+            end
         end)
 
         it('client: Config.seatbelt.enabled = false never shows it', function()
@@ -570,6 +609,21 @@ describe('aeterna_hudkit 0.2', function()
         end)
     end)
 
+    describe('8. extra bar label length counts characters (0.1 fix)', function()
+        it('accepts 24 Thai characters, refuses 25 and invalid UTF-8', function()
+            natives.reset()
+            local H = assert(loadfile(DIR .. '/shared/logic/hud.lua'))()
+            local reg = H.createBarsRegistry({})
+            local thai24 = string.rep('ก', 24) -- 72 bytes, 24 characters
+            local thai25 = string.rep('ก', 25)
+            assert.is_true(reg.add('res', { id = 'th24', label = thai24, icon = 'activity', value = 50 }))
+            assert.is_false(reg.add('res', { id = 'th25', label = thai25, icon = 'activity', value = 50 }))
+            assert.is_false(reg.add('res', { id = 'bad', label = '\255\254', icon = 'activity', value = 50 }))
+            assert.is_false(reg.add('res', { id = 'empty', label = '', icon = 'activity', value = 50 }))
+            assert.is_false(reg.add('res', { id = 'none', icon = 'activity', value = 50 }))
+        end)
+    end)
+
     describe('7. compass and layout elements (client)', function()
         it('registers compass and sends hud:compass only when the whole degree changes', function()
             local ctx = load_client({})
@@ -585,6 +639,32 @@ describe('aeterna_hudkit 0.2', function()
             assert.are.equal(count, #ctx.messages('hud:compass'))
             camZ = -90.0
             natives.advance(250)
+            assert.are.equal(90, ctx.last('hud:compass').deg)
+        end)
+
+        it('a compass-only thread follows the camera at about 50 ms and pauses while hidden', function()
+            local ctx = load_client({})
+            local camZ = 0.0
+            natives.stub('GetGameplayCamRot', function() return { x = 0.0, y = 0.0, z = camZ } end)
+            -- Before the first 200 ms tick, the compass thread has already sent.
+            natives.advance(60)
+            assert.are.equal(0, ctx.last('hud:compass').deg)
+            camZ = -45.0
+            natives.advance(60)
+            assert.are.equal(45, ctx.last('hud:compass').deg)
+
+            -- Hidden in the layout editor: no more compass messages.
+            natives.fire('aeterna_layout:apply', 'aeterna_hudkit', 'compass',
+                { x = 0.5, y = 0.02, ax = 0.5, ay = 0, scale = 1, hidden = true })
+            local count = #ctx.messages('hud:compass')
+            camZ = -90.0
+            natives.advance(600)
+            assert.are.equal(count, #ctx.messages('hud:compass'))
+
+            -- Shown again: it resumes.
+            natives.fire('aeterna_layout:apply', 'aeterna_hudkit', 'compass',
+                { x = 0.5, y = 0.02, ax = 0.5, ay = 0, scale = 1, hidden = false })
+            natives.advance(600)
             assert.are.equal(90, ctx.last('hud:compass').deg)
         end)
 
