@@ -189,11 +189,11 @@
         return fit > 0 && isFinite(fit) ? fit : 1;
     }
 
-    // The frame is scaled by fit, then by the layout scale (shared/logic/shell.lua S.drawnScale).
+    // The layout scale capped by fit, min(place scale, fit) (shared/logic/shell.lua S.drawnScale).
     function calculateDrawnScale(placeScale, fit) {
         const scale = Number(placeScale) || 1.0;
         const fitVal = Number(fit) || 1.0;
-        return scale * fitVal;
+        return Math.min(scale, fitVal);
     }
 
     // Top-left corner and scale in viewport px (shared/logic/shell.lua S.frameRect). Never writes `place`.
@@ -202,11 +202,9 @@
         const h = Number(height) || 812;
         const margin = 0.048 * vh;
         const rawFit = Math.min((vh - margin) / h, (vw - margin) / w);
-        const fit = Math.max(0, Math.min(1, rawFit));
         const hasPlace = !!place && typeof place === 'object' && isFinite(Number(place.x)) && isFinite(Number(place.y))
             && place.x !== null && place.y !== null;
-        let scale = calculateDrawnScale(hasPlace ? place.scale : 1, fit);
-        scale = Math.max(0.05, Math.min(scale, rawFit));
+        const scale = Math.max(0.05, calculateDrawnScale(hasPlace ? place.scale : 1, rawFit));
         const dw = w * scale;
         const dh = h * scale;
         const edge = 0.024 * vh;

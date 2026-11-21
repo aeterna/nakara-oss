@@ -136,7 +136,15 @@ function B.set(state, pct, cfg)
     state.shown = B.shown(p)
     local ev = { shown = state.shown, old = old, changed = old ~= state.shown, save = false, warn = {} }
     ev.save = B.shouldSave(old, state.shown, c.saveStep)
-    if state.shown > 0 then ev.warn = B.checkWarnings(old, state.shown, c.warnAt) end
+    if state.shown > 0 then
+        -- several values crossed in one step: only the lowest is shown
+        local crossed = B.checkWarnings(old, state.shown, c.warnAt)
+        local lowest
+        for _, w in ipairs(crossed) do
+            if not lowest or w < lowest then lowest = w end
+        end
+        ev.warn = lowest and { lowest } or {}
+    end
     if state.shown == 0 and not state.dead then
         state.dead = true
         ev.power = false

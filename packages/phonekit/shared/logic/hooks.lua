@@ -90,6 +90,19 @@ function H.createIntents(warn)
         end
     end
 
+    -- An `addTile` re-add: keeps the app's place for kinds it still handles, drops the others, appends new ones.
+    function reg:set(owner, id, handles)
+        local keep = {}
+        if type(handles) == 'table' then
+            for _, kind in ipairs(handles) do keep[kind] = true end
+        end
+        for i = #self.order, 1, -1 do
+            local e = self.order[i]
+            if e.owner == owner and e.id == id and not keep[e.kind] then table.remove(self.order, i) end
+        end
+        self:register(owner, id, handles)
+    end
+
     function reg:remove(owner, id)
         for i = #self.order, 1, -1 do
             local e = self.order[i]
@@ -200,6 +213,11 @@ function H.createRingManager(opts)
     end
 
     return mgr
+end
+
+-- A contact number as typed: digits, + * # - spaces and parentheses.
+function H.isPhoneNumber(s)
+    return type(s) == 'string' and s:match('^[%d%+%*#%-%s%(%)]+$') ~= nil
 end
 
 -- false for a pad, a player with no phone, or a dead battery; else true. info = { hasDevice, model, battery }

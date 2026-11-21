@@ -94,6 +94,8 @@ local function validate(value, schema)
     return type(value) == 'table', 'payload: type', value
 end
 
+local COVER = Cfg.cover ~= false
+
 local function modelInfo(modelId)
     return D.resolveModel(modelId, Cfg.models, { names = Cfg.names, t = translate, prop = Cfg.prop })
 end
@@ -168,7 +170,7 @@ local function ensureLoaded(src)
         p.devices = { { id = SINGLE_ID, model = SINGLE_MODEL, color = 0 } }
         p.active = SINGLE_ID
         p.states[SINGLE_ID] = B.createState(tonumber(saved.battery) or (batteryCfg and batteryCfg.startPct or 100))
-        p.folds[SINGLE_ID] = D.validateFold(SINGLE_MODEL, saved.fold)
+        p.folds[SINGLE_ID] = D.validateFold(SINGLE_MODEL, saved.fold, COVER)
     else
         local chosen = readKvp('aeterna_phonekit:active:v1:' .. who)
         p.chosen = type(chosen) == 'string' and chosen or nil
@@ -232,7 +234,7 @@ local function sendDevice(src)
     local dev = activeOf(p)
     if not dev and MODE == 'single' then
         -- not loaded yet (no character): the single model with its defaults
-        p = { folds = { [SINGLE_ID] = D.validateFold(SINGLE_MODEL, nil) }, states = {}, devices = {} }
+        p = { folds = { [SINGLE_ID] = D.validateFold(SINGLE_MODEL, nil, COVER) }, states = {}, devices = {} }
         dev = { id = SINGLE_ID, model = SINGLE_MODEL, color = 0 }
     end
     if not dev then
@@ -294,27 +296,51 @@ local function applyBatteryEvents(src, ev, chargingChanged)
     if ev.power ~= nil then setPower(src, ev.power) end
 end
 
+-- After the active device changed: tell the client when the phone's power state changed with it.
+local function syncPowerAfterSwitch(src, wasDead)
+    local dead = isDead(src)
+    if dead ~= wasDead then
+        setPower(src, not dead)
+    end
+end
+
 -- A gate answer arrived: keep the carried devices, pick the active one, close surfaces if it is gone.
+-- The active phone keeps the number the server counts; every other phone takes the battery and fold from its
+-- item (it may have been handed away and back), and phones no longer carried are forgotten.
 local function applyDevices(src, devices)
     local p = players[src]
     if not p then return end
     local before = p.active
+    local wasDead = isDead(src)
+    local carried = {}
     p.devices = {}
     for _, d in ipairs(devices or {}) do
+        carried[d.id] = true
         p.devices[#p.devices + 1] = { id = d.id, model = d.model, color = d.color }
-        local fresh = false
-        if not p.states[d.id] then
-            p.states[d.id] = B.createState(d.battery or (batteryCfg and batteryCfg.startPct or 100))
-            fresh = d.battery == nil and batteryCfg ~= false
+        local missingBattery = false
+        if d.id == before and p.states[d.id] then
+            p.folds[d.id] = D.validateFold(d.model, p.folds[d.id], COVER)
+        else
+            if d.battery ~= nil then
+                p.states[d.id] = B.createState(d.battery)
+            elseif not p.states[d.id] then
+                p.states[d.id] = B.createState(batteryCfg and batteryCfg.startPct or 100)
+                missingBattery = batteryCfg ~= false
+            end
+            p.folds[d.id] = D.validateFold(d.model, d.fold or p.folds[d.id], COVER)
         end
-        local fold = D.validateFold(d.model, p.folds[d.id] or d.fold)
-        if fold and d.fold == nil then fresh = true end
-        p.folds[d.id] = fold
-        if fresh then
+        if missingBattery then
+            -- a phone with no battery in its item gets startPct written back once
             TriggerEvent('aeterna_phonekit:deviceSave', src, {
-                id = d.id, battery = batteryCfg and p.states[d.id].pct or nil, fold = fold,
+                id = d.id, battery = p.states[d.id].pct, fold = p.folds[d.id],
             })
         end
+    end
+    for id in pairs(p.states) do
+        if not carried[id] then p.states[id] = nil end
+    end
+    for id in pairs(p.folds) do
+        if not carried[id] then p.folds[id] = nil end
     end
     local pick = D.pickActiveDevice(p.devices, p.chosen)
     p.active = pick and pick.id or nil
@@ -325,6 +351,9 @@ local function applyDevices(src, devices)
     end
     sendDevice(src)
     sendBattery(src)
+    if before ~= p.active then
+        syncPowerAfterSwitch(src, wasDead)
+    end
 end
 
 -- Asks other resources before the phone opens (Config.ask, and always in items mode).
@@ -390,11 +419,8 @@ exports('addTile', function(app)
         logWarn('addTile rejected tile', { owner = owner, err = err })
         return false, err
     end
-    intents:remove(owner, app.id)
     local stored = registry:find(owner, app.id)
-    if stored and stored.handles then
-        intents:register(owner, app.id, stored.handles)
-    end
+    intents:set(owner, app.id, stored and stored.handles or {})
     return true
 end)
 
@@ -756,6 +782,9 @@ exports('live', function(src, opts)
     local p = ensureLoaded(numSrc)
     if not p then return false end
     if type(opts) ~= 'table' then
+        if p.live and p.live.owner ~= callerResource() then
+            return false
+        end
         p.live = nil
         TriggerClientEvent('aeterna_phonekit:cl:live', numSrc, {})
         return true
@@ -796,12 +825,20 @@ RegisterNetEvent('aeterna_phonekit:sv:open', function()
         return
     end
 
-    ensureLoaded(src)
+    local loadedPlayer = ensureLoaded(src)
+    if MODE == 'items' and not loadedPlayer then
+        TriggerClientEvent('aeterna_phonekit:cl:refused', src, { reason = 'phonekit.refused.nodevice' })
+        return
+    end
     askGate(src, function(allowed, reasonKey)
         if not allowed then
             TriggerClientEvent('aeterna_phonekit:cl:refused', src, {
                 reason = reasonKey or 'phonekit.refused.default',
             })
+            return
+        end
+        if MODE == 'items' and not activeOf(players[src]) then
+            TriggerClientEvent('aeterna_phonekit:cl:refused', src, { reason = 'phonekit.refused.nodevice' })
             return
         end
         if isDead(src) then
@@ -897,6 +934,10 @@ RegisterNetEvent('aeterna_phonekit:sv:tap', function(data)
 
     local payload = { owner = app.owner, id = app.id }
     if type(data.intent) == 'table' then
+        if not H.isPhoneNumber(data.intent.number) then
+            logWarn('aeterna_phonekit:sv:tap intent number refused', { src = src })
+            return
+        end
         if not intents:isHandler(data.intent.kind, app.owner, app.id) then
             logWarn('aeterna_phonekit:sv:tap intent for an app that does not handle it', { src = src, id = id })
             return
@@ -1064,7 +1105,7 @@ RegisterNetEvent('aeterna_phonekit:sv:fold', function(data)
         logWarn('aeterna_phonekit:sv:fold refused for a model that does not fold', { src = src })
         return
     end
-    if Cfg.cover == false and dev.model == 'fold' and data.state == 'closed' then
+    if not COVER and dev.model == 'fold' and data.state == 'closed' then
         return
     end
     p.folds[dev.id] = data.state
@@ -1089,11 +1130,16 @@ RegisterNetEvent('aeterna_phonekit:sv:device', function(data)
         logWarn('aeterna_phonekit:sv:device id not in the last answer', { src = src })
         return
     end
+    local wasDead = isDead(src)
+    local switched = p.active ~= data.id
     p.chosen = data.id
     p.active = data.id
     writeKvp('aeterna_phonekit:active:v1:' .. p.who, data.id)
     sendDevice(src)
     sendBattery(src)
+    if switched then
+        syncPowerAfterSwitch(src, wasDead)
+    end
 end)
 
 RegisterNetEvent('aeterna_phonekit:sv:ring', function(data)
@@ -1158,11 +1204,14 @@ end
 
 if batteryCfg and type(CreateThread) == 'function' then
     CreateThread(function()
+        local lastMs = GetGameTimer()
         while true do
             Wait(batteryCfg.tickSec * 1000)
             local nowMs = GetGameTimer()
+            local dtSec = math.max(0, (nowMs - lastMs) / 1000)
+            lastMs = nowMs
             for src in pairs(loaded) do
-                tickPlayer(src, batteryCfg.tickSec, nowMs)
+                tickPlayer(src, dtSec, nowMs)
             end
         end
     end)

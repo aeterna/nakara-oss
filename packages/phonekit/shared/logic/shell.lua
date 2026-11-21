@@ -73,11 +73,11 @@ function S.calcFit(w, h, vw, vh)
     return math.max(0, math.min(1, rawFit(w, h, vw, vh)))
 end
 
--- The frame is scaled by `fit`, then by the layout scale.
+-- The layout scale, capped by `fit` so the frame never clips: min(place scale, fit).
 function S.drawnScale(placeScale, fit)
     local scale = tonumber(placeScale) or 1
     local f = tonumber(fit) or 1
-    return scale * f
+    return math.min(scale, f)
 end
 
 -- Top-left corner and scale of the frame in viewport px. `place` is the last applied layout place
@@ -85,10 +85,8 @@ end
 -- the viewport and never written back: the caller's place is not changed and nothing is saved.
 function S.frameRect(place, position, w, h, vw, vh)
     local fw, fh = tonumber(w) or 392, tonumber(h) or 812
-    local fit = S.calcFit(fw, fh, vw, vh)
     local hasPlace = type(place) == 'table' and tonumber(place.x) ~= nil and tonumber(place.y) ~= nil
-    local scale = S.drawnScale(hasPlace and place.scale or 1, fit)
-    scale = math.max(0.05, math.min(scale, rawFit(fw, fh, vw, vh)))
+    local scale = math.max(0.05, S.drawnScale(hasPlace and place.scale or 1, rawFit(fw, fh, vw, vh)))
     local dw, dh = fw * scale, fh * scale
     local margin = 0.024 * vh
     local x, y

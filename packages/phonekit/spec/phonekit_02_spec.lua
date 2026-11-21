@@ -747,7 +747,7 @@ describe('aeterna_phonekit 0.2 server under the harness', function()
         natives.fire_net('aeterna_phonekit:sv:open', 1)
         local before = #natives.emitted('local', 'aeterna_phonekit:app')
         natives.fire_net('aeterna_phonekit:sv:tap', 1, { id = 'dialer', owner = 'aeterna_phonekit',
-            intent = { kind = 'tel', number = 'drop table' } })
+            intent = { kind = 'tel', number = 'call me' } })
         assert.are.equal(before, #natives.emitted('local', 'aeterna_phonekit:app'))
         natives.fire_net('aeterna_phonekit:sv:tap', 1, { id = 'dialer', owner = 'aeterna_phonekit',
             intent = { kind = 'tel', number = '555-0101' } })

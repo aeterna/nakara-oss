@@ -29,7 +29,7 @@ local device = {
     color = nil,
     devices = {},
 }
-device.fold = D.validateFold(device.model, nil)
+device.fold = D.validateFold(device.model, nil, Cfg.cover ~= false)
 local batteryState = { none = true }
 local powerOn = true
 local haveBattery = false
@@ -420,6 +420,8 @@ RegisterNetEvent('aeterna_phonekit:cl:open', function(data)
     local tok = acquireFocus()
     if not tok then
         logWarn('aeterna_phonekit focus denied by aeterna_core')
+        -- the server already counts the phone as open: tell it the phone did not open
+        TriggerServerEvent('aeterna_phonekit:sv:close')
         return
     end
 
@@ -509,7 +511,7 @@ RegisterNetEvent('aeterna_phonekit:cl:device', function(data)
     local sizeBefore = layoutSize
     device.model = data.model
     device.label = type(data.label) == 'string' and data.label or nil
-    device.fold = D.validateFold(data.model, data.fold)
+    device.fold = D.validateFold(data.model, data.fold, Cfg.cover ~= false)
     device.voice = data.voice ~= false
     device.color = (type(data.color) == 'string' and data.color:match('^#%x%x%x%x%x%x$')) and data.color or nil
     device.devices = type(data.devices) == 'table' and data.devices or {}
@@ -760,7 +762,7 @@ RegisterNUICallback('tap', function(data, cb)
 
     local payload = { id = id, owner = owner }
     if type(data.intent) == 'table' and (data.intent.kind == 'tel' or data.intent.kind == 'sms')
-        and type(data.intent.number) == 'string' then
+        and H.isPhoneNumber(data.intent.number) then
         payload.intent = { kind = data.intent.kind, number = L.textClean(data.intent.number, 20) }
     end
 

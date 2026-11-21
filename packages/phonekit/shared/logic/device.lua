@@ -21,9 +21,11 @@ function D.getFrameSize(modelId, foldState)
     return m.w, m.h
 end
 
-function D.validateFold(modelId, foldState)
+-- `coverAllowed = false` (Config.cover = false): a `fold` never closes.
+function D.validateFold(modelId, foldState, coverAllowed)
     local m = D.MODELS[modelId]
     if not m or not m.folds then return nil end
+    if modelId == 'fold' and coverAllowed == false then return 'open' end
     return (foldState == 'open' or foldState == 'closed') and foldState or (m.defaultFold or 'open')
 end
 
