@@ -179,3 +179,11 @@ test('a result is final: a second result for the same envelope is 409', () => {
     assert.equal(post(500), 409);
     assert.deepEqual(r.call('GET', `/srv1/status/${T}/${s}`).body, { result: 'accepted' });
 });
+
+test('preflight refuses the server API without the key, and a server body over 128 KiB', () => {
+    const r = make();
+    const pre = (headers) => { const o = r.relay.preflight({ method: 'POST', path: '/v1/tickets', headers, socketAddress: '1.2.3.4' }); return o ? o.status : null; };
+    assert.equal(pre({ 'content-length': '10' }), 401);
+    assert.equal(pre({ authorization: `Bearer ${KEY}`, 'content-length': String(200 * 1024) }), 413);
+    assert.equal(pre({ authorization: `Bearer ${KEY}`, 'content-length': '100' }), null);
+});

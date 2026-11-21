@@ -38,8 +38,11 @@ function createRelayClient({ config, fetchImpl, log = () => {} }) {
     if (!config || typeof fetchImpl !== 'function') throw new TypeError('relay client needs a config and fetch');
     const headers = { Authorization: `Bearer ${config.key}`, 'Content-Type': 'application/json' };
 
+    let down = false; // the last request did not reach the Relay at all (network error or timeout)
+
     async function call(method, path, body) {
         let res;
+        down = false;
         try {
             res = await fetchImpl(path, {
                 method,
@@ -47,6 +50,7 @@ function createRelayClient({ config, fetchImpl, log = () => {} }) {
                 body: body === undefined ? undefined : JSON.stringify(body),
             });
         } catch {
+            down = true;
             return { ok: false, status: 0, body: null };
         }
         let parsed = null;
@@ -100,8 +104,11 @@ function createRelayClient({ config, fetchImpl, log = () => {} }) {
         const value = status === 200 ? 'accepted' : status;
         if (!RESULTS.includes(value)) throw new TypeError('result must be accepted or a listed status');
         const r = await call('POST', `/v1/tickets/${ticket}/envelopes/${sha256}/result`, { result: value });
-        if (!r.ok) log(`rongroi relay: result refused (${r.status})`, ticket);
-        return r.ok;
+        // Settled: stored now (2xx), already stored by a post whose answer was lost (409), or the envelope is gone
+        // (404: freed after a 422, swept, or the Relay restarted). Anything else is posted again next round.
+        const settled = r.ok || r.status === 409 || r.status === 404;
+        if (!settled) log(`rongroi relay: result not stored (${r.status})`, ticket);
+        return settled;
     }
 
     async function remove(ticket) {
@@ -114,7 +121,7 @@ function createRelayClient({ config, fetchImpl, log = () => {} }) {
         return { ok: r.ok, status: r.status, server: r.body && typeof r.body.server === 'string' ? r.body.server : null };
     }
 
-    return { register, poll, pending, result, remove, health, origin: config.origin, id: config.id };
+    return { register, poll, pending, result, remove, health, unreachable: () => down, origin: config.origin, id: config.id };
 }
 
 // Loaded directly as a server_script FXServer provides no CommonJS `module`; the specs still get the export.

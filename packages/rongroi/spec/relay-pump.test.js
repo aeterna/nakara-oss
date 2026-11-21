@@ -93,3 +93,64 @@ test('overlapping rounds never run in parallel', async () => {
     assert.equal(maxInFlight, 1);
     assert.equal(relay.calls.poll, 2, 'the first round plus one more for the calls that came in during it');
 });
+
+test('a result the Relay already has (409) or no longer has (404) is settled, not retried', async () => {
+    const store = fakeStore();
+    let answer = false;
+    const relay = fakeRelay({ poll: (n) => (n === 1 ? { status: 200, envelopes: [{ sha256: SHA, raw: Buffer.from('x') }] } : { status: 200, envelopes: [] }),
+        result: () => answer });
+    const pump = createRelayPump({ relay, store, ingest: () => 200, graceMs: 600000 });
+    await pump.round();
+    assert.deepEqual(pump.state().toResult, [`${T}:${SHA}`], 'lost ack: kept for retry');
+    answer = 'settled';
+    await pump.round();
+    assert.deepEqual(pump.state().toResult, []);
+});
+
+test('a forgotten ticket never gets its result re-queued by a round that was in flight', async () => {
+    const store = fakeStore();
+    let release;
+    const relay = fakeRelay({ poll: () => ({ status: 200, envelopes: [{ sha256: SHA, raw: Buffer.from('x') }] }),
+        result: () => new Promise((r) => { release = () => r(false); }) });
+    const pump = createRelayPump({ relay, store, ingest: () => 200, graceMs: 600000 });
+    const p = pump.round();
+    while (!release) await new Promise((r) => setImmediate(r));
+    pump.forget(T);
+    release();
+    await p;
+    assert.deepEqual(pump.state().toResult, []);
+});
+
+test('one ticket that throws does not stop the others, and the cursor moves on', async () => {
+    const T2 = 'b'.repeat(32);
+    const polled = [];
+    const store = { lookup: () => ({ state: 'issued', expiresAt: Date.now() + 300000 }), relayTickets: () => [T, T2] };
+    const relay = { register: async () => true, result: async () => true,
+        poll: async (t) => { polled.push(t); return { status: 200, envelopes: [{ sha256: SHA, raw: Buffer.from('x') }] }; } };
+    const pump = createRelayPump({ relay, store, ingest: ({ ticket }) => { if (ticket === T) throw new Error('boom'); return 200; }, graceMs: 600000 });
+    await pump.round();
+    assert.deepEqual(polled, [T, T2]);
+});
+
+test('a Relay that cannot be reached ends the round at the first failure', async () => {
+    const T2 = 'b'.repeat(32);
+    let polls = 0;
+    const store = { lookup: () => ({ state: 'issued', expiresAt: Date.now() + 300000 }), relayTickets: () => [T, T2] };
+    const relay = { register: async () => true, result: async () => true, poll: async () => { polls += 1; return { status: 0, envelopes: [] }; } };
+    const pump = createRelayPump({ relay, store, ingest: () => 200, graceMs: 600000 });
+    await pump.round();
+    assert.equal(polls, 1);
+});
+
+test('a Relay restart is repaired while the ticket is uploading, not only while issued', async () => {
+    const store = fakeStore();
+    const relay = fakeRelay({ poll: (n) => (n === 1 ? { status: 404, envelopes: [] } : { status: 200, envelopes: [] }) });
+    const pump = createRelayPump({ relay, store, ingest: () => 200, graceMs: 600000 });
+    pump.issued({ ticket: T, expiresAt: store.t.expiresAt, policyBody: '{}' });
+    await pump.round();
+    assert.equal(relay.calls.register, 1);
+    store.t.state = 'uploading';
+    await pump.round(); // poll 1 → 404
+    await pump.round();
+    assert.equal(relay.calls.register, 2);
+});

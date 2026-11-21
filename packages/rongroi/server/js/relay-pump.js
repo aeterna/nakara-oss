@@ -10,24 +10,32 @@
 const MAX_TICKETS_PER_ROUND = 32;
 
 function createRelayPump({ relay, store, ingest, graceMs, log = () => {} }) {
-    const toRegister = new Map(); // ticket -> { expiresAt, policyBody }
-    const toResult = new Map();   // `${ticket}:${sha}` -> { ticket, sha, status }
+    const toRegister = new Map(); // ticket -> { expiresAt, policyBody, registered }
+    const toResult = new Map();   // `${ticket}:${sha}` -> { ticket, sha, status, until }
+    const forgotten = new Set();  // tickets staff deleted while a round may still hold them
     let cursor = 0;
+    const unreachable = () => typeof relay.unreachable === 'function' && relay.unreachable();
+    const open = (found) => found && (found.state === 'issued' || found.state === 'uploading') && Date.now() < found.expiresAt;
 
     // Called when a relay code is first made for a ticket: register now and keep retrying until the Relay confirms.
+    // The record stays while the ticket is open, so a Relay that restarts later (404 on poll) gets it again.
     function issued({ ticket, expiresAt, policyBody }) {
-        toRegister.set(ticket, { expiresAt, policyBody });
+        forgotten.delete(ticket);
+        toRegister.set(ticket, { expiresAt, policyBody, registered: false });
     }
 
     function forget(ticket) {
+        forgotten.add(ticket);
         toRegister.delete(ticket);
         for (const key of [...toResult.keys()]) if (key.startsWith(`${ticket}:`)) toResult.delete(key);
     }
 
-    async function postResult(ticket, sha, status) {
-        const ok = await relay.result(ticket, sha, status);
-        if (ok) toResult.delete(`${ticket}:${sha}`);
-        else toResult.set(`${ticket}:${sha}`, { ticket, sha, status });
+    // A result is posted until the Relay has it (relay.result says settled), at most until the ticket's grace ends.
+    async function postResult(ticket, sha, status, until) {
+        const key = `${ticket}:${sha}`;
+        const settled = await relay.result(ticket, sha, status);
+        if (settled || forgotten.has(ticket) || Date.now() >= until) toResult.delete(key);
+        else toResult.set(key, { ticket, sha, status, until });
     }
 
     // One round at a time: a call while a round runs waits for it and then runs one more, so a code issued mid-round
@@ -52,44 +60,65 @@ function createRelayPump({ relay, store, ingest, graceMs, log = () => {} }) {
         return running;
     }
 
+    // Each step that cannot reach the Relay ends the round (one timeout per round, not one per ticket). A step that
+    // throws is logged and skipped so one bad ticket cannot block the rest.
     async function roundOnce() {
+        forgotten.clear(); // no request from an earlier round is still in flight
         for (const [ticket, entry] of [...toRegister]) {
             const found = store.lookup(ticket);
-            if (!found || found.state !== 'issued') {
+            if (!open(found)) {
                 toRegister.delete(ticket);
                 continue;
             }
             if (entry.registered) continue;
-            if (await relay.register({ ticket, expiresAt: entry.expiresAt, policyBody: entry.policyBody })) {
-                toRegister.set(ticket, { ...entry, registered: true });
+            try {
+                if (await relay.register({ ticket, expiresAt: entry.expiresAt, policyBody: entry.policyBody })) {
+                    if (toRegister.has(ticket)) toRegister.set(ticket, { ...entry, registered: true });
+                } else if (unreachable()) return;
+            } catch {
+                log('rongroi relay: register failed', ticket);
             }
         }
-        for (const { ticket, sha, status } of [...toResult.values()]) await postResult(ticket, sha, status);
+        for (const { ticket, sha, status, until } of [...toResult.values()]) {
+            try {
+                await postResult(ticket, sha, status, until);
+            } catch {
+                toResult.delete(`${ticket}:${sha}`);
+                log('rongroi relay: result failed', ticket);
+            }
+            if (unreachable()) return;
+        }
 
         const due = store.relayTickets(graceMs);
         if (due.length === 0) return;
         const count = Math.min(due.length, MAX_TICKETS_PER_ROUND);
+        const start = cursor;
+        cursor = (cursor + count) % due.length;
         for (let i = 0; i < count; i += 1) {
-            const ticket = due[(cursor + i) % due.length];
-            const polled = await relay.poll(ticket);
-            if (polled.status === 404) {
-                const entry = toRegister.get(ticket);
-                const found = store.lookup(ticket);
-                if (entry && found && found.state === 'issued' && Date.now() < found.expiresAt) {
-                    toRegister.set(ticket, { expiresAt: entry.expiresAt, policyBody: entry.policyBody });
+            const ticket = due[(start + i) % due.length];
+            try {
+                const polled = await relay.poll(ticket);
+                if (polled.status === 0) return;
+                if (polled.status === 404) {
+                    const entry = toRegister.get(ticket);
+                    if (entry && open(store.lookup(ticket))) toRegister.set(ticket, { ...entry, registered: false });
+                    continue;
                 }
-                continue;
-            }
-            for (const e of polled.envelopes) {
-                let status = ingest({ ticket, sha: e.sha256, raw: e.raw, receivedAt: e.receivedAt,
-                    address: e.address, addressSource: e.addressSource });
-                if (status === 429) continue; // a slot is busy: leave it on the Relay, try next round
-                if (status === 400 || status === 413) status = 422;
-                if (![200, 404, 409, 410, 422, 500].includes(status)) status = 500;
-                await postResult(ticket, e.sha256, status);
+                const until = Date.now() + graceMs;
+                for (const e of polled.envelopes) {
+                    if (forgotten.has(ticket)) break;
+                    let status = ingest({ ticket, sha: e.sha256, raw: e.raw, receivedAt: e.receivedAt,
+                        address: e.address, addressSource: e.addressSource });
+                    if (status === 429) continue; // a slot is busy: leave it on the Relay, try next round
+                    if (status === 400 || status === 413) status = 422;
+                    if (![200, 404, 409, 410, 422, 500].includes(status)) status = 500;
+                    await postResult(ticket, e.sha256, status, until);
+                    if (unreachable()) return;
+                }
+            } catch {
+                log('rongroi relay: ticket skipped this round', ticket);
             }
         }
-        cursor = (cursor + count) % Math.max(due.length, 1);
     }
 
     // `entries` keeps the registration record (including `registered: true`) so a Relay restart can be repaired.

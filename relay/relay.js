@@ -16,6 +16,7 @@ const ID_RE = /^[a-z0-9_-]{1,64}$/;
 const RESULTS = ['accepted', 404, 409, 410, 422, 500];
 const MAX_ENVELOPE_BYTES = 2 * 1024 * 1024;
 const MAX_POLICY_BYTES = 64 * 1024;
+const MAX_SERVER_BODY_BYTES = 128 * 1024; // a register call: base64 of a 64 KiB policy plus JSON
 const MAX_SLOTS = 3;               // pending or accepted envelopes per ticket
 const RESULT_KEEP_MS = 10 * 60 * 1000; // result word kept past expires_at for Connect's status poll
 const UNANSWERED_KEEP_MS = 60 * 60 * 1000; // envelopes without a result are dropped this long past expires_at
@@ -110,6 +111,13 @@ function createRelay({ servers, trustedProxies = [], now = Date.now, log = () =>
     function preflight(req) {
         const path = (req.path || '').split('?')[0];
         const parts = path.split('/').filter(Boolean);
+        // Server API: a wrong key is refused before any body is read, and a body is at most a register call.
+        if (parts[0] === 'v1') {
+            if (req.method !== 'POST') return null;
+            if (!serverForKey((req.headers || {}).authorization)) return json(401, { status: 401 });
+            if (Number((req.headers || {})['content-length']) > MAX_SERVER_BODY_BYTES) return json(413, { status: 413 });
+            return null;
+        }
         if (req.method !== 'POST' || parts.length !== 2 || parts[1] !== 'report' || !byId.has(parts[0])) return null;
         const h = req.headers || {};
         const who = peer(req.socketAddress, h['x-forwarded-for']);
@@ -245,4 +253,9 @@ function createRelay({ servers, trustedProxies = [], now = Date.now, log = () =>
     return { preflight, handle, sweep, _tickets: tickets };
 }
 
-module.exports = { createRelay, MAX_ENVELOPE_BYTES };
+// The most a request body may be before the relay stops reading it.
+function bodyLimit(path) {
+    return String(path || '').startsWith('/v1/') ? MAX_SERVER_BODY_BYTES : MAX_ENVELOPE_BYTES;
+}
+
+module.exports = { createRelay, bodyLimit, MAX_ENVELOPE_BYTES };

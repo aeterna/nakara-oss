@@ -8,7 +8,7 @@
 //   PORT            default 8080
 const http = require('node:http');
 const crypto = require('node:crypto');
-const { createRelay, MAX_ENVELOPE_BYTES } = require('./relay.js');
+const { createRelay, bodyLimit } = require('./relay.js');
 
 if (process.argv[2] === 'keygen') {
     const id = process.argv[3];
@@ -62,17 +62,20 @@ const server = http.createServer((req, res) => {
         req.resume();
         return;
     }
+    const limit = bodyLimit(req.url);
     const chunks = [];
     let size = 0;
     let over = false;
     req.on('data', (c) => {
         if (over) return;
         size += c.length;
-        if (size > MAX_ENVELOPE_BYTES) {
+        if (size > limit) {
+            // Stop keeping the body, answer 413, and close once the answer is written.
             over = true;
+            chunks.length = 0;
             res.setHeader('Connection', 'close');
-            send(res, ERROR_413);
-            req.destroy();
+            res.writeHead(ERROR_413.status, ERROR_413.headers);
+            res.end(ERROR_413.body, () => req.socket.destroy());
             return;
         }
         chunks.push(c);
