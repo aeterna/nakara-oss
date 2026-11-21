@@ -15,4 +15,15 @@ describe('web i18n merge (x4)', () => {
     expect(t('categories', 'en')).toBe('Categories');
     expect(t('settings', 'en')).toBe('Settings');
   });
+
+  it('labels the picker fields without the word ID', () => {
+    expect(t('parentChannelId', 'en')).toBe('Parent Channel');
+    expect(t('parentChannelId', 'th')).toBe('ช่องหลัก (Parent Channel)');
+    expect(t('staffRoleIds', 'en')).toBe('Staff Roles');
+    expect(t('staffRoleIds', 'th')).toBe('บทบาททีมงาน (Staff Roles)');
+    expect(t('channelId', 'en')).toBe('Channel');
+    expect(t('channelId', 'th')).toBe('ช่อง Discord (Channel)');
+    expect(t('channelRequired', 'en')).toBe('Choose a channel');
+    expect(t('channelRequired', 'th')).toBe('กรุณาเลือกช่อง');
+  });
 });

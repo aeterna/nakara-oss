@@ -85,7 +85,7 @@ describe('Categories component', () => {
     const nameInput = screen.getByLabelText('Category Name') as HTMLInputElement;
     expect(nameInput.value).toBe('General Support');
 
-    const parentSelect = screen.getByLabelText('Parent Channel ID') as HTMLSelectElement;
+    const parentSelect = screen.getByLabelText('Parent Channel') as HTMLSelectElement;
     expect(parentSelect.value).toBe('987654321098765432');
 
     expect((screen.getByLabelText('Role 123') as HTMLInputElement).checked).toBe(true);

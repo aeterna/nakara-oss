@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Locale } from '../i18n.js';
 import { t } from '../i18n.js';
 import {
@@ -6,6 +6,7 @@ import {
   type TicketItem,
   type MessageItem,
 } from '../api/tickets.js';
+import { getGuildMembers } from '../api/discord.js';
 
 import { TicketActions } from '../components/TicketActions.js';
 
@@ -26,6 +27,10 @@ export const Tickets: React.FC<TicketsProps> = ({ guildId, locale }) => {
   const [selectedTicket, setSelectedTicket] = useState<TicketItem | null>(null);
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [loadingMessages, setLoadingMessages] = useState<boolean>(false);
+
+  // Display names for opener and claimer ids; ids are looked up once per guild.
+  const [memberNames, setMemberNames] = useState<Record<string, string>>({});
+  const requestedMemberIds = useRef<Set<string>>(new Set());
 
   // Close modal/dialog state
   const [isClosing, setIsClosing] = useState<boolean>(false);
@@ -75,6 +80,30 @@ export const Tickets: React.FC<TicketsProps> = ({ guildId, locale }) => {
   };
 
   useEffect(() => {
+    requestedMemberIds.current = new Set();
+    setMemberNames({});
+  }, [guildId]);
+
+  useEffect(() => {
+    const visible = [...ticketsList, ...(selectedTicket ? [selectedTicket] : [])];
+    const ids = [...new Set(visible.flatMap((tk) => [tk.openerId, tk.claimerId]))].filter(
+      (id): id is string => !!id && !requestedMemberIds.current.has(id)
+    );
+    if (ids.length === 0) return;
+    ids.forEach((id) => requestedMemberIds.current.add(id));
+    // The API takes at most 50 ids per call.
+    for (let i = 0; i < ids.length; i += 50) {
+      getGuildMembers(guildId, ids.slice(i, i + 50))
+        .then((members) => {
+          setMemberNames((prev) => ({ ...prev, ...Object.fromEntries(members.map((m) => [m.id, m.name])) }));
+        })
+        .catch(() => {
+          // Names are optional: the page keeps showing the raw ids.
+        });
+    }
+  }, [guildId, ticketsList, selectedTicket]);
+
+  useEffect(() => {
     if (!selectedTicketId) {
       loadTickets();
     }
@@ -122,6 +151,25 @@ export const Tickets: React.FC<TicketsProps> = ({ guildId, locale }) => {
       default:
         return 'badge';
     }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'open':
+        return t('statusOpen', locale);
+      case 'claimed':
+        return t('statusClaimed', locale);
+      case 'closed':
+        return t('statusClosed', locale);
+      default:
+        return status;
+    }
+  };
+
+  // Name with the raw id in title; the raw id while the name is loading or missing.
+  const renderMember = (id: string | null) => {
+    if (!id) return t('unassigned', locale);
+    return memberNames[id] ? <span title={id}>{memberNames[id]}</span> : id;
   };
 
   return (
@@ -224,12 +272,12 @@ export const Tickets: React.FC<TicketsProps> = ({ guildId, locale }) => {
                   Ticket #{selectedTicket.number}
                 </h3>
                 <span className={getStatusBadgeClass(selectedTicket.status)}>
-                  {selectedTicket.status}
+                  {getStatusLabel(selectedTicket.status)}
                 </span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginTop: '1rem', fontSize: '0.875rem' }}>
-                <div><strong>{t('opener', locale)}:</strong> {selectedTicket.openerId}</div>
-                <div><strong>{t('claimer', locale)}:</strong> {selectedTicket.claimerId || t('unassigned', locale)}</div>
+                <div><strong>{t('opener', locale)}:</strong> {renderMember(selectedTicket.openerId)}</div>
+                <div><strong>{t('claimer', locale)}:</strong> {renderMember(selectedTicket.claimerId)}</div>
                 <div><strong>{t('createdAt', locale)}:</strong> {new Date(selectedTicket.createdAt).toLocaleString()}</div>
                 {selectedTicket.closeReason && (
                   <div><strong>{t('closeReason', locale)}:</strong> {selectedTicket.closeReason}</div>
@@ -363,11 +411,11 @@ export const Tickets: React.FC<TicketsProps> = ({ guildId, locale }) => {
                         <td style={{ fontWeight: 600 }}>#{tk.number}</td>
                         <td>
                           <span className={getStatusBadgeClass(tk.status)}>
-                            {tk.status}
+                            {getStatusLabel(tk.status)}
                           </span>
                         </td>
-                        <td style={{ fontSize: '0.85rem' }}>{tk.openerId}</td>
-                        <td style={{ fontSize: '0.85rem' }}>{tk.claimerId || t('unassigned', locale)}</td>
+                        <td style={{ fontSize: '0.85rem' }}>{renderMember(tk.openerId)}</td>
+                        <td style={{ fontSize: '0.85rem' }}>{renderMember(tk.claimerId)}</td>
                         <td style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
                           {new Date(tk.createdAt).toLocaleDateString()}
                         </td>

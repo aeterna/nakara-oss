@@ -33,6 +33,7 @@ describe('discord-lookup routes', () => {
 
   const mockChannels = vi.fn();
   const mockRoles = vi.fn();
+  const mockMember = vi.fn();
 
   beforeAll(async () => {
     testEnv = await openTestDb();
@@ -60,7 +61,7 @@ describe('discord-lookup routes', () => {
     app = Fastify();
     app.decorate('config', cfg);
     app.decorate('db', testEnv.db);
-    app.decorate('discord', { listGuildChannels: mockChannels, listGuildRoles: mockRoles });
+    app.decorate('discord', { listGuildChannels: mockChannels, listGuildRoles: mockRoles, getGuildMember: mockMember });
     await installSession(app, { config: cfg, db: testEnv.db });
     await app.register(routes);
     await app.ready();
@@ -132,5 +133,100 @@ describe('discord-lookup routes', () => {
     expect(res.json().code).toBe('discord_unavailable');
     expect(res.json().message).not.toContain('mock-bot-token');
     expect(res.json().message).toContain('[REDACTED]');
+  });
+
+  describe('members', () => {
+    const M1 = '100000000000000001';
+    const M2 = '100000000000000002';
+    const M3 = '100000000000000003';
+    const members = (ids: string[], cookie = staffCookie) =>
+      app.inject({
+        method: 'GET',
+        url: `/api/v1/guilds/${GUILD_A}/discord/members?ids=${ids.join(',')}`,
+        headers: { cookie },
+      });
+
+    it('enforces staff-only 401 and 403', async () => {
+      const r1 = await app.inject({ method: 'GET', url: `/api/v1/guilds/${GUILD_A}/discord/members?ids=${M1}` });
+      expect(r1.statusCode).toBe(401);
+      const r2 = await members([M1], nonStaffCookie);
+      expect(r2.statusCode).toBe(403);
+      expect(mockMember).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 invalid_ids for a malformed id and for more than 50 unique ids', async () => {
+      const bad = await members(['abc']);
+      expect(bad.statusCode).toBe(400);
+      expect(bad.json().code).toBe('invalid_ids');
+
+      const fiftyOne = Array.from({ length: 51 }, (_, i) => `10000000000000000${String(i).padStart(2, '0')}`);
+      const tooMany = await members(fiftyOne);
+      expect(tooMany.statusCode).toBe(400);
+      expect(tooMany.json().code).toBe('invalid_ids');
+      expect(mockMember).not.toHaveBeenCalled();
+    });
+
+    it('counts duplicate ids once, so 50 unique ids plus a repeat are accepted', async () => {
+      mockMember.mockImplementation(async (_g: string, id: string) => ({ user: { id, username: 'x' } }));
+      const fifty = Array.from({ length: 50 }, (_, i) => `10000000000000000${String(i).padStart(2, '0')}`);
+      const res = await members([...fifty, fifty[0]]);
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toHaveLength(50);
+      expect(mockMember).toHaveBeenCalledTimes(50);
+    });
+
+    it('answers nick, then global_name, then username', async () => {
+      mockMember.mockImplementation(async (_g: string, id: string) => {
+        if (id === M1) return { nick: 'Nick One', user: { id: M1, username: 'u1', global_name: 'Global One' } };
+        if (id === M2) return { user: { id: M2, username: 'u2', global_name: 'Global Two' } };
+        return { user: { id: M3, username: 'user_three' } };
+      });
+      const res = await members([M1, M2, M3]);
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual([
+        { id: M1, name: 'Nick One' },
+        { id: M2, name: 'Global Two' },
+        { id: M3, name: 'user_three' },
+      ]);
+    });
+
+    it('serves a repeated lookup from the cache without a second Discord fetch', async () => {
+      mockMember.mockResolvedValue({ nick: 'Cached', user: { id: M1, username: 'c' } });
+      for (let i = 0; i < 2; i++) {
+        const res = await members([M1]);
+        expect(res.json()).toEqual([{ id: M1, name: 'Cached' }]);
+      }
+      expect(mockMember).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves out a 404 member and caches the miss', async () => {
+      mockMember.mockImplementation(async (_g: string, id: string) => {
+        if (id === M2) throw Object.assign(new Error('Unknown Member'), { status: 404 });
+        return { user: { id, username: 'one' } };
+      });
+      for (let i = 0; i < 2; i++) {
+        const res = await members([M1, M2]);
+        expect(res.json()).toEqual([{ id: M1, name: 'one' }]);
+      }
+      expect(mockMember.mock.calls.filter(([, id]) => id === M2)).toHaveLength(1);
+    });
+
+    it('leaves out only the failing member on another Discord error and does not cache it', async () => {
+      let failing = true;
+      mockMember.mockImplementation(async (_g: string, id: string) => {
+        if (id === M2 && failing) throw Object.assign(new Error('boom'), { status: 500 });
+        return { user: { id, username: id === M1 ? 'one' : 'two' } };
+      });
+      const first = await members([M1, M2]);
+      expect(first.statusCode).toBe(200);
+      expect(first.json()).toEqual([{ id: M1, name: 'one' }]);
+
+      failing = false;
+      const second = await members([M1, M2]);
+      expect(second.json()).toEqual([
+        { id: M1, name: 'one' },
+        { id: M2, name: 'two' },
+      ]);
+    });
   });
 });
