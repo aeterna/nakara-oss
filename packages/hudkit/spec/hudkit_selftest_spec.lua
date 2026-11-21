@@ -332,11 +332,16 @@ describe('aeterna_hudkit self-tests', function()
             assert.is_nil(steps[3].expect)
         end)
 
-        it('fails without firing anything when the presser is not in a vehicle', function()
-            local state, detail, extra = ST.seatbeltVerdict(nil, true, false)
-            assert.are.equal('fail', state)
-            assert.truthy(detail:find('vehicle', 1, true))
-            assert.is_true(extra.restored)
+        it('skips without firing anything when the presser never got in a vehicle', function()
+            local state, detail = ST.seatbeltVerdict(nil, true, false)
+            assert.are.equal('skip', state)
+            assert.are.equal('presser is not in a vehicle', detail)
+        end)
+
+        it('gives the presser time to get in a vehicle within the row timeout', function()
+            local m = by_name(ST.definitions())
+            assert.is_true(ST.SEATBELT_WAIT_MS >= 10000)
+            assert.is_true(m.seatbelt_event.timeout > ST.SEATBELT_WAIT_MS + 2000)
         end)
 
         it('reports mock with restored only when every step matched and the state is back', function()
@@ -472,6 +477,7 @@ describe('aeterna_hudkit self-tests', function()
         local function load_client(opts)
             opts = opts or {}
             local inVehicle = opts.inVehicle == true
+            local vehicleBox = { set = function(v) inVehicle = v end }
             natives.reset({ side = 'client', resource = 'aeterna_hudkit', invoker = 'aeterna_hudkit' })
             natives.spy('RegisterCommand')
             natives.spy('RegisterKeyMapping')
@@ -497,7 +503,7 @@ describe('aeterna_hudkit self-tests', function()
             end
             resource.load_resource(DIR, 'client', loadOpts)
             natives.advance(0)
-            return { reports = reports, ui = ui }
+            return { reports = reports, ui = ui, setInVehicle = vehicleBox.set }
         end
 
         local function seatbeltStates(ui, from)
@@ -529,16 +535,29 @@ describe('aeterna_hudkit self-tests', function()
             assert.is_true(ctx.reports[1].extra.restored)
         end)
 
-        it('seatbelt_event on foot fails and fires nothing', function()
+        it('seatbelt_event waits for the presser to get in, then runs', function()
+            local ctx = load_client({ inVehicle = false })
+            natives.advance(500)
+            fireAsCore('aeterna_core:selftest', 'r2-abcd', 'aeterna_hudkit.seatbelt_event',
+                { kind = 'mock', side = 'client', role = 'A' })
+            natives.advance(3000)
+            assert.are.equal(0, #ctx.reports)
+            ctx.setInVehicle(true)
+            natives.advance(1000)
+            assert.are.equal(1, #ctx.reports)
+            assert.are.equal('mock', ctx.reports[1].ok)
+        end)
+
+        it('seatbelt_event skips and fires nothing when the presser stays on foot', function()
             local ctx = load_client({ inVehicle = false })
             natives.advance(500)
             local from = #ctx.ui + 1
             fireAsCore('aeterna_core:selftest', 'r2-abcd', 'aeterna_hudkit.seatbelt_event',
                 { kind = 'mock', side = 'client', role = 'A' })
-            natives.advance(0)
+            natives.advance(ST.SEATBELT_WAIT_MS + 1000)
             assert.are.equal(0, seatbeltStates(ctx.ui, from).n)
-            assert.are.equal('fail', ctx.reports[1].ok)
-            assert.truthy(ctx.reports[1].detail:find('vehicle', 1, true))
+            assert.are.equal('skip', ctx.reports[1].ok)
+            assert.are.equal('presser is not in a vehicle', ctx.reports[1].detail)
         end)
 
         it('seatbelt_event reports skip with the config reason when the icon is off', function()

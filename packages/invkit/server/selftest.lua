@@ -8,9 +8,9 @@ local A = InvkitOxAdapter
 local hooks = InvkitServerSelftestHooks
 local RESOURCE = GetCurrentResourceName()
 
-local function translate(key)
+local function translate(key, vars)
     if AeternaCore and type(AeternaCore.t) == 'function' then
-        return AeternaCore.t(key)
+        return AeternaCore.t(key, vars)
     end
     if Locales and Locales.en and Locales.en[key] then
         return Locales.en[key]
@@ -22,7 +22,7 @@ local function mayWrite(runId, name)
     return AeternaCore.selftest.mayWrite(runId, name) == true
 end
 
-for _, row in ipairs(ST.definitions(translate)) do
+for _, row in ipairs(ST.definitions(translate, Config)) do
     exports.aeterna_core:addSelftest(row.name, row.meta)
 end
 
@@ -122,8 +122,23 @@ local function unregister(prep)
     prep.registered = false
 end
 
+-- The use gate: a test registration takes only the presser's item tagged with the run id. Any other player's
+-- use, or the presser's own untagged item of the same name, falls through to ox_inventory.
+local function useGate(src, item, slot, metadata, entry)
+    if type(entry) ~= 'table' or entry.owner ~= RESOURCE then return true end
+    for _, prep in pairs(prepared) do
+        if prep.item == item and prep.src == src then
+            if type(metadata) == 'table' then return metadata.aeterna_selftest == prep.runId end
+            local tagged = findTagged(src, item, prep.runId)
+            return tagged ~= nil and tonumber(tagged.slot) == tonumber(slot)
+        end
+    end
+    return false
+end
+hooks.setUseGate(useGate)
+
 -- Registers a usable on a free default item, gives the presser one tagged with the run id, and starts the use
--- once the client listens. Nothing happens unless the write guard agrees.
+-- once the client listens. Nothing happens unless the write guard agrees, at the start and again before the use.
 local function prepareItemUse(runId, name, src)
     local item = ST.pickUseItem(function(n) return hooks.useManager:getUsable(n) ~= nil end)
     if not item or not mayWrite(runId, name) then return end
@@ -139,9 +154,11 @@ local function prepareItemUse(runId, name, src)
     local key = runId .. '|' .. name
     prepared[key] = prep
     SetTimeout(ST.USE_START_DELAY_MS, function()
-        if prepared[key] ~= prep then return end
+        if prepared[key] ~= prep or not mayWrite(runId, name) then return end
         local slot = findTagged(src, item, runId)
-        if slot then hooks.useManager:startUse(src, item, tonumber(slot.slot)) end
+        if slot and useGate(src, item, tonumber(slot.slot), slot.metadata, hooks.useManager:getUsable(item)) then
+            hooks.useManager:startUse(src, item, tonumber(slot.slot))
+        end
     end)
 end
 
@@ -155,6 +172,8 @@ end)
 
 -- The used event for the test item: drop the registration at once, so the use runs exactly once.
 AddEventHandler('aeterna_invkit:used', function(src, data)
+    local invoker = GetInvokingResource()
+    if invoker ~= nil and invoker ~= RESOURCE then return end -- fired by invkit's own use manager only
     if type(data) ~= 'table' or data.owner ~= RESOURCE then return end
     for _, prep in pairs(prepared) do
         if prep.src == src and prep.item == data.item then unregister(prep) end
@@ -178,8 +197,8 @@ AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
     tearDown(tostring(runId) .. '|' .. tostring(name))
 end)
 
--- aeterna_core stopped mid-test: no selftestEnd will come, so undo every preparation now.
+-- aeterna_core or invkit itself stopped mid-test: no selftestEnd will come, so undo every preparation now.
 AddEventHandler('onResourceStop', function(res)
-    if res ~= 'aeterna_core' then return end
+    if res ~= 'aeterna_core' and res ~= RESOURCE then return end
     for key in pairs(prepared) do tearDown(key) end
 end)

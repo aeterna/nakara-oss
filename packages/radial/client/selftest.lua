@@ -48,6 +48,8 @@ end
 
 -- Picks of the temporary slots: say which one, and tell the watch.
 AddEventHandler('aeterna_radial:select', function(owner, id)
+    local invoker = GetInvokingResource()
+    if invoker ~= nil and invoker ~= RESOURCE then return end -- fired by radial itself only
     local test = current
     if not test or owner ~= RESOURCE or not test.labels[id] then return end
     feedLine(ST.pickedLine(AeternaCore.t, test.labels[id]))

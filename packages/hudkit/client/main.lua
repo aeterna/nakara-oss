@@ -692,6 +692,7 @@ end)
 
 -- Focus loss handler from aeterna_core
 AddEventHandler('aeterna_core:focusLost', function(owner, token)
+    if GetInvokingResource() ~= 'aeterna_core' then return end -- focus decisions come from core only
     local selfName = type(GetCurrentResourceName) == 'function' and GetCurrentResourceName() or 'aeterna_hudkit'
     if owner ~= nil and owner ~= selfName then return end
     if token ~= nil and focusToken ~= nil and token ~= focusToken then return end
@@ -702,6 +703,7 @@ end)
 
 -- Focus overlay (core 0.2): paused keeps the card open; resumed gives input back.
 AddEventHandler('aeterna_core:focusPaused', function(owner, token)
+    if GetInvokingResource() ~= 'aeterna_core' then return end -- focus decisions come from core only
     if owner ~= selfResource() then return end
     if token ~= nil and focusToken ~= nil and token ~= focusToken then return end
     if settingsOpen then
@@ -710,6 +712,7 @@ AddEventHandler('aeterna_core:focusPaused', function(owner, token)
 end)
 
 AddEventHandler('aeterna_core:focusResumed', function(owner, token)
+    if GetInvokingResource() ~= 'aeterna_core' then return end -- focus decisions come from core only
     if owner ~= selfResource() then return end
     if token ~= nil and focusToken ~= nil and token ~= focusToken then return end
     focusPaused = false

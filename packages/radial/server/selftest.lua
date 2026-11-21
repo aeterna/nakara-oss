@@ -39,6 +39,8 @@ AddEventHandler('aeterna_core:selftestStarted', function(runId, name, ctx)
 end)
 
 AddEventHandler('aeterna_radial:select', function(src, data)
+    local invoker = GetInvokingResource()
+    if invoker ~= nil and invoker ~= RESOURCE then return end -- fired by radial itself only
     if type(data) ~= 'table' or data.owner ~= RESOURCE or data.id ~= ST.RECHECK_ID then return end
     hooks.sendSlot(src, { op = 'remove', owner = RESOURCE, id = ST.RECHECK_ID })
 end)

@@ -65,8 +65,11 @@ local function stashOpen(runId, name)
     report(runId, name, watch.verdict())
 end
 
-AddEventHandler('aeterna_invkit:cl:use', function()
-    useCount = useCount + 1
+-- Counts only the test's own use (its label); a real use of another item during the test is not counted.
+AddEventHandler('aeterna_invkit:cl:use', function(data)
+    if type(data) == 'table' and data.label == ST.USE_DEF.label then
+        useCount = useCount + 1
+    end
 end)
 
 -- Tagged test items of this run, from the client's own ox_inventory view: item name and count.

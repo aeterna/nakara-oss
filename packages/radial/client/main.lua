@@ -271,6 +271,7 @@ end)
 
 -- Focus from aeterna_core: lost closes with no pick; an overlay pauses the menu until it resumes.
 AddEventHandler('aeterna_core:focusLost', function(owner, token)
+    if GetInvokingResource() ~= 'aeterna_core' then return end -- focus decisions come from core only
     if owner == RESOURCE and menu and menu.token == token then
         menu.token = nil
         close()
@@ -278,10 +279,12 @@ AddEventHandler('aeterna_core:focusLost', function(owner, token)
 end)
 
 AddEventHandler('aeterna_core:focusPaused', function(owner)
+    if GetInvokingResource() ~= 'aeterna_core' then return end -- focus decisions come from core only
     if owner == RESOURCE and menu then menu.paused = true end
 end)
 
 AddEventHandler('aeterna_core:focusResumed', function(owner, token)
+    if GetInvokingResource() ~= 'aeterna_core' then return end -- focus decisions come from core only
     if owner == RESOURCE and menu and menu.token == token then menu.paused = false end
 end)
 

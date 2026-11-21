@@ -8,6 +8,8 @@ local PREFIX = 'aeterna_hudkit.'
 
 -- The voice rows wait this long for the presser to act, then report what they saw before core's timeout.
 HudSelftest.VOICE_WATCH_MS = 25000
+-- seatbelt_event waits this long for the presser to sit in a vehicle before it skips.
+HudSelftest.SEATBELT_WAIT_MS = 20000
 
 local ROWS = {
     { name = 'values_mapping', kind = 'headless' },
@@ -16,7 +18,7 @@ local ROWS = {
     { name = 'compass_tape', kind = 'ped', expect = true, timeout = 10000 },
     { name = 'voice_indicator', kind = 'ped', expect = true, timeout = 30000, needsVoice = true },
     { name = 'voice_radio', kind = 'ped', expect = true, timeout = 30000, needsVoice = true },
-    { name = 'seatbelt_event', kind = 'mock', side = 'client', expect = true },
+    { name = 'seatbelt_event', kind = 'mock', side = 'client', expect = true, timeout = 30000 },
     { name = 'minimap_follows', kind = 'ped', expect = true },
 }
 
@@ -224,12 +226,12 @@ function HudSelftest.seatbeltSteps()
 end
 
 --- observed[i] = icon state hudkit's own handler sent after step i; restored = the state before the test is
---- back; inVehicle = false: the presser was on foot, so nothing was fired (the spec runs it in a vehicle).
+--- back; inVehicle = false: the presser never sat in a vehicle within SEATBELT_WAIT_MS, so nothing was fired.
 function HudSelftest.seatbeltVerdict(observed, restored, inVehicle)
-    local extra = { restored = restored == true }
     if inVehicle == false then
-        return 'fail', 'needs the presser in a vehicle', extra
+        return 'skip', 'presser is not in a vehicle'
     end
+    local extra = { restored = restored == true }
     for i, step in ipairs(HudSelftest.seatbeltSteps()) do
         local got = observed and observed[i]
         if got ~= step.expect then
