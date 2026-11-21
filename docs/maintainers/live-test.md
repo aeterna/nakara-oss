@@ -64,7 +64,7 @@ facts, never values that identify a person:
 | Player ids from the player list are **strings** | Lua exports (`ox_inventory`, `qbx_medical`, `qbx_core`) look players up by **number**; pass `Number(id)`. `AddItem('1', …)` returns `[false, "invalid_inventory"]` |
 | A Lua export that returns several values arrives in JS as an **array** | normalise: `const ok = Array.isArray(r) ? r[0] : r` |
 | A command handler is called as `(source, args, rawCommand)` | never give the handler a third parameter with another meaning; wrap it |
-| Each long-poll cycle ending can log `Invalid state: Reader released` from Node's web streams | non-fatal in our run; still open |
+| Every `fetch` that sends a request body logs `Uncaught TypeError: Invalid state: Reader released` (string, `Buffer`, `Uint8Array`, `Blob`, stream with `duplex: 'half'`, `new Request()`, `keepalive` all do; `GET` and a `POST` with no body do not). Measured 2026-11-21 on Node v26.3.0 inside FXServer | the response still arrives and is read normally; the line is console noise from the runtime, not the resource. Do not chase it in resource code; to tell it apart from a real failure, check that the request's result arrived |
 
 ## Before you call the resource tested
 

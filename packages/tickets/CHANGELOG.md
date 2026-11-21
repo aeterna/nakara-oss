@@ -6,6 +6,8 @@ All notable changes to `nakara_tickets` are documented here. The format follows
 
 ## Unreleased
 
+## 0.1.0 - 2026-11-21
+
 ### Added
 
 - Initial release of `nakara_tickets` game bridge resource.
@@ -28,3 +30,9 @@ All notable changes to `nakara_tickets` are documented here. The format follows
 - Outbound HTTP folding in `api.js` and capability declaration in `oss.json`.
 - In-memory execution cache pruning in `store.js`.
 - Polling error resilience and result retry capping in `main.js`.
+
+### Known issues
+
+- FXServer's embedded Node (v26.3.0 on Enhanced) logs `Uncaught TypeError: Invalid state: Reader released` for every
+  `fetch` that sends a request body, so the console shows it at pairing and on each heartbeat (every 30 s). The request
+  and its response complete normally; requests without a body do not log it. Measured on a live server 2026-11-21.
