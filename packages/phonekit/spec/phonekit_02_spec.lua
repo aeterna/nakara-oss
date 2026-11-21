@@ -31,9 +31,9 @@ describe('aeterna_phonekit 0.2 additions', function()
             assert.is_true(D.isAppAllowed('*', 'contacts', nil, 'burner'))
         end)
 
-        it('drawn scale multiplies the fit by the layout scale', function()
-            assert.are.equal(0.4, S.drawnScale(0.5, 0.8))
-            assert.are.equal(0.8, S.drawnScale(1, 0.8))
+        it('drawn scale is min(place scale, fit)', function()
+            assert.are.equal(0.8, S.drawnScale(0.8, 0.84))
+            assert.are.equal(0.9, S.drawnScale(1.5, 0.9))
             assert.are.equal(1, S.drawnScale(nil, nil))
         end)
     end)
@@ -92,6 +92,12 @@ describe('aeterna_phonekit 0.2 additions', function()
             assert.are.equal('#3A5F8F', D.colorAt('keypad', nil, 1))
             assert.are.equal('#33363B', D.colorAt('keypad', nil, 0))
             assert.are.equal('#33363B', D.colorAt('keypad', nil, 9))
+        end)
+
+        it('Config.cover = false forces a fold open', function()
+            assert.are.equal('open', D.validateFold('fold', 'closed', false))
+            assert.are.equal('closed', D.validateFold('fold', 'closed', true))
+            assert.are.equal('closed', D.validateFold('book', 'closed', false))
         end)
 
         it('builds the server KVP owner key', function()
@@ -237,7 +243,7 @@ describe('aeterna_phonekit 0.2 additions', function()
             ev = B.set(st, 25, cfg)
             assert.are.same({}, ev.warn)
             ev = B.set(st, 4, cfg)
-            assert.are.same({ 20, 10, 5 }, ev.warn)
+            assert.are.same({ 5 }, ev.warn)
             ev = B.set(st, 0, cfg)
             assert.are.same({}, ev.warn)
             assert.is_false(ev.power)
@@ -384,12 +390,15 @@ describe('aeterna_phonekit 0.2 additions', function()
             assert.is_true(small.y >= 0 and small.y + 700 * small.scale <= 720)
         end)
 
-        it('drawn scale uses the place scale and the fit', function()
-            local r = S.frameRect({ x = 0.5, y = 0.5, ax = 0.5, ay = 0.5, scale = 0.5 }, 'bottom-right', 392, 812, 1920, 1080)
-            assert.are.equal(S.drawnScale(0.5, D.calcFit(392, 812, 1920, 1080)), r.scale)
-            assert.is_true(r.scale <= 0.5)
-            local big = S.frameRect({ x = 0.5, y = 0.5, ax = 0.5, ay = 0.5, scale = 3 }, 'bottom-right', 392, 812, 1280, 720)
-            assert.is_true(812 * big.scale <= 720)
+        it('drawn scale = min(place scale, fit) on real viewports', function()
+            -- slab 392 x 812 in 1280 x 720: fit = (720 - 0.048 * 720) / 812 = 0.8441
+            local fit = (720 - 0.048 * 720) / 812
+            local r = S.frameRect({ x = 0.5, y = 0.5, ax = 0.5, ay = 0.5, scale = 0.8 }, 'bottom-right', 392, 812, 1280, 720)
+            assert.are.equal(0.8, r.scale)
+            local big = S.frameRect({ x = 0.5, y = 0.5, ax = 0.5, ay = 0.5, scale = 1.5 }, 'bottom-right', 392, 812, 1280, 720)
+            assert.is_true(math.abs(big.scale - fit) < 1e-9)
+            local none = S.frameRect(nil, 'bottom-right', 392, 812, 1920, 1080)
+            assert.are.equal(1, none.scale)
         end)
     end)
 
@@ -439,6 +448,15 @@ describe('aeterna_phonekit 0.2 additions', function()
             assert.is_nil(intents:route('fax', '1'))
             assert.is_true(intents:isHandler('tel', 'res_a', 'dialer'))
             assert.is_false(intents:isHandler('tel', 'res_b', 'dialer2'))
+            intents:set('res_a', 'dialer', { 'tel' })
+            assert.is_true(intents:isHandler('tel', 'res_a', 'dialer'))
+            intents:set('res_a', 'dialer', {})
+            assert.is_true(intents:isHandler('tel', 'res_b', 'dialer2'))
+            intents:set('res_a', 'dialer', { 'tel' })
+            assert.is_true(intents:isHandler('tel', 'res_b', 'dialer2'))
+            assert.is_true(H.isPhoneNumber('+66 (81) 555-01*2#'))
+            assert.is_false(H.isPhoneNumber('call me'))
+            assert.is_false(H.isPhoneNumber(''))
             intents:removeOwner('res_a')
             assert.are.equal('res_b', intents:route('tel', '1').owner)
             assert.are.same({ tel = { owner = 'res_b', id = 'dialer2' }, sms = { owner = 'res_b', id = 'dialer2' } },
@@ -657,6 +675,92 @@ describe('aeterna_phonekit 0.2 server under the harness', function()
         assert.is_true(before - api.battery(1) <= 1)
     end)
 
+    local function bootItems()
+        natives.reset({ resource = 'aeterna_phonekit', side = 'server', players = { [1] = 'One' } })
+        natives.stub('AeternaCore', {
+            log = { debug = function() end, info = function() end, warn = function() end, error = function() end },
+            t = function(k) return k end,
+            lang = function() return 'en' end,
+            can = function() return true end,
+            rateLimit = function() return true end,
+        })
+        natives.stub('GetPlayerIdentifierByType', function() return 'license:abc' end)
+        natives.stub_export('aeterna_notify', 'notify', function() return true end)
+        natives.stub('Config', { devices = 'items', models = {}, battery = {}, apps = {} })
+        local res = resource.load_resource(DIR, 'server', { skip = { ['config.lua'] = true } })
+        return res.exports
+    end
+
+    local function answerLast(answer)
+        local ask = natives.last_emitted('local', 'aeterna_phonekit:asking')
+        natives.fire('aeterna_phonekit:answer', ask.args[2].checkId, answer)
+    end
+
+    it('items: a phone handed away and back carries the battery from the item', function()
+        local api = bootItems()
+        natives.fire_net('aeterna_phonekit:sv:open', 1)
+        answerLast({ allow = true, devices = { { id = 'A', model = 'slab', battery = 80, fold = nil },
+            { id = 'B', model = 'keypad', battery = 50 } } })
+        assert.are.equal('A', api.device(1).id)
+        assert.is_true(api.setBattery(1, 40))
+        api.refreshDevices(1)
+        answerLast({ allow = true, devices = { { id = 'B', model = 'keypad', battery = 50 } } })
+        assert.are.equal('B', api.device(1).id)
+        api.refreshDevices(1)
+        answerLast({ allow = true, devices = { { id = 'A', model = 'slab', battery = 90 },
+            { id = 'B', model = 'keypad', battery = 50 } } })
+        assert.are.equal('A', api.device(1).id)
+        assert.are.equal(90, api.battery(1))
+    end)
+
+    it('items: the active phone keeps its own number; a fold-less item is not saved on every answer', function()
+        local api = bootItems()
+        natives.fire_net('aeterna_phonekit:sv:open', 1)
+        answerLast({ allow = true, devices = { { id = 'A', model = 'slab', battery = 80 } } })
+        api.setBattery(1, 61)
+        local saves = #natives.emitted('local', 'aeterna_phonekit:deviceSave')
+        api.refreshDevices(1)
+        answerLast({ allow = true, devices = { { id = 'A', model = 'slab', battery = 80 } } })
+        assert.are.equal(61, api.battery(1))
+        assert.are.equal(saves, #natives.emitted('local', 'aeterna_phonekit:deviceSave'))
+    end)
+
+    it('items: switching to a phone at 0 % powers off; no device refuses open with nodevice', function()
+        local api = bootItems()
+        natives.fire_net('aeterna_phonekit:sv:open', 1)
+        answerLast({ allow = true, devices = { { id = 'A', model = 'slab', battery = 80 },
+            { id = 'Z', model = 'keypad', battery = 0 } } })
+        natives.fire_net('aeterna_phonekit:sv:device', 1, { id = 'Z' })
+        assert.is_false(lastArgs('client', 'aeterna_phonekit:cl:power').on)
+        natives.fire_net('aeterna_phonekit:sv:device', 1, { id = 'A' })
+        assert.is_true(lastArgs('client', 'aeterna_phonekit:cl:power').on)
+
+        natives.stub('GetPlayerIdentifierByType', function() return nil end)
+        natives.fire_net('aeterna_phonekit:sv:open', 2)
+        assert.are.equal('phonekit.refused.nodevice', lastArgs('client', 'aeterna_phonekit:cl:refused').reason)
+    end)
+
+    it('intent number must look like a number; the live pill is cleared only by its owner', function()
+        local api = boot()
+        assert.is_true(api.addTile({ id = 'dialer', label = 'Dialer', icon = 'phone', handles = { 'tel' } }))
+        natives.fire_net('aeterna_phonekit:sv:battery', 1)
+        natives.fire_net('aeterna_phonekit:sv:open', 1)
+        local before = #natives.emitted('local', 'aeterna_phonekit:app')
+        natives.fire_net('aeterna_phonekit:sv:tap', 1, { id = 'dialer', owner = 'aeterna_phonekit',
+            intent = { kind = 'tel', number = 'drop table' } })
+        assert.are.equal(before, #natives.emitted('local', 'aeterna_phonekit:app'))
+        natives.fire_net('aeterna_phonekit:sv:tap', 1, { id = 'dialer', owner = 'aeterna_phonekit',
+            intent = { kind = 'tel', number = '555-0101' } })
+        assert.are.equal(before + 1, #natives.emitted('local', 'aeterna_phonekit:app'))
+
+        natives.stub('GetInvokingResource', function() return 'res_a' end)
+        assert.is_true(api.live(1, { id = 'call', text = 'On call' }))
+        natives.stub('GetInvokingResource', function() return 'res_b' end)
+        assert.is_false(api.live(1, nil))
+        natives.stub('GetInvokingResource', function() return 'res_a' end)
+        assert.is_true(api.live(1, nil))
+    end)
+
     it('ring: busy on a second ring, answer maps to __answer, sv:fold refused on a slab', function()
         local api = boot()
         assert.is_true(api.addTile({ id = 'dialer', label = 'Dialer', icon = 'phone', needs = 'voice', handles = { 'tel' } }))
@@ -677,5 +781,32 @@ describe('aeterna_phonekit 0.2 server under the harness', function()
         local kvpBefore = natives.get_kvp('aeterna_phonekit:device:v1:lic:license:abc')
         natives.fire_net('aeterna_phonekit:sv:fold', 1, { state = 'closed' })
         assert.are.equal(kvpBefore, natives.get_kvp('aeterna_phonekit:device:v1:lic:license:abc'))
+    end)
+end)
+
+describe('aeterna_phonekit 0.2 client under the harness', function()
+    local resource = require('helpers.resource')
+
+    it('a focus-denied open tells the server the phone is closed', function()
+        natives.reset({ resource = 'aeterna_phonekit', side = 'client' })
+        natives.spy('SendNUIMessage')
+        natives.spy('RegisterNUICallback')
+        natives.spy('RegisterKeyMapping')
+        natives.spy('RegisterCommand')
+        natives.stub('AeternaCore', {
+            log = { debug = function() end, info = function() end, warn = function() end, error = function() end },
+            t = function(k) return k end,
+            lang = function() return 'en' end,
+            kvp = { get = function(_, _, default) return default end, set = function() end },
+            key = function() end,
+            requestFocus = function() return nil end,
+            releaseFocus = function() return true end,
+        })
+        natives.stub_export('aeterna_core', 'themeHref', function() return nil end)
+        natives.stub_export('aeterna_notify', 'history', function() return {} end)
+        resource.load_resource(DIR, 'client')
+        local before = #natives.emitted('server', 'aeterna_phonekit:sv:close')
+        natives.fire('aeterna_phonekit:cl:open', { apps = {} })
+        assert.are.equal(before + 1, #natives.emitted('server', 'aeterna_phonekit:sv:close'))
     end)
 end)
