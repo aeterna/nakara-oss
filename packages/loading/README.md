@@ -77,6 +77,15 @@ None.
 - **Supported / รองรับ:** standalone servers and Qbox/QBCore/ESX servers, with or without `aeterna_core`, Thai and English page strings.
 - **Not supported / ไม่รองรับ:** remote images, video or audio, theming through `aeterna_theme` (the page runs before convars can be read), more than one loading screen resource on a server.
 
+## Differences from the spec / ต่างจากสเปก
+
+These are deliberate and wait for the spec update ([spec § Manifest](../../docs/specs/aeterna_loading.md#manifest), [§ Stages](../../docs/specs/aeterna_loading.md#stages)):
+
+1. **Manifest: shared logic.** The spec's manifest lists only `client_script 'client/main.lua'` and `server_script 'server/main.lua'`. This package also loads `shared/logic/loading.lua` with `shared_script`, because both sides need it: the server validates `html/config.json`, and the client reads `shutdown.fallbackSeconds` and the close timing from it.
+2. **Manifest: Lua locales on the server only.** `locales/th.lua` and `locales/en.lua` hold only the server's `warn` line (`loading.config.bad`), so they are `server_scripts`, not shared. The page's strings are in `html/locale.json`.
+3. **Shutdown hard cap.** While the game session has not started, the client script also closes the page `shutdown.fallbackSeconds` after this resource started, so a session that never starts cannot leave the player on a manually shut-down loading screen. If `LoadingLogic` is missing or the config cannot be read, it closes after the default 30 s. Once the session starts, the spec's rule applies (close on `playerSpawned` or `fallbackSeconds` after the session started).
+4. **`tips: {}`.** Lua JSON decoders cannot tell an empty object from an empty list, so both validators treat `"tips": {}` as an empty list (the tip line is hidden). A non-empty object is refused.
+
 ## Capabilities
 
 What this resource is allowed to do to your server, from [`oss.json`](oss.json). Keep this table in sync with `oss.json`; widening a capability needs maintainer review.
