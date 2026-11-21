@@ -108,6 +108,14 @@ describe('1. Config validation', () => {
     assert.deepEqual(cfg.tips, []);
   });
 
+  test('treats an empty JSON object for tips as an empty list, and refuses a non-empty object', () => {
+    // Lua JSON decoders cannot tell {} from []; the Lua twin applies the same rule.
+    const { config: cfg, errors } = L.validateConfig(JSON.parse('{"tips":{}}'));
+    assert.deepEqual(errors, []);
+    assert.deepEqual(cfg.tips, []);
+    assert.deepEqual(fields(L.validateConfig(JSON.parse('{"tips":{"a":"tip"}}')).errors), ['tips']);
+  });
+
   test('refuses paths outside the resource or with a wrong extension', () => {
     const bad = ['/x.jpg', '/custom/bg.jpg', '../bg.jpg', 'custom/../../bg.jpg', 'http://example.com/bg.jpg',
       'http:bg.jpg', '//example.com/bg.jpg', 'custom//bg.jpg', 'custom/bg.png.exe', 'custom/bg', 'nui:x.png'];

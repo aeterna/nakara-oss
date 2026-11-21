@@ -124,6 +124,15 @@ describe('aeterna_loading', function()
             assert.are.same({}, cfg.tips)
         end)
 
+        it('treats an empty JSON object for tips as an empty list, and refuses a non-empty object', function()
+            -- Lua JSON decoders cannot tell {} from []; the JS twin applies the same rule.
+            local cfg, errors = L.validateConfig(json.decode('{"tips":{}}'))
+            assert.are.same({}, errors)
+            assert.are.same({}, cfg.tips)
+            local _, errors2 = L.validateConfig(json.decode('{"tips":{"a":"tip"}}'))
+            assert.are.same({ 'tips' }, fields(errors2))
+        end)
+
         it('refuses paths outside the resource or with a wrong extension', function()
             local bad = { '/x.jpg', '/custom/bg.jpg', '../bg.jpg', 'custom/../../bg.jpg', 'http://example.com/bg.jpg',
                 'http:bg.jpg', '//example.com/bg.jpg', 'custom//bg.jpg', 'custom/bg.png.exe', 'custom/bg', 'nui:x.png' }
@@ -313,6 +322,95 @@ describe('aeterna_loading', function()
             assert.is_false(L.fallbackDue(nil, 100000, 30))
             assert.is_false(L.fallbackDue(1000, 30999, 30))
             assert.is_true(L.fallbackDue(1000, 31000, 30))
+        end)
+
+        it('closeDue: counts from the session start, or from the resource start while the session has not started', function()
+            -- resource started at 1000, session never started: hard cap at 1000 + 30 s
+            assert.is_false(L.closeDue(1000, nil, 30999, 30))
+            assert.is_true(L.closeDue(1000, nil, 31000, 30))
+            -- session started at 20000: due at 50000, not at the resource-start cap
+            assert.is_false(L.closeDue(1000, 20000, 49999, 30))
+            assert.is_true(L.closeDue(1000, 20000, 50000, 30))
+        end)
+    end)
+
+    describe('Client script (client/main.lua)', function()
+        local shutdowns, nuiShutdowns, messages, active, sessionStarted
+
+        local function start_client(opts)
+            opts = opts or {}
+            natives.reset({ resource = 'aeterna_loading', side = 'client' })
+            active, sessionStarted = true, false
+            if not opts.noLogic then load_logic() else LoadingLogic = nil end
+            natives.track_global('LoadingLogic')
+            natives.stub('LoadResourceFile', function(_, path)
+                assert.are.equal('html/config.json', path)
+                if opts.configError then error('read failed') end
+                return opts.config or '{"shutdown":{"fallbackSeconds":30}}'
+            end)
+            natives.stub('NetworkIsSessionStarted', function() return sessionStarted end)
+            natives.stub('GetIsLoadingScreenActive', function() return active end)
+            shutdowns = natives.spy('ShutdownLoadingScreen')
+            nuiShutdowns = natives.spy('ShutdownLoadingScreenNui', function() active = false end)
+            messages = natives.spy('SendLoadingScreenMessage')
+            assert(loadfile(DIR .. '/client/main.lua'))()
+        end
+
+        local function closed() return #nuiShutdowns == 1 and #shutdowns == 1 end
+
+        it('closes the page on playerSpawned once the session started', function()
+            start_client()
+            sessionStarted = true
+            natives.advance(500)
+            assert.are.equal(1, #messages)
+            assert.truthy(messages[1][1]:find('character', 1, true))
+            natives.fire('playerSpawned')
+            natives.advance(1500)
+            assert.is_true(closed())
+        end)
+
+        it('closes fallbackSeconds after the session started', function()
+            start_client()
+            natives.advance(20000)
+            sessionStarted = true
+            natives.advance(48000) -- 20 s + 28 s: not yet
+            assert.are.equal(0, #nuiShutdowns)
+            natives.advance(4000)
+            assert.is_true(closed())
+        end)
+
+        it('closes anyway when the session never starts (hard cap from resource start)', function()
+            start_client()
+            natives.advance(29000)
+            assert.are.equal(0, #nuiShutdowns)
+            natives.advance(3000)
+            assert.is_true(closed())
+        end)
+
+        it('still closes when LoadingLogic is missing', function()
+            start_client({ noLogic = true })
+            natives.advance(32000)
+            assert.is_true(closed())
+        end)
+
+        it('still closes when the config cannot be read or decoded', function()
+            start_client({ configError = true })
+            natives.advance(32000)
+            assert.is_true(closed())
+            start_client({ config = 'not json' })
+            natives.advance(32000)
+            assert.is_true(closed())
+        end)
+
+        it('does not shut down a loading screen that something else already closed', function()
+            start_client()
+            sessionStarted = true
+            natives.advance(500)
+            active = false
+            natives.fire('playerSpawned')
+            natives.advance(2000)
+            assert.are.equal(0, #shutdowns)
+            assert.are.equal(0, #nuiShutdowns)
         end)
     end)
 end)
