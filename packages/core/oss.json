@@ -11,7 +11,7 @@
       "write": []
     },
     "netEvents": {
-      "server": [],
+      "server": ["aeterna_core:sv:selftestResult", "aeterna_core:sv:eyeAnswer"],
       "client": ["aeterna_core:cl:selftest", "aeterna_core:cl:selftestEnd"]
     },
     "nui": true,
