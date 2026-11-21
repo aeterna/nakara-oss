@@ -35,12 +35,41 @@ class GuildCache<T> {
 
 const channelsCache = new GuildCache<any[]>();
 const rolesCache = new GuildCache<any[]>();
+// Member display names per guild+user; null remembers a Discord 404 (member not in guild).
+const memberNameCache = new GuildCache<string | null>(2000, 10 * 60_000);
 export const clearDiscordLookupCache = () => {
   channelsCache.clear();
   rolesCache.clear();
+  memberNameCache.clear();
 };
 
 const ALLOWED_TYPES = new Set([0, 4, 5, 15]);
+
+const MEMBER_ID = /^[0-9]{17,20}$/;
+const MAX_MEMBER_IDS = 50;
+const MEMBER_FETCH_CONCURRENCY = 5;
+
+// Comma-separated ids -> unique ids, or null when the list is malformed or too long.
+function parseMemberIds(raw: unknown): string[] | null {
+  if (raw === undefined || raw === '') return [];
+  if (typeof raw !== 'string') return null;
+  const ids = [...new Set(raw.split(','))];
+  if (ids.length > MAX_MEMBER_IDS || !ids.every((id) => MEMBER_ID.test(id))) return null;
+  return ids;
+}
+
+async function mapWithLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
 
 export default async function (app: FastifyInstance) {
   const requireStaff = async (req: FastifyRequest, reply: FastifyReply) => {
@@ -108,4 +137,33 @@ export default async function (app: FastifyInstance) {
       return data;
     })
   );
+
+  // One member's display name. Unknown members (404) are cached as misses; other errors are
+  // left out and not cached, so the next request tries again.
+  const fetchMemberName = async (discord: any, guildId: string, userId: string) => {
+    const key = `${guildId}:${userId}`;
+    const cached = memberNameCache.get(key);
+    if (cached !== undefined) return cached === null ? null : { id: userId, name: cached };
+    try {
+      const member = await discord.getGuildMember(guildId, userId);
+      const name = String(member?.nick || member?.user?.global_name || member?.user?.username || '');
+      if (!name) return null;
+      memberNameCache.set(key, name);
+      return { id: userId, name };
+    } catch (err: any) {
+      if (err?.status === 404) memberNameCache.set(key, null);
+      return null;
+    }
+  };
+
+  app.get('/api/v1/guilds/:guildId/discord/members', { preHandler: [requireStaff] }, async (req, reply) => {
+    const ids = parseMemberIds((req.query as { ids?: unknown }).ids);
+    if (!ids) {
+      return reply.code(400).send({ code: 'invalid_ids', message: 'ids must be up to 50 Discord user ids' });
+    }
+    return handle(req, reply, async (discord, guildId) => {
+      const found = await mapWithLimit(ids, MEMBER_FETCH_CONCURRENCY, (id) => fetchMemberName(discord, guildId, id));
+      return found.filter((m): m is { id: string; name: string } => m !== null);
+    });
+  });
 }

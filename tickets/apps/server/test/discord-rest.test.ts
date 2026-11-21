@@ -191,4 +191,40 @@ describe('discord-rest (w2)', () => {
     });
     expect(roles).toEqual([{ id: 'item-1' }]);
   });
+
+  it('getGuildMember GETs the guild member path and returns the member', async () => {
+    const calls: Array<{ url: string; method: string }> = [];
+    const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      calls.push({ url, method: init?.method ?? 'GET' });
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ nick: 'Nick', user: { id: 'user-9', username: 'u9' } }),
+      };
+    });
+
+    const rest = createDiscordRest({ token, fetchImpl: mockFetch as any });
+    const member = await rest.getGuildMember('guild-123', 'user-9');
+
+    expect(calls[0]).toEqual({
+      url: 'https://discord.com/api/v10/guilds/guild-123/members/user-9',
+      method: 'GET',
+    });
+    expect(member).toEqual({ nick: 'Nick', user: { id: 'user-9', username: 'u9' } });
+  });
+
+  it('getGuildMember surfaces a 404 as DiscordRestError{status:404}', async () => {
+    const mockFetch = vi.fn().mockImplementation(async () => ({
+      ok: false,
+      status: 404,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ code: 10007, message: 'Unknown Member' }),
+    }));
+
+    const rest = createDiscordRest({ token, fetchImpl: mockFetch as any });
+
+    await expect(rest.getGuildMember('guild-123', 'user-9')).rejects.toBeInstanceOf(DiscordRestError);
+    await expect(rest.getGuildMember('guild-123', 'user-9')).rejects.toMatchObject({ status: 404 });
+  });
 });

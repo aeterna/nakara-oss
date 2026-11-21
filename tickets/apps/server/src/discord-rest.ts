@@ -24,6 +24,7 @@ export interface DiscordRest {
   getChannel(channelId: string): Promise<{ id: string; guild_id?: string; type: number }>;
   listGuildChannels(guildId: string): Promise<any[]>;
   listGuildRoles(guildId: string): Promise<any[]>;
+  getGuildMember(guildId: string, userId: string): Promise<any>;
 }
 
 export function createDiscordRest(opts: DiscordRestOptions): DiscordRest {
@@ -166,6 +167,12 @@ export function createDiscordRest(opts: DiscordRestOptions): DiscordRest {
 
     async listGuildRoles(guildId: string): Promise<any[]> {
       return request(`/guilds/${guildId}/roles`, {
+        method: 'GET',
+      });
+    },
+
+    async getGuildMember(guildId: string, userId: string): Promise<any> {
+      return request(`/guilds/${guildId}/members/${userId}`, {
         method: 'GET',
       });
     },

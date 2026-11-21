@@ -3,6 +3,8 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Tickets } from '../src/pages/Tickets.js';
 import { ticketsApi } from '../src/api/tickets.js';
+import * as discordApi from '../src/api/discord.js';
+import { t } from '../src/i18n.js';
 
 // Mock TicketActions component (written by Lane L5)
 vi.mock('../src/components/TicketActions.js', () => ({
@@ -145,5 +147,78 @@ describe('Tickets Web Page (acceptance test t6)', () => {
       expect(screen.getByText('ยังไม่มีตั๋ว')).toBeTruthy();
     });
     expect(screen.queryByText('ยังไม่มีข้อความ')).toBeNull();
+  });
+});
+
+describe('Tickets page names and status labels (polish)', () => {
+  const guildId = '123456789012345678';
+  const OPENER = '100000000000000001';
+  const CLAIMER = '100000000000000002';
+
+  const polishTicket = {
+    id: 'ticket-uuid-9',
+    number: 9,
+    guildId,
+    categoryId: 'cat-uuid-1',
+    status: 'claimed' as const,
+    openerId: OPENER,
+    claimerId: CLAIMER,
+    channelId: 'chan-9',
+    createdAt: '2026-01-01T10:00:00Z',
+    firstResponseAt: null,
+    lastActivityAt: null,
+    closedAt: null,
+    closeReason: null,
+    reopenedCount: 0,
+  };
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(ticketsApi, 'getTickets').mockResolvedValue({ items: [polishTicket], next: null });
+    vi.spyOn(ticketsApi, 'getTicket').mockResolvedValue(polishTicket);
+    vi.spyOn(ticketsApi, 'getTicketMessages').mockResolvedValue({ items: [], next: null });
+  });
+
+  it('shows display names for opener and claimer, with the raw id in title', async () => {
+    const lookup = vi.spyOn(discordApi, 'getGuildMembers').mockResolvedValue([
+      { id: OPENER, name: 'Alice' },
+      { id: CLAIMER, name: 'Bob' },
+    ]);
+
+    render(<Tickets guildId={guildId} locale="th" />);
+
+    expect(await screen.findByText('Alice')).toBeTruthy();
+    expect(screen.getByText('Bob')).toBeTruthy();
+    expect(screen.getByTitle(OPENER).textContent).toBe('Alice');
+    expect(screen.getByTitle(CLAIMER).textContent).toBe('Bob');
+    expect(screen.queryByText(OPENER)).toBeNull();
+    expect(lookup).toHaveBeenCalledTimes(1);
+    expect(lookup).toHaveBeenCalledWith(guildId, [OPENER, CLAIMER]);
+  });
+
+  it('keeps showing the raw ids when the name lookup fails', async () => {
+    vi.spyOn(discordApi, 'getGuildMembers').mockRejectedValue(new Error('Discord unavailable'));
+
+    render(<Tickets guildId={guildId} locale="th" />);
+
+    expect(await screen.findByText(OPENER)).toBeTruthy();
+    expect(screen.getByText(CLAIMER)).toBeTruthy();
+    expect(screen.queryByText('Discord unavailable')).toBeNull();
+  });
+
+  it('shows the Thai status label on the list badge and on the ticket page', async () => {
+    vi.spyOn(discordApi, 'getGuildMembers').mockResolvedValue([]);
+    const label = t('statusClaimed', 'th');
+    expect(label).toBe('รับเรื่องแล้ว');
+
+    render(<Tickets guildId={guildId} locale="th" />);
+
+    await screen.findByText('#9');
+    expect(document.querySelector('.badge-claimed')?.textContent).toBe(label);
+
+    fireEvent.click(screen.getByText(t('view', 'th')));
+
+    expect(await screen.findByText('Ticket #9')).toBeTruthy();
+    expect(document.querySelector('.badge-claimed')?.textContent).toBe(label);
   });
 });
