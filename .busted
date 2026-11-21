@@ -2,7 +2,7 @@
 -- Specs require the devkit harness as `helpers.natives` / `helpers.resource` (lpath below).
 return {
     default = {
-        ROOT = { 'packages/cargen-fix/spec', 'packages/devkit/busted/spec_example', 'templates/resource/spec', 'packages/core/spec', 'packages/uikit/spec', 'packages/layout/spec', 'packages/notify/spec', 'packages/invkit/spec', 'packages/hudkit/spec', 'packages/phonekit/spec' },
+        ROOT = { 'packages/cargen-fix/spec', 'packages/devkit/busted/spec_example', 'templates/resource/spec', 'packages/core/spec', 'packages/uikit/spec', 'packages/layout/spec', 'packages/notify/spec', 'packages/invkit/spec', 'packages/hudkit/spec', 'packages/phonekit/spec', 'packages/radial/spec' },
         pattern = '_spec',
         lpath = './packages/devkit/busted/?.lua;./?.lua;./?/init.lua',
     },
