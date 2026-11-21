@@ -135,7 +135,8 @@ describe('aeterna_invkit 0.2 phone items', function()
         it('1b. an unknown model, a bad name, a 65-char name and a 33rd entry are skipped', function()
             local P = loadLogic()
             local items = {}
-            for i = 1, 33 do items[('p%02d'):format(i)] = 'slab' end
+            -- 32 'pNN' names plus one valid 64-char name: 33 valid entries, so the last in name order (p32) is skipped.
+            for i = 1, 32 do items[('p%02d'):format(i)] = 'slab' end
             items['zz_brick'] = 'brick'
             items['bad name!'] = 'slab'
             items[string.rep('a', 65)] = 'slab'
@@ -149,6 +150,8 @@ describe('aeterna_invkit 0.2 phone items', function()
             assert.is_nil(map.zz_brick)
             assert.is_nil(map['bad name!'])
             assert.is_nil(map[string.rep('a', 65)])
+            assert.is_nil(map.p32)
+            assert.are.equal('slab', map.p31)
             assert.are.equal(4, #skipped)
         end)
 
