@@ -1,6 +1,7 @@
 -- spec/radial_spec.lua -- busted tests for aeterna_radial (pure logic in shared/logic/radial.lua).
 
 local natives = require('helpers.natives')
+local resource = require('helpers.resource')
 
 local HERE = debug.getinfo(1, 'S').source:match('^@(.*)/[^/]*$') or '.'
 local DIR = HERE .. '/..'
@@ -464,6 +465,130 @@ describe('aeterna_radial', function()
                 assert.is_true(mirror:addSlot(list[i].owner, list[i], 'server'))
             end
             assert.is_true(mirror:getSlot('res_a', 'grp', 'server').isGroup)
+        end)
+    end)
+
+    describe('9. Resource scripts under the harness', function()
+        local CORE = { ['@aeterna_core/import.lua'] = DIR .. '/../core/import.lua' }
+
+        it('server: delivers slots by ACE, re-checks picks, fires one select, cleans up on owner stop', function()
+            natives.reset({ resource = 'aeterna_radial', side = 'server', invoker = 'res_a' })
+            natives.add_player(1, 'One')
+            natives.add_player(2, 'Two')
+            local inVehicle = false
+            natives.stub('IsPlayerAceAllowed', function(src, ace) return tonumber(src) == 1 and ace == 'aeterna.radial.test' end)
+            natives.stub('GetPlayerPed', function(src) return 100 + tonumber(src) end)
+            natives.stub('GetVehiclePedIsIn', function() return inVehicle and 500 or 0 end)
+            natives.stub('GetResourceState', function() return 'missing' end)
+            local api = resource.load_resource(DIR, 'server', { externals = CORE }).exports
+
+            assert.is_true(api.addSlot({ id = 'open', label = 'Open' }))
+            local first = natives.last_emitted('client', 'aeterna_radial:cl:slot')
+            assert.are.equal(-1, first.target)
+            assert.are.equal('add', first.args[1].op)
+            assert.are.equal('res_a', first.args[1].owner)
+
+            assert.is_true(api.addSlot({ id = 'admin', label = 'Admin', when = { ace = 'aeterna.radial.test' } }))
+            local sent = natives.emitted('client', 'aeterna_radial:cl:slot')
+            local byTarget = {}
+            for i = 2, #sent do byTarget[tonumber(sent[i].target)] = sent[i].args[1].op end
+            assert.are.same({ [1] = 'add', [2] = 'remove' }, byTarget)
+
+            natives.fire_net('aeterna_radial:sv:hello', 2)
+            assert.are.equal(1, #natives.last_emitted('client', 'aeterna_radial:cl:slots').args[1].slots)
+            natives.fire_net('aeterna_radial:sv:hello', 1)
+            local list = natives.last_emitted('client', 'aeterna_radial:cl:slots').args[1].slots
+            assert.are.equal(2, #list)
+            for i = 1, #list do assert.is_true(list[i].when == nil or list[i].when.ace == nil) end
+
+            assert.is_true(api.addSlot({ id = 'car', label = 'Car', when = { vehicle = 'in' } }))
+            natives.fire_net('aeterna_radial:sv:select', 1, { owner = 'res_a', id = 'car' })
+            natives.fire_net('aeterna_radial:sv:select', 2, { owner = 'res_a', id = 'admin' })
+            natives.fire_net('aeterna_radial:sv:select', 1, { owner = 'res_a', id = 'nope' })
+            natives.fire_net('aeterna_radial:sv:select', 1, { owner = 'res_a', id = 'car', extra = true })
+            assert.are.equal(0, #natives.emitted('local', 'aeterna_radial:select'))
+
+            inVehicle = true
+            natives.fire_net('aeterna_radial:sv:select', 1, { owner = 'res_a', id = 'car' })
+            local picks = natives.emitted('local', 'aeterna_radial:select')
+            assert.are.equal(1, #picks)
+            assert.are.equal(1, picks[1].args[1])
+            assert.are.same({ owner = 'res_a', id = 'car' }, picks[1].args[2])
+
+            local before = #natives.emitted('client', 'aeterna_radial:cl:slot')
+            natives.fire('onResourceStop', 'res_a')
+            local after = natives.emitted('client', 'aeterna_radial:cl:slot')
+            assert.are.equal(before + 3, #after)
+            assert.are.equal('remove', after[#after].args[1].op)
+            natives.fire_net('aeterna_radial:sv:hello', 1)
+            assert.are.equal(0, #natives.last_emitted('client', 'aeterna_radial:cl:slots').args[1].slots)
+        end)
+
+        it('client: opens on the key, picks a client slot, opens a group, and closes on focus loss', function()
+            natives.reset({ resource = 'aeterna_radial', side = 'client', invoker = 'res_a' })
+            local commands, nuiCallbacks = {}, {}
+            local nui = natives.spy('SendNUIMessage')
+            natives.spy('RegisterCommand', function(name, fn) commands[name] = fn end)
+            natives.spy('RegisterNUICallback', function(name, fn) nuiCallbacks[name] = fn end)
+            local mappings = natives.spy('RegisterKeyMapping')
+            natives.spy('SetNuiFocus')
+            natives.spy('SetNuiFocusKeepInput')
+            natives.stub('GetVehiclePedIsIn', function() return 0 end)
+            natives.stub('GetResourceState', function() return 'missing' end)
+            natives.stub('IsEntityDead', function() return false end)
+            natives.stub('IsPedRagdoll', function() return false end)
+            natives.stub_export('aeterna_core', 'requestFocus', function() return 'tok_1' end)
+            natives.stub_export('aeterna_core', 'releaseFocus', function() return true end)
+            natives.stub_export('aeterna_core', 'themeHref', function() return '' end)
+            natives.stub_export('aeterna_core', 'themePreset', function() return 'asphalt' end)
+            local api = resource.load_resource(DIR, 'client', { externals = CORE }).exports
+
+            for i = 1, #mappings do assert.are.equal('', mappings[i][4]) end
+            assert.are.equal(2, #mappings)
+
+            assert.is_true(api.addSlot({ id = 'hud', label = 'HUD', order = 1 }))
+            assert.is_true(api.addSlot({ id = 'grp', label = 'Group', order = 2 }))
+            assert.is_true(api.addSlot({ id = 'k1', label = 'K1', parent = 'grp' }))
+            local okAce = api.addSlot({ id = 'bad', label = 'Bad', when = { ace = 'aeterna.radial.x' } })
+            assert.is_false(okAce)
+
+            commands['+aeterna_radial_open']()
+            assert.is_true(api.isOpen())
+            local opened
+            for i = 1, #nui do if nui[i][1].type == 'ring:open' then opened = nui[i][1] end end
+            assert.are.equal(2, #opened.slots)
+            assert.are.same({ label = 'Group', group = true }, opened.slots[2])
+
+            nuiCallbacks.pick({ index = 2 }, function() end)
+            assert.are.equal('ring:hover', nui[#nui][1].type)
+            assert.are.equal('ring:child', nui[#nui - 1][1].type)
+            nuiCallbacks.pick({ index = 2 }, function() end)
+            assert.is_true(api.isOpen())
+            nuiCallbacks.back({}, function() end)
+            assert.are.equal(2, nui[#nui][1].index)
+            -- After a group opened, releasing the key no longer picks; escape closes with no pick.
+            commands['-aeterna_radial_open']()
+            assert.is_true(api.isOpen())
+            nuiCallbacks.escape({}, function() end)
+            assert.is_false(api.isOpen())
+            assert.are.equal(0, #natives.emitted('local', 'aeterna_radial:select'))
+
+            commands['+aeterna_radial_open']()
+            nuiCallbacks.hover({ index = 7 }, function() end)
+            nuiCallbacks.hover({ index = 1 }, function() end)
+            commands['-aeterna_radial_open']()
+            assert.is_false(api.isOpen())
+            local picks = natives.emitted('local', 'aeterna_radial:select')
+            assert.are.equal(1, #picks)
+            assert.are.equal('res_a', picks[1].args[1])
+            assert.are.equal('hud', picks[1].args[2])
+
+            commands['aeterna_radial_open']()
+            assert.is_true(api.isOpen())
+            natives.fire('aeterna_core:focusLost', 'aeterna_radial', 'tok_1', 'preempted')
+            assert.is_false(api.isOpen())
+            assert.are.equal('ring:close', nui[#nui][1].type)
+            assert.are.equal(1, #natives.emitted('local', 'aeterna_radial:select'))
         end)
     end)
 end)
