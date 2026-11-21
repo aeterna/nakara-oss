@@ -8,7 +8,7 @@ export default {
   severity: 'error',
   kind: 'must-declare',
   needsManifest: true,
-  description: 'NUI use (ui_page, SetNuiFocus, RegisterNUICallback, SendNUIMessage, __cfx_nui: handlers) without capabilities.nui: true',
+  description: 'NUI use (ui_page, loadscreen, SetNuiFocus, RegisterNUICallback, SendNUIMessage, __cfx_nui: handlers) without capabilities.nui: true',
   docs: 'NUI is a browser inside the game client: it can take keyboard/mouse focus from the player and its callbacks are a client entry point. Declared so the owner knows a package draws UI.',
   check(f, rctx, emit) {
     if (f.isNui) return;
@@ -19,8 +19,11 @@ export default {
     if (!rctx.caps.nui) emit(uses[0].line, `NUI used (${uses[0].path}${uses.length > 1 ? ` and ${uses.length - 1} more` : ''}) — oss.json capabilities.nui is not true`);
   },
   checkResource(rctx, emit) {
-    if (!rctx.res.manifest.ui_page) return;
-    rctx.used.nui = true;
-    if (!rctx.caps.nui) emit(null, `fxmanifest ui_page '${rctx.res.manifest.ui_page}' — oss.json capabilities.nui is not true`, { file: rctx.res.manifestPath });
+    const m = rctx.res.manifest;
+    for (const key of ['ui_page', 'loadscreen']) {
+      if (!m[key]) continue;
+      rctx.used.nui = true;
+      if (!rctx.caps.nui) emit(null, `fxmanifest ${key} '${m[key]}' — oss.json capabilities.nui is not true`, { file: rctx.res.manifestPath });
+    }
   },
 };
