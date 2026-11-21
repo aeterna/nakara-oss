@@ -31,19 +31,19 @@ describe('aeterna_phonekit self-tests', function()
             end, function(id) return id:upper() end)
         end
 
-        it('are the spec table in order, eye_battery_dead left out', function()
+        it('are the spec table in order', function()
             local names = {}
             for i, r in ipairs(rows()) do names[i] = r.name:sub(#OWNER + 2) end
             local want = { 'rules_loaded', 'models_have_apps', 'battery_drain_tick', 'battery_zero_closes_all',
                 'battery_kvp_roundtrip', 'stale_pulse_is_off', 'gate_items_silence_denies', 'open_close_prop',
                 'fold_keeps_screen', 'clamp_on_unfold', 'exit_contract' }
             for _, m in ipairs(MODELS) do want[#want + 1] = 'eye_model_' .. m end
-            for _, n in ipairs({ 'eye_book_two_pane', 'eye_fold_cover', 'eye_lock', 'eye_control_centre', 'ring_cover',
-                'contacts_hooks' }) do
+            for _, n in ipairs({ 'eye_book_two_pane', 'eye_fold_cover', 'eye_lock', 'eye_control_centre', 'eye_battery_dead',
+                'ring_cover', 'contacts_hooks' }) do
                 want[#want + 1] = n
             end
             assert.are.same(want, names)
-            assert.are.same({ 'eye_battery_dead' }, P.NOT_BUILT)
+            assert.is_nil(P.NOT_BUILT)
         end)
 
         it('carry kind, side, players, destructive and expect as the spec says', function()
@@ -58,17 +58,24 @@ describe('aeterna_phonekit self-tests', function()
             assert.are.same({ kind = 'mock', players = 1, destructive = true }, by.battery_kvp_roundtrip)
             assert.are.same({ kind = 'mock', players = 1, destructive = false }, by.gate_items_silence_denies)
             for _, n in ipairs({ 'open_close_prop', 'fold_keeps_screen', 'clamp_on_unfold', 'exit_contract' }) do
-                assert.are.same({ kind = 'ped', players = 1, destructive = false }, by[n])
+                assert.are.same({ kind = 'ped', players = 1, destructive = false, timeout = 15000 }, by[n])
             end
-            assert.are.same({ kind = 'eye', players = 1, destructive = false,
+            assert.are.same({ kind = 'eye', players = 1, destructive = false, timeout = 15000,
                 expect = '<phonekit.selftest.expect.model:BOOK>' }, by.eye_model_book)
-            assert.are.same({ kind = 'eye', players = 1, destructive = false,
+            assert.are.same({ kind = 'eye', players = 1, destructive = false, timeout = 15000,
                 expect = '<phonekit.selftest.expect.ring_cover>' }, by.ring_cover)
+            assert.are.same({ kind = 'eye', players = 1, destructive = true, timeout = 15000,
+                expect = '<phonekit.selftest.expect.battery_dead>' }, by.eye_battery_dead)
             assert.are.same({ kind = 'mock', side = 'client', players = 1, destructive = false }, by.contacts_hooks)
             for name, meta in pairs(by) do
                 if meta.kind == 'eye' then assert.is_string(meta.expect, name) end
                 assert.is_nil(meta.ask, name)
-                assert.is_nil(meta.timeout, name)
+                -- rows that open the phone (server gate, focus, prop) get 15 s; the rest keep core's default
+                if meta.kind == 'ped' or meta.kind == 'eye' then
+                    assert.are.equal(15000, meta.timeout, name)
+                else
+                    assert.is_nil(meta.timeout, name)
+                end
                 assert.is_nil(meta.skipWhen, name)
             end
         end)
@@ -77,7 +84,7 @@ describe('aeterna_phonekit self-tests', function()
             assert(loadfile(DIR .. '/locales/en.lua'))()
             assert(loadfile(DIR .. '/locales/th.lua'))()
             for _, lang in ipairs({ 'en', 'th' }) do
-                for _, k in ipairs({ 'model', 'book_two_pane', 'fold_cover', 'lock', 'control_centre', 'ring_cover' }) do
+                for _, k in ipairs({ 'model', 'book_two_pane', 'fold_cover', 'lock', 'control_centre', 'battery_dead', 'ring_cover' }) do
                     local s = Locales[lang]['phonekit.selftest.expect.' .. k]
                     assert.is_string(s, lang .. ' ' .. k)
                     assert.is_true(utf8.len(s) <= 240 - 24, lang .. ' ' .. k)
@@ -97,7 +104,7 @@ describe('aeterna_phonekit self-tests', function()
         it('follow the spec table', function()
             assert.is_nil(P.skipReason('battery_drain_tick', env))
             env.battery = false
-            for _, n in ipairs({ 'battery_drain_tick', 'battery_zero_closes_all', 'stale_pulse_is_off' }) do
+            for _, n in ipairs({ 'battery_drain_tick', 'battery_zero_closes_all', 'stale_pulse_is_off', 'eye_battery_dead' }) do
                 assert.are.equal('Config.battery is false', P.skipReason(n, env))
             end
             assert.is_nil(P.skipReason('battery_kvp_roundtrip', env))
@@ -179,19 +186,24 @@ describe('aeterna_phonekit self-tests', function()
             assert.is_false(ok)
         end)
 
-        it('gate_items_silence_denies: silence on an items check is a denial with nodevice', function()
-            assert.are.same({ true, 'silence denied with phonekit.refused.nodevice' }, { P.silenceDenies(L) })
-            local allow = { createOpeningCheckManager = function()
-                return { createCheck = function(_, _, cb) return 'c', cb end,
-                    handleTimeout = function() end }
+        it('gate_items_silence_denies: the live items options make silence a denial with nodevice', function()
+            assert.are.same({ silenceDenies = true, silenceReason = 'phonekit.refused.nodevice' },
+                D.gateCheckOptions('items'))
+            assert.is_nil(D.gateCheckOptions('single'))
+            assert.are.same({ true, 'silence denied with phonekit.refused.nodevice' },
+                { P.silenceDenies(L, D.gateCheckOptions('items')) })
+            -- the single-mode options (none): silence with no listener allows the phone
+            assert.are.same({ false, 'silence allowed the phone' }, { P.silenceDenies(L, D.gateCheckOptions('single')) })
+            local never = { createOpeningCheckManager = function()
+                return { createCheck = function() return 'c' end, handleTimeout = function() end }
             end }
-            assert.are.same({ false, 'the check never resolved' }, { P.silenceDenies(allow) })
+            assert.are.same({ false, 'the check never resolved' }, { P.silenceDenies(never, D.gateCheckOptions('items')) })
         end)
     end)
 
     describe('mock and client checks', function()
         it('battery_zero_closes_all needs every surface closed and power off', function()
-            local good = { dead = true, device = false, open = false, screens = false, powerOff = true }
+            local good = { dead = true, open = false, screens = false, powerOff = true }
             assert.are.same({ true, 'at 0 %: power off, no device, no screen, phone closed' }, { P.zeroClosed(good) })
             good.open = true
             assert.are.same({ false, 'phone still open' }, { P.zeroClosed(good) })
@@ -294,10 +306,16 @@ local flatJson = {
 
 describe('aeterna_phonekit self-tests under the harness', function()
     local added, reports
+    local warns, guardCalls, mayWriteAnswer, failReport = {}, {}, true, false
 
     local function stubCore(extra)
         local core = {
-            log = { debug = function() end, info = function() end, warn = function() end, error = function() end },
+            log = { debug = function() end, info = function() end, error = function() end,
+                warn = function(msg, fields) warns[#warns + 1] = { msg = msg, fields = fields } end },
+            selftest = { mayWrite = function(runId, name)
+                guardCalls[#guardCalls + 1] = { runId, name }
+                return mayWriteAnswer
+            end },
             t = function(k) return k end,
             lang = function() return 'en' end,
             can = function() return true end,
@@ -309,7 +327,7 @@ describe('aeterna_phonekit self-tests under the harness', function()
 
     local function bootServer(config)
         natives.reset({ resource = OWNER, side = 'server', players = { [1] = 'One' }, json = flatJson })
-        added, reports = {}, {}
+        added, reports, warns, guardCalls, mayWriteAnswer, failReport = {}, {}, {}, {}, true, false
         stubCore()
         natives.stub('GetPlayerIdentifierByType', function() return 'license:abc' end)
         natives.stub('GetInvokingResource', function() return 'aeterna_core' end)
@@ -319,6 +337,7 @@ describe('aeterna_phonekit self-tests under the harness', function()
             return name
         end)
         natives.stub_export('aeterna_core', 'reportSelftest', function(runId, name, ok, detail, extra)
+            if failReport then error('core is gone') end
             reports[#reports + 1] = { runId = runId, name = name, ok = ok, detail = detail, extra = extra }
             return true
         end)
@@ -336,11 +355,11 @@ describe('aeterna_phonekit self-tests under the harness', function()
     end
 
     describe('server', function()
-        it('registers 25 rows on start', function()
+        it('registers 26 rows on start', function()
             bootServer()
-            assert.are.equal(25, #added)
+            assert.are.equal(26, #added)
             assert.are.equal('aeterna_phonekit.rules_loaded', added[1].name)
-            assert.are.equal('aeterna_phonekit.contacts_hooks', added[25].name)
+            assert.are.equal('aeterna_phonekit.contacts_hooks', added[26].name)
         end)
 
         it('reports the headless rows and skips the items gate in single mode', function()
@@ -411,6 +430,82 @@ describe('aeterna_phonekit self-tests under the harness', function()
                 { run('battery_drain_tick').ok, reports[#reports].detail })
         end)
 
+        it('destructive rows fail closed when the write guard says no', function()
+            local api = bootServer()
+            natives.fire_net('aeterna_phonekit:sv:battery', 1)
+            api.setBattery(1, 64)
+            mayWriteAnswer = false
+            local r = run('battery_zero_closes_all', { kind = 'mock', side = 'server', a = 1, destructive = true })
+            assert.are.same({ false, 'write guard refused' }, { r.ok, r.detail })
+            assert.are.equal(64, api.battery(1))
+            assert.are.same({ { 'r1-abcd', 'aeterna_phonekit.battery_zero_closes_all' } }, guardCalls)
+            r = run('battery_kvp_roundtrip', { kind = 'mock', side = 'server', a = 1, destructive = true })
+            assert.are.same({ false, 'write guard refused' }, { r.ok, r.detail })
+        end)
+
+        it('no write guard in AeternaCore means no write', function()
+            local api = bootServer()
+            AeternaCore.selftest = nil
+            natives.fire_net('aeterna_phonekit:sv:battery', 1)
+            api.setBattery(1, 64)
+            local r = run('battery_zero_closes_all', { kind = 'mock', side = 'server', a = 1, destructive = true })
+            assert.are.same({ false, 'write guard refused' }, { r.ok, r.detail })
+            assert.are.equal(64, api.battery(1))
+        end)
+
+        it('battery_kvp_roundtrip deletes the key again when it was absent before', function()
+            bootServer()
+            natives.fire_net('aeterna_phonekit:sv:battery', 1)
+            assert.is_nil(natives.get_kvp('aeterna_phonekit:device:v1:lic:license:abc'))
+            local r = run('battery_kvp_roundtrip', { kind = 'mock', side = 'server', a = 1, destructive = true })
+            assert.are.equal('mock', r.ok, r.detail)
+            assert.is_true(r.extra.restored)
+            assert.is_nil(natives.get_kvp('aeterna_phonekit:device:v1:lic:license:abc'))
+        end)
+
+        it('a failed reportSelftest is logged at warn', function()
+            bootServer()
+            failReport = true
+            run('rules_loaded')
+            assert.are.equal('reportSelftest failed', warns[#warns].msg)
+        end)
+
+        it('eye_battery_dead: selftestStarted saves 0 for the presser, selftestEnd puts the value back', function()
+            local api = bootServer()
+            natives.fire_net('aeterna_phonekit:sv:battery', 1)
+            api.setBattery(1, 64)
+            local ctx = { kind = 'eye', side = 'client', a = 1, destructive = true }
+            natives.fire('aeterna_core:selftestStarted', 'r1-abcd', OWNER .. '.eye_battery_dead', ctx)
+            assert.are.equal(0, api.battery(1))
+            assert.is_false(natives.last_emitted('client', 'aeterna_phonekit:cl:power').args[1].on)
+            assert.is_truthy(natives.get_kvp('aeterna_phonekit:device:v1:lic:license:abc'):find('"battery":0', 1, true))
+            assert.are.same({ { 'r1-abcd', 'aeterna_phonekit.eye_battery_dead' } }, guardCalls)
+            assert.are.equal(0, #reports) -- the client reports; the server only prepares
+            natives.fire('aeterna_core:selftestEnd', 'r1-abcd', OWNER .. '.eye_battery_dead')
+            assert.are.equal(64, api.battery(1))
+            assert.is_true(natives.last_emitted('client', 'aeterna_phonekit:cl:power').args[1].on)
+            assert.is_truthy(natives.get_kvp('aeterna_phonekit:device:v1:lic:license:abc'):find('"battery":64', 1, true))
+            -- a second end changes nothing
+            api.setBattery(1, 50)
+            natives.fire('aeterna_core:selftestEnd', 'r1-abcd', OWNER .. '.eye_battery_dead')
+            assert.are.equal(50, api.battery(1))
+        end)
+
+        it('eye_battery_dead: no write without the guard, and nothing for other tests or other invokers', function()
+            local api = bootServer()
+            natives.fire_net('aeterna_phonekit:sv:battery', 1)
+            api.setBattery(1, 64)
+            local ctx = { kind = 'eye', side = 'client', a = 1, destructive = true }
+            mayWriteAnswer = false
+            natives.fire('aeterna_core:selftestStarted', 'r1-abcd', OWNER .. '.eye_battery_dead', ctx)
+            assert.are.equal(64, api.battery(1))
+            mayWriteAnswer = true
+            natives.fire('aeterna_core:selftestStarted', 'r1-abcd', OWNER .. '.eye_lock', ctx)
+            natives.stub('GetInvokingResource', function() return 'other' end)
+            natives.fire('aeterna_core:selftestStarted', 'r1-abcd', OWNER .. '.eye_battery_dead', ctx)
+            assert.are.equal(64, api.battery(1))
+        end)
+
         it('ignores tests of other resources and events not fired by aeterna_core', function()
             bootServer()
             natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_core.core', {})
@@ -422,10 +517,13 @@ describe('aeterna_phonekit self-tests under the harness', function()
 
     describe('client', function()
         local kvp, nui
+        local failContactsSave = false
+
+        local toasts
 
         local function bootClient(config)
             natives.reset({ resource = OWNER, side = 'client', json = flatJson })
-            reports, kvp, nui = {}, {}, {}
+            reports, kvp, nui, warns, toasts, failReport = {}, {}, {}, {}, {}, false
             natives.spy('SendNUIMessage', function(msg) nui[#nui + 1] = msg end)
             natives.spy('RegisterNUICallback')
             natives.spy('RegisterKeyMapping')
@@ -434,7 +532,14 @@ describe('aeterna_phonekit self-tests under the harness', function()
             stubCore({
                 kvp = {
                     get = function(name, _, default) if kvp[name] == nil then return default end return kvp[name] end,
-                    set = function(name, _, value) kvp[name] = value end,
+                    set = function(name, _, value)
+                        if name == 'contacts' and type(value) == 'table' and failContactsSave then
+                            for _, c in ipairs(value) do
+                                if c.name == 'Self-test' then error('disk full') end
+                            end
+                        end
+                        kvp[name] = value
+                    end,
                 },
                 key = function() end,
                 requestFocus = function() return 'tok' end,
@@ -442,7 +547,9 @@ describe('aeterna_phonekit self-tests under the harness', function()
             })
             natives.stub_export('aeterna_core', 'themeHref', function() return nil end)
             natives.stub_export('aeterna_notify', 'history', function() return {} end)
+            natives.stub_export('aeterna_notify', 'notify', function(opts) toasts[#toasts + 1] = opts.title end)
             natives.stub_export('aeterna_core', 'reportSelftest', function(runId, name, ok, detail, extra)
+                if failReport then error('core is gone') end
                 reports[#reports + 1] = { runId = runId, name = name, ok = ok, detail = detail, extra = extra }
                 return true
             end)
@@ -500,6 +607,63 @@ describe('aeterna_phonekit self-tests under the harness', function()
             assert.are.equal(closes + 1, #natives.emitted('server', 'aeterna_phonekit:sv:close'))
         end)
 
+        it('a test ended by core before the phone opens changes nothing afterwards', function()
+            bootClient()
+            runClient('eye_model_pad')
+            natives.advance(400)
+            natives.fire('aeterna_core:selftestEnd', 'r1-abcd', OWNER .. '.eye_model_pad')
+            local mark = #nui
+            local closes = #natives.emitted('server', 'aeterna_phonekit:sv:close')
+            natives.fire('aeterna_phonekit:cl:open', { apps = {} })
+            natives.advance(2000)
+            for i = mark + 1, #nui do
+                assert.is_false(nui[i].type == 'device' and nui[i].model == 'pad', 'device override after the end')
+                assert.is_false(nui[i].type == 'fold', 'fold after the end')
+            end
+            assert.are.equal(0, #reports)
+            -- the late open is put away again
+            assert.are.equal(closes + 1, #natives.emitted('server', 'aeterna_phonekit:sv:close'))
+        end)
+
+        it('eye_battery_dead: with the power off from the server, opening is refused and the card is ready', function()
+            bootClient()
+            natives.fire('aeterna_phonekit:cl:power', { on = false })
+            local opens = #natives.emitted('server', 'aeterna_phonekit:sv:open')
+            runClient('eye_battery_dead')
+            natives.advance(200)
+            assert.are.equal('ready', reports[#reports].ok)
+            assert.are.equal(opens, #natives.emitted('server', 'aeterna_phonekit:sv:open'))
+            assert.are.equal('phonekit.battery.dead', toasts[#toasts])
+        end)
+
+        it('eye_battery_dead: a phone still powered after 1 s fails the row', function()
+            bootClient()
+            runClient('eye_battery_dead')
+            natives.advance(2000)
+            local r = reports[#reports]
+            assert.are.same({ 'fail', 'phone still powered: the server did not set 0 %' }, { r.ok, r.detail })
+        end)
+
+        it('contacts_hooks restores the list even when the add throws', function()
+            bootClient()
+            kvp.contacts = { { name = 'Ann', number = '555-0101' } }
+            failContactsSave = true
+            runClient('contacts_hooks', 'mock')
+            natives.advance(100)
+            failContactsSave = false
+            local r = reports[#reports]
+            assert.is_false(r.ok)
+            assert.is_true(r.extra.restored)
+            assert.are.same({ { name = 'Ann', number = '555-0101' } }, kvp.contacts)
+        end)
+
+        it('a failed client reportSelftest is logged at warn', function()
+            bootClient()
+            failReport = true
+            runClient('clamp_on_unfold', 'ped')
+            assert.are.equal('reportSelftest failed', warns[#warns].msg)
+        end)
+
         it('a phone that does not open fails the row with the refusal', function()
             bootClient()
             runClient('eye_control_centre')
@@ -509,5 +673,19 @@ describe('aeterna_phonekit self-tests under the harness', function()
             local r = reports[#reports]
             assert.are.same({ 'fail', 'phone did not open: phonekit.refused.nodevice' }, { r.ok, r.detail })
         end)
+    end)
+end)
+
+describe('aeterna_phonekit icons for the camera package', function()
+    it('camera and image are in the icon whitelist and drawn in icons.js', function()
+        natives.reset()
+        local L = load('phone.lua')
+        assert.is_true(L.isValidIcon('camera'))
+        assert.is_true(L.isValidIcon('image'))
+        local f = assert(io.open(DIR .. '/html/icons.js', 'rb'))
+        local js = f:read('*a')
+        f:close()
+        assert.is_truthy(js:find("    'camera': [", 1, true))
+        assert.is_truthy(js:find("    'image': [", 1, true))
     end)
 end)
