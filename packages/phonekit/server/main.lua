@@ -1232,8 +1232,35 @@ end
 -- Resource Cleanup & Player Disconnect
 --------------------------------------------------------------------------------
 
+-- eye_battery_dead: the battery each presser had before the test set 0 %. ['runId|name'] = { src, before }.
+-- Restored on selftestEnd, and before anything saves the dead value: unload, drop, aeterna_core or phonekit stopping.
+local deadPrepared = {}
+
+local function fromCore()
+    return type(GetInvokingResource) == 'function' and GetInvokingResource() == 'aeterna_core'
+end
+
+-- Puts back the battery of every prepared eye_battery_dead (only those of `src` when given). Returns the srcs.
+local function restoreDead(src)
+    local done = {}
+    for key, prep in pairs(deadPrepared) do
+        if src == nil or prep.src == src then
+            deadPrepared[key] = nil
+            local p = players[prep.src]
+            local dev = activeOf(p)
+            local st = dev and p.states[dev.id]
+            if st then
+                applyBatteryEvents(prep.src, B.set(st, prep.before, batteryCfg), false)
+                done[#done + 1] = prep.src
+            end
+        end
+    end
+    return done
+end
+
 local function unloadPlayer(src)
     if players[src] then
+        restoreDead(src)
         saveDevice(src)
     end
     players[src] = nil
@@ -1241,6 +1268,10 @@ local function unloadPlayer(src)
 end
 
 AddEventHandler('onResourceStop', function(resName)
+    if resName == 'aeterna_core' then
+        -- core ends its run without selftestEnd: put every prepared battery back and save it
+        for _, src in ipairs(restoreDead(nil)) do saveDevice(src) end
+    end
     if resName ~= selfName() then
         registry:removeOwner(resName)
         badgeMgr:removeOwner(resName)
@@ -1272,6 +1303,7 @@ AddEventHandler('onResourceStop', function(resName)
             end
         end
     else
+        restoreDead(nil)
         for src in pairs(players) do
             saveDevice(src)
         end
@@ -1384,7 +1416,7 @@ local SERVER_TESTS = {
 }
 
 AddEventHandler('aeterna_core:selftest', function(runId, name, ctx)
-    if type(GetInvokingResource) ~= 'function' or GetInvokingResource() ~= 'aeterna_core' then return end
+    if not fromCore() then return end
     local short = PS.shortName(selfName(), name)
     local test = short and SERVER_TESTS[short]
     if not test then return end
@@ -1399,11 +1431,6 @@ end)
 
 -- eye_battery_dead is a client eye test that needs the server half: core fires selftestStarted before it sends the
 -- test to the presser, so the battery is at 0 (saved, power off) when the card asks; selftestEnd puts it back.
-local deadPrepared = {} -- ['runId|name'] = { src, before }
-
-local function fromCore()
-    return type(GetInvokingResource) == 'function' and GetInvokingResource() == 'aeterna_core'
-end
 
 AddEventHandler('aeterna_core:selftestStarted', function(runId, name, ctx)
     if not fromCore() or PS.shortName(selfName(), name) ~= 'eye_battery_dead' or not batteryCfg then return end
@@ -1417,16 +1444,9 @@ end)
 
 AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
     if not fromCore() then return end
-    local key = tostring(runId) .. '|' .. tostring(name)
-    local prep = deadPrepared[key]
+    local prep = deadPrepared[tostring(runId) .. '|' .. tostring(name)]
     if not prep then return end
-    deadPrepared[key] = nil
-    local p = players[prep.src]
-    local dev = activeOf(p)
-    local st = dev and p.states[dev.id]
-    if not st then return end
-    applyBatteryEvents(prep.src, B.set(st, prep.before, batteryCfg), false)
-    saveDevice(prep.src)
+    for _, src in ipairs(restoreDead(prep.src)) do saveDevice(src) end
 end)
 
 for _, r in ipairs(PS.rows(selfName(), translate, function(id) return modelInfo(id).label end)) do

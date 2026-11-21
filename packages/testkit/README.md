@@ -124,8 +124,8 @@ Then read the capability table above (or `oss.json` inside the zip).
 
 ## Now-testing strip / แถบกำลังทดสอบ
 
-While a `ped` test that carries an `expect` line runs on your client, a one-line strip in the lower left (where the eye card sits) shows the test name and "Do this now:" with that line. It never takes focus or the cursor, so you keep playing while you read it, and it goes away when `aeterna_core` ends the test. A `ped` test without `expect` shows nothing.
-ระหว่างที่การทดสอบแบบ `ped` ที่มีข้อความ `expect` ทำงานบนเครื่องของคุณ จะมีแถบหนึ่งบรรทัดที่มุมซ้ายล่างบอกชื่อการทดสอบและ "ทำตอนนี้:" ตามด้วยสิ่งที่ต้องทำ แถบนี้ไม่แย่งเคอร์เซอร์หรือคีย์บอร์ด และหายไปเมื่อการทดสอบจบ
+While a client test that carries an `expect` line runs on your client (a `ped` test, or a client-side `mock` or `headless` test; eye tests use the card), a one-line strip in the lower left (where the eye card sits) shows the test name and "Do this now:" with that line. It never takes focus or the cursor, so you keep playing while you read it, and it goes away when `aeterna_core` ends the test. A test without `expect` shows nothing.
+ระหว่างที่การทดสอบฝั่งไคลเอนต์ที่มีข้อความ `expect` (ยกเว้นแบบ eye) ทำงานบนเครื่องของคุณ จะมีแถบหนึ่งบรรทัดที่มุมซ้ายล่างบอกชื่อการทดสอบและ "ทำตอนนี้:" ตามด้วยสิ่งที่ต้องทำ แถบนี้ไม่แย่งเคอร์เซอร์หรือคีย์บอร์ด และหายไปเมื่อการทดสอบจบ
 
 ## Self-tests / การทดสอบตัวเอง
 
@@ -136,12 +136,12 @@ Registered with `aeterna_core` on start like every kit package, and run from thi
 |---|---|---|---|
 | `aeterna_testkit.scrub` | headless | 1 | A detail with a name, a `license:` id, an IPv4 and a `C:\` path comes out as `A`, `[id]`, `[ip]`, `[path]` |
 | `aeterna_testkit.report_schema` | headless | 1 | A sample run builds JSON with exactly the keys of `schema/report-1.schema.json` (top level, `env`, `counts`, each row) and Markdown that ends with the footer |
-| `aeterna_testkit.save` | headless | 1 | `SaveResourceFile` of `reports/latest.json` and `reports/latest.md` returns true and `LoadResourceFile` reads the same content back |
+| `aeterna_testkit.save` | headless | 1 | `reports/latest.json` and `reports/latest.md` read back as a report (JSON with the report schema id, Markdown with the report header) |
 | `aeterna_testkit.env` | headless, `side = 'client'` | 1 | Player A's askEnv reply (game build and resolution) passes the schema the server checks `aeterna_testkit:sv:env` with |
 | `aeterna_testkit.eye_card` | eye | 1 | The person sees the card in the lower left corner with a question and Pass, Doesn't match, Skip, over the menu panel that stays open |
 | `aeterna_testkit.eye_card_b` | eye | 2 | Player B sees the same card, headed "as player B" |
 
-`save` writes each report file back with the content it already holds, so a test run never loses or replaces the last report; before the first finished run it is SKIP `no report yet` and writes nothing. It writes only this resource's own report files, so it is not destructive.
+`save` only reads: a write inside a test could race the report a finishing run saves. Before the first finished run it is SKIP `no report yet`.
 
 ## Tests
 

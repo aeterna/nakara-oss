@@ -475,8 +475,8 @@ if Config.menuEntry ~= false then
     uikit('addMenuEntry', { id = 'testkit', label = Menu.cut(t('testkit.menu.title'), 60), icon = 'check', ace = ACE })
 end
 
--- Own self-tests (spec § Self-tests). save rewrites the report files with what they already hold and skips
--- when there is no report yet, so a test run never loses or replaces the last report.
+-- Own self-tests (spec § Self-tests). save reads the last report files back and writes nothing; it skips when
+-- there is no report yet.
 
 local function readSchema()
     local raw = LoadResourceFile(RES, 'schema/report-1.schema.json')
@@ -492,16 +492,11 @@ local function lastReportFiles()
     return json1, md1
 end
 
+-- Read-only: a write here could race the report a finishing run saves, so the files are only read back.
 local function saveCheck()
     local json1, md1 = lastReportFiles()
     if not json1 then return 'skip', 'no report yet' end
-    -- literal paths: they are the two files oss.json declares
-    local okJson = SaveResourceFile(RES, 'reports/latest.json', json1, -1)
-    local okMd = SaveResourceFile(RES, 'reports/latest.md', md1, -1)
-    return Selftest.save({
-        json = { saved = okJson == true, wrote = json1, back = LoadResourceFile(RES, 'reports/latest.json') },
-        md = { saved = okMd == true, wrote = md1, back = LoadResourceFile(RES, 'reports/latest.md') },
-    })
+    return Selftest.save(json1, md1, json.decode)
 end
 
 AddEventHandler('aeterna_core:selftest', function(runId, name)

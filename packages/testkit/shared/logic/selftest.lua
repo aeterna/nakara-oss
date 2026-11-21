@@ -88,14 +88,17 @@ function M.reportSchema(report, schema, decode, footer)
     return true, 'JSON keys match the schema; Markdown ends with the footer'
 end
 
--- result = { json = { saved, wrote, back }, md = { saved, wrote, back } }
-function M.save(result)
-    for _, k in ipairs({ 'json', 'md' }) do
-        local r = result[k] or {}
-        if r.saved ~= true then return false, M.REPORT_FILES[k] .. ': SaveResourceFile returned false' end
-        if r.back ~= r.wrote then return false, M.REPORT_FILES[k] .. ': read back differs' end
+-- The last report as read back from disk: the JSON line decodes to an aeterna_testkit.report/1 object and the
+-- Markdown starts with the report header. Read-only: the test never writes a report file.
+function M.save(jsonText, mdText, decode)
+    local ok, decoded = pcall(decode, jsonText)
+    if not ok or type(decoded) ~= 'table' or decoded.schema ~= 'aeterna_testkit.report/1' then
+        return false, M.REPORT_FILES.json .. ': not a report'
     end
-    return true, 'both report files saved and read back'
+    if type(mdText) ~= 'string' or mdText:sub(1, 26) ~= '# Starter Kit test report ' then
+        return false, M.REPORT_FILES.md .. ': not a report'
+    end
+    return true, 'both report files read back'
 end
 
 -- The schema of aeterna_testkit:sv:env, the client's askEnv reply. The server checks sv:env with it and the env

@@ -933,6 +933,17 @@ AddEventHandler('aeterna_phonekit:contactsChanged', function()
     contactsChangedCount = contactsChangedCount + 1
 end)
 
+local function fromCore()
+    return type(GetInvokingResource) == 'function' and GetInvokingResource() == 'aeterna_core'
+end
+
+-- Client KVP key of an AeternaCore.kvp name (same rule as aeterna_core's kvp module).
+local function kvpDelete(name)
+    local mod = AeternaCoreLogic and AeternaCoreLogic.kvp
+    local key = mod and mod.keyFor and mod.keyFor(selfName(), name, 1) or ('aeterna_phonekit:' .. name .. ':v1')
+    DeleteResourceKvp(key)
+end
+
 local function reportTest(runId, name, ok, detail, extra)
     local sent, err = pcall(function() return exports.aeterna_core:reportSelftest(runId, name, ok, detail, extra) end)
     if not sent then logWarn('reportSelftest failed', { name = name, err = tostring(err) }) end
@@ -1222,7 +1233,10 @@ local CLIENT_TESTS = {
         changes = contactsChangedCount - count
         -- put the list back whatever happened above
         local changed = not sameList(copyList(getSavedContacts()), before)
-        if changed then kvpSet('contacts', before) end
+        if changed then
+            -- an empty book had no key before: delete it rather than store an empty list
+            if #before == 0 then kvpDelete('contacts') else kvpSet('contacts', before) end
+        end
         if changed or added then
             TriggerEvent('aeterna_phonekit:contactsChanged')
             sendUi({ type = 'builtin:data', contacts = getSavedContacts() })
@@ -1239,7 +1253,7 @@ local CLIENT_TESTS = {
 }
 
 AddEventHandler('aeterna_core:selftest', function(runId, name)
-    if type(GetInvokingResource) ~= 'function' or GetInvokingResource() ~= 'aeterna_core' then return end
+    if not fromCore() then return end
     local short = PS.shortName(selfName(), name)
     if not short then return end
     local model = short:match('^eye_model_(%a+)$')
@@ -1268,7 +1282,7 @@ end)
 
 -- Core ends every test with this, reported or not: put back what the test changed.
 AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
-    if type(GetInvokingResource) ~= 'function' or GetInvokingResource() ~= 'aeterna_core' then return end
+    if not fromCore() then return end
     if selftest and selftest.runId == runId and selftest.name == name then endSelftest() end
 end)
 

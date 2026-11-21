@@ -64,7 +64,7 @@ local strip = Menu.createNowStrip({
     end,
 })
 
--- Any aeterna_core self-test reaching this client: a ped test with expect shows the now-testing strip.
+-- Any aeterna_core self-test reaching this client: a non-eye test with expect shows the now-testing strip.
 AddEventHandler('aeterna_core:selftest', function(runId, name, ctx)
     if GetInvokingResource() ~= 'aeterna_core' or type(runId) ~= 'string' or type(name) ~= 'string' then return end
     strip:started(runId, name, ctx)

@@ -28,9 +28,11 @@ local function decodeJson(s)
     local function ws() pos = s:find('[^%s]', pos) or #s + 1 end
     local function str()
         local out = {}
+        if s:sub(pos, pos) ~= '"' then error('json: string expected at ' .. pos) end
         pos = pos + 1
         while true do
             local c = s:sub(pos, pos)
+            if c == '' then error('json: unterminated string') end
             if c == '"' then pos = pos + 1 return table.concat(out) end
             if c == '\\' then
                 local e = s:sub(pos + 1, pos + 1)
@@ -86,6 +88,7 @@ local function decodeJson(s)
         elseif s:sub(pos, pos + 3) == 'null' then pos = pos + 4 return nil
         end
         local num = s:match('^-?%d+%.?%d*[eE]?[-+]?%d*', pos)
+        if not num then error('json: bad value at ' .. pos) end
         pos = pos + #num
         return math.tointeger(tonumber(num)) or tonumber(num)
     end
@@ -386,14 +389,19 @@ describe('aeterna_testkit now-testing strip', function()
         assert.is_true(strip:isShown())
     end)
 
-    it('shows nothing for a ped test without expect, or for any other kind', function()
+    it('shows nothing without expect, or for an eye test (the card shows those)', function()
         assert.is_false(strip:started('r1-abcd', 'aeterna_x.a', { kind = 'ped' }))
         assert.is_false(strip:started('r1-abcd', 'aeterna_x.b', { kind = 'ped', expect = '   ' }))
         assert.is_false(strip:started('r1-abcd', 'aeterna_x.c', { kind = 'eye', expect = 'Look' }))
-        assert.is_false(strip:started('r1-abcd', 'aeterna_x.d', { kind = 'headless', expect = 'x' }))
         assert.is_false(strip:started('r1-abcd', 'aeterna_x.e', nil))
         assert.are.equal(0, #shown)
         assert.is_false(strip:isShown())
+    end)
+
+    it('shows client-side mock and headless tests with expect too', function()
+        assert.is_true(strip:started('r1-abcd', 'aeterna_x.m', { kind = 'mock', side = 'client', expect = 'Hold E' }))
+        assert.is_true(strip:started('r1-abcd', 'aeterna_x.h', { kind = 'headless', side = 'client', expect = 'Wait' }))
+        assert.are.equal(2, #shown)
     end)
 
     it('hides on selftestEnd for its own test only, once', function()
