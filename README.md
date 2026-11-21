@@ -11,7 +11,7 @@
 [![Capabilities](https://img.shields.io/badge/oss.json-checked_on_every_PR-6a4fe0?style=flat-square)](packages/devkit/docs/safety.md)
 [![License](https://img.shields.io/badge/License-MIT-2b8a3e?style=flat-square)](LICENSE)
 
-**[Website](https://aeterna.github.io/nakara-oss/en/) · [Scan a script](#scan-a-script-before-you-install-it) · [Trust Architecture](#️-trust-architecture) · [What the scanner cannot catch](#what-the-scanner-cannot-catch)**
+**[Website](https://aeterna.github.io/nakara-oss/en/) · [Scripts](#scripts-you-can-download) · [Scan a script](#scan-a-script-before-you-install-it) · [Trust Architecture](#️-trust-architecture) · [What the scanner cannot catch](#what-the-scanner-cannot-catch)**
 
 </div>
 
@@ -19,18 +19,40 @@ Open-source FiveM resources and developer tooling from the **Nakara City** dev t
 declares in `oss.json` what it may touch, every PR is scanned for dangerous code, and every release is
 built in CI with a provenance attestation, so you can re-check all of it yourself.
 
-## Packages
+## Scripts you can download
 
-| Package | What it does | Status |
+Every script below is free (MIT), declares in `oss.json` what it may touch, and ships as a CI-built
+release asset with a provenance attestation.
+
+### FiveM resources
+
+| Script | What it does | Latest release |
 |---|---|---|
-| [`devkit`](packages/devkit) · npm `@aeterna_game/fivem-devkit` | Finds dangerous code and silent bugs in anyone's FiveM Lua/JS, plus a busted test harness | ✅ released · `npx @aeterna_game/fivem-devkit check` |
-| [`cargen-fix`](packages/cargen-fix) · resource `nakara_cargen_fix` | Guards against the `CNetworkCarGenWorldStateData Pool Full` client crash, and explains why the popular `GAMECONFIG_FILE` fix does nothing ([what is verified](packages/cargen-fix/README.md#what-we-have-verified)) | ✅ released · [Releases](https://github.com/aeterna/nakara-oss/releases?q=nakara_cargen_fix) |
-| [`tickets`](packages/tickets) · resource `nakara_tickets` | Self-hosted Discord ticket system with an in-game bridge (outbound only, no open port) | 🚧 in development · no release yet |
-| [`launcher`](docs/adr/0002-aeterna-game-launcher.md) | Your server's own game launcher, written in Rust · [install](launcher/docs/install.md) · [for server owners](launcher/docs/server-owners.md) | ✅ released · [`launcher-v0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/launcher-v0.1.0) |
-| [`rongroi`](packages/rongroi) · resource `nakara_rongroi` | Server side of [aeterna-rongroi](https://github.com/aeterna/aeterna-rongroi) | ✅ released · [`nakara_rongroi@0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/nakara_rongroi%400.1.0) |
+| [`nakara_tickets`](packages/tickets) + [server](tickets/deploy/README.md) | Self-hosted Discord ticket system: private-thread tickets, a Thai/English web dashboard, and staff actions in game (player info, teleport, revive, give item) over a bridge that opens no port | [`nakara-tickets@0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/nakara-tickets%400.1.0) · image `ghcr.io/aeterna/nakara-tickets:0.1.0` |
+| [`nakara_cargen_fix`](packages/cargen-fix) | Guards against the `CNetworkCarGenWorldStateData Pool Full` client crash, and explains why the popular `GAMECONFIG_FILE` fix does nothing ([what is verified](packages/cargen-fix/README.md#what-we-have-verified)) | [`nakara_cargen_fix@1.0.0`](https://github.com/aeterna/nakara-oss/releases/tag/nakara_cargen_fix%401.0.0) |
+| [`nakara_rongroi`](packages/rongroi) | Server side of [aeterna-rongroi](https://github.com/aeterna/aeterna-rongroi) | [`nakara_rongroi@0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/nakara_rongroi%400.1.0) |
+
+### AETERNA Starter Kit · seven base resources ([guide](https://aeterna.github.io/nakara-oss/en/starter-kit/))
+
+| Script | What it does | Latest release |
+|---|---|---|
+| [`aeterna_core`](packages/core) | Shared foundation: logging, a local event bus, Thai-aware text helpers, locale lookup | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_core%400.1.0) |
+| [`aeterna_uikit`](packages/uikit) | Server-owned UI panels, prompts (`confirm`, `input`, `progress`, `skillCheck`) and a shared menu | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_uikit%400.1.0) |
+| [`aeterna_notify`](packages/notify) | Toasts, server-wide announcement banners, and a message-of-the-day card | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_notify%400.1.0) |
+| [`aeterna_invkit`](packages/invkit) | Personal stashes and server-validated item use around `ox_inventory` | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_invkit%400.1.0) |
+| [`aeterna_layout`](packages/layout) | HUD layout editor with layouts saved on the client | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_layout%400.1.0) |
+| [`aeterna_phonekit`](packages/phonekit) | A modular phone shell with utility apps and an app API | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_phonekit%400.1.0) |
+| [`aeterna_hudkit`](packages/hudkit) | Player HUD: status bars, vehicle cluster, street and compass, minimap | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_hudkit%400.1.0) |
+
+### Tools
+
+| Tool | What it does | Latest release |
+|---|---|---|
+| [`fivem-devkit`](packages/devkit) · npm `@aeterna_game/fivem-devkit` | Finds dangerous code and silent bugs in anyone's FiveM Lua/JS, plus a busted test harness | [npm](https://www.npmjs.com/package/@aeterna_game/fivem-devkit) · `npx @aeterna_game/fivem-devkit check` |
+| [AETERNA Game Launcher](docs/adr/0002-aeterna-game-launcher.md) | Your server's own game launcher, written in Rust · [install](launcher/docs/install.md) · [for server owners](launcher/docs/server-owners.md) | [`launcher-v0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/launcher-v0.1.0) |
 
 Download a **release asset**, not the repository ZIP: the repo contains tests and tooling you do not
-need on a server.
+need on a server. All releases: [Releases](https://github.com/aeterna/nakara-oss/releases).
 
 ## Scan a script before you install it
 
