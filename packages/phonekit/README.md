@@ -81,7 +81,7 @@ App spec (`Config.models[m].apps`): comma-separated tokens, `*` = every app, `-x
 
 | Export | Arguments | Description / คำอธิบาย |
 |---|---|---|
-| `addTile(app)` | `app = { id, label, icon, order?, ace?, needs?, handles? }` | Registers an app tile on the home screen. `id` ≤ 32, `label` ≤ 24, `icon` from uikit icon names. 0.2: `needs = 'voice'` hides it on models without calls; `handles = { 'tel', 'sms' }` makes it the target of a contact's Call / Message. Removed automatically when the owner resource stops. |
+| `addTile(app)` | `app = { id, label, icon, order?, ace?, needs?, handles? }` | Registers an app tile on the home screen. `id` ≤ 32, `label` ≤ 24, `icon` from uikit icon names, plus `camera` and `image`. 0.2: `needs = 'voice'` hides it on models without calls; `handles = { 'tel', 'sms' }` makes it the target of a contact's Call / Message. Removed automatically when the owner resource stops. |
 | `removeTile(id)` | `id` | Removes an app tile registered by the calling resource. |
 | `showApp(src, id, spec)` | `src, id, spec` | Draws a uikit panel spec inside the phone frame for app `id`. Returns `screenId` or `nil, err`. |
 | `updateApp(src, screenId, patch)` | `src, screenId, patch` | Updates the active spec screen with partial block patches. |
@@ -171,7 +171,7 @@ sha256sum -c SHA256SUMS --ignore-missing
 
 ## Self-tests / การทดสอบตัวเอง
 
-Registered with `aeterna_core` on start; `aeterna_testkit` runs them from its menu ([spec § Self-tests (0.2)](../../docs/specs/aeterna_phonekit.md#self-tests-02)). A row whose condition does not hold reports SKIP with the reason in the last column. Destructive rows run only when `aeterna_core_allow_destructive` is on and the server is not listed publicly.
+Registered with `aeterna_core` on start; `aeterna_testkit` runs them from its menu ([spec § Self-tests (0.2)](../../docs/specs/aeterna_phonekit.md#self-tests-02)). A row whose condition does not hold reports SKIP with the reason in the last column. Destructive rows run only when `aeterna_core_allow_destructive` is on and the server is not listed publicly, and every write they make asks `aeterna_core`'s write guard first (no guard, no write). Rows that open the phone (ped and eye) have a 15 s timeout.
 ลงทะเบียนกับ `aeterna_core` ตอนเริ่ม และกดทดสอบได้จากเมนูของ `aeterna_testkit` แถวที่เงื่อนไขไม่ตรงจะรายงาน SKIP พร้อมเหตุผล
 
 | Name | Kind | Destructive | Checks | Skip when |
@@ -180,9 +180,9 @@ Registered with `aeterna_core` on start; `aeterna_testkit` runs them from its me
 | `models_have_apps` | headless | n | Every model has a label and draws its built-in apps (settings always) | never |
 | `battery_drain_tick` | headless | n | One minute on a fake in-memory slab with the screen on drains `standby + screen` | `Config.battery = false` |
 | `battery_zero_closes_all` | mock | y | Sets the presser's battery to 0 (saved): power off, no device, no app screen, phone closed; then sets and saves the old value | `Config.battery = false`, no presser |
-| `battery_kvp_roundtrip` | mock | y | Writes the presser's device KVP and reads it back, then writes the old value back | `Config.devices = 'items'`, no presser |
+| `battery_kvp_roundtrip` | mock | y | Writes the presser's device KVP and reads it back, then writes the old value back (or deletes the key when there was none) | `Config.devices = 'items'`, no presser |
 | `stale_pulse_is_off` | headless | n | A screen pulse older than `pulseTtlSec` drains like the screen off | `Config.battery = false` |
-| `gate_items_silence_denies` | mock | n | A made-up items check nobody answers is denied with `phonekit.refused.nodevice` (the live gate is untouched) | `Config.devices = 'single'` |
+| `gate_items_silence_denies` | mock | n | A made-up check built with the live gate's items options, which nobody answers, is denied with `phonekit.refused.nodevice` (the live gate is untouched) | `Config.devices = 'single'` |
 | `open_close_prop` | ped | n | Opening attaches the prop to the ped (none with `Config.animation = false`); closing removes it | presser not spawned |
 | `fold_keeps_screen` | ped | n | An app screen stays on top after fold and unfold | held model does not fold |
 | `clamp_on_unfold` | ped | n | The opened book frame stays inside the viewport | held model is not `book` |
@@ -192,12 +192,13 @@ Registered with `aeterna_core` on start; `aeterna_testkit` runs them from its me
 | `eye_fold_cover` | eye | n | Fold closed: the cover screen | never |
 | `eye_lock` | eye | n | The lock screen with one test card | `Config.lockScreen = false` |
 | `eye_control_centre` | eye | n | The control centre (opened by the test) | never |
+| `eye_battery_dead` | eye | y | The server sets the presser's battery to 0 (saved) before the card: the phone closes, the open is refused with the battery dead toast; the old value comes back when the test ends | `Config.battery = false` |
 | `ring_cover` | eye | n | Fold closed: a test call card with Answer and Decline on the cover | held model is not `fold`, or `Config.cover = false` |
 | `contacts_hooks` | mock, client | n | `addContact` adds, `getContacts` lists it, `contactsChanged` fires once; the list is put back | no presser (GAP) |
 
 How the client rows work: they open the phone the normal way (open gate, focus), so a phone that cannot open (no phone item, a dead battery) fails the row with the refusal. To show another model or a fold they change the page only: nothing is sent to the server and nothing is saved, and the held phone comes back when `aeterna_core` ends the test. The test screens and the test call card exist only on the page; answering the test call card stops it locally. The eye cards are look-only: the card holds the cursor, so the test opens the control centre and unfolds the book itself.
 
-Not registered: `eye_battery_dead`. It is a client eye test that must set the battery to 0 on the server, and a client has no way to make the server do that (the battery is server-owned and no net event may lower or raise it). `battery_zero_closes_all` covers the server half.
+`eye_battery_dead` has a server half: `aeterna_core` fires the server-local `aeterna_core:selftestStarted` before it sends the test to the presser, phonekit's server sets the battery to 0 there, and puts the old value back on `aeterna_core:selftestEnd`. A test that `aeterna_core` ends (timeout, cancel) stops changing the phone at once, and a phone that opens after the end is put away again.
 
 ## Tests
 
