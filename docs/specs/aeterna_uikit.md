@@ -240,14 +240,14 @@ Rules (each failure makes `open` return `nil, '<path>: <rule>'` as in 0.1):
 | Block | Rule |
 | --- | --- |
 | `tabs` | One per spec. 2–6 `items`, ids follow the id rule and are unique in the whole spec. `value` must be one of them (default: the first). A block's `tab` must name an item of the spec's `tabs` block; `tab` on a spec without `tabs` fails. `tabs` itself cannot carry `tab`. |
-| `tabs` switching | Happens in the page, with no round trip. The active tab id comes back in `values[<tabs id>]`. With `report = true`, a switch also fires `aeterna_uikit:action` with `action = <tab item id>` so the owner can load that tab's content through `update`. |
-| `slider` | `min < max`, `step > 0`, `(max − min) / step ≤ 1000`, `value` inside the range (default `min`). Comes back as a number in `values`, re-checked on the server: outside the range or off the step grid (tolerance 1e-6 × step) is dropped. Keyboard: arrows move one step, Page Up / Page Down ten steps, Home / End jump to the ends. |
-| `table` | 1–6 `columns`, 0–50 `rows`, unique ids; `cells` keys must be column ids; a missing cell shows empty. `selectable = true` makes each row a button: picking it fires `action = <row id>` (row ids join the list of allowed actions). Header cells are not sortable in 0.2. |
+| `tabs` switching | Happens in the page, with no round trip. The active tab id comes back in `values[<tabs id>]`. Blocks on a tab that is not shown are only hidden, not removed: their values (field, toggle, select, slider) still come back in `values` on every action. With `report = true`, a switch also fires `aeterna_uikit:action` with `action = <tab item id>` so the owner can load that tab's content through `update`. |
+| `slider` | `min < max`, `step > 0`, `(max − min) / step ≤ 1000`, `value` inside the range (default `min`). A start `value` that is inside the range but off the step grid is accepted by `open`; the page snaps it to the nearest grid point (never past the last step) before it shows or sends it, so what comes back is always on the grid. Comes back as a number in `values`, re-checked on the server: outside the range or off the step grid (tolerance 1e-6 × step) is dropped. Keyboard: arrows move one step, Page Up / Page Down ten steps, Home / End jump to the ends. |
+| `table` | 1–6 `columns`, 0–50 `rows`, unique ids; `cells` keys must be column ids; a missing cell shows empty. `selectable = true` makes each row a button: picking it fires `action = <row id>` (row ids join the list of allowed actions). Column ids are unique inside the table and, like row ids, share the spec-wide id set, so a column id that repeats another id of the spec fails with `duplicate`. Header cells are not sortable in 0.2. |
 | `empty` (block) | `label` required. `action.id` joins the list of allowed actions. |
 | `list.search` | `search = { placeholder = '≤ 40, optional' }` or `true`. Filters the items in the page by `label` and `meta`, case-insensitive, no round trip. With search on, the item limit is 200 instead of 50; without it, 50 as in 0.1. |
 | `empty` (option) | `list` and `table` accept `empty = { icon?, label, body? }`, shown when `items` / `rows` is empty or the search matches nothing. |
 
-**Changed in 0.2 — `update`.** `patch` may also change `rows` (table), `value` of `tabs` and `slider`, and
+**Changed in 0.2 — `update`.** `patch` may also change `rows` (table), `value` of `tabs` and `slider` (out of range or off the step grid is refused), and
 `empty`. The 0.1 keys (`label`, `value`, `items`, `disabled`) behave as before. Reason: tables and tabs are useless
 if the owner cannot refresh them. Upgrade note: none; a 0.1 caller never sends the new keys.
 
@@ -302,7 +302,7 @@ eye card is an overlay and must be able to ask about a panel without closing it.
 
 | Text | Token |
 | --- | --- |
-| Table header, list `meta`, slider unit, key hints | `--fs-1` |
+| Table header, slider unit, key hints | `--fs-1` |
 | List item `meta`, empty-state body, field help | `--fs-2` |
 | Body text, list labels, table cells, buttons, tab labels | `--fs-3` |
 | Panel title, empty-state label | `--fs-4` |
@@ -313,6 +313,7 @@ The pixel value of each token lives in `theme.css` only.
 ### NUI messages (0.2)
 
 Lua → NUI: unchanged names; `panel:open` and `panel:update` carry the new block types.
+Lua → NUI: `focus:paused` with `paused = true | false` is new. It tells the page that a focus overlay holds focus (see Paused by a focus overlay): while `paused` is true the page drops every key and click, and a skill check's marker stops. It replaces the pause and resume actions that a 0.2 build first sent on `prompt:skill`. Both are internal NUI messages; no caller sees them.
 NUI → Lua: `panelAction` may carry `action = <tab item id>` (with `report = true`), `<row id>` (selectable table)
 or `<empty action id>`; the same validation applies.
 

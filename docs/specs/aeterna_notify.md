@@ -200,7 +200,7 @@ with `PlaySoundFrontend(-1, name, set, true)`. The shipped names are **not verif
 | Field | Rule |
 | --- | --- |
 | `actions` | 1–2 entries. `id` ≤ 32 matching `^[%w_%-]+$`, unique in the toast; `label` ≤ 20; `variant` `primary` or `secondary` (default `secondary`). A third entry, a bad id or an over-long label makes the whole toast fall back to no actions, with one `warn`. |
-| `sound` | boolean, default `true`; only plays when both the owner and the player allow sound. |
+| `sound` | boolean, default `true`; only plays when both the owner and the player allow sound. **Changed in 0.2:** only `false` turns it off; any other value (for example the string `'bell'`, which 0.1 ignored with the other extra `lib.notify` keys) reads as `true` and is not rejected. Reason: the field is a switch, not a sound name; the sound per toast type comes from `Config.sound.byType`. Upgrade note: a caller that passed a non-boolean `sound` now allows the sound when the owner and the player allow it; pass `sound = false` to keep it silent. |
 | `history`, `merge` | boolean, default `true`. |
 
 ### Action buttons
@@ -222,10 +222,19 @@ Where the press goes depends on who created the toast:
 | client export `notify(opts)` | client-local event `aeterna_notify:action` → `({ owner, toastId, action })`. `owner` is the resource that called the export (`GetInvokingResource()`, which is reliable for exports). The owner filters on `owner == GetCurrentResourceName()`. |
 | server export `notify(src, opts)` | the client sends `aeterna_notify:sv:action { toastId, action }`; the server checks that it sent that `toastId` to that player, that `action` is one of its ids, and that the toast is not older than its `duration` + 2000 ms; then fires the server-local event `aeterna_notify:action` → `(src, { owner, toastId, action })`. Each `toastId` answers at most once. |
 
-`toastId` is the toast's `id` when given, otherwise `t` + a base-36 counter (≤ 24). The server export keeps the
-return shape its 0.1 code has (`true, nil, clean` or `false, err`); in 0.2 `clean.toastId` holds the id. The client
-export returns the `toastId`. The server keeps at most 8 open action toasts per
-player; a ninth replaces the oldest, whose press is then refused. No function crosses resources.
+`toastId` is the toast's `id` when given. Otherwise it is generated: `c` + a base-36 counter for a toast made by the
+client export, `s` + a base-36 counter for one made by the server export (≤ 24), so a client toast and a server toast on
+screen together never share an id. History uses the same id. A toast with `actions` and an `id` longer than 24
+characters is refused (`id: maxLen 24 with actions`), because a press carries the `toastId` in at most 24 characters.
+
+**Changed in 0.2 — the client export's return value.** `notify(opts)` returns the `toastId` instead of `true`; the
+server export keeps its return shape (`true, nil, clean` or `false, err`) and `clean.toastId` holds the id. Reason: the
+caller needs the id to match the later `aeterna_notify:action`. Upgrade note: a 0.1 caller that tests the result for
+truthiness still works (a string is truthy); one that compares it with `== true` must change.
+
+The server keeps its record of open action toasts per player, keyed by owner resource + `toastId`, so one resource
+never replaces or evicts another's. At most 8 per player per owner; a ninth replaces that owner's oldest, whose press is
+then refused. Sending the same `id` again without `actions` drops that owner's record. No function crosses resources.
 
 ### Lifetime bar
 
@@ -245,8 +254,8 @@ for `warning`, `--bad` for `error`). It restarts when the toast is replaced by `
   several times now sees one toast with `×n` instead of a stack. Reason: a stack of copies hides other toasts.
   Upgrade note: set `Config.toast.merge = false` for the 0.1 behaviour; `merge = false` on one toast exempts it.
   The lifetime bar is also on by default (`Config.toast.lifetimeBar = false` removes it).
-- A merged copy plays its sound only if the first copy's sound finished more than 1000 ms ago, so a burst of copies
-  makes one sound.
+- A merged copy plays its sound only if the toast's last sound started more than 1000 ms ago (`L.SOUND_THROTTLE_MS`), so a
+  burst of copies makes one sound.
 
 ### MOTD while paused
 
@@ -267,16 +276,18 @@ Announcements and the MOTD make no sound.
 | Export / command | Notes |
 | --- | --- |
 | `announceCountdown(opts)` (server export) | `opts = { title, body?, seconds, by?, marks? }`. `title` ≤ 80, `body` ≤ 200, `by` ≤ 32, `seconds` 10–3600, `marks` up to 8 integers below `seconds` (default `Config.countdown.marks`). Returns `countdownId` or `nil, err`. |
-| `cancelCountdown(countdownId)` (server export) | Hides it for everyone and fires `aeterna_notify:countdownEnd` with `cancelled = true`. |
+| `cancelCountdown(countdownId)` (server export) | Hides it for everyone and fires `aeterna_notify:countdownEnd` with `cancelled = true`. Only the resource that started the countdown can cancel it; another resource's call returns false and changes nothing. |
 | `aeterna_announce_countdown <minutes> <text>` (command) | Same ACE as `aeterna_announce` (`aeterna.notify.announce`; console always allowed). `minutes` 1–60. `title` = locale `notify.countdown.title`. |
 
 - One countdown at a time; a second `announceCountdown` returns `nil, 'busy'`.
 - The banner shows the time left as `mm:ss` in tabular figures, counted down by each client from the
   `remainingMs` the server sends; the server is the clock that ends it.
-- At each mark the server sends the banner again with a fresh `remainingMs`, so a player who joined late sees it from
+- Each showing of the banner stays up for 8 seconds, then hides. A showing with 16 seconds or less left stays until zero.
+  At each mark the server sends the banner again with a fresh `remainingMs`, so a player who joined late sees it from
   the next mark on. A countdown banner goes ahead of the normal announcement queue and does not count against it.
 - At zero the server fires the server-local event `aeterna_notify:countdownEnd` → `({ countdownId, cancelled =
-  false })`. notify does nothing else at zero; a restart or a kick is the owner's own resource's job.
+  false })`. If the resource that started the countdown stops, or notify stops, the countdown ends at once with
+  `cancelled = true`. notify does nothing else at zero; a restart or a kick is the owner's own resource's job.
 
 ### History
 

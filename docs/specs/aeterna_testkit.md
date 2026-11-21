@@ -84,13 +84,17 @@ not closed, and gets its focus back when the card releases after the answer.
 
 ```
  ┌──────────────────────────────────────────────┐
- │ Look 4 of 6 · phonekit                        │
+ │ Look 4 · phonekit                             │
  │ <ask>                                         │
  │ Normally you will see: <expect>               │
  │ [ Pass ]  [ Doesn't match ]  [ Skip ]         │
  └──────────────────────────────────────────────┘
 ```
 
+- The header is `Look <n> · <suite>` (locale `testkit.eye.header`; `testkit.eye.role_b` adds `· as player B`). `n` is
+  the count of cards this player has been shown in the current run, starting at 1. There is **no total** ("of 6"):
+  `aeterna_core:eyeAsk` carries only `{ ask, expect, role }`, so the card cannot know how many looks are left. `suite`
+  is the test name's part before the first `.`, without `aeterna_`.
 - `ask` and `expect` come from the registering resource, already translated, and are rendered with `textContent`.
 - Pass → `exports.aeterna_core:answerEye(runId, name, 'pass')`; Doesn't match → `'mismatch'`; Skip → `'skip'`.
   ESC = Skip. Core decides the state: Pass → PASS, Doesn't match → FAIL, Skip → GAP, and GAP after 120 s with no answer.
@@ -101,7 +105,12 @@ not closed, and gets its focus back when the card releases after the answer.
 
 ## Two-player A/B flow
 
-1. The presser (A) presses **Invite player B** and types a server id in a uikit input prompt (integer 1–65535).
+1. The presser (A) presses **Invite player B**. The server opens a small uikit panel (`sm`, block `target`: a number
+   field for a server id, 1–65535, and a **Send** button). The id does not travel in a client event of this package:
+   it comes back through uikit's own `aeterna_uikit:action` with `values.target`, which the server re-checks (ACE
+   `aeterna.testkit.run`, rate limit 3 / 10000 ms) before it validates the id. There is no `aeterna_testkit:sv:invite`
+   net event and no client input prompt. After Send (or Back) the menu opens again, with `testkit.invite.invalid` on the
+   head line when the invite was refused.
 2. The server checks: A has the ACE, the id is online, it is not A, no other invite or run is pending for either, and
    the rate limit. Otherwise A sees `testkit.invite.invalid`.
 3. B gets `exports.aeterna_uikit:confirm` with `testkit.invite.body` ("Player A asks you to help test the server as
@@ -145,10 +154,15 @@ server name or the host.
 
 Every `detail` and `expected` string is scrubbed before it is stored, printed or saved:
 
-1. Exact matches of the current player A and B names → `A` / `B`.
+1. Occurrences of the current player A and B names → `A` / `B`, longest name first. Names shorter than 3 characters are
+   skipped. An occurrence counts only when the byte before and after it is not an ASCII letter, digit or `_`. **Limit:**
+   that test looks at ASCII only, so a Thai (or other non-ASCII) name is also replaced inside a longer word, because Thai
+   is written without spaces; the match is weaker there than for a Latin-letter name, and an ordinary word that contains
+   the name is also cut to `A` or `B`. It errs toward hiding.
 2. `<prefix>:<value>` identifiers → `[id]`. The prefixes are a fixed list in `shared/logic/scrub.lua` covering every
-   identifier type FXServer documents for `GetPlayerIdentifiers` (`license`, `license2`, `steam`, `fivem`, `xbl`,
-   `live`, `ip` and the rest); other `word:value` text is left alone.
+   identifier type FXServer documents for `GetPlayerIdentifiers` (`license2`, `license`, `steam`, `fivem`, `discord`,
+   `xbl`, `live`, `ip`); a `<letters>:` followed by 15 or more digits is also `[id]`, which catches a Discord-style
+   id under a prefix not in the list. Other `word:value` text is left alone.
 3. IPv4 (`n.n.n.n`, optional `:port`) and IPv6 forms → `[ip]`.
 4. Absolute paths (`X:\…`, `\\…`, and `/…` with two or more segments) → `[path]`.
 5. Then `AeternaCore.text.clean` with max 300.
@@ -232,7 +246,6 @@ No export starts a run: runs start from the ACE-checked menu, the console comman
 | Event | Direction | Schema | Rate limit |
 | --- | --- | --- | --- |
 | `aeterna_testkit:sv:open` | client → server | none | 2 / 1000 ms |
-| `aeterna_testkit:sv:invite` | client → server | `{ target: integer 1–65535 }` | 3 / 10000 ms |
 | `aeterna_testkit:sv:inviteAnswer` | client → server | `{ accept: boolean }` | 3 / 10000 ms |
 | `aeterna_testkit:sv:leave` | client → server | none | 2 / 5000 ms |
 | `aeterna_testkit:sv:env` | client → server | `{ gameBuild: integer 1–99999, w: integer 320–15360, h: integer 240–8640 }` | 2 / 10000 ms |
@@ -240,8 +253,8 @@ No export starts a run: runs start from the ACE-checked menu, the console comman
 | `aeterna_testkit:cl:role` | server → client | `{ role: enum A/B/none }` | — |
 | `aeterna_testkit:cl:askEnv` | server → client | none | — |
 
-Every server handler calls `AeternaCore.rateLimit` first, then validates, then checks state: `open`, `invite` need
-ACE `aeterna.testkit.run`; `inviteAnswer` is accepted only from the invited player while the invite is open; `env`
+Every server handler calls `AeternaCore.rateLimit` first, then validates, then checks state: `open` needs
+ACE `aeterna.testkit.run`; the invite is sent from the server panel and re-checks the ACE and a 3 / 10000 ms limit; `inviteAnswer` is accepted only from the invited player while the invite is open; `env`
 only from player A of the current run, once per run. Menu buttons arrive through uikit's own
 `aeterna_uikit:action` (server-local, filtered on `owner == 'aeterna_testkit'`) and are ACE-checked again.
 
@@ -254,7 +267,7 @@ Listened to (not net events): `aeterna_core:runProgress`, `aeterna_core:runDone`
 
 The eye card is the only page of this package (`ui_page 'html/index.html'`).
 
-Lua → NUI: `aeterna:theme` (with `preset`), `locale`, `eye:show {header, ask, expect, index, total, role}`,
+Lua → NUI: `aeterna:theme` (with `preset`), `locale`, `eye:show {header, ask, expect, index, role}`,
 `eye:hide`. NUI → Lua callbacks: `eyeAnswer {answer: enum pass/mismatch/skip}`, `escape {}`, both validated before use.
 
 ## Commands and keys
@@ -284,7 +297,7 @@ No KVP and no database. Files: `reports/latest.json` and `reports/latest.md` in 
                                                     "-aeterna_testkit_menu", "+aeterna_testkit_leave",
                                                     "-aeterna_testkit_leave"],
   "convars": { "read": ["version"], "write": [] },
-  "netEvents": { "server": ["aeterna_testkit:sv:open", "aeterna_testkit:sv:invite", "aeterna_testkit:sv:inviteAnswer",
+  "netEvents": { "server": ["aeterna_testkit:sv:open", "aeterna_testkit:sv:inviteAnswer",
                             "aeterna_testkit:sv:leave", "aeterna_testkit:sv:env"],
                  "client": ["aeterna_testkit:cl:invite", "aeterna_testkit:cl:role", "aeterna_testkit:cl:askEnv"] },
   "nui": true, "db": { "tables": [], "ddl": false },
