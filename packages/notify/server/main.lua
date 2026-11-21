@@ -1,13 +1,39 @@
--- aeterna_notify server: single-player toast export, queued server-wide announcements, and ACE-checked command.
+-- aeterna_notify server: single-player toast export (0.2: action presses), queued server-wide announcements,
+-- countdown announcements, and the ACE-checked commands.
 
 local L = NotifyLogic
 
 local announceQueue = nil
 local activeTimer = nil
+local toastSeq = 0
+local actionTracker = L.createActionTracker({ max = L.ACTION_TOAST_MAX, graceMs = L.ACTION_GRACE_MS })
+local countdown = nil
+
+local function selfName()
+    local n = GetCurrentResourceName()
+    if type(n) == 'string' and n ~= '' then
+        return n
+    end
+    return 'aeterna_notify'
+end
+
+local function callerName()
+    local n = GetInvokingResource()
+    if type(n) == 'string' and n ~= '' then
+        return n
+    end
+    return selfName()
+end
 
 local function logWarn(msg, fields)
     if AeternaCore and AeternaCore.log and type(AeternaCore.log.warn) == 'function' then
         AeternaCore.log.warn(msg, fields)
+    end
+end
+
+local function logInfo(msg)
+    if AeternaCore and AeternaCore.log and type(AeternaCore.log.info) == 'function' then
+        AeternaCore.log.info(msg)
     end
 end
 
@@ -32,6 +58,13 @@ local function checkAce(src, ace)
         return IsPlayerAceAllowed(src, ace) == true
     end
     return false
+end
+
+local function getPlayerNameSafe(s)
+    if type(GetPlayerName) == 'function' then
+        return GetPlayerName(s)
+    end
+    return nil
 end
 
 local function getAnnounceQueue()
@@ -69,17 +102,32 @@ local function getAnnounceQueue()
     return announceQueue
 end
 
-local function sendToastToPlayer(src, opts)
+local function sendToastToPlayer(src, opts, owner)
     local target = tonumber(src)
     if not target or target <= 0 then
         logWarn('notify refused invalid target player', { src = tostring(src) })
         return false, 'src: invalid'
     end
     local toastCfg = type(Config) == 'table' and Config.toast or nil
-    local ok, err, clean = L.validateToastOpts(opts, toastCfg)
+    local ok, err, clean = L.validateToastOpts(opts, toastCfg, logWarn)
     if not ok then
         logWarn('notify invalid opts', { src = target, err = err })
         return false, err
+    end
+    if clean.id then
+        clean.toastId = clean.id
+    else
+        toastSeq = toastSeq + 1
+        clean.toastId = 't' .. L.base36(toastSeq)
+    end
+    clean.owner = owner or selfName()
+    if clean.actions then
+        actionTracker:track(target, {
+            toastId = clean.toastId,
+            actions = clean.actions,
+            duration = clean.duration,
+            owner = clean.owner,
+        }, GetGameTimer())
     end
     TriggerClientEvent('aeterna_notify:cl:toast', target, clean)
     return true, nil, clean
@@ -90,12 +138,74 @@ local function sendAnnouncement(opts)
     return aq:push(opts)
 end
 
+local function getCountdown()
+    if countdown then
+        return countdown
+    end
+    countdown = L.createCountdown({
+        send = function(payload)
+            TriggerClientEvent('aeterna_notify:cl:countdown', -1, payload)
+        end,
+        fire = function(payload)
+            TriggerEvent('aeterna_notify:countdownEnd', payload)
+        end,
+    })
+    return countdown
+end
+
+local function startCountdown(opts)
+    local cd = getCountdown()
+    local id, err = cd:start(opts, GetGameTimer())
+    if not id then
+        if err ~= 'busy' then
+            logWarn('announceCountdown invalid opts', { err = err })
+        end
+        return nil, err
+    end
+    CreateThread(function()
+        while cd:active() == id do
+            Wait(250)
+            cd:tick(GetGameTimer())
+        end
+    end)
+    return id
+end
+
 exports('notify', function(src, opts)
-    return sendToastToPlayer(src, opts)
+    return sendToastToPlayer(src, opts, callerName())
 end)
 
 exports('announce', function(opts)
     return sendAnnouncement(opts)
+end)
+
+exports('announceCountdown', function(opts)
+    return startCountdown(opts)
+end)
+
+exports('cancelCountdown', function(countdownId)
+    return getCountdown():cancel(countdownId)
+end)
+
+RegisterNetEvent('aeterna_notify:sv:action', function(payload)
+    local src = source
+    if not AeternaCore.rateLimit(src, 'aeterna_notify:sv:action', 5, 1000) then
+        return
+    end
+    local ok, err, press = L.validateActionPress(payload)
+    if not ok then
+        logWarn('aeterna_notify:sv:action dropped', { src = tostring(src), err = err })
+        return
+    end
+    local accepted, rec = actionTracker:press(src, press.toastId, press.action, GetGameTimer())
+    if not accepted then
+        return
+    end
+    TriggerEvent('aeterna_notify:action', src, rec)
+end)
+
+AddEventHandler('playerDropped', function()
+    actionTracker:drop(source)
 end)
 
 RegisterCommand('aeterna_announce', function(src, args, rawCommand)
@@ -103,12 +213,7 @@ RegisterCommand('aeterna_announce', function(src, args, rawCommand)
     local ok, errKey, msgOrRes = L.handleAnnounceCommand(src, rawText, {
         can = checkAce,
         t = translate,
-        getPlayerName = function(s)
-            if type(GetPlayerName) == 'function' then
-                return GetPlayerName(s)
-            end
-            return nil
-        end,
+        getPlayerName = getPlayerNameSafe,
         notify = function(targetSrc, toastOpts)
             sendToastToPlayer(targetSrc, toastOpts)
         end,
@@ -116,8 +221,25 @@ RegisterCommand('aeterna_announce', function(src, args, rawCommand)
             return sendAnnouncement(annOpts)
         end,
     })
-    if not ok and (tonumber(src) or 0) == 0 and AeternaCore and AeternaCore.log and type(AeternaCore.log.info) == 'function' then
-        AeternaCore.log.info(tostring(msgOrRes))
+    if not ok and (tonumber(src) or 0) == 0 then
+        logInfo(tostring(msgOrRes))
+    end
+    return ok, errKey, msgOrRes
+end, false)
+
+RegisterCommand('aeterna_announce_countdown', function(src, args, rawCommand)
+    local rawText = L.extractCommandText(args, rawCommand, 'aeterna_announce_countdown')
+    local ok, errKey, msgOrRes = L.handleCountdownCommand(src, rawText, {
+        can = checkAce,
+        t = translate,
+        getPlayerName = getPlayerNameSafe,
+        notify = function(targetSrc, toastOpts)
+            sendToastToPlayer(targetSrc, toastOpts)
+        end,
+        start = startCountdown,
+    })
+    if not ok and (tonumber(src) or 0) == 0 then
+        logInfo(tostring(msgOrRes))
     end
     return ok, errKey, msgOrRes
 end, false)

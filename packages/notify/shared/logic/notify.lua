@@ -1,5 +1,6 @@
--- Pure logic for aeterna_notify: toast opts and queue, announcement opts and queue,
--- MOTD validation and state controller, aeterna_announce command handler, and layout helpers.
+-- Pure logic for aeterna_notify: toast opts (0.2: actions, sound, history, merge) and queue (0.2: merging, expiry,
+-- sound throttle), announcement opts and queue (0.2: pause for a countdown), MOTD validation and state controller,
+-- aeterna_announce command handler, and layout helpers.
 -- Natives-free so stock Lua 5.1+ can test it.
 
 NotifyLogic = {}
@@ -229,7 +230,83 @@ end
 -- Toasts: opts validation & queue
 --------------------------------------------------------------------------------
 
-function L.validateToastOpts(opts, toastCfg)
+L.ACTION_VARIANTS = {
+    primary = true,
+    secondary = true,
+}
+
+-- A merged copy plays its sound only when the last sound of that toast started more than this long ago.
+L.SOUND_THROTTLE_MS = 1000
+
+local function warnVia(warnFn, msg, fields)
+    if type(warnFn) == 'function' then
+        warnFn(msg, fields)
+    elseif AeternaCore and AeternaCore.log and type(AeternaCore.log.warn) == 'function' then
+        AeternaCore.log.warn(msg, fields)
+    end
+end
+
+local BASE36_DIGITS = '0123456789abcdefghijklmnopqrstuvwxyz'
+
+function L.base36(n)
+    local v = math.floor(tonumber(n) or 0)
+    if v <= 0 then return '0' end
+    local out = {}
+    while v > 0 do
+        local d = v % 36
+        table.insert(out, 1, BASE36_DIGITS:sub(d + 1, d + 1))
+        v = math.floor(v / 36)
+    end
+    return table.concat(out)
+end
+
+-- 1-2 entries; id <= 32 matching ^[%w_%-]+$ and unique; label 1-20 visible chars; variant primary|secondary.
+function L.validateActions(actions)
+    if type(actions) ~= 'table' or not isArrayTable(actions) then
+        return false, 'actions: type'
+    end
+    local n = #actions
+    if n < 1 then return false, 'actions: minItems 1' end
+    if n > 2 then return false, 'actions: maxItems 2' end
+    local seen = {}
+    local out = {}
+    for i = 1, n do
+        local a = actions[i]
+        local path = ('actions[%d]'):format(i)
+        if type(a) ~= 'table' then
+            return false, path .. ': type'
+        end
+        if not L.isValidId(a.id, 32) then
+            return false, path .. '.id: pattern'
+        end
+        if seen[a.id] then
+            return false, path .. '.id: unique'
+        end
+        seen[a.id] = true
+        if type(a.label) ~= 'string' then
+            return false, path .. '.label: type'
+        end
+        local labelLen = L.textLen(L.stripControlAndTrim(a.label))
+        if labelLen < 1 then
+            return false, path .. '.label: minLen 1'
+        end
+        if labelLen > 20 then
+            return false, path .. '.label: maxLen 20'
+        end
+        local variant = 'secondary'
+        if type(a.variant) == 'string' and L.ACTION_VARIANTS[a.variant] then
+            variant = a.variant
+        end
+        out[i] = { id = a.id, label = L.textClean(a.label, 20), variant = variant }
+    end
+    return true, nil, out
+end
+
+local function flagDefaultTrue(v)
+    return v ~= false
+end
+
+function L.validateToastOpts(opts, toastCfg, warnFn)
     if type(opts) ~= 'table' then
         return false, 'opts: type'
     end
@@ -280,7 +357,21 @@ function L.validateToastOpts(opts, toastCfg)
     if type(cfg) ~= 'table' then
         cfg = (type(Config) == 'table' and Config.toast) or nil
     end
+
+    local cleanActions = nil
+    if opts.actions ~= nil then
+        local okAct, errAct, ca = L.validateActions(opts.actions)
+        if okAct then
+            cleanActions = ca
+        else
+            warnVia(warnFn or (type(cfg) == 'table' and cfg.warn) or nil, 'toast actions dropped', { err = errAct })
+        end
+    end
+
     local defDur = (type(cfg) == 'table' and tonumber(cfg.defaultDuration)) or 4000
+    if cleanActions then
+        defDur = (type(cfg) == 'table' and tonumber(cfg.actionDuration)) or 8000
+    end
     local rawDur = defDur
     if opts.duration ~= nil then
         if type(opts.duration) ~= 'number' or opts.duration ~= opts.duration or opts.duration == math.huge or opts.duration == -math.huge then
@@ -302,45 +393,153 @@ function L.validateToastOpts(opts, toastCfg)
         type = toastType,
         duration = cleanDuration,
         icon = cleanIcon,
+        actions = cleanActions,
+        sound = flagDefaultTrue(opts.sound),
+        history = flagDefaultTrue(opts.history),
+        merge = flagDefaultTrue(opts.merge),
     }
+end
+
+-- Duplicate key: owner resource + type + title + description after cleaning (cleaned text holds no newline).
+function L.mergeKey(owner, toast)
+    return table.concat({
+        tostring(owner or ''),
+        tostring(toast.type or ''),
+        tostring(toast.title or ''),
+        tostring(toast.description or ''),
+    }, '\n')
+end
+
+function L.formatCount(n)
+    local v = math.floor(tonumber(n) or 0)
+    if v < 2 then return '' end
+    if v > 99 then return '×99+' end
+    return '×' .. tostring(v)
+end
+
+-- Owner (Config.sound.enabled), player (settings KVP) and toast (`sound ~= false`) must all allow it.
+function L.soundGate(ownerEnabled, playerEnabled, toastSound)
+    return ownerEnabled == true and playerEnabled == true and toastSound ~= false
+end
+
+function L.formatKeyLabel(rawButton, unboundLabel)
+    local fallback = unboundLabel or ''
+    if type(rawButton) ~= 'string' or rawButton == '' then
+        return fallback
+    end
+    local stripped = rawButton:gsub('^[tb]_', '')
+    if stripped == '' or stripped == '-1' or stripped == 'NULL' or stripped == 'NONE' or stripped == 'null' then
+        return fallback
+    end
+    return L.textClean(stripped, 16)
 end
 
 function L.createToastQueue(cfg)
     local maxVisible = 4
     local defaultDuration = 4000
+    local actionDuration = 8000
+    local mergeOn = true
+    local warnFn = nil
+    local src = nil
     if type(cfg) == 'number' then
         maxVisible = math.max(1, math.floor(cfg))
     elseif type(cfg) == 'table' then
-        if tonumber(cfg.max) then
-            maxVisible = math.max(1, math.floor(tonumber(cfg.max)))
-        end
-        if tonumber(cfg.defaultDuration) then
-            defaultDuration = math.floor(tonumber(cfg.defaultDuration))
-        end
+        src = cfg
     elseif type(Config) == 'table' and type(Config.toast) == 'table' then
-        if tonumber(Config.toast.max) then
-            maxVisible = math.max(1, math.floor(tonumber(Config.toast.max)))
+        src = Config.toast
+    end
+    if src then
+        if tonumber(src.max) then
+            maxVisible = math.max(1, math.floor(tonumber(src.max)))
         end
-        if tonumber(Config.toast.defaultDuration) then
-            defaultDuration = math.floor(tonumber(Config.toast.defaultDuration))
+        if tonumber(src.defaultDuration) then
+            defaultDuration = math.floor(tonumber(src.defaultDuration))
+        end
+        if tonumber(src.actionDuration) then
+            actionDuration = clampNumber(tonumber(src.actionDuration), 1000, 15000)
+        end
+        mergeOn = src.merge ~= false
+        if type(src.warn) == 'function' then
+            warnFn = src.warn
         end
     end
 
     local q = {
         max = maxVisible,
         defaultDuration = defaultDuration,
+        actionDuration = actionDuration,
+        merge = mergeOn,
+        warn = warnFn,
         items = {},
         seq = 0,
     }
 
-    function q:push(opts)
+    local function soundFor(item, clean, c, t)
+        if c.soundAllowed ~= true or clean.sound == false then
+            return false
+        end
+        if item.soundAt ~= nil and t - item.soundAt <= L.SOUND_THROTTLE_MS then
+            return false
+        end
+        item.soundAt = t
+        return true
+    end
+
+    -- ctx = { now = ms, owner = resource, origin = 'client'|'server', toastId = string?, soundAllowed = boolean }
+    function q:push(opts, ctx)
+        local c = type(ctx) == 'table' and ctx or {}
+        local now = tonumber(c.now)
+        if now then
+            self:prune(now)
+        end
+        local t = now or 0
+
         local ok, err, clean = L.validateToastOpts(opts, {
-            max = self.max,
             defaultDuration = self.defaultDuration,
-        })
+            actionDuration = self.actionDuration,
+        }, self.warn)
         if not ok then
             return false, err
         end
+
+        local owner = type(c.owner) == 'string' and c.owner or nil
+
+        if self.merge and clean.id == nil and clean.actions == nil and clean.merge then
+            local key = L.mergeKey(owner, clean)
+            for i = 1, #self.items do
+                local item = self.items[i]
+                if item.mergeKey == key then
+                    item.count = item.count + 1
+                    item.expiresAt = t + item.duration
+                    return true, nil, {
+                        toast = item,
+                        replaced = false,
+                        merged = true,
+                        index = i,
+                        evicted = nil,
+                        sound = soundFor(item, clean, c, t),
+                    }
+                end
+            end
+            clean.mergeKey = key
+        end
+
+        self.seq = self.seq + 1
+        local toastId
+        if clean.id then
+            toastId = clean.id
+        elseif type(c.toastId) == 'string' and L.isValidId(c.toastId, 24) then
+            toastId = c.toastId
+        else
+            toastId = 't' .. L.base36(self.seq)
+        end
+        clean.toastId = toastId
+        clean.key = clean.id or ('#' .. L.base36(self.seq))
+        clean.owner = owner
+        clean.origin = c.origin == 'server' and 'server' or 'client'
+        clean.count = 1
+        clean.expiresAt = t + clean.duration
+        local sound = soundFor(clean, clean, c, t)
 
         if clean.id then
             for i = 1, #self.items do
@@ -349,14 +548,13 @@ function L.createToastQueue(cfg)
                     return true, nil, {
                         toast = clean,
                         replaced = true,
+                        merged = false,
                         index = i,
                         evicted = nil,
+                        sound = sound,
                     }
                 end
             end
-        else
-            self.seq = self.seq + 1
-            clean.id = 't' .. tostring(self.seq)
         end
 
         self.items[#self.items + 1] = clean
@@ -368,13 +566,27 @@ function L.createToastQueue(cfg)
         return true, nil, {
             toast = clean,
             replaced = false,
+            merged = false,
             index = #self.items,
             evicted = evicted,
+            sound = sound,
         }
     end
 
     q.add = q.push
     q.notify = q.push
+
+    -- Drops toasts whose timer ran out (a timed-out toast fires nothing).
+    function q:prune(now)
+        local t = tonumber(now)
+        if not t then return end
+        for i = #self.items, 1, -1 do
+            local exp = self.items[i].expiresAt
+            if exp ~= nil and exp <= t then
+                table.remove(self.items, i)
+            end
+        end
+    end
 
     function q:clear(id)
         if id == nil then
@@ -394,6 +606,45 @@ function L.createToastQueue(cfg)
     end
 
     q.remove = q.clear
+
+    function q:removeItem(item)
+        for i = 1, #self.items do
+            if self.items[i] == item then
+                table.remove(self.items, i)
+                return true
+            end
+        end
+        return false
+    end
+
+    -- Newest on-screen toast with this toastId whose actions include `action`.
+    function q:findAction(toastId, action, now)
+        self:prune(now)
+        if type(toastId) ~= 'string' or type(action) ~= 'string' then
+            return nil
+        end
+        for i = #self.items, 1, -1 do
+            local item = self.items[i]
+            if item.toastId == toastId and item.actions then
+                for j = 1, #item.actions do
+                    if item.actions[j].id == action then
+                        return item
+                    end
+                end
+            end
+        end
+        return nil
+    end
+
+    function q:newestWithActions(now)
+        self:prune(now)
+        for i = #self.items, 1, -1 do
+            if self.items[i].actions then
+                return self.items[i]
+            end
+        end
+        return nil
+    end
 
     function q:list()
         local out = {}
@@ -527,6 +778,7 @@ function L.createAnnounceQueue(cfg)
         current = nil,
         waiting = {},
         seq = 0,
+        paused = false,
     }
 
     function aq:push(opts)
@@ -541,7 +793,7 @@ function L.createAnnounceQueue(cfg)
             clean.id = 'a' .. tostring(self.seq)
         end
 
-        if self.current == nil then
+        if self.current == nil and not self.paused then
             self.current = clean
             if onShowFn then
                 onShowFn(clean)
@@ -576,6 +828,9 @@ function L.createAnnounceQueue(cfg)
     aq.announce = aq.push
 
     function aq:next()
+        if self.paused then
+            return nil
+        end
         if #self.waiting == 0 then
             self.current = nil
             return nil
@@ -613,6 +868,32 @@ function L.createAnnounceQueue(cfg)
     function aq:clear()
         self.current = nil
         self.waiting = {}
+    end
+
+    -- A countdown banner goes ahead: the banner on screen goes back to the front of the line (it already counted
+    -- against the cap), and nothing is shown until resume().
+    function aq:pause()
+        if self.paused then return nil end
+        self.paused = true
+        local held = self.current
+        if held then
+            table.insert(self.waiting, 1, held)
+            self.current = nil
+        end
+        return held
+    end
+
+    function aq:resume()
+        if not self.paused then return nil end
+        self.paused = false
+        if self.current == nil then
+            return self:next()
+        end
+        return nil
+    end
+
+    function aq:isPaused()
+        return self.paused == true
     end
 
     return aq
