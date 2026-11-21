@@ -4,6 +4,7 @@
 local Menu = TestkitLogic.menu
 local Report = TestkitLogic.report
 local Scrub = TestkitLogic.scrub
+local Selftest = TestkitLogic.selftest
 
 local RES = GetCurrentResourceName()
 local ACE = 'aeterna.testkit.run'
@@ -241,11 +242,6 @@ end
 
 local INVITE_SCHEMA = { type = 'table', fields = { target = { type = 'number', integer = true, min = 1, max = 65535 } } }
 local ANSWER_SCHEMA = { type = 'table', fields = { accept = { type = 'boolean' } } }
-local ENV_SCHEMA = { type = 'table', fields = {
-    gameBuild = { type = 'number', integer = true, min = 1, max = 99999 },
-    w = { type = 'number', integer = true, min = 320, max = 15360 },
-    h = { type = 'number', integer = true, min = 240, max = 8640 },
-} }
 
 -- A invites B by server id from the invite panel. Rate limit is the caller's.
 local function invite(src, payload)
@@ -375,7 +371,7 @@ end)
 RegisterNetEvent('aeterna_testkit:sv:env', function(payload)
     local src = tonumber(source)
     if not src or src <= 0 or not AeternaCore.rateLimit(src, 'aeterna_testkit:sv:env', 2, 10000) then return end
-    local ok, _, p = AeternaCore.validate(payload, ENV_SCHEMA)
+    local ok, _, p = AeternaCore.validate(payload, Selftest.ENV_SCHEMA)
     if not ok or not current or current.by ~= 'menu' or current.starter ~= src or current.env then return end
     current.env = { gameBuild = p.gameBuild, resolution = ('%dx%d'):format(p.w, p.h) }
 end)
@@ -479,9 +475,8 @@ if Config.menuEntry ~= false then
     uikit('addMenuEntry', { id = 'testkit', label = Menu.cut(t('testkit.menu.title'), 60), icon = 'check', ace = ACE })
 end
 
--- Own self-tests (spec § Self-tests). save rewrites the report files with what they already hold (or a sample
--- report when there is none), so a test run never loses the last report.
-local Selftest = TestkitLogic.selftest
+-- Own self-tests (spec § Self-tests). save rewrites the report files with what they already hold and skips
+-- when there is no report yet, so a test run never loses or replaces the last report.
 
 local function readSchema()
     local raw = LoadResourceFile(RES, 'schema/report-1.schema.json')
@@ -490,15 +485,16 @@ local function readSchema()
     return ok and schema or nil
 end
 
+-- Both report files of a finished run, or nil when there is none yet.
+local function lastReportFiles()
+    local json1, md1 = LoadResourceFile(RES, 'reports/latest.json'), LoadResourceFile(RES, 'reports/latest.md')
+    if type(json1) ~= 'string' or json1 == '' or type(md1) ~= 'string' or md1 == '' then return nil end
+    return json1, md1
+end
+
 local function saveCheck()
-    local built = Report.build(Selftest.sampleInput())
-    local sample = { json = Report.encode(built), md = Report.markdown(built, t('testkit.report.footer')) }
-    local function keep(path, k)
-        local content = LoadResourceFile(RES, path)
-        if type(content) ~= 'string' or content == '' then content = sample[k] end
-        return content
-    end
-    local json1, md1 = keep('reports/latest.json', 'json'), keep('reports/latest.md', 'md')
+    local json1, md1 = lastReportFiles()
+    if not json1 then return 'skip', 'no report yet' end
     -- literal paths: they are the two files oss.json declares
     local okJson = SaveResourceFile(RES, 'reports/latest.json', json1, -1)
     local okMd = SaveResourceFile(RES, 'reports/latest.md', md1, -1)
@@ -520,7 +516,8 @@ AddEventHandler('aeterna_core:selftest', function(runId, name)
     else
         return
     end
-    core('reportSelftest', runId, name, ok, detail)
+    local sent, err = pcall(function() return exports.aeterna_core:reportSelftest(runId, name, ok, detail) end)
+    if not sent then AeternaCore.log.warn('reportSelftest failed', { name = name, err = tostring(err) }) end
 end)
 
 for _, r in ipairs(Selftest.rows(RES, t)) do

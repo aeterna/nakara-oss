@@ -98,15 +98,19 @@ function M.save(result)
     return true, 'both report files saved and read back'
 end
 
-local function intIn(v, lo, hi)
-    return math.type(v) == 'integer' and v >= lo and v <= hi
-end
+-- The schema of aeterna_testkit:sv:env, the client's askEnv reply. The server checks sv:env with it and the env
+-- self-test checks the reply the client would send with it.
+M.ENV_SCHEMA = { type = 'table', fields = {
+    gameBuild = { type = 'number', integer = true, min = 1, max = 99999 },
+    w = { type = 'number', integer = true, min = 320, max = 15360 },
+    h = { type = 'number', integer = true, min = 240, max = 8640 },
+} }
 
--- The same ranges as the aeterna_testkit:sv:env schema on the server.
-function M.env(gameBuild, w, h)
-    local line = ('game build %s · %sx%s'):format(tostring(gameBuild), tostring(w), tostring(h))
-    if intIn(gameBuild, 1, 99999) and intIn(w, 320, 15360) and intIn(h, 240, 8640) then return true, line end
-    return false, line .. ' out of range'
+-- `validate` = AeternaCore.validate; `payload` = the askEnv reply { gameBuild, w, h }.
+function M.env(validate, payload)
+    local ok, err = validate(payload, M.ENV_SCHEMA)
+    if not ok then return false, 'askEnv reply refused: ' .. tostring(err) end
+    return true, ('game build %d · %dx%d'):format(payload.gameBuild, payload.w, payload.h)
 end
 
 TestkitLogic.selftest = M

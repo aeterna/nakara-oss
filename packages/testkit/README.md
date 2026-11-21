@@ -132,11 +132,11 @@ Registered with `aeterna_core` on start like every kit package, and run from thi
 | `aeterna_testkit.scrub` | headless | 1 | A detail with a name, a `license:` id, an IPv4 and a `C:\` path comes out as `A`, `[id]`, `[ip]`, `[path]` |
 | `aeterna_testkit.report_schema` | headless | 1 | A sample run builds JSON with exactly the keys of `schema/report-1.schema.json` (top level, `env`, `counts`, each row) and Markdown that ends with the footer |
 | `aeterna_testkit.save` | headless | 1 | `SaveResourceFile` of `reports/latest.json` and `reports/latest.md` returns true and `LoadResourceFile` reads the same content back |
-| `aeterna_testkit.env` | headless, `side = 'client'` | 1 | Player A's client has a game build and a resolution inside the ranges `aeterna_testkit:sv:env` accepts |
+| `aeterna_testkit.env` | headless, `side = 'client'` | 1 | Player A's askEnv reply (game build and resolution) passes the schema the server checks `aeterna_testkit:sv:env` with |
 | `aeterna_testkit.eye_card` | eye | 1 | The person sees the card in the lower left corner with a question and Pass, Doesn't match, Skip, over the menu panel that stays open |
 | `aeterna_testkit.eye_card_b` | eye | 2 | Player B sees the same card, headed "as player B" |
 
-`save` writes each report file back with the content it already holds (a sample report when the file is missing), so a test run never loses the last report. It writes only this resource's own report files, so it is not destructive.
+`save` writes each report file back with the content it already holds, so a test run never loses or replaces the last report; before the first finished run it is SKIP `no report yet` and writes nothing. It writes only this resource's own report files, so it is not destructive.
 
 ## Tests
 
