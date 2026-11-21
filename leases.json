@@ -36,6 +36,18 @@
       "plan": "kit-v02",
       "acquired": "2026-11-21T15:06:27Z",
       "expires": "2026-11-21T19:06:27Z"
+    },
+    {
+      "id": "kit02-w2-st-c-8104a54d",
+      "repo": "nakara-oss",
+      "lane": "kit02-w2-st-c",
+      "host": "mac",
+      "scope": [
+        "packages/{phonekit,loading,testkit}/**"
+      ],
+      "plan": "kit-v02",
+      "acquired": "2026-11-21T15:06:36Z",
+      "expires": "2026-11-21T19:06:36Z"
     }
   ]
 }
