@@ -767,6 +767,7 @@ if not IsDuplicityVersion() then
         local cursor = normalized.cursor ~= false
         local keyboard = normalized.keyboard ~= false
         local keepGameInput = normalized.keepGameInput == true
+        AeternaCore._focusMemo = { token = token, keyboard = keyboard, cursor = cursor, keepGameInput = keepGameInput }
         SetNuiFocus(keyboard, cursor)
         SetNuiFocusKeepInput(keepGameInput)
         return token
@@ -791,7 +792,28 @@ if not IsDuplicityVersion() then
                 SetNuiFocus(false, false)
             end
         end)
+        -- Overlay: a paused holder clears its natives (its page stays) and gets its options back on resume.
+        AddEventHandler('aeterna_core:focusPaused', function(owner)
+            if owner == GetCurrentResourceName() then
+                SetNuiFocusKeepInput(false)
+                SetNuiFocus(false, false)
+            end
+        end)
+        AddEventHandler('aeterna_core:focusResumed', function(owner, token)
+            local memo = AeternaCore._focusMemo
+            if owner == GetCurrentResourceName() and memo and memo.token == token then
+                SetNuiFocus(memo.keyboard, memo.cursor)
+                SetNuiFocusKeepInput(memo.keepGameInput)
+            end
+        end)
     end
+end
+
+-- Theme message for a kit page; `preset` only applies when `href` is empty (ADR 0005 decision 9).
+function AeternaCore.themeMessage()
+    local okH, href = pcall(function() return exports.aeterna_core:themeHref() end)
+    local okP, preset = pcall(function() return exports.aeterna_core:themePreset() end)
+    return { type = 'aeterna:theme', href = okH and href or nil, preset = okP and preset or 'asphalt' }
 end
 
 return AeternaCore

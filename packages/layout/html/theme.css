@@ -75,6 +75,65 @@
     --fast: 140ms;
     --enter: 200ms;
     --font: 'IBM Plex Sans Thai', 'Noto Sans Thai', system-ui, sans-serif;
+    /* Type scale for in-game UI at 1080p: --fs-1 smallest (captions), --fs-3 body, --fs-5 titles (ADR 0005 decision 9). */
+    --fs-1: 11px;
+    --fs-2: 12px;
+    --fs-3: 14px;
+    --fs-4: 16px;
+    --fs-5: 20px;
+    --lh: 1.45;
+}
+
+/* Presets (ADR 0005 decision 9). Each page sets data-preset on <html>. A preset redefines colour tokens only. */
+
+/* asphalt: the default, written out so the name always works. Same values as :root. */
+:root[data-preset="asphalt"] {
+    --surface: #1d2024;
+    --raised: #262a2f;
+    --text: #eceff2;
+    --text-2: #aab1b9;
+    --text-3: #8a929b;
+    --line: rgba(232, 236, 240, .09);
+    --track: rgba(232, 236, 240, .12);
+    --accent: #2f6feb;
+    --on-accent: #ffffff;
+    --good: #3fae6e;
+    --warn: #d9a03a;
+    --bad: #e0574f;
+}
+
+/* paper (light). Measured contrast: --text on --surface 14.80 : 1; --on-accent on --accent 6.28 : 1
+   (WCAG AA needs 4.5 : 1). --text-3 on --raised 4.73 : 1. The accent is the asphalt blue, darkened so white passes. */
+:root[data-preset="paper"] {
+    --surface: #f5f2ec;
+    --raised: #ebe6dc;
+    --text: #1c1f23;
+    --text-2: #4b5159;
+    --text-3: #5f656d;
+    --line: rgba(28, 31, 35, .10);
+    --track: rgba(28, 31, 35, .14);
+    --accent: #1d5bc4;
+    --on-accent: #ffffff;
+    --good: #1f7a4a;
+    --warn: #8a5a00;
+    --bad: #b3322b;
+}
+
+/* night-market (dark graphite, orange accent). Measured contrast: --text on --surface 14.62 : 1;
+   --on-accent on --accent 6.22 : 1. White on this orange measures only 2.71 : 1, so the on-accent text is dark. */
+:root[data-preset="night-market"] {
+    --surface: #1b1d21;
+    --raised: #262a2f;
+    --text: #eceff2;
+    --text-2: #aab1b9;
+    --text-3: #8a929b;
+    --line: rgba(232, 236, 240, .09);
+    --track: rgba(232, 236, 240, .12);
+    --accent: #e8833a;
+    --on-accent: #1b1d21;
+    --good: #3fae6e;
+    --warn: #d9a03a;
+    --bad: #e0574f;
 }
 
 @media (prefers-reduced-motion: reduce) {

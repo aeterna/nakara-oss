@@ -8,35 +8,86 @@ function M.new(callbacks)
     callbacks = type(callbacks) == 'table' and callbacks or {}
     local onLost = callbacks.onLost
     local onApply = callbacks.onApply
+    local onPaused = callbacks.onPaused
+    local onResumed = callbacks.onResumed
 
     local currentOwner = nil
     local currentToken = nil
     local currentOpts = nil
+    local currentOverlay = false
+    local paused = nil -- { owner, token, opts } of the normal holder that an overlay covers
     local seq = 0
 
     local inst = {}
 
+    local function lost(owner, token, reason)
+        if onLost then
+            onLost(owner, token, reason)
+        end
+    end
+
+    local function clearActive()
+        currentOwner = nil
+        currentToken = nil
+        currentOpts = nil
+        currentOverlay = false
+    end
+
+    -- Gives focus back to the paused holder (same token), or clears the natives when there is none.
+    local function resumeOrClear()
+        if paused == nil then
+            if onApply then
+                onApply(false, false, false)
+            end
+            return
+        end
+        local p = paused
+        paused = nil
+        currentOwner, currentToken, currentOpts, currentOverlay = p.owner, p.token, p.opts, false
+        if onApply then
+            onApply(p.opts.keyboard, p.opts.cursor, p.opts.keepGameInput)
+        end
+        if onResumed then
+            onResumed(p.owner, p.token)
+        end
+    end
+
     local function requestImpl(owner, opts)
         local nextOwner = tostring(owner or 'aeterna_core')
         local normalized = type(opts) == 'table' and opts or {}
+        local overlay = normalized.overlay == true
         local cursor = normalized.cursor ~= false
         local keyboard = normalized.keyboard ~= false
         local keepGameInput = normalized.keepGameInput == true
+        local changed = currentToken ~= nil and currentOwner ~= nextOwner
 
         local preempted = nil
-        if currentToken ~= nil and currentOwner ~= nil and currentOwner ~= nextOwner then
-            local prevOwner = currentOwner
-            local prevToken = currentToken
-            preempted = { owner = prevOwner, token = prevToken, reason = 'preempted' }
-            if onLost then
-                onLost(prevOwner, prevToken, 'preempted')
+        if changed and overlay and not currentOverlay then
+            -- An overlay pauses a normal holder: no focusLost, and the holder keeps its token.
+            paused = { owner = currentOwner, token = currentToken, opts = currentOpts }
+            if onPaused then
+                onPaused(currentOwner, currentToken)
             end
+        elseif changed then
+            preempted = { owner = currentOwner, token = currentToken, reason = 'preempted' }
+            lost(currentOwner, currentToken, 'preempted')
+        end
+        if paused ~= nil and not overlay then
+            -- A normal request also preempts the paused holder.
+            local p = paused
+            paused = nil
+            if p.owner ~= nextOwner then
+                lost(p.owner, p.token, 'preempted')
+            end
+        elseif paused ~= nil and paused.owner == nextOwner then
+            paused = nil -- the paused holder takes the card itself; nothing resumes later
         end
 
         seq = seq + 1
         local token = 'focus_' .. tostring(seq)
         currentOwner = nextOwner
         currentToken = token
+        currentOverlay = overlay
         currentOpts = {
             cursor = cursor,
             keyboard = keyboard,
@@ -51,46 +102,54 @@ function M.new(callbacks)
     end
 
     local function releaseImpl(token)
-        if type(token) ~= 'string' or currentToken == nil or token ~= currentToken then
+        if type(token) ~= 'string' then
             return false
         end
-        currentOwner = nil
-        currentToken = nil
-        currentOpts = nil
-        if onApply then
-            onApply(false, false, false)
+        if paused ~= nil and token == paused.token then
+            -- A paused holder releases its own token; nothing resumes when the overlay ends.
+            paused = nil
+            return true
         end
+        if currentToken == nil or token ~= currentToken then
+            return false
+        end
+        clearActive()
+        resumeOrClear()
         return true
     end
 
     local function stopImpl(stoppedResource, coreResource)
-        if currentToken == nil or currentOwner == nil then
-            return nil
-        end
         local coreName = coreResource or 'aeterna_core'
-        local reason = nil
         if stoppedResource == coreName then
-            reason = 'released_by_core'
-        elseif stoppedResource == currentOwner then
-            reason = 'owner_stopped'
+            local p = paused
+            local prevOwner, prevToken = currentOwner, currentToken
+            paused = nil
+            clearActive()
+            resumeOrClear()
+            if p ~= nil then
+                lost(p.owner, p.token, 'released_by_core')
+            end
+            if prevToken == nil then
+                return nil
+            end
+            lost(prevOwner, prevToken, 'released_by_core')
+            return { owner = prevOwner, token = prevToken, reason = 'released_by_core' }
         end
-        if not reason then
+        if paused ~= nil and stoppedResource == paused.owner then
+            -- The paused holder is gone: nothing to resume when the overlay ends.
+            local p = paused
+            paused = nil
+            lost(p.owner, p.token, 'owner_stopped')
+            return { owner = p.owner, token = p.token, reason = 'owner_stopped' }
+        end
+        if currentToken == nil or currentOwner == nil or stoppedResource ~= currentOwner then
             return nil
         end
-
-        local prevOwner = currentOwner
-        local prevToken = currentToken
-        currentOwner = nil
-        currentToken = nil
-        currentOpts = nil
-
-        if onApply then
-            onApply(false, false, false)
-        end
-        if onLost then
-            onLost(prevOwner, prevToken, reason)
-        end
-        return { owner = prevOwner, token = prevToken, reason = reason }
+        local prevOwner, prevToken = currentOwner, currentToken
+        clearActive()
+        lost(prevOwner, prevToken, 'owner_stopped')
+        resumeOrClear()
+        return { owner = prevOwner, token = prevToken, reason = 'owner_stopped' }
     end
 
     function inst.request(a, b, c)
@@ -125,6 +184,14 @@ function M.new(callbacks)
         return currentOpts
     end
 
+    function inst.pausedOwner()
+        return paused and paused.owner or nil
+    end
+
+    function inst.pausedToken()
+        return paused and paused.token or nil
+    end
+
     function inst.onResourceStop(a, b, c)
         if a == inst then
             return stopImpl(b, c)
@@ -133,9 +200,8 @@ function M.new(callbacks)
     end
 
     function inst.reset()
-        currentOwner = nil
-        currentToken = nil
-        currentOpts = nil
+        paused = nil
+        clearActive()
     end
 
     return inst

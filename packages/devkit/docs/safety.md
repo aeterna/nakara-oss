@@ -121,8 +121,8 @@ for them (`invalid-allow`).
 | `undeclared-registered-command` | `RegisterCommand`, `lib.addCommand` (string or list) | `capabilities.registeredCommands` |
 | `undeclared-convar` | `GetConvar`, `GetConvarInt`, `GetConvarBool`, `GetConvarFloat` / `SetConvar`, `SetConvarReplicated`, `SetConvarServerInfo` | `capabilities.convars.read` / `.write` |
 | `undeclared-net-event` | `RegisterNetEvent`, `RegisterServerEvent`, `onNet`, `lib.callback.register` | `capabilities.netEvents.server` (server files) / `.client` (client files); shared and unlisted files need both |
-| `undeclared-nui` | `ui_page`, `SetNuiFocus*`, `RegisterNUICallback`, `RegisterNuiCallbackType`, `SendNUIMessage`, `__cfx_nui:` handlers | `capabilities.nui: true` |
-| `undeclared-file-write` | `SaveResourceFile` — and writing into any resource but `GetCurrentResourceName()` is always an error | `capabilities.files.write` |
+| `undeclared-nui` | `ui_page`/`loadscreen`, `SetNuiFocus*`, `RegisterNUICallback`, `RegisterNuiCallbackType`, `SendNUIMessage`, `__cfx_nui:` handlers | `capabilities.nui: true` |
+| `undeclared-file-write` | `SaveResourceFile` — a literal path, or a path built from a literal prefix that a declared glob covers (`'photos/' .. id .. '.jpg'` with `photos/*`); a prefix containing `..` or starting with `/` is refused; writing into any resource but `GetCurrentResourceName()` is always an error | `capabilities.files.write` |
 | `undeclared-db` | table names after `FROM`/`INTO`/`UPDATE`/`JOIN`/`TABLE` in SQL string literals of server-side code and `.sql` files (best effort; CTE names, `ON DUPLICATE KEY UPDATE`, `FROM JSON_TABLE(…)` excluded); `CREATE`/`ALTER`/`DROP`/`TRUNCATE`/`RENAME`; SQL with a table appended at runtime is a warning | `capabilities.db.tables`, `capabilities.db.ddl: true` |
 
 Values must be literal or resolvable: a string literal, concatenation of literals, `('…%s'):format()`
@@ -216,7 +216,10 @@ release.
   `'https://' .. GetConvar('mypkg_api_host', '') .. '/v1/'`. In a port or path position it also
   accepts any runtime value.
 - **`commands`, `registeredCommands`, `convars.*`, `netEvents.*`, `db.tables`, `files.write`** —
-  exact names, or globs with `*` (`nakara_metrics_*`, `nakara_metrics:*`).
+  exact names, or globs with `*` (`nakara_metrics_*`, `nakara_metrics:*`). A `files.write` glob also
+  covers a runtime-built path whose literal prefix it matches: `photos/*` covers
+  `SaveResourceFile(GetCurrentResourceName(), 'photos/' .. id .. '.jpg', …)`. The scanner cannot see the runtime
+  part, so the package must validate it (for example a fixed-length hex id) so it can never hold `..` or `/`.
 - **`httpHandlers`** — paths under `/<resource>/` answered by `SetHttpHandler`; a trailing `*`
   matches a prefix. Optional. The scanner sees only that a handler exists, so any `SetHttpHandler`
   makes every declared entry used; entries with no `SetHttpHandler` in the package are

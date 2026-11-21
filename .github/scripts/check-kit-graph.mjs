@@ -1,17 +1,23 @@
 #!/usr/bin/env node
-// Starter Kit checks (ADR 0004 decisions 2 and 6): package edges follow the table, and every theme.css is the same file.
+// Starter Kit checks (ADR 0004 decision 6, ADR 0005 decision 2): package edges follow the table, and every theme.css is the same file.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { ROOT, resourcePackages } from './oss-manifest.mjs';
 
 export const EDGES = {
+  // ADR 0005 decision 2 (replaces the ADR 0004 table). Optional = local events only.
   aeterna_core: { required: [], optional: [] },
   aeterna_notify: { required: ['aeterna_core'], optional: ['aeterna_layout'] },
   aeterna_uikit: { required: ['aeterna_core'], optional: [] },
   aeterna_layout: { required: ['aeterna_core', 'aeterna_uikit'], optional: [] },
   aeterna_hudkit: { required: ['aeterna_core', 'aeterna_uikit', 'aeterna_layout'], optional: [] },
   aeterna_phonekit: { required: ['aeterna_core', 'aeterna_uikit', 'aeterna_notify'], optional: ['aeterna_layout'] },
-  aeterna_invkit: { required: ['aeterna_core', 'aeterna_uikit'], optional: [] },
+  aeterna_invkit: { required: ['aeterna_core', 'aeterna_uikit'], optional: ['aeterna_phonekit'] },
+  aeterna_testkit: { required: ['aeterna_core', 'aeterna_uikit'], optional: [] },
+  aeterna_radial: { required: ['aeterna_core', 'aeterna_uikit'], optional: [] },
+  aeterna_loading: { required: [], optional: ['aeterna_core'] },
+  aeterna_phonecall: { required: ['aeterna_core', 'aeterna_uikit', 'aeterna_phonekit'], optional: [] },
+  aeterna_camera: { required: ['aeterna_core', 'aeterna_uikit', 'aeterna_phonekit', 'aeterna_notify'], optional: [] },
 };
 const NAME = '((?:aeterna|nakara)_[a-z0-9_]+)';
 const REFS = [
@@ -42,7 +48,7 @@ export function manifestDependencies(text) {
 
 export function checkPackage(resource, dir) {
   const rule = EDGES[resource];
-  if (!rule) return [`${resource}: not in the ADR 0004 table`];
+  if (!rule) return [`${resource}: not in the ADR 0005 edge table`];
   const errors = [];
   const allowed = new Set([resource, ...rule.required]);
   const label = (file) => path.relative(ROOT, file);
