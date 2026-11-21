@@ -9,6 +9,8 @@ All notable changes to `aeterna_core` are documented here. The format follows
 ### Fixed
 
 - `busy().since` and the `busy: <phase> since <n> s` detail now count whole seconds; the server passed milliseconds.
+- The focus handlers that `import.lua` adds to every package (`focusLost`, `focusPaused`, `focusResumed`) now act only
+  when `aeterna_core` fired the event, so another resource cannot clear a package's NUI focus.
 
 ### Added
 
