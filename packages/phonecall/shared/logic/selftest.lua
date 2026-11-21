@@ -155,6 +155,9 @@ function T.createTracker()
     function tr:finish(runId, name)
         self.items[key(runId, name)] = nil
     end
+    function tr:clear()
+        self.items = {}
+    end
     return tr
 end
 

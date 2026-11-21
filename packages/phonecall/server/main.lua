@@ -334,20 +334,22 @@ end
 local refusedSeq = 0
 
 -- The reason a dial was refused, on the dialer's number field; the next dial from that dialer puts the label
--- back (a freshly drawn dialer always starts with the plain label).
+-- back (a freshly drawn dialer always starts with the plain label). The flag lives on the screen record, so it
+-- goes when the dialer closes (`__close` clears the screens) or is pruned.
 local function showRefusal(src, screenId, reason)
     local s = sessions[src]
-    if screenId and s then
-        s.refused = s.refused or {}
-        s.refused[screenId] = true
+    local scr = s and screenId and s.screens[screenId]
+    if scr then
+        scr.refused = true
         update(src, screenId, { blocks = { number = { label = cut(t('phonecall.end.' .. reason), 40) } } })
     end
 end
 
 local function clearRefusal(src, screenId)
     local s = sessions[src]
-    if screenId and s and s.refused and s.refused[screenId] then
-        s.refused[screenId] = nil
+    local scr = s and screenId and s.screens[screenId]
+    if scr and scr.refused then
+        scr.refused = nil
         update(src, screenId, { blocks = { number = { label = t('phonecall.dial.title') } } })
     end
 end
@@ -1058,7 +1060,7 @@ end)
 
 -- A core restart drops its runs, so nothing set up for them may still fire.
 AddEventHandler('onResourceStop', function(name)
-    if name == 'aeterna_core' then tracker.items = {} end
+    if name == 'aeterna_core' then tracker:clear() end
 end)
 
 local function registerSelftests()
