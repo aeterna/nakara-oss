@@ -1,10 +1,37 @@
--- server/main.lua -- aeterna_phonekit server: app registry, app screen lifecycle,
--- badge tracking, opening check controller, and rate-limited net events.
+-- server/main.lua -- aeterna_phonekit server: app registry, app screen lifecycle, badge tracking, opening check
+-- controller, and rate-limited net events. 0.2: device modes, the battery, the ring screen, contact intents.
 
 local L = PhoneLogic
+local D = DeviceLogic
+local B = BatteryLogic
+local H = HooksLogic
+
+local function logWarn(msg, fields)
+    if AeternaCore and AeternaCore.log and type(AeternaCore.log.warn) == 'function' then
+        AeternaCore.log.warn(msg, fields)
+    end
+end
+
+local function translate(key, vars)
+    if AeternaCore and type(AeternaCore.t) == 'function' then
+        return AeternaCore.t(key, vars)
+    end
+    return key
+end
+
+local Cfg = type(Config) == 'table' and Config or {}
+local MODE = D.resolveMode(Cfg.devices)
+local SINGLE_ID = 'single'
+local SINGLE_MODEL = D.MODELS[Cfg.singleModel] and Cfg.singleModel or 'slab'
+if Cfg.singleModel ~= nil and not D.MODELS[Cfg.singleModel] then
+    logWarn('phonekit Config.singleModel is not a model id, using slab', { value = tostring(Cfg.singleModel) })
+end
+local batteryCfg = B.validateConfig(Cfg.battery, function(key)
+    logWarn('phonekit Config.battery value out of range, using the default', { key = key })
+end)
 
 local registry = L.createAppRegistry({
-    maxApps = (type(Config) == 'table' and tonumber(Config.maxApps)) or 24,
+    maxApps = tonumber(Cfg.maxApps) or 24,
 })
 
 local badgeMgr = L.createBadgeManager()
@@ -14,6 +41,14 @@ local openingMgr = L.createOpeningCheckManager({
     clearTimeout = type(ClearTimeout) == 'function' and ClearTimeout or nil,
 })
 
+local intents = H.createIntents(logWarn)
+
+local function nowSec()
+    return (type(GetGameTimer) == 'function' and GetGameTimer() or 0) / 1000
+end
+
+local rings = H.createRingManager({ now = nowSec })
+
 local playerScreens = {}
 
 local function getCurrentScreen(src)
@@ -22,12 +57,6 @@ local function getCurrentScreen(src)
         return stack[#stack]
     end
     return nil
-end
-
-local function logWarn(msg, fields)
-    if AeternaCore and AeternaCore.log and type(AeternaCore.log.warn) == 'function' then
-        AeternaCore.log.warn(msg, fields)
-    end
 end
 
 local function selfName()
@@ -58,8 +87,300 @@ local function canPlayerAccess(src, ace)
     return false
 end
 
+local function validate(value, schema)
+    if AeternaCore and type(AeternaCore.validate) == 'function' then
+        return AeternaCore.validate(value, schema)
+    end
+    return type(value) == 'table', 'payload: type', value
+end
+
+local function modelInfo(modelId)
+    return D.resolveModel(modelId, Cfg.models, { names = Cfg.names, t = translate, prop = Cfg.prop })
+end
+
 --------------------------------------------------------------------------------
--- Server Exports
+-- Device state (0.2)
+--------------------------------------------------------------------------------
+
+-- players[src] = { who, devices = { {id, model, color} }, active = id, chosen = id, states = { [id] = battery },
+--   folds = { [id] = fold }, pulse = { level, at }, chargers = { [res:id] = sec }, calls = { [res] = true },
+--   charging = bool, live = { owner, id, text } }
+local players = {}
+local loaded = {}
+
+local function readKvp(key)
+    if type(GetResourceKvpString) ~= 'function' then return nil end
+    local raw = GetResourceKvpString(key)
+    if type(raw) ~= 'string' or raw == '' then return nil end
+    local ok, val = pcall(json.decode, raw)
+    if ok then return val end
+    return nil
+end
+
+local function writeKvp(key, value)
+    if type(SetResourceKvp) ~= 'function' then return end
+    local ok, encoded = pcall(json.encode, value)
+    if ok and type(encoded) == 'string' then
+        SetResourceKvp(key, encoded)
+    end
+end
+
+local function qbxStarted()
+    return type(GetResourceState) == 'function' and GetResourceState('qbx_core') == 'started'
+end
+
+-- `<who>`: nil while qbx_core runs and no character is loaded yet.
+local function whoOf(src)
+    local cid
+    if qbxStarted() then
+        local ok, player = pcall(function() return exports.qbx_core:GetPlayer(src) end)
+        if ok and type(player) == 'table' and type(player.PlayerData) == 'table' then
+            cid = player.PlayerData.citizenid
+        end
+        if type(cid) ~= 'string' or cid == '' then return nil end
+    end
+    local license
+    if type(GetPlayerIdentifierByType) == 'function' then
+        local ok, id = pcall(GetPlayerIdentifierByType, src, 'license')
+        if ok then license = id end
+    end
+    return D.whoKey(cid, license)
+end
+
+local function activeOf(p)
+    if not p or not p.active then return nil end
+    for _, d in ipairs(p.devices) do
+        if d.id == p.active then return d end
+    end
+    return nil
+end
+
+local function ensureLoaded(src)
+    local p = players[src]
+    if p then return p end
+    local who = whoOf(src)
+    if not who then return nil end
+    p = { who = who, devices = {}, states = {}, folds = {}, pulse = { level = 'off', at = 0 }, chargers = {},
+        calls = {}, charging = false }
+    if MODE == 'single' then
+        local saved = readKvp('aeterna_phonekit:device:v1:' .. who)
+        saved = type(saved) == 'table' and saved or {}
+        p.devices = { { id = SINGLE_ID, model = SINGLE_MODEL, color = 0 } }
+        p.active = SINGLE_ID
+        p.states[SINGLE_ID] = B.createState(tonumber(saved.battery) or (batteryCfg and batteryCfg.startPct or 100))
+        p.folds[SINGLE_ID] = D.validateFold(SINGLE_MODEL, saved.fold)
+    else
+        local chosen = readKvp('aeterna_phonekit:active:v1:' .. who)
+        p.chosen = type(chosen) == 'string' and chosen or nil
+    end
+    players[src] = p
+    loaded[src] = true
+    return p
+end
+
+local function isDead(src)
+    if not batteryCfg then return false end
+    local p = players[src]
+    local dev = activeOf(p)
+    local st = dev and p.states[dev.id]
+    return st ~= nil and st.dead == true
+end
+
+local function saveDevice(src)
+    local p = players[src]
+    local dev = activeOf(p)
+    if not dev then return end
+    local st = p.states[dev.id]
+    if MODE == 'single' then
+        writeKvp('aeterna_phonekit:device:v1:' .. p.who, { battery = st and st.pct or nil, fold = p.folds[dev.id] })
+    else
+        TriggerEvent('aeterna_phonekit:deviceSave', src, {
+            id = dev.id,
+            battery = (batteryCfg and st) and st.pct or nil,
+            fold = p.folds[dev.id],
+        })
+    end
+end
+
+local function sendBattery(src)
+    local p = players[src]
+    local dev = activeOf(p)
+    local st = dev and p.states[dev.id]
+    if not batteryCfg or not st then
+        TriggerClientEvent('aeterna_phonekit:cl:battery', src, { none = true })
+        return
+    end
+    TriggerClientEvent('aeterna_phonekit:cl:battery', src, { pct = st.shown, charging = p.charging == true })
+end
+
+local function deviceList(p)
+    local list = {}
+    for _, d in ipairs(p.devices) do
+        local st = p.states[d.id]
+        list[#list + 1] = {
+            id = d.id,
+            label = modelInfo(d.model).label,
+            battery = (batteryCfg and st) and st.shown or nil,
+            active = d.id == p.active,
+        }
+    end
+    return list
+end
+
+local function sendDevice(src)
+    local p = players[src]
+    local dev = activeOf(p)
+    if not dev and MODE == 'single' then
+        -- not loaded yet (no character): the single model with its defaults
+        p = { folds = { [SINGLE_ID] = D.validateFold(SINGLE_MODEL, nil) }, states = {}, devices = {} }
+        dev = { id = SINGLE_ID, model = SINGLE_MODEL, color = 0 }
+    end
+    if not dev then
+        TriggerClientEvent('aeterna_phonekit:cl:device', src, { devices = {} })
+        return
+    end
+    local info = modelInfo(dev.model)
+    TriggerClientEvent('aeterna_phonekit:cl:device', src, {
+        model = dev.model,
+        label = info.label,
+        fold = p.folds[dev.id],
+        voice = info.voice,
+        color = D.colorAt(dev.model, Cfg.models, dev.color),
+        devices = MODE == 'items' and deviceList(p) or {},
+    })
+end
+
+-- Closes every phone surface on the server side: the app on screen gets `__close`, the ring card goes.
+local function closeServerSide(src)
+    local current = getCurrentScreen(src)
+    playerScreens[src] = nil
+    badgeMgr:setPhoneOpen(src, false)
+    badgeMgr:setCurrentApp(src, nil)
+    local r = rings:current(src)
+    if r then
+        rings:stop(src, r.ringId)
+        TriggerClientEvent('aeterna_phonekit:cl:ringStop', src, { ringId = r.ringId })
+    end
+    if current then
+        TriggerEvent('aeterna_phonekit:action', src, {
+            owner = current.owner, id = current.id, screenId = current.screenId, action = '__close', values = {},
+        })
+    end
+end
+
+local function setPower(src, on)
+    TriggerClientEvent('aeterna_phonekit:cl:power', src, { on = on })
+    TriggerEvent('aeterna_phonekit:power', src, { on = on })
+    if not on then
+        closeServerSide(src)
+    end
+end
+
+local function warnLow(src, pct)
+    local title = translate('phonekit.battery.low', { pct = pct })
+    if badgeMgr:isPhoneOpen(src) then
+        TriggerClientEvent('aeterna_phonekit:cl:banner', src, { id = 'battery', title = title, body = '' })
+    else
+        pcall(function()
+            exports.aeterna_notify:notify(src, { title = title, type = 'warning', icon = 'alert-triangle' })
+        end)
+    end
+end
+
+local function applyBatteryEvents(src, ev, chargingChanged)
+    if ev.changed or chargingChanged then sendBattery(src) end
+    if ev.save then saveDevice(src) end
+    for _, pct in ipairs(ev.warn) do warnLow(src, pct) end
+    if ev.power ~= nil then setPower(src, ev.power) end
+end
+
+-- A gate answer arrived: keep the carried devices, pick the active one, close surfaces if it is gone.
+local function applyDevices(src, devices)
+    local p = players[src]
+    if not p then return end
+    local before = p.active
+    p.devices = {}
+    for _, d in ipairs(devices or {}) do
+        p.devices[#p.devices + 1] = { id = d.id, model = d.model, color = d.color }
+        local fresh = false
+        if not p.states[d.id] then
+            p.states[d.id] = B.createState(d.battery or (batteryCfg and batteryCfg.startPct or 100))
+            fresh = d.battery == nil and batteryCfg ~= false
+        end
+        local fold = D.validateFold(d.model, p.folds[d.id] or d.fold)
+        if fold and d.fold == nil then fresh = true end
+        p.folds[d.id] = fold
+        if fresh then
+            TriggerEvent('aeterna_phonekit:deviceSave', src, {
+                id = d.id, battery = batteryCfg and p.states[d.id].pct or nil, fold = fold,
+            })
+        end
+    end
+    local pick = D.pickActiveDevice(p.devices, p.chosen)
+    p.active = pick and pick.id or nil
+    if before and before ~= p.active then
+        -- The active phone is gone: every surface closes (an empty device message), the battery is not marked dead.
+        closeServerSide(src)
+        TriggerClientEvent('aeterna_phonekit:cl:device', src, { devices = {} })
+    end
+    sendDevice(src)
+    sendBattery(src)
+end
+
+-- Asks other resources before the phone opens (Config.ask, and always in items mode).
+local function askGate(src, onDone)
+    local items = MODE == 'items'
+    if not items and Cfg.ask ~= true then
+        onDone(true)
+        return
+    end
+    local checkId = openingMgr:createCheck(src, function(target, allowed, reason, devices)
+        if items then
+            if allowed and devices then
+                applyDevices(target, devices)
+            else
+                applyDevices(target, {})
+                if allowed or not reason or reason == 'phonekit.refused.default' then
+                    reason = 'phonekit.refused.nodevice'
+                end
+                allowed = false
+            end
+        end
+        onDone(allowed, reason)
+    end, items and { silenceDenies = true, silenceReason = 'phonekit.refused.nodevice' } or nil)
+    TriggerEvent('aeterna_phonekit:asking', src, { checkId = checkId, devices = MODE })
+end
+
+local function visibleApps(src)
+    local p = players[src]
+    local dev = activeOf(p)
+    local model = dev and dev.model or SINGLE_MODEL
+    local spec = D.parseAppSpec(modelInfo(model).apps)
+    local out = {}
+    for _, app in ipairs(registry:getVisibleApps(src, canPlayerAccess)) do
+        if D.isAppAllowed(spec, app.owner .. ':' .. app.id, app, model) then
+            out[#out + 1] = app
+        end
+    end
+    return out
+end
+
+local function appAllowedOnModel(src, app)
+    local p = players[src]
+    local dev = activeOf(p)
+    local model = dev and dev.model or SINGLE_MODEL
+    return D.isAppAllowed(modelInfo(model).apps, app.owner .. ':' .. app.id, app, model)
+end
+
+local function openFor(src)
+    badgeMgr:setPhoneOpen(src, true)
+    sendDevice(src)
+    sendBattery(src)
+    TriggerClientEvent('aeterna_phonekit:cl:open', src, { apps = visibleApps(src), intents = intents:available() })
+end
+
+--------------------------------------------------------------------------------
+-- Server Exports (0.1 App API)
 --------------------------------------------------------------------------------
 
 exports('addTile', function(app)
@@ -69,11 +390,17 @@ exports('addTile', function(app)
         logWarn('addTile rejected tile', { owner = owner, err = err })
         return false, err
     end
+    intents:remove(owner, app.id)
+    local stored = registry:find(owner, app.id)
+    if stored and stored.handles then
+        intents:register(owner, app.id, stored.handles)
+    end
     return true
 end)
 
 exports('removeTile', function(id)
     local owner = callerResource()
+    intents:remove(owner, id)
     return registry:removeTile(owner, id)
 end)
 
@@ -93,6 +420,10 @@ exports('showApp', function(src, id, spec)
     if not badgeMgr:isPhoneOpen(numSrc) then
         logWarn('showApp rejected phone closed', { src = numSrc, id = id })
         return nil, 'phone_closed'
+    end
+
+    if isDead(numSrc) then
+        return nil, 'dead'
     end
 
     if app.ace and not canPlayerAccess(numSrc, app.ace) then
@@ -118,6 +449,21 @@ exports('showApp', function(src, id, spec)
     end
 
     local stack = playerScreens[numSrc]
+
+    -- 0.2 `detailOf`: names a list or table of the screen on display. A new detail of the list beside the
+    -- current detail replaces that detail; a `detailOf` that names nothing on display is dropped.
+    if cleanSpec.detailOf then
+        local top = stack[#stack]
+        local under = stack[#stack - 1]
+        if top and top.spec.detailOf and under and ShellLogic.hasDetailTarget(under.spec, cleanSpec.detailOf)
+            and not ShellLogic.hasDetailTarget(top.spec, cleanSpec.detailOf) then
+            table.remove(stack)
+        elseif not (top and ShellLogic.hasDetailTarget(top.spec, cleanSpec.detailOf)) then
+            cleanSpec.detailOf = nil
+            cleanSpec.detailItem = nil
+        end
+    end
+
     if #stack >= 8 then
         table.remove(stack, 1)
     end
@@ -137,6 +483,8 @@ exports('showApp', function(src, id, spec)
         title = cleanSpec.title,
         subtitle = cleanSpec.subtitle,
         blocks = cleanSpec.blocks,
+        detailOf = cleanSpec.detailOf,
+        detailItem = cleanSpec.detailItem,
     })
 
     return screenId
@@ -151,8 +499,11 @@ exports('updateApp', function(src, screenId, patch)
     end
 
     local invoker = callerResource()
-    local current = getCurrentScreen(numSrc)
-    if not current or current.screenId ~= screenId then
+    local current = nil
+    for _, entry in ipairs(playerScreens[numSrc] or {}) do
+        if entry.screenId == screenId then current = entry end
+    end
+    if not current then
         return false, 'unknown_screen'
     end
 
@@ -225,6 +576,7 @@ exports('notifyApp', function(src, id, opts)
         body = (opts and opts.body) or '',
     }
 
+    local dead = isDead(numSrc)
     local newBadge = badgeMgr:notifyApp(
         numSrc,
         appOwner,
@@ -237,7 +589,9 @@ exports('notifyApp', function(src, id, opts)
             end)
         end,
         function(target, bannerData)
-            TriggerClientEvent('aeterna_phonekit:cl:banner', target, bannerData)
+            if not dead then
+                TriggerClientEvent('aeterna_phonekit:cl:banner', target, bannerData)
+            end
         end
     )
 
@@ -253,12 +607,182 @@ exports('listenOpen', function()
     return openingMgr:listenOpen()
 end)
 
-exports('allowOpen', function(checkId)
-    return openingMgr:allowOpen(checkId)
+exports('allowOpen', function(checkId, answer)
+    return openingMgr:allowOpen(checkId, answer)
 end)
 
 exports('denyOpen', function(checkId, reasonKey)
     return openingMgr:denyOpen(checkId, reasonKey)
+end)
+
+--------------------------------------------------------------------------------
+-- Server Exports (0.2: devices, battery, hooks)
+--------------------------------------------------------------------------------
+
+exports('device', function(src)
+    local numSrc = tonumber(src)
+    local p = numSrc and players[numSrc]
+    local dev = activeOf(p)
+    if not dev or isDead(numSrc) then return nil end
+    local info = modelInfo(dev.model)
+    local st = p.states[dev.id]
+    return {
+        model = dev.model,
+        id = dev.id,
+        label = info.label,
+        voice = info.voice,
+        fold = p.folds[dev.id],
+        battery = (batteryCfg and st) and st.shown or nil,
+    }
+end)
+
+exports('refreshDevices', function(src)
+    local numSrc = tonumber(src)
+    if not numSrc or MODE ~= 'items' or not ensureLoaded(numSrc) then return false end
+    askGate(numSrc, function() end)
+    return true
+end)
+
+local function batteryTarget(src)
+    if not batteryCfg then return nil end
+    local numSrc = tonumber(src)
+    local p = numSrc and ensureLoaded(numSrc)
+    local dev = activeOf(p)
+    if not dev then return nil end
+    return numSrc, p, p.states[dev.id]
+end
+
+exports('battery', function(src)
+    local _, _, st = batteryTarget(src)
+    return st and st.shown or nil
+end)
+
+exports('setBattery', function(src, pct)
+    local numSrc, _, st = batteryTarget(src)
+    if not st or type(pct) ~= 'number' or pct ~= pct then return false end
+    applyBatteryEvents(numSrc, B.set(st, pct, batteryCfg), false)
+    return true
+end)
+
+exports('charge', function(src, pct)
+    local numSrc, _, st = batteryTarget(src)
+    if not st or type(pct) ~= 'number' or pct ~= pct or pct < 0 or pct > 100 then return false end
+    applyBatteryEvents(numSrc, B.set(st, st.pct + pct, batteryCfg), false)
+    return true
+end)
+
+exports('setCharger', function(src, id, secToFull)
+    local numSrc = tonumber(src)
+    if not numSrc or not L.isValidId(id, 32) then return false end
+    local p = ensureLoaded(numSrc)
+    if not p then return false end
+    local key = callerResource() .. ':' .. id
+    if secToFull == false or secToFull == nil then
+        p.chargers[key] = nil
+    elseif type(secToFull) == 'number' and secToFull == secToFull then
+        p.chargers[key] = secToFull
+    else
+        return false
+    end
+    return true
+end)
+
+exports('activity', function(src, kind, on)
+    local numSrc = tonumber(src)
+    if not numSrc or kind ~= 'call' then return false end
+    local p = ensureLoaded(numSrc)
+    if not p then return false end
+    p.calls[callerResource()] = on == true or nil
+    return true
+end)
+
+exports('canCall', function(src)
+    local numSrc = tonumber(src)
+    local p = numSrc and players[numSrc]
+    local dev = activeOf(p)
+    local st = dev and p.states[dev.id]
+    return H.canCall({
+        hasDevice = dev ~= nil,
+        model = dev and dev.model,
+        battery = (batteryCfg and st) and st.shown or nil,
+    })
+end)
+
+exports('ring', function(src, id, opts)
+    local numSrc = tonumber(src)
+    if not numSrc then return nil, 'nodevice' end
+    local owner = callerResource()
+    local app = registry:find(owner, id)
+    local p = ensureLoaded(numSrc)
+    local dev = activeOf(p)
+    local st = dev and p.states[dev.id]
+    local o = type(opts) == 'table' and opts or {}
+    local title = L.textClean(type(o.title) == 'string' and o.title or '', 40)
+    local body = L.textClean(type(o.body) == 'string' and o.body or '', 60)
+    local ringId, err = rings:ring(numSrc, {
+        owner = owner,
+        id = id,
+        appExists = app ~= nil,
+        hasDevice = dev ~= nil,
+        voice = dev ~= nil and modelInfo(dev.model).voice,
+        battery = (batteryCfg and st) and st.shown or nil,
+        title = title,
+        body = body,
+    })
+    if not ringId then return nil, err end
+    if badgeMgr:isPhoneOpen(numSrc) then
+        TriggerClientEvent('aeterna_phonekit:cl:ring', numSrc, { ringId = ringId, id = id, title = title, body = body })
+    else
+        pcall(function()
+            exports.aeterna_notify:notify(numSrc, { title = title, description = body, icon = app.icon or 'phone' })
+        end)
+    end
+    return ringId
+end)
+
+exports('stopRing', function(src, ringId)
+    local numSrc = tonumber(src)
+    if not numSrc then return false end
+    local r = rings:current(numSrc)
+    if not r or r.owner ~= callerResource() or r.ringId ~= ringId then return false end
+    rings:stop(numSrc, ringId)
+    TriggerClientEvent('aeterna_phonekit:cl:ringStop', numSrc, { ringId = ringId })
+    return true
+end)
+
+exports('live', function(src, opts)
+    local numSrc = tonumber(src)
+    if not numSrc then return false end
+    local p = ensureLoaded(numSrc)
+    if not p then return false end
+    if type(opts) ~= 'table' then
+        p.live = nil
+        TriggerClientEvent('aeterna_phonekit:cl:live', numSrc, {})
+        return true
+    end
+    if not L.isValidId(opts.id, 32) or type(opts.text) ~= 'string' then return false end
+    p.live = { owner = callerResource(), id = opts.id, text = L.textClean(opts.text, 24) }
+    TriggerClientEvent('aeterna_phonekit:cl:live', numSrc, { id = p.live.id, text = p.live.text })
+    return true
+end)
+
+--------------------------------------------------------------------------------
+-- Server-local events (0.2 gate in local-event form)
+--------------------------------------------------------------------------------
+
+AddEventHandler('aeterna_phonekit:listen', function()
+    openingMgr:listenOpen()
+end)
+
+AddEventHandler('aeterna_phonekit:answer', function(checkId, answer)
+    openingMgr:answer(checkId, answer)
+end)
+
+AddEventHandler('aeterna_phonekit:devicesChanged', function(src)
+    local numSrc = tonumber(src)
+    if numSrc and MODE == 'items' and ensureLoaded(numSrc) then
+        askGate(numSrc, function() end)
+    end
 end)
 
 --------------------------------------------------------------------------------
@@ -272,27 +796,20 @@ RegisterNetEvent('aeterna_phonekit:sv:open', function()
         return
     end
 
-    local isAsk = (type(Config) == 'table' and Config.ask == true)
-    if not isAsk then
-        badgeMgr:setPhoneOpen(src, true)
-        local visibleApps = registry:getVisibleApps(src, canPlayerAccess)
-        TriggerClientEvent('aeterna_phonekit:cl:open', src, { apps = visibleApps })
-        return
-    end
-
-    local checkId = openingMgr:createCheck(src, function(targetSrc, allowed, reasonKey)
-        if allowed then
-            badgeMgr:setPhoneOpen(targetSrc, true)
-            local visibleApps = registry:getVisibleApps(targetSrc, canPlayerAccess)
-            TriggerClientEvent('aeterna_phonekit:cl:open', targetSrc, { apps = visibleApps })
-        else
-            TriggerClientEvent('aeterna_phonekit:cl:refused', targetSrc, {
+    ensureLoaded(src)
+    askGate(src, function(allowed, reasonKey)
+        if not allowed then
+            TriggerClientEvent('aeterna_phonekit:cl:refused', src, {
                 reason = reasonKey or 'phonekit.refused.default',
             })
+            return
         end
+        if isDead(src) then
+            TriggerClientEvent('aeterna_phonekit:cl:refused', src, { reason = 'phonekit.battery.dead' })
+            return
+        end
+        openFor(src)
     end)
-
-    TriggerEvent('aeterna_phonekit:asking', src, { checkId = checkId })
 end)
 
 RegisterNetEvent('aeterna_phonekit:sv:close', function()
@@ -318,6 +835,22 @@ RegisterNetEvent('aeterna_phonekit:sv:close', function()
     end
 end)
 
+local TAP_SCHEMA = {
+    type = 'table',
+    fields = {
+        id = { type = 'string', minLen = 1, maxLen = 32 },
+        owner = { type = 'string', maxLen = 64, optional = true },
+        intent = {
+            type = 'table',
+            optional = true,
+            fields = {
+                kind = { type = 'string', enum = { 'tel', 'sms' } },
+                number = { type = 'string', minLen = 1, maxLen = 20 },
+            },
+        },
+    },
+}
+
 RegisterNetEvent('aeterna_phonekit:sv:tap', function(data)
     local src = source
     if not AeternaCore.rateLimit(src, 'phonekit:tap', 5, 1000) then
@@ -333,9 +866,18 @@ RegisterNetEvent('aeterna_phonekit:sv:tap', function(data)
         logWarn('aeterna_phonekit:sv:tap invalid owner', { src = src })
         return
     end
+    local okSchema, errSchema = validate(data, TAP_SCHEMA)
+    if not okSchema then
+        logWarn('aeterna_phonekit:sv:tap invalid payload', { src = src, err = errSchema })
+        return
+    end
+
+    if isDead(src) or not badgeMgr:isPhoneOpen(src) then
+        return
+    end
 
     local id = data.id
-    local owner = type(data.owner) == 'string' and data.owner or nil
+    local owner = (type(data.owner) == 'string' and data.owner ~= '') and data.owner or nil
     local app = registry:find(owner, id) or registry:find(nil, id)
 
     if not app then
@@ -348,11 +890,22 @@ RegisterNetEvent('aeterna_phonekit:sv:tap', function(data)
         return
     end
 
+    if not appAllowedOnModel(src, app) then
+        TriggerClientEvent('aeterna_phonekit:cl:refused', src, { reason = 'phonekit.refused.noapp' })
+        return
+    end
+
+    local payload = { owner = app.owner, id = app.id }
+    if type(data.intent) == 'table' then
+        if not intents:isHandler(data.intent.kind, app.owner, app.id) then
+            logWarn('aeterna_phonekit:sv:tap intent for an app that does not handle it', { src = src, id = id })
+            return
+        end
+        payload.intent = { kind = data.intent.kind, number = L.textClean(data.intent.number, 20) }
+    end
+
     badgeMgr:setCurrentApp(src, id)
-    TriggerEvent('aeterna_phonekit:app', src, {
-        owner = app.owner,
-        id = app.id,
-    })
+    TriggerEvent('aeterna_phonekit:app', src, payload)
 end)
 
 RegisterNetEvent('aeterna_phonekit:sv:action', function(data)
@@ -392,8 +945,30 @@ RegisterNetEvent('aeterna_phonekit:sv:action', function(data)
         end
     end
 
+    if isDead(src) then
+        return
+    end
+
     local current = getCurrentScreen(src)
-    if not current or current.screenId ~= data.screenId then
+    if not current then
+        logWarn('aeterna_phonekit:sv:action screen mismatch or closed', { src = src, screenId = data.screenId })
+        return
+    end
+
+    -- 0.2 two panes: a pick on the list beside a detail is checked against that list's screen.
+    if current.screenId ~= data.screenId then
+        local stack = playerScreens[src]
+        local under = stack[#stack - 1]
+        if under and under.screenId == data.screenId and current.spec.detailOf
+            and L.isDetailSourceAction(under.spec, current.spec.detailOf, data.action) then
+            local okLeft, errLeft, cleanLeft = L.validateAction(under, data)
+            if not okLeft then
+                logWarn('aeterna_phonekit:sv:action validation failed', { src = src, err = errLeft })
+                return
+            end
+            TriggerEvent('aeterna_phonekit:action', src, cleanLeft)
+            return
+        end
         logWarn('aeterna_phonekit:sv:action screen mismatch or closed', { src = src, screenId = data.screenId })
         return
     end
@@ -427,6 +1002,8 @@ RegisterNetEvent('aeterna_phonekit:sv:action', function(data)
                 title = prev.spec.title,
                 subtitle = prev.spec.subtitle,
                 blocks = prev.spec.blocks,
+                detailOf = prev.spec.detailOf,
+                detailItem = prev.spec.detailItem,
             })
         else
             local last = stack and table.remove(stack) or current
@@ -452,15 +1029,186 @@ RegisterNetEvent('aeterna_phonekit:sv:action', function(data)
     TriggerEvent('aeterna_phonekit:action', src, clean)
 end)
 
+local SCREEN_SCHEMA = { type = 'table', fields = { level = { type = 'string', enum = { 'off', 'on', 'media' } } } }
+local FOLD_SCHEMA = { type = 'table', fields = { state = { type = 'string', enum = { 'open', 'closed' } } } }
+local DEVICE_SCHEMA = { type = 'table', fields = { id = { type = 'string', minLen = 1, maxLen = 64 } } }
+local RING_SCHEMA = {
+    type = 'table',
+    fields = { ringId = { type = 'string', minLen = 1, maxLen = 24 }, answer = { type = 'boolean' } },
+}
+
+RegisterNetEvent('aeterna_phonekit:sv:screen', function(data)
+    local src = source
+    if not AeternaCore.rateLimit(src, 'phonekit:screen', 4, 1000) then return end
+    local ok, err = validate(data, SCREEN_SCHEMA)
+    if not ok then
+        logWarn('aeterna_phonekit:sv:screen invalid payload', { src = src, err = err })
+        return
+    end
+    local p = ensureLoaded(src)
+    if not p then return end
+    p.pulse = { level = data.level, at = type(GetGameTimer) == 'function' and GetGameTimer() or 0 }
+end)
+
+RegisterNetEvent('aeterna_phonekit:sv:fold', function(data)
+    local src = source
+    if not AeternaCore.rateLimit(src, 'phonekit:fold', 4, 1000) then return end
+    local ok, err = validate(data, FOLD_SCHEMA)
+    if not ok then
+        logWarn('aeterna_phonekit:sv:fold invalid payload', { src = src, err = err })
+        return
+    end
+    local p = ensureLoaded(src)
+    local dev = activeOf(p)
+    if not dev or not D.MODELS[dev.model].folds then
+        logWarn('aeterna_phonekit:sv:fold refused for a model that does not fold', { src = src })
+        return
+    end
+    if Cfg.cover == false and dev.model == 'fold' and data.state == 'closed' then
+        return
+    end
+    p.folds[dev.id] = data.state
+    saveDevice(src)
+end)
+
+RegisterNetEvent('aeterna_phonekit:sv:device', function(data)
+    local src = source
+    if not AeternaCore.rateLimit(src, 'phonekit:device', 2, 1000) then return end
+    local ok, err = validate(data, DEVICE_SCHEMA)
+    if not ok then
+        logWarn('aeterna_phonekit:sv:device invalid payload', { src = src, err = err })
+        return
+    end
+    local p = players[src]
+    if MODE ~= 'items' or not p then return end
+    local found = false
+    for _, d in ipairs(p.devices) do
+        if d.id == data.id then found = true end
+    end
+    if not found then
+        logWarn('aeterna_phonekit:sv:device id not in the last answer', { src = src })
+        return
+    end
+    p.chosen = data.id
+    p.active = data.id
+    writeKvp('aeterna_phonekit:active:v1:' .. p.who, data.id)
+    sendDevice(src)
+    sendBattery(src)
+end)
+
+RegisterNetEvent('aeterna_phonekit:sv:ring', function(data)
+    local src = source
+    if not AeternaCore.rateLimit(src, 'phonekit:ring', 4, 1000) then return end
+    local ok, err = validate(data, RING_SCHEMA)
+    if not ok then
+        logWarn('aeterna_phonekit:sv:ring invalid payload', { src = src, err = err })
+        return
+    end
+    local action = rings:answer(src, data.ringId, data.answer)
+    if not action then return end
+    TriggerClientEvent('aeterna_phonekit:cl:ringStop', src, { ringId = data.ringId })
+    TriggerEvent('aeterna_phonekit:action', src, action)
+end)
+
+RegisterNetEvent('aeterna_phonekit:sv:battery', function()
+    local src = source
+    if not AeternaCore.rateLimit(src, 'phonekit:battery', 1, 2000) then return end
+    local p = ensureLoaded(src)
+    if not p then
+        TriggerClientEvent('aeterna_phonekit:cl:battery', src, { none = true })
+        return
+    end
+    if MODE == 'items' then
+        askGate(src, function() end)
+        return
+    end
+    sendDevice(src)
+    sendBattery(src)
+end)
+
+--------------------------------------------------------------------------------
+-- Battery tick: only players in the loaded set, never a scan of every player
+--------------------------------------------------------------------------------
+
+local function inVehicle(src)
+    if type(GetPlayerPed) ~= 'function' or type(GetVehiclePedIsIn) ~= 'function' then return false end
+    local ok, veh = pcall(function() return GetVehiclePedIsIn(GetPlayerPed(src), false) end)
+    return ok and veh ~= nil and veh ~= 0
+end
+
+local function tickPlayer(src, dtSec, nowMs)
+    local p = players[src]
+    local dev = activeOf(p)
+    local st = dev and p.states[dev.id]
+    if not st then return end
+    local vehicle = batteryCfg.vehicleSec > 0 and inVehicle(src)
+    local charging = B.fastestCharger(p.chargers, vehicle, batteryCfg.vehicleSec) ~= nil
+    local chargingChanged = charging ~= p.charging
+    p.charging = charging
+    local ev = B.advance(st, dtSec, {
+        chargers = p.chargers,
+        inVehicle = vehicle,
+        screen = p.pulse.level,
+        pulseAge = (nowMs - p.pulse.at) / 1000,
+        call = next(p.calls) ~= nil,
+        multiplier = D.MODELS[dev.model].batteryMultiplier,
+    }, batteryCfg)
+    applyBatteryEvents(src, ev, chargingChanged)
+end
+
+if batteryCfg and type(CreateThread) == 'function' then
+    CreateThread(function()
+        while true do
+            Wait(batteryCfg.tickSec * 1000)
+            local nowMs = GetGameTimer()
+            for src in pairs(loaded) do
+                tickPlayer(src, batteryCfg.tickSec, nowMs)
+            end
+        end
+    end)
+end
+
+if type(CreateThread) == 'function' then
+    CreateThread(function()
+        while true do
+            Wait(1000)
+            for _, r in ipairs(rings:expire()) do
+                TriggerClientEvent('aeterna_phonekit:cl:ringStop', r.src, { ringId = r.ringId })
+            end
+        end
+    end)
+end
+
 --------------------------------------------------------------------------------
 -- Resource Cleanup & Player Disconnect
 --------------------------------------------------------------------------------
+
+local function unloadPlayer(src)
+    if players[src] then
+        saveDevice(src)
+    end
+    players[src] = nil
+    loaded[src] = nil
+end
 
 AddEventHandler('onResourceStop', function(resName)
     if resName ~= selfName() then
         registry:removeOwner(resName)
         badgeMgr:removeOwner(resName)
-        for src, stack in pairs(playerScreens) do
+        intents:removeOwner(resName)
+        rings:removeOwner(resName)
+        local prefix = resName .. ':'
+        for src, p in pairs(players) do
+            for key in pairs(p.chargers) do
+                if key:sub(1, #prefix) == prefix then p.chargers[key] = nil end
+            end
+            p.calls[resName] = nil
+            if p.live and p.live.owner == resName then
+                p.live = nil
+                TriggerClientEvent('aeterna_phonekit:cl:live', src, {})
+            end
+        end
+        for src in pairs(playerScreens) do
             local current = getCurrentScreen(src)
             if current and current.owner == resName then
                 playerScreens[src] = nil
@@ -470,10 +1218,24 @@ AddEventHandler('onResourceStop', function(resName)
         for srcStr, p in pairs(badgeMgr.players) do
             local numSrc = tonumber(srcStr)
             if numSrc and p.phoneOpen then
-                local visibleApps = registry:getVisibleApps(numSrc, canPlayerAccess)
-                TriggerClientEvent('aeterna_phonekit:cl:open', numSrc, { apps = visibleApps })
+                TriggerClientEvent('aeterna_phonekit:cl:open', numSrc, { apps = visibleApps(numSrc),
+                    intents = intents:available() })
             end
         end
+    else
+        for src in pairs(players) do
+            saveDevice(src)
+        end
+    end
+end)
+
+-- qbx_core character logout: save under the old character key and forget it (the next request loads the next one).
+AddEventHandler('QBCore:Server:OnPlayerUnload', function(src)
+    local numSrc = tonumber(src or source)
+    if numSrc then
+        closeServerSide(numSrc)
+        unloadPlayer(numSrc)
+        TriggerClientEvent('aeterna_phonekit:cl:battery', numSrc, { none = true })
     end
 end)
 
@@ -481,6 +1243,11 @@ AddEventHandler('playerDropped', function()
     local src = source
     if src then
         playerScreens[src] = nil
+        rings:stop(src, nil)
+        unloadPlayer(src)
         badgeMgr:removePlayer(src)
     end
 end)
+
+-- phonekit (re)started: answerers fire `aeterna_phonekit:listen` again.
+TriggerEvent('aeterna_phonekit:hello')

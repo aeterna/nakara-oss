@@ -616,6 +616,24 @@ function L.createAppRegistry(config)
             end
             aceStr = app.ace
         end
+        -- 0.2: `needs = 'voice'` (hidden on models without calls) and `handles` (contact intents)
+        if app.needs ~= nil and app.needs ~= 'voice' then
+            return false, 'needs: enum'
+        end
+        local handles = nil
+        if app.handles ~= nil then
+            if not isArrayTable(app.handles) or #app.handles > 2 then
+                return false, 'handles: type'
+            end
+            handles = {}
+            for i = 1, #app.handles do
+                local kind = app.handles[i]
+                if kind ~= 'tel' and kind ~= 'sms' then
+                    return false, 'handles: enum'
+                end
+                handles[#handles + 1] = kind
+            end
+        end
 
         local key = owner .. ':' .. app.id
         local existing = self.apps[key]
@@ -642,6 +660,8 @@ function L.createAppRegistry(config)
             icon = app.icon,
             order = orderNum,
             ace = aceStr,
+            needs = app.needs,
+            handles = handles,
         }
         return true
     end
@@ -697,6 +717,7 @@ function L.createAppRegistry(config)
                     label = app.label,
                     icon = app.icon,
                     order = app.order,
+                    needs = app.needs,
                 }
             end
         end
@@ -1882,7 +1903,8 @@ function L.positionToAnchor(pos)
     return { x = 0.9875, y = 0.9778, ax = 1, ay = 1 }
 end
 
-function L.buildLayoutDefs(pos, label)
+-- `w`, `h` (0.2): the held model's frame size; 0.1 callers get 320 x 640.
+function L.buildLayoutDefs(pos, label, w, h)
     local anchor = L.positionToAnchor(pos)
     local lbl = 'Phone'
     if type(label) == 'string' and L.stripControlAndTrim(label) ~= '' then
@@ -1892,8 +1914,8 @@ function L.buildLayoutDefs(pos, label)
         {
             id = 'phone',
             label = lbl,
-            w = 320,
-            h = 640,
+            w = tonumber(w) or 320,
+            h = tonumber(h) or 640,
             x = anchor.x,
             y = anchor.y,
             ax = anchor.ax,
