@@ -354,3 +354,93 @@ describe('aeterna_testkit self-tests', function()
         end)
     end)
 end)
+
+describe('aeterna_testkit now-testing strip', function()
+    local M, shown, hidden, strip
+    before_each(function()
+        natives.reset()
+        M = loadLogic('menu')
+        shown, hidden = {}, 0
+        strip = M.createNowStrip({
+            show = function(msg) shown[#shown + 1] = msg end,
+            hide = function() hidden = hidden + 1 end,
+        })
+    end)
+
+    it('shows a ped test with expect: the name and the expect line', function()
+        assert.is_true(strip:started('r1-abcd', 'aeterna_phonekit.exit_contract',
+            { kind = 'ped', expect = 'Press ESC while the phone is open' }))
+        assert.are.same({ { name = 'aeterna_phonekit.exit_contract', expect = 'Press ESC while the phone is open' } },
+            shown)
+        assert.is_true(strip:isShown())
+    end)
+
+    it('shows nothing for a ped test without expect, or for any other kind', function()
+        assert.is_false(strip:started('r1-abcd', 'aeterna_x.a', { kind = 'ped' }))
+        assert.is_false(strip:started('r1-abcd', 'aeterna_x.b', { kind = 'ped', expect = '   ' }))
+        assert.is_false(strip:started('r1-abcd', 'aeterna_x.c', { kind = 'eye', expect = 'Look' }))
+        assert.is_false(strip:started('r1-abcd', 'aeterna_x.d', { kind = 'headless', expect = 'x' }))
+        assert.is_false(strip:started('r1-abcd', 'aeterna_x.e', nil))
+        assert.are.equal(0, #shown)
+        assert.is_false(strip:isShown())
+    end)
+
+    it('hides on selftestEnd for its own test only, once', function()
+        strip:started('r1-abcd', 'aeterna_x.a', { kind = 'ped', expect = 'Do it' })
+        strip:ended('r1-abcd', 'aeterna_x.other')
+        strip:ended('r2-abcd', 'aeterna_x.a')
+        assert.are.equal(0, hidden)
+        strip:ended('r1-abcd', 'aeterna_x.a')
+        strip:ended('r1-abcd', 'aeterna_x.a')
+        assert.are.equal(1, hidden)
+        assert.is_false(strip:isShown())
+    end)
+
+    it('a new ped test replaces the strip; a test without expect hides the old one', function()
+        strip:started('r1-abcd', 'aeterna_x.a', { kind = 'ped', expect = 'One' })
+        strip:started('r1-abcd', 'aeterna_x.b', { kind = 'ped', expect = 'Two' })
+        assert.are.equal('Two', shown[2].expect)
+        strip:started('r1-abcd', 'aeterna_x.c', { kind = 'ped' })
+        assert.are.equal(1, hidden)
+        assert.is_false(strip:isShown())
+    end)
+
+    it('the client shows it without focus and hides it on selftestEnd', function()
+        natives.reset({ resource = OWNER, side = 'client' })
+        local nui, focus = {}, 0
+        natives.spy('SendNUIMessage', function(msg) nui[#nui + 1] = msg end)
+        natives.spy('RegisterNUICallback')
+        natives.spy('RegisterKeyMapping')
+        natives.spy('RegisterCommand')
+        natives.spy('SetNuiFocus')
+        natives.stub('GetInvokingResource', function() return 'aeterna_core' end)
+        natives.stub('AeternaCore', {
+            log = { debug = function() end, info = function() end, warn = function() end, error = function() end },
+            t = function(k) return '<' .. k .. '>' end,
+            key = function() end,
+            validate = function(v) return true, nil, v end,
+            requestFocus = function() focus = focus + 1 return 'tok' end,
+            releaseFocus = function() return true end,
+            themeMessage = function() return { type = 'aeterna:theme' } end,
+        })
+        resource.load_resource(DIR, 'client')
+        natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_phonekit.exit_contract',
+            { kind = 'ped', side = 'client', role = 'A', expect = 'Press ESC' })
+        local show
+        for _, m in ipairs(nui) do if m.type == 'now:show' then show = m end end
+        assert.are.same({ type = 'now:show', name = 'aeterna_phonekit.exit_contract', label = '<testkit.now_doing>',
+            expect = 'Press ESC' }, show)
+        assert.are.equal(0, focus)
+        assert.are.equal(0, #natives.calls('SetNuiFocus'))
+        natives.fire('aeterna_core:selftestEnd', 'r1-abcd', 'aeterna_phonekit.exit_contract')
+        assert.are.equal('now:hide', nui[#nui].type)
+    end)
+
+    it('has testkit.now_doing in Thai and English', function()
+        natives.reset()
+        assert(loadfile(DIR .. '/locales/en.lua'))()
+        assert(loadfile(DIR .. '/locales/th.lua'))()
+        assert.are.equal('Do this now:', Locales.en['testkit.now_doing'])
+        assert.is_string(Locales.th['testkit.now_doing'])
+    end)
+end)
