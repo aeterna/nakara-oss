@@ -15,6 +15,7 @@ All notable changes to `aeterna_hudkit` are documented here. The format follows
 - Seatbelt icon in the vehicle part, driven by the client-local event `aeterna_hudkit:seatbelt` (`{ on = boolean }` or `nil`); the owning resource stopping hides it; `Config.seatbelt.enabled`.
 - NUI messages `hud:compass`, `hud:voice`, `hud:seatbelt`; `settings:open` / `settings:apply` carry `barStyle` and the compass span; `ready` reports `compass` and `voice` sizes.
 - Locale keys for bar style, compass, voice and seatbelt (en, th).
+- Self-tests registered with `aeterna_core` on start: `values_mapping`, `compass_math` (server), `bar_style` (eye), `compass_tape`, `voice_indicator`, `voice_radio`, `minimap_follows` (ped) and `seatbelt_event` (client mock), with their expect strings in en and th; `SeatbeltLogic` gains `snapshot`, `restore` and `same` so the mock puts the previous state back. Agent: Claude Code - Claude Opus 5.5 (agent engineer).
 
 ### Changed
 
