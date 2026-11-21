@@ -45,7 +45,7 @@
     <nav class="crumbs" aria-label="เส้นทาง"><a href="../">หน้าแรก</a> <span aria-hidden="true">›</span> <span>AETERNA Starter Kit</span></nav>
     <p class="kicker">MIT · Qbox · ox_lib</p>
     <h1>AETERNA Starter Kit</h1>
-    <p class="lede">ชุดพื้นฐาน 7 ตัวสำหรับเปิดเซิร์ฟ FiveM ของคุณเอง ใช้ตัวเดียวหรือทั้งชุดก็ได้</p>
+    <p class="lede">ชุดพื้นฐาน 7 ตัวสำหรับเปิดเซิร์ฟ FiveM ของคุณเอง ใช้ตัวเดียวหรือทั้งชุดก็ได้ 0.2 ที่กำลังมาเพิ่มอีก 5 ตัว (<a href="#v02">ดูด้านล่าง</a>)</p>
     <div class="prose">
       <h2>มีอะไรบ้าง</h2>
       <ul>
@@ -57,6 +57,20 @@
         <li><strong>aeterna_phonekit:</strong> โทรศัพท์พร้อมแอปในตัว 4 แอป และ API สำหรับเพิ่มแอปเอง</li>
         <li><strong>aeterna_invkit:</strong> stash ส่วนตัวและการใช้ไอเทมแบบมีเวลา บน ox_inventory</li>
       </ul>
+      <h2 id="v02">มาใน 0.2</h2>
+      <p>0.2 ยังไม่ออก ทุกอย่างในส่วนนี้มาจากสเปกที่เขียนก่อนโค้ด รายละเอียดอาจเปลี่ยนก่อนออกจริง แพ็กเกจเดิม 7 ตัวขึ้นเป็น 0.2.0 และมีแพ็กเกจใหม่ 5 ตัวเริ่มที่ 0.1.0 รวมเป็น 12 ตัว</p>
+      <h3 id="radial">aeterna_radial · เมนูวงกลม</h3>
+      <p>วงช่อง 4–8 ช่องกลางจอ แต่ละช่องเปิดวงที่สองได้ resource อื่นเพิ่มหรือลบช่องผ่าน export พร้อมเงื่อนไขว่าช่องไหนแสดงเมื่อไร ช่องที่มีผลกับผู้เล่นคนอื่น server ตรวจเงื่อนไขซ้ำก่อนทำ ชุดให้เมนูเปล่า เซิร์ฟเติมเอง ใช้เมาส์หรือจอยได้ ไม่มีปุ่มเริ่มต้น</p>
+      <h3 id="loading">aeterna_loading · หน้าโหลด</h3>
+      <p>บอกผู้เล่นว่ากำลังทำอะไรจริงตอนเข้าเซิร์ฟ: โหลดแผนที่ เริ่ม script (เป็นเปอร์เซ็นต์) และรอตัวละคร แสดงชื่อเซิร์ฟ ภาพพื้นหลัง และเคล็ดลับที่หมุนเวียน ทั้งหมดตั้งในไฟล์ config ไม่โหลดอะไรจากเว็บอื่น</p>
+      <h3 id="testkit">aeterna_testkit · ปุ่มทดสอบทั้งชุด</h3>
+      <p>ปุ่มเดียวรัน self-test ทุกตัวที่แพ็กเกจลงทะเบียนไว้กับ <code>aeterna_core</code> พาคนกดดูทีละข้อที่ต้องใช้ตาคนตรวจ เชิญผู้เล่นคนที่สองมาช่วยข้อที่ต้องใช้สองคน แล้วเขียนรายงาน JSON และ Markdown ที่แนบ issue ได้ทันที รายงานไม่มีชื่อผู้เล่น identifier หรือ IP ต้องมี ACE <code>aeterna.testkit.run</code></p>
+      <h3 id="phonecall">aeterna_phonecall · โทรและข้อความ</h3>
+      <p>เบอร์โทร ข้อความ และโทรด้วยเสียง เป็นสองแอปในโทรศัพท์ของ <code>aeterna_phonekit</code> เบอร์และข้อความเก็บฝั่ง server ผู้เล่นแก้ไม่ได้ บน FiveM Enhanced โทรผ่าน voice channel ของ FXServer เอง บน Legacy ใช้ <code>pma-voice</code> ถ้าเปิดอยู่ ถ้าไม่มีทางโทร ข้อความยังใช้ได้</p>
+      <h3 id="camera">aeterna_camera · กล้องและแกลเลอรี</h3>
+      <p>แอปกล้อง (กล้องหน้า กล้องหลัง ปุ่มถ่าย) และแกลเลอรีในโทรศัพท์ ถ่ายรูปเมื่อเปิด <code>screenshot-basic</code> รูปเก็บบนดิสก์ของเซิร์ฟคุณในโฟลเดอร์ของ resource เอง ชุดไม่อัปโหลดรูปไปที่ไหน ถ้าอยากส่งต่อ ให้ resource ของคุณฟัง event <code>aeterna_camera:saved</code></p>
+      <h3 id="presets">ธีมสำเร็จรูป 3 แบบ</h3>
+      <p>0.2 เพิ่มธีม <code>asphalt</code> (ค่าเริ่มต้น) <code>paper</code> (สว่าง) และ <code>night-market</code> (มืด สีส้ม) เลือกด้วย <code>setr aeterna_theme_preset</code> <a href="theme/">ลองกดเปลี่ยนธีมดู</a></p>
       <h2>ติดตั้ง</h2>
       <p>ดาวน์โหลด zip แตกลง <code>resources/[aeterna_kit]/</code> แล้วเพิ่มบรรทัดนี้ต่อจาก framework:</p>
       <pre><code># server.cfg
@@ -72,7 +86,7 @@ ensure aeterna_invkit</code></pre>
       <h2>ทดสอบกับ</h2>
       <p>FXServer Enhanced, game build 3788 กับ qbx_core 1.23.0, ox_lib 3.30.6, oxmysql 2.14.3 และ ox_inventory 2.44.0 เวอร์ชันอื่นยังไม่ได้ทดสอบ</p>
       <h2>หน้าตาเป็นของเซิร์ฟคุณ</h2>
-      <p>ธีมเริ่มต้นตั้งใจให้เรียบ ตั้ง convar <code>aeterna_theme</code> ไปที่ไฟล์ของคุณเพื่อเปลี่ยนสี ความมน และฟอนต์ได้ทุกหน้าจอ ทุก release สร้างใน CI และมี provenance attestation ให้ตรวจก่อนติดตั้ง</p>
+      <p>ธีมเริ่มต้นตั้งใจให้เรียบ ตั้ง convar <code>aeterna_theme</code> ไปที่ไฟล์ของคุณเพื่อเปลี่ยนสี ความมน และฟอนต์ได้ทุกหน้าจอ ทุก release สร้างใน CI และมี provenance attestation ให้ตรวจก่อนติดตั้ง ตั้งแต่ 0.2 มีธีมสำเร็จรูปให้เลือก 3 แบบ (<a href="theme/">ลองธีม</a>)</p>
       <div class="cta"><a class="btn btn-p" href="https://github.com/aeterna/nakara-oss/releases?q=aeterna_">ดาวน์โหลด</a><a class="btn btn-s" href="https://github.com/aeterna/nakara-oss/blob/main/docs/guides/starter-kit.th.md">คู่มือเต็ม</a></div>
     </div>
   </article>
