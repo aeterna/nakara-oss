@@ -483,7 +483,7 @@ applies after the package restarts or the player reconnects.
 
 | Event | Direction | Schema | Rate limit |
 | --- | --- | --- | --- |
-| `aeterna_core:cl:selftest` | server → client | `{ runId: string ≤ 24, name: string ≤ 96, kind: enum headless/mock/ped/eye, role: enum A/B, timeout: integer, destructive: boolean, expect?: string ≤ 240 (eye only), ask?: string ≤ 160 (eye only) }` | — |
+| `aeterna_core:cl:selftest` | server → client | `{ runId: string ≤ 24, name: string ≤ 96, kind: enum headless/mock/ped/eye, role: enum A/B, timeout: integer, destructive: boolean, expect?: string ≤ 240 (client tests that set it), ask?: string ≤ 160 (eye only) }` | — |
 | `aeterna_core:cl:selftestEnd` | server → client | `{ runId, name }` | — |
 | `aeterna_core:sv:selftestResult` | client → server | `{ runId: string ≤ 24, name: string ≤ 96, state: enum pass/fail/skip/mock/ready, detail: string ≤ 300 optional, restored: boolean optional, wrote: boolean optional, step: integer 1–99 optional, expected: string ≤ 80 optional }` | 20 / 10000 ms |
 | `aeterna_core:sv:eyeAnswer` | client → server | `{ runId: string ≤ 24, name: string ≤ 96, answer: enum pass/mismatch/skip }` | 5 / 5000 ms |
