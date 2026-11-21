@@ -166,6 +166,10 @@ end)
 RegisterNetEvent('aeterna_phonecall:cl:state', function(data)
     local ok, _, clean = AeternaCore.validate(data, STATE_SCHEMA)
     if not ok then return end
+    if T.setupFailure(clean.callId) then -- a self-test set-up failure, not a call: keep the real call state
+        onCallState(clean)
+        return
+    end
     local wasActive = current.state == 'active'
     current = clean
     if clean.state == 'active' and not wasActive then earLoop() end
