@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en" data-preset="asphalt">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>aeterna_testkit</title>
+    <link rel="stylesheet" href="theme.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <section id="eye" class="eye hidden" role="dialog" aria-modal="false" aria-labelledby="eye-header">
+        <p id="eye-header" class="eye-header"></p>
+        <p id="eye-ask" class="eye-ask"></p>
+        <p class="eye-expect"><span id="eye-normally" class="eye-normally"></span> <span id="eye-expect-text"></span></p>
+        <div class="eye-actions">
+            <button type="button" id="eye-pass" class="btn btn-primary" data-answer="pass"></button>
+            <button type="button" id="eye-mismatch" class="btn btn-danger" data-answer="mismatch"></button>
+            <button type="button" id="eye-skip" class="btn btn-secondary" data-answer="skip"></button>
+        </div>
+    </section>
+    <script src="app.js"></script>
+</body>
+</html>

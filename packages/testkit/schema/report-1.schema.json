@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "aeterna_testkit.report/1",
+  "title": "aeterna_testkit report",
+  "description": "The report aeterna_testkit writes to reports/latest.json. Keys are fixed; unknown keys are an error.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "runId", "startedAt", "ms", "by", "playerB", "destructive", "cancelled", "env", "kit",
+    "counts", "ok", "rows"],
+  "properties": {
+    "schema": { "const": "aeterna_testkit.report/1" },
+    "runId": { "type": "string", "minLength": 1, "maxLength": 24 },
+    "startedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$" },
+    "ms": { "type": "integer", "minimum": 0 },
+    "by": { "enum": ["console", "menu"] },
+    "playerB": { "type": "boolean" },
+    "destructive": { "enum": ["on", "off"] },
+    "cancelled": { "type": "boolean" },
+    "env": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fxserver", "gameBuild", "resolution"],
+      "properties": {
+        "fxserver": { "type": ["string", "null"], "pattern": "^\\d+$" },
+        "gameBuild": { "type": ["integer", "null"], "minimum": 1, "maximum": 99999 },
+        "resolution": { "type": ["string", "null"], "pattern": "^\\d+x\\d+$" }
+      }
+    },
+    "kit": {
+      "type": "object",
+      "propertyNames": { "pattern": "^aeterna_[a-z0-9_]+$" },
+      "additionalProperties": { "type": "string" }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["PASS", "FAIL", "SKIP", "GAP", "MOCK", "MISSING"],
+      "properties": {
+        "PASS": { "type": "integer", "minimum": 0 },
+        "FAIL": { "type": "integer", "minimum": 0 },
+        "SKIP": { "type": "integer", "minimum": 0 },
+        "GAP": { "type": "integer", "minimum": 0 },
+        "MOCK": { "type": "integer", "minimum": 0 },
+        "MISSING": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "ok": { "type": "boolean", "description": "true when counts.FAIL and counts.MISSING are both 0" },
+    "rows": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["suite", "name", "kind", "players", "destructive", "state", "detail", "ms", "step", "expected"],
+        "properties": {
+          "suite": { "type": "string", "description": "Owner resource without the aeterna_ prefix" },
+          "name": { "type": "string", "maxLength": 96 },
+          "kind": { "enum": ["headless", "ped", "eye", "mock", null] },
+          "players": { "enum": [1, 2, null] },
+          "destructive": { "type": ["boolean", "null"] },
+          "state": { "enum": ["PASS", "FAIL", "SKIP", "GAP", "MOCK", "MISSING"] },
+          "detail": { "type": ["string", "null"], "maxLength": 300 },
+          "ms": { "type": ["integer", "null"], "minimum": 0 },
+          "step": { "type": ["integer", "null"], "minimum": 1, "maximum": 99 },
+          "expected": { "type": ["string", "null"], "maxLength": 300 }
+        }
+      }
+    },
+    "truncated": { "const": true, "description": "Present only when the run had more than 500 rows" }
+  }
+}
