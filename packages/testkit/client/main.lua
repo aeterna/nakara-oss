@@ -77,6 +77,7 @@ AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
 end)
 
 AddEventHandler('aeterna_core:focusLost', function(owner, token)
+    if GetInvokingResource() ~= 'aeterna_core' then return end
     if owner == RES then card:lost(token) end
 end)
 
@@ -149,5 +150,9 @@ exports('isOpen', function()
 end)
 
 AddEventHandler('onResourceStop', function(name)
-    if name == RES then card:close() end
+    -- aeterna_core stopping sends no selftestEnd: close what it would have closed
+    if name == RES or name == 'aeterna_core' then
+        card:close()
+        strip:close()
+    end
 end)

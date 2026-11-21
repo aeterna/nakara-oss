@@ -103,6 +103,11 @@ local function selfName()
     return 'aeterna_phonekit'
 end
 
+-- Events from aeterna_core (focus, self-tests) count only when aeterna_core fired them.
+local function fromCore()
+    return type(GetInvokingResource) == 'function' and GetInvokingResource() == 'aeterna_core'
+end
+
 local function logWarn(msg, fields)
     if AeternaCore and AeternaCore.log and type(AeternaCore.log.warn) == 'function' then
         AeternaCore.log.warn(msg, fields)
@@ -576,6 +581,7 @@ end)
 
 -- Focus Loss Handler
 AddEventHandler('aeterna_core:focusLost', function(owner, token)
+    if not fromCore() then return end
     if owner ~= nil and owner ~= selfName() then return end
     if token ~= nil and focusToken ~= nil and token ~= focusToken then return end
     closePhone()
@@ -583,12 +589,14 @@ end)
 
 -- 0.2: a focus overlay pauses the phone (same screen, input ignored); resume gives it back.
 AddEventHandler('aeterna_core:focusPaused', function(owner)
+    if not fromCore() then return end
     if owner ~= selfName() or not isOpen then return end
     isPaused = true
     sendUi({ type = 'paused', on = true })
 end)
 
 AddEventHandler('aeterna_core:focusResumed', function(owner)
+    if not fromCore() then return end
     if owner ~= selfName() or not isOpen then return end
     isPaused = false
     sendUi({ type = 'paused', on = false })
@@ -933,15 +941,9 @@ AddEventHandler('aeterna_phonekit:contactsChanged', function()
     contactsChangedCount = contactsChangedCount + 1
 end)
 
-local function fromCore()
-    return type(GetInvokingResource) == 'function' and GetInvokingResource() == 'aeterna_core'
-end
-
--- Client KVP key of an AeternaCore.kvp name (same rule as aeterna_core's kvp module).
+-- Deletes the client KVP of an AeternaCore.kvp name, keyed by aeterna_core's own keyFor (import.lua loads it).
 local function kvpDelete(name)
-    local mod = AeternaCoreLogic and AeternaCoreLogic.kvp
-    local key = mod and mod.keyFor and mod.keyFor(selfName(), name, 1) or ('aeterna_phonekit:' .. name .. ':v1')
-    DeleteResourceKvp(key)
+    DeleteResourceKvp(AeternaCoreLogic.kvp.keyFor(selfName(), name, 1))
 end
 
 local function reportTest(runId, name, ok, detail, extra)

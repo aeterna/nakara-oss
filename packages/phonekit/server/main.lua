@@ -1232,7 +1232,7 @@ end
 -- Resource Cleanup & Player Disconnect
 --------------------------------------------------------------------------------
 
--- eye_battery_dead: the battery each presser had before the test set 0 %. ['runId|name'] = { src, before }.
+-- eye_battery_dead: the device the test set to 0 % and its battery before. ['runId|name'] = { src, devId, before }.
 -- Restored on selftestEnd, and before anything saves the dead value: unload, drop, aeterna_core or phonekit stopping.
 local deadPrepared = {}
 
@@ -1246,9 +1246,9 @@ local function restoreDead(src)
     for key, prep in pairs(deadPrepared) do
         if src == nil or prep.src == src then
             deadPrepared[key] = nil
+            -- the device that was zeroed, even if the player switched phones since
             local p = players[prep.src]
-            local dev = activeOf(p)
-            local st = dev and p.states[dev.id]
+            local st = p and p.states[prep.devId]
             if st then
                 applyBatteryEvents(prep.src, B.set(st, prep.before, batteryCfg), false)
                 done[#done + 1] = prep.src
@@ -1438,7 +1438,7 @@ AddEventHandler('aeterna_core:selftestStarted', function(runId, name, ctx)
     if not src then return end
     local st = p.states[dev.id]
     if st.dead or not mayWrite(runId, name) then return end
-    deadPrepared[tostring(runId) .. '|' .. name] = { src = src, before = st.pct }
+    deadPrepared[tostring(runId) .. '|' .. name] = { src = src, devId = dev.id, before = st.pct }
     applyBatteryEvents(src, B.set(st, 0, batteryCfg), false)
 end)
 
