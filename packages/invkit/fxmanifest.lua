@@ -19,15 +19,18 @@ shared_scripts {
     'locales/th.lua',
     'config.lua',
     'shared/logic/invkit.lua',
+    'shared/logic/phone.lua',
+    'shared/logic/selftest.lua',
 }
 
 client_scripts {
     'client/main.lua',
+    'client/selftest.lua',
 }
 
 server_scripts {
-    'shared/logic/phone.lua',
     'server/ox_adapter.lua',
     'server/main.lua',
     'server/phone.lua',
+    'server/selftest.lua',
 }

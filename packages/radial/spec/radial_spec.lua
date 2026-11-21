@@ -554,6 +554,8 @@ describe('aeterna_radial', function()
             natives.stub('GetPlayerPed', function(src) return 100 + tonumber(src) end)
             natives.stub('GetVehiclePedIsIn', function() return inVehicle and 500 or 0 end)
             natives.stub('GetResourceState', function() return 'missing' end)
+            -- 0.2: server/selftest.lua registers the self-tests with aeterna_core on start.
+            natives.stub_export('aeterna_core', 'addSelftest', function() return true end)
             local api = resource.load_resource(DIR, 'server', { externals = CORE }).exports
 
             assert.is_true(api.addSlot({ id = 'open', label = 'Open' }))

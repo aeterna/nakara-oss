@@ -49,6 +49,20 @@ function SeatbeltLogic.create(opts)
         return owner
     end
 
+    --- Self-test support: copy of the current state and owner, put back with restore().
+    function S.snapshot()
+        return { state = state, owner = owner }
+    end
+
+    function S.restore(snap)
+        if type(snap) ~= 'table' then return end
+        state, owner = snap.state, snap.owner
+    end
+
+    function S.same(snap)
+        return type(snap) == 'table' and snap.state == state and snap.owner == owner
+    end
+
     return S
 end
 

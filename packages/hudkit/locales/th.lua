@@ -48,6 +48,12 @@ local STRINGS = {
     ['hudkit.voice.radio'] = 'วิทยุ',
     ['hudkit.vehicle.seatbelt.on'] = 'คาดเข็มขัดแล้ว',
     ['hudkit.vehicle.seatbelt.off'] = 'ยังไม่คาดเข็มขัด',
+    ['hudkit.selftest.bar_style.expect'] = 'สลับจากแถบเป็นวงแหวนแล้วแถบสถานะทุกแถบกลายเป็นวงแหวน ส่วนสถานะยังอยู่บนจอ และกรอบแทนในเลย์เอาต์มีขนาดตรงกับขนาดใหม่',
+    ['hudkit.selftest.compass_tape.expect'] = 'อยู่นิ่ง ๆ ขณะที่การทดสอบขยับกล้องและเรดาร์',
+    ['hudkit.selftest.voice_indicator.expect'] = 'พูดใส่ไมโครโฟน แล้วเปลี่ยนระยะเสียง',
+    ['hudkit.selftest.voice_radio.expect'] = 'เข้าช่องวิทยุ แล้วพูดทางวิทยุ',
+    ['hudkit.selftest.seatbelt_event.expect'] = 'นั่งอยู่ในรถจนกว่าการทดสอบนี้จะจบ',
+    ['hudkit.selftest.minimap_follows.expect'] = 'อยู่นิ่ง ๆ ขณะที่การทดสอบขยับกล้องและเรดาร์',
 }
 
 for k, v in pairs(STRINGS) do

@@ -97,6 +97,8 @@ local function boot(opts)
         },
     })
     natives.spy('RegisterCommand')
+    -- 0.2: server/selftest.lua registers the self-tests with aeterna_core on start.
+    natives.stub_export('aeterna_core', 'addSelftest', function() return true end)
 
     local res = resource.load_resource(DIR, 'server', { skip = { ['config.lua'] = true } })
     return { res = res, ox = ox, warns = warns, debugs = debugs }

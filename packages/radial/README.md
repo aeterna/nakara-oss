@@ -114,6 +114,26 @@ A server pick that fails a check is dropped with a `debug` log. When a slot's co
 
 While the menu is open the player keeps walking and driving; camera look and weapon fire are disabled. Another resource taking focus closes the menu with no pick; an overlay (for example the test kit's eye card) pauses it until focus returns. With `prefers-reduced-motion: reduce` nothing moves.
 
+## Self-tests / การทดสอบตัวเอง
+
+radial registers these tests with `aeterna_core` on start (`aeterna_testkit` lists and runs them). A ped or eye test
+with nobody to run it is GAP.
+
+Self-test events are accepted only from `aeterna_core` (the invoking resource), so no other resource can start a test or its server preparation. When `aeterna_core` stops mid-test, the server drops its temporary slot.
+
+| Test | Kind | Runs | What it checks |
+|---|---|---|---|
+| `aeterna_radial.registry` | headless | server | A private registry: add, replace, `maxPerOwner`, `maxTotal`, a child of a child and a cross-owner parent refused, owner stop removes only its slots and flags |
+| `aeterna_radial.conditions` | headless | server | `vehicle` in/out/driver, `jobs` + `grade`, `jobs` false without `qbx_core`, `flags` all-true |
+| `aeterna_radial.server_recheck` | ped | presser | On core's `aeterna_core:selftestStarted` the server registers a server slot with `when.vehicle = 'in'` and sends it to the presser alone. The client, on foot, sends a pick for it straight to the server; the server must drop it. An accepted pick makes the server take the slot back, which the client sees as FAIL. The slot is removed on core's server-side `aeterna_core:selftestEnd`. SKIP while the presser is in a vehicle |
+| `aeterna_radial.open_pick` | eye | presser | Adds six slots "Test 1" … "Test 6" and opens the ring; after the person picks one (a feed line says "picked Test N") or after 50 s, the card asks for the look |
+| `aeterna_radial.child_ring` | eye | presser | Adds a group with three children and opens the ring; after the person opens the group and goes back, the card asks for the look |
+| `aeterna_radial.gamepad` | eye | presser | Adds six slots and opens the ring; after the person closes it with the pad (pick or cancel), the card asks. A close with mouse or keyboard does not count. With no pad input at all for 8 s, the card asks at once, and a presser without a gamepad presses Skip (GAP) |
+
+The eye tests act before the card because the card takes focus and pauses the ring. Their slots belong to
+`aeterna_radial` and are removed, and the ring closed, when the test ends. The ring also shows the root slots of other
+resources that are visible at the time.
+
 ## Commands and keys / คำสั่งและปุ่มลัด
 
 - `aeterna_radial_open` — chat or F8: opens the menu in `toggle` mode (runs again to close)

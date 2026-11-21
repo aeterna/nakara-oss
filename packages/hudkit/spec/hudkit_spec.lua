@@ -424,6 +424,8 @@ describe('aeterna_hudkit', function()
             local targetPlayer = nil
 
             natives.spy('TriggerClientEvent')
+            -- 0.2: server/selftest.lua registers the self-tests with aeterna_core on start.
+            natives.stub_export('aeterna_core', 'addSelftest', function() return true end)
 
             resServer = resource.load_resource(DIR, 'server')
             assert.is_not_nil(resServer)

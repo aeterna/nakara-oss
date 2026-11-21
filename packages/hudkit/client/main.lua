@@ -1022,3 +1022,31 @@ end)
 
 registerLayoutElements()
 checkVoice()
+
+-- Read and set points for client/selftest.lua (same resource; nothing here crosses resources).
+HudkitSelftestHooks = {
+    barStyle = function() return settings.barStyle end,
+    -- Shows a bar style on the page without saving it to the player's KVP.
+    showBarStyle = function(style)
+        local shown = {}
+        for k, v in pairs(settings) do shown[k] = v end
+        shown.barStyle = style
+        sendUi({ type = 'settings:apply', settings = shown, low = Config and Config.low or 20, span = compassSpan() })
+    end,
+    compassSpan = compassSpan,
+    compassDeg = function() return lastCompassDeg end,
+    voiceMessage = function() return lastVoiceMsg end,
+    seatbelt = seatbelt,
+    sendSeatbelt = sendSeatbelt,
+    lastSeatbelt = function() return lastSeatbelt end,
+    isInVehicle = isInVehicle,
+    minimapMetrics = function()
+        local p0, p1, pxW, pxH, defaultSx, defaultSy, screenW, screenH = getMinimapMetrics()
+        return { p0 = p0, p1 = p1, pxW = pxW, pxH = pxH, defaultSx = defaultSx, defaultSy = defaultSy,
+            screenW = screenW, screenH = screenH }
+    end,
+    minimapPlace = function() return appliedPlaces['minimap'] end,
+    applyMinimapPlace = applyMinimapPlace,
+    clearMinimapPlace = function() appliedPlaces['minimap'] = nil end,
+    appliedMinimap = function() return lastMinimapPositions end,
+}
