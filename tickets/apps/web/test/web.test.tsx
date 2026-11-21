@@ -98,7 +98,7 @@ describe('Web acceptance tests (w1-w3)', () => {
     const nameInput = screen.getByLabelText(/category name/i);
     const emojiInput = screen.getByLabelText(/emoji/i);
     const modeSelect = screen.getByLabelText(/mode/i);
-    const parentChannelInput = screen.getByLabelText(/parent channel id/i);
+    const parentChannelInput = screen.getByLabelText(/^parent channel$/i);
     const staffRolesInput = screen.getByLabelText(/staff role ids/i);
     const nameTemplateInput = screen.getByLabelText(/name template/i);
     const maxOpenInput = screen.getByLabelText(/max open tickets/i);
@@ -138,7 +138,7 @@ describe('Web acceptance tests (w1-w3)', () => {
     createCategorySpy.mockRejectedValueOnce(new Error('Category creation failed'));
     fireEvent.click(screen.getByRole('button', { name: /create category/i }));
     fireEvent.change(screen.getByLabelText(/category name/i), { target: { value: 'Bad Category' } });
-    fireEvent.change(screen.getByLabelText(/parent channel id/i), { target: { value: '999999999999999999' } });
+    fireEvent.change(screen.getByLabelText(/^parent channel$/i),{ target: { value: '999999999999999999' } });
     fireEvent.change(screen.getByLabelText(/staff role ids/i), { target: { value: '888888888888888888' } });
     fireEvent.click(screen.getByRole('button', { name: /save category|submit/i }));
 
