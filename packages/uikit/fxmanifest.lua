@@ -17,6 +17,7 @@ shared_scripts {
     'locales/en.lua',
     'locales/th.lua',
     'shared/logic/uikit.lua',
+    'shared/logic/selftests.lua',
 }
 
 client_scripts {

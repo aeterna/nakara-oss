@@ -8,6 +8,7 @@ All notable changes to `aeterna_layout` are documented here. The format follows
 
 ### Added (0.2.0)
 
+- Self-tests (0.2) registered with `aeterna_core`: `placement_math`, `import_validate` (server), `clamp_on_grow` (client mock), `preset_apply` (eye) and `grid_drag`, `export_import`, `export_copy`, `reset_from_menu` (ped; `reset_from_menu` is destructive). While a self-test holds the editor, Done acts as Cancel and a snap pick is not saved. Written by Claude Code - Claude Opus 5.5 (agent engineer).
 - Clamp on size change: an element that grows (a re-add with a new `w`/`h`, a scale change, a screen size change reported by the page) is moved back on screen, also outside the editor. The clamped place is not saved, so a shrinking element returns to the saved place.
 - Presets: `Config.presets` (`default`, `compact`, `centered`; up to 8), validated at start, applied from a Preset select in the editor (session only: Done saves, Cancel undoes).
 - Grid: drawn while dragging; the toolbar's snap control is a select (Off and `Config.snapSteps`), kept in client KVP `aeterna_layout:prefs:v1`.

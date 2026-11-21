@@ -105,6 +105,30 @@ sha256sum -c SHA256SUMS --ignore-missing
 
 Then read the capability table above (or `oss.json` inside the zip).
 
+## Self-tests (0.2)
+
+Registered with `aeterna_core` as `aeterna_uikit.<name>` and run from `aeterna_testkit` (or the core console command,
+where ped and eye tests are GAP). Spec: `docs/specs/aeterna_uikit.md` § Self-tests (0.2).
+
+| Name | Kind | What it checks |
+| --- | --- | --- |
+| `spec_limits` | headless | `open` refuses every spec over a limit (41 blocks, two `tabs`, 1 or 7 tabs, 7 columns, 51 rows, 1001 slider steps, 51 items without search, 201 with search, a 61-character Thai title) and accepts the largest inside it |
+| `values_recheck` | headless | Values coming back with an action are checked again: a slider off the grid, out of range or as a string, an unknown tab and an unknown key are dropped; a hidden tab's field still comes back |
+| `forged_action` | headless | An action the spec does not offer (unknown id, tab id without `report`, row of a non-selectable table, disabled button, wrong `panelId`, no panel) is dropped |
+| `panel_every_block` | eye | An `md` panel with tabs, a searchable list, a slider, a table and an empty state |
+| `tabs_switch` | ped | The page clicks the second tab; the owner receives its id and the right blocks show |
+| `slider_keyboard` | ped | The page presses ArrowRight on the slider and OK; the owner receives one step more and the page shows the same number |
+| `motion_reduced` | eye | The test panel leaves and enters every 2 s, so the person sees whether it fades and rises |
+| `focus_lost_closes` | ped | A focus loss closes the panel and the owner receives `__close` |
+| `overlay_pauses` | eye | The panel stays open and ignores clicks behind the eye card; after the answer its button counts presses |
+
+Client tests open a test panel on the presser's client only. Its actions go to a client-side panel manager that runs
+the server's validation, never to the server; an open panel is replaced as if the server had opened a new one.
+`focus_lost_closes` fires core's `aeterna_core:focusLost` event itself, because one resource cannot be a second one.
+
+Core's local events (`aeterna_core:selftest`, `selftestEnd` and the focus events) count only when `aeterna_core`
+fired them, and open test state is torn down when `aeterna_core` stops.
+
 ## Tests
 
 From the repository root:

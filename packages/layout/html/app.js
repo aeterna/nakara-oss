@@ -51,6 +51,7 @@ let dragState = null;
 let confirmOpen = false;
 let shareOpen = false;
 let shareStatusEl = null;
+let shareRefs = null; // 0.2 self-tests: the export box, import box and Import button of the open share card
 const boxNodes = new Map();
 
 function postCallback(name, payload) {
@@ -425,6 +426,7 @@ function openShare(text, error) {
     });
     foot.appendChild(applyBtn);
     card.appendChild(foot);
+    shareRefs = { exportBox, importBox, applyBtn };
 
     shareLayer.appendChild(card);
     shareLayer.classList.remove('hidden');
@@ -441,6 +443,7 @@ function openShare(text, error) {
 function closeShare() {
     shareOpen = false;
     shareStatusEl = null;
+    shareRefs = null;
     clearChildren(shareLayer);
     shareLayer.classList.add('hidden');
 }
@@ -845,6 +848,41 @@ function closeEditor() {
     layoutRoot.classList.add('hidden');
 }
 
+// Self-tests (0.2): the client test drives the editor the way a player would and reports what it saw.
+function pointer(type, target, x, y, shift) {
+    target.dispatchEvent(new PointerEvent(type, {
+        clientX: x, clientY: y, button: 0, shiftKey: shift, bubbles: true, cancelable: true,
+    }));
+}
+
+function selftestDrive(msg) {
+    if (!isOpen) return;
+    if (msg.op === 'drag') {
+        const entry = boxNodes.get(String(msg.owner) + '/' + String(msg.id));
+        if (!entry) return;
+        const shift = msg.shift === true;
+        const rect = entry.box.getBoundingClientRect();
+        const x = rect.left + 4;
+        const y = rect.top + 4;
+        pointer('pointerdown', entry.box, x, y, shift);
+        pointer('pointermove', window, x + Number(msg.dx), y + Number(msg.dy), shift);
+        const grid = !gridLayer.classList.contains('hidden');
+        pointer('pointerup', window, x + Number(msg.dx), y + Number(msg.dy), shift);
+        postCallback('selftestProbe', { op: 'drag', grid });
+    } else if (msg.op === 'export') {
+        postCallback('selftestProbe', { op: 'export', text: shareRefs ? shareRefs.exportBox.value : null });
+    } else if (msg.op === 'copy') {
+        if (!shareRefs) return;
+        const { exportBox, importBox, applyBtn } = shareRefs;
+        exportBox.focus();
+        exportBox.select();
+        const copied = document.execCommand('copy');
+        postCallback('selftestProbe', { op: 'copy', copied });
+        importBox.value = exportBox.value;
+        applyBtn.click();
+    }
+}
+
 window.addEventListener('message', (event) => {
     const msg = event.data;
     if (!msg || typeof msg.type !== 'string') return;
@@ -872,6 +910,8 @@ window.addEventListener('message', (event) => {
         if (isOpen) openShare(msg.text, msg.error);
     } else if (msg.type === 'import:result') {
         showImportResult(msg);
+    } else if (msg.type === 'selftest:drive') {
+        selftestDrive(msg);
     }
 });
 

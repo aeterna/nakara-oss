@@ -725,6 +725,7 @@ function buildBlockNode(block, panelId) {
             type: 'slider',
             root: slider.wrap,
             labelEl: slider.labelEl,
+            track: slider.track,
             setValue: slider.setValue,
             setDisabled: slider.setDisabled,
         });
@@ -1276,6 +1277,38 @@ function clearHints() {
     hintsLayer.classList.add('hidden');
 }
 
+// Self-tests (0.2): the client test drives the open test panel the way a player would and reports what it saw.
+function visibleBlockIds() {
+    const out = [];
+    for (const [id, ref] of blockElements.entries()) {
+        if (!ref.root.classList.contains('hidden')) out.push(id);
+    }
+    return out;
+}
+
+function selftestDrive(msg) {
+    if (!currentPanel) return;
+    if (msg.op === 'tab') {
+        const buttons = panelLayer.querySelectorAll('.tab-btn');
+        for (const btn of buttons) {
+            if (btn.dataset.tab === String(msg.target)) btn.click();
+        }
+        postCallback('selftestProbe', { op: 'tab', visible: visibleBlockIds() });
+    } else if (msg.op === 'slider') {
+        const ref = blockElements.get(String(msg.block));
+        let shown = null;
+        if (ref && ref.track) {
+            ref.track.focus();
+            ref.track.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+            shown = ref.track.getAttribute('aria-valuenow');
+        }
+        const press = blockElements.get(String(msg.press));
+        const btn = press && press.itemsWrap ? press.itemsWrap.querySelector('button') : null;
+        if (btn) btn.click();
+        postCallback('selftestProbe', { op: 'slider', shown });
+    }
+}
+
 window.addEventListener('message', (event) => {
     const msg = event.data;
     if (!msg || typeof msg.type !== 'string') return;
@@ -1308,6 +1341,8 @@ window.addEventListener('message', (event) => {
         showHints(msg.hints);
     } else if (msg.type === 'hints:clear') {
         clearHints();
+    } else if (msg.type === 'selftest:drive') {
+        selftestDrive(msg);
     }
 });
 

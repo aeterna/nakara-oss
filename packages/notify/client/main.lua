@@ -13,6 +13,7 @@ local motdOpen = false
 local motdPaused = false
 local focusToken = nil
 local localeReady = false
+local selftest = nil -- 0.2: the client self-test in flight (Self-tests section at the end)
 local layoutPlaces = {
     toasts = nil,
     announce = nil,
@@ -260,16 +261,20 @@ local function nuiToast(item)
     }
 end
 
--- ctx = { owner, origin = 'client'|'server', toastId? }
+-- ctx = { owner, origin = 'client'|'server', toastId?, soundAllowed? (self-tests only: replaces the sound gate) }
 local function addToast(opts, ctx, sourceLabel)
     local c = type(ctx) == 'table' and ctx or {}
     local q = getToastQueue()
+    local allowSound = c.soundAllowed
+    if allowSound == nil then
+        allowSound = soundAllowed()
+    end
     local ok, err, res = q:push(opts, {
         now = nowMs(),
         owner = c.owner or selfName(),
         origin = c.origin,
         toastId = c.toastId,
-        soundAllowed = soundAllowed(),
+        soundAllowed = allowSound,
     })
     if not ok then
         logWarn((sourceLabel or 'notify') .. ' dropped invalid toast opts', { err = err })
@@ -388,7 +393,8 @@ local function endCountdownView(countdownId)
     getAnnounceQueue():resume()
 end
 
-local function showCountdown(clean)
+-- record = false keeps the banner out of the history (self-tests).
+local function showCountdown(clean, record)
     syncThemeAndLocale()
     local aq = getAnnounceQueue()
     if not aq:isPaused() then
@@ -415,7 +421,9 @@ local function showCountdown(clean)
         showMs = showMs,
         place = layoutPlaces.announce,
     })
-    recordHistory(L.historyFromBanner('countdown', clean, selfName(), nowSeconds()))
+    if record ~= false then
+        recordHistory(L.historyFromBanner('countdown', clean, selfName(), nowSeconds()))
+    end
 end
 
 --------------------------------------------------------------------------------
@@ -643,6 +651,11 @@ AddEventHandler('playerSpawned', function()
     tryShowMotd()
 end)
 
+-- Core's local events count only when aeterna_core fired them, so another resource cannot fake one.
+local function fromCore()
+    return GetInvokingResource() == 'aeterna_core'
+end
+
 local function ownsFocusEvent(owner, token)
     if owner ~= selfName() then return false end
     if token ~= nil and focusToken ~= nil and token ~= focusToken then return false end
@@ -650,6 +663,7 @@ local function ownsFocusEvent(owner, token)
 end
 
 AddEventHandler('aeterna_core:focusPaused', function(owner, token)
+    if not fromCore() then return end
     if not ownsFocusEvent(owner, token) then return end
     if motdOpen then
         motdPaused = true
@@ -657,11 +671,13 @@ AddEventHandler('aeterna_core:focusPaused', function(owner, token)
 end)
 
 AddEventHandler('aeterna_core:focusResumed', function(owner, token)
+    if not fromCore() then return end
     if not ownsFocusEvent(owner, token) then return end
     motdPaused = false
 end)
 
 AddEventHandler('aeterna_core:focusLost', function(owner, token)
+    if not fromCore() then return end
     if owner ~= nil and owner ~= selfName() then return end
     if token ~= nil and focusToken ~= nil and token ~= focusToken then return end
     focusToken = nil
@@ -758,6 +774,200 @@ RegisterNUICallback('toastAction', function(data, cb)
         return
     end
     pressAction(item, press.action)
+end)
+
+--------------------------------------------------------------------------------
+-- Self-tests (0.2): the client rows (docs/specs/aeterna_notify.md § Self-tests (0.2)). Test toasts and banners
+-- never enter the history and are removed when the test ends.
+--------------------------------------------------------------------------------
+
+local Selftests = NotifySelftests
+local TEST_TOAST_MS = 15000
+local MOTION_TOAST_MS = 3000
+local MOTION_GAP_MS = 3500
+local PRESS_WAIT_MS = 300
+local COUNTDOWN_ID = 'st_countdown'
+local COUNTDOWN_SECONDS = 30
+
+local function reportSelftest(runId, name, state, detail)
+    pcall(function()
+        exports.aeterna_core:reportSelftest(runId, name, state, detail)
+    end)
+end
+
+local function endSelftest()
+    local st = selftest
+    if not st then return end
+    selftest = nil
+    st.ended = true
+    local q = getToastQueue()
+    for item in pairs(st.items) do
+        if q:removeItem(item) then
+            sendUi({ type = 'toast:clear', id = item.key })
+        end
+    end
+    endCountdownView(COUNTDOWN_ID)
+end
+
+-- A test toast: owned by notify, out of the history, silent unless `soundAllowedFlag` says otherwise.
+local function testToast(st, opts, soundAllowedFlag)
+    opts.history = false
+    if soundAllowedFlag == nil then
+        opts.sound = false
+    end
+    local ok, _, item = addToast(opts, { owner = selfName(), origin = 'client', soundAllowed = soundAllowedFlag }, 'selftest')
+    if ok then
+        st.items[item] = true
+    end
+    return ok and item or nil
+end
+
+local function ready(st)
+    reportSelftest(st.runId, st.name, 'ready', 'on screen')
+end
+
+local CLIENT_TESTS = {}
+
+function CLIENT_TESTS.toast_types(st)
+    for _, ty in ipairs(Selftests.TYPES) do
+        testToast(st, { title = translate('notify.selftest.toast', { type = ty }), type = ty, duration = TEST_TOAST_MS })
+    end
+    ready(st)
+end
+
+function CLIENT_TESTS.stack_merge(st)
+    for _ = 1, 6 do
+        testToast(st, { title = translate('notify.selftest.merge'), type = 'info', duration = TEST_TOAST_MS })
+    end
+    ready(st)
+end
+
+function CLIENT_TESTS.motion_reduced(st)
+    ready(st)
+    CreateThread(function()
+        while not st.ended do
+            testToast(st, { title = translate('notify.selftest.motion'), type = 'info', duration = MOTION_TOAST_MS })
+            Wait(MOTION_GAP_MS)
+        end
+    end)
+end
+
+-- The player's stored sound setting is never changed: each step passes the gate it would have.
+function CLIENT_TESTS.sound_plays(st)
+    ready(st)
+    CreateThread(function()
+        for _, step in ipairs(Selftests.soundPlan()) do
+            Wait(step.delayMs)
+            if st.ended then return end
+            local key = step.playerOn and 'notify.selftest.sound_on' or 'notify.selftest.sound_off'
+            testToast(st, { title = translate(key, { type = step.type }), type = step.type },
+                L.soundGate(ownerAllowsSound(), step.playerOn, true))
+        end
+    end)
+end
+
+-- A banner on this client only, on the clock a server countdown would use; no server countdown starts.
+function CLIENT_TESTS.countdown_banner(st)
+    local plan = Selftests.countdownPlan(L, COUNTDOWN_SECONDS, cfgSection('countdown').marks or L.COUNTDOWN_DEFAULT_MARKS)
+    local startedAt = nowMs()
+    local function show(remainingMs)
+        local ok, _, clean = L.validateCountdownMessage({
+            countdownId = COUNTDOWN_ID, title = translate('notify.selftest.countdown'), remainingMs = remainingMs,
+        })
+        if ok then
+            showCountdown(clean, false)
+        end
+    end
+    show(plan.shows[1].remainingMs)
+    ready(st)
+    CreateThread(function()
+        for i = 2, #plan.shows do
+            Wait(math.max(0, startedAt + plan.shows[i].atMs - nowMs()))
+            if st.ended then return end
+            show(plan.shows[i].remainingMs)
+        end
+        Wait(math.max(0, startedAt + plan.endMs - nowMs()))
+        if not st.ended then
+            endCountdownView(COUNTDOWN_ID)
+        end
+    end)
+end
+
+-- Presses action 1 of the test toast itself, through the function the key mappings and the mouse use, so a newer
+-- toast with actions cannot take the press.
+function CLIENT_TESTS.action_press(st)
+    local item = testToast(st, {
+        id = 'st_action',
+        title = translate('notify.selftest.action'),
+        actions = {
+            { id = 'first', label = translate('notify.selftest.action1'), variant = 'primary' },
+            { id = 'second', label = translate('notify.selftest.action2') },
+        },
+    })
+    if not item then
+        reportSelftest(st.runId, st.name, 'fail', 'test toast refused')
+        endSelftest()
+        return
+    end
+    CreateThread(function()
+        Wait(PRESS_WAIT_MS)
+        if st.ended then return end
+        if getToastQueue():findAction('st_action', 'first', nowMs()) ~= item then
+            reportSelftest(st.runId, st.name, 'fail', 'the test toast left the screen before the press')
+            endSelftest()
+            return
+        end
+        pressAction(item, 'first')
+        local onScreen = getToastQueue():findAction('st_action', 'first', nowMs()) ~= nil
+        local ok, detail = Selftests.judgeActionPress(st.received, onScreen, 'first')
+        reportSelftest(st.runId, st.name, ok and 'pass' or 'fail', detail)
+        endSelftest()
+    end)
+end
+
+function CLIENT_TESTS.history_pull(st)
+    local ok, detail = Selftests.historyCheck(L, cfgSection('history').max)
+    if ok then
+        ok, detail = Selftests.historyShape(getHistory():list(5), 5)
+    end
+    reportSelftest(st.runId, st.name, ok and 'pass' or 'fail', detail)
+    endSelftest()
+end
+
+AddEventHandler('aeterna_notify:action', function(press)
+    local st = selftest
+    if st and type(press) == 'table' and press.owner == selfName() and press.toastId == 'st_action' then
+        st.received = press
+    end
+end)
+
+AddEventHandler('aeterna_core:selftest', function(runId, name)
+    if not fromCore() then return end
+    local short = Selftests.shortName(name)
+    local run = short and CLIENT_TESTS[short]
+    if not run then return end
+    endSelftest()
+    local reason = Selftests.skipReason(short, Config)
+    if reason then
+        reportSelftest(runId, name, 'skip', reason)
+        return
+    end
+    selftest = { runId = runId, name = name, items = {} }
+    run(selftest)
+end)
+
+AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
+    if not fromCore() then return end
+    if selftest and selftest.runId == runId and selftest.name == name then
+        endSelftest()
+    end
+end)
+
+-- Core stopping ends the run: remove the test toasts and banner.
+AddEventHandler('onResourceStop', function(resName)
+    if resName == 'aeterna_core' then
+        endSelftest()
+    end
 end)
 
 registerLayoutElements()

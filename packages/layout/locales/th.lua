@@ -31,4 +31,13 @@ Locales.th['layout.import.version'] = 'ไม่รองรับข้อค�
 Locales.th['layout.import.invalid'] = 'ข้อความนี้ไม่ใช่เลย์เอาต์ที่ถูกต้อง: {path}'
 Locales.th['layout.export.tooLong'] = 'เลย์เอาต์นี้ยาวเกินกว่าจะส่งออกเป็นข้อความ'
 
+-- 0.2 self-tests (expect texts and test strings)
+Locales.th['layout.selftest.preset_apply'] = 'เลือก compact แล้วองค์ประกอบของชุดทั้งหมดย้ายไปมุมล่างซ้าย กดยกเลิกแล้วกลับที่เดิม'
+Locales.th['layout.selftest.grid_drag'] = 'ระหว่างลาก มีกริดจางๆ ตามขั้นที่เลือกและองค์ประกอบวางลงบนกริด เมื่อกด Shift จะไม่เป็นเช่นนั้น'
+Locales.th['layout.selftest.export_import'] = 'ส่งออกได้ข้อความหนึ่งบรรทัด ย้ายตำแหน่งแล้วนำเข้าข้อความนั้น ตำแหน่งกลับที่เดิม'
+Locales.th['layout.selftest.export_copy'] = 'กด Ctrl+C ในช่องส่งออกแล้วคัดลอกข้อความได้ วางลงช่องนำเข้าแล้วระบบยอมรับ'
+Locales.th['layout.selftest.reset_from_menu'] = 'ปุ่มรีเซ็ตทั้งหมดในแผงเมนู หลังยืนยันแล้ว ทุกองค์ประกอบกลับตำแหน่งเริ่มต้น (เลย์เอาต์ที่ผู้เล่นบันทึกไว้ถูกล้าง)'
+Locales.th['layout.selftest.element'] = 'กล่องทดสอบตัวเอง'
+Locales.th['layout.selftest.backup'] = 'เลย์เอาต์ก่อนการทดสอบรีเซ็ต (วางลงช่องนำเข้าเพื่อกู้คืน): {text}'
+
 return Locales.th

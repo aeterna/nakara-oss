@@ -31,4 +31,13 @@ Locales.en['layout.import.version'] = 'Unsupported layout text version'
 Locales.en['layout.import.invalid'] = 'This text is not a valid layout: {path}'
 Locales.en['layout.export.tooLong'] = 'This layout is too long to export as text'
 
+-- 0.2 self-tests (expect texts and test strings)
+Locales.en['layout.selftest.preset_apply'] = 'Picking compact moves every kit element to the bottom-left; Cancel puts them back'
+Locales.en['layout.selftest.grid_drag'] = 'While dragging, a faint grid at the picked step shows and the element lands on it; with Shift it does not'
+Locales.en['layout.selftest.export_import'] = 'Export shows one line of text; changing a place and importing that text puts it back'
+Locales.en['layout.selftest.export_copy'] = 'Ctrl+C in the export box copies the text; pasting it into import is accepted'
+Locales.en['layout.selftest.reset_from_menu'] = 'The menu panel\'s Reset all, after confirming, puts every element at its default (the player\'s saved layout is cleared)'
+Locales.en['layout.selftest.element'] = 'Self-test box'
+Locales.en['layout.selftest.backup'] = 'Layout before the reset self-test (paste it into import to restore): {text}'
+
 return Locales.en

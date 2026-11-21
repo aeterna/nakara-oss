@@ -160,6 +160,30 @@ sha256sum -c SHA256SUMS --ignore-missing
 
 Then read the capability table above (or `oss.json` inside the zip).
 
+## Self-tests (0.2)
+
+Registered with `aeterna_core` as `aeterna_notify.<name>` and run from `aeterna_testkit` (or the core console command,
+where client tests are GAP). Spec: `docs/specs/aeterna_notify.md` § Self-tests (0.2).
+
+| Name | Kind | What it checks |
+| --- | --- | --- |
+| `toast_opts` | headless | Three actions, a bad action id or a 21-character label fall back to no actions with one warning; a long `id` with actions, no title, durations, `sound` |
+| `merge_key` | headless | The same toast merges with `×2` and restarts its timer; another description, owner, an `id`, actions or `merge = false` never merge; `×99+` |
+| `action_forged` | headless | A press for an unknown toast, another action, another player, a second press or a late press is refused |
+| `countdown_clock` | headless | 9 and 3601 seconds refused, `busy`, marks above `seconds` dropped, the banner at a mark, the end event once, cancel by the owner only, `mm:ss` |
+| `toast_types` | eye | Four toasts, one per type, for 15 s |
+| `stack_merge` | eye | Six identical toasts |
+| `action_press` | ped | A toast with two buttons; the test presses its first action through the function the key mappings and the mouse use, receives the first id, and the toast closes |
+| `sound_plays` | eye | Each type with the player's setting treated as on, then as off (the stored setting is not changed). SKIP when `Config.sound.enabled = false` |
+| `countdown_banner` | eye | A 30-second banner on this client only, shown again at the marks and hidden at zero; no server countdown starts |
+| `history_pull` | headless (client) | The history logic on a fresh instance and the shape of what the export returns. SKIP when `Config.history.max = 0` |
+| `motion_reduced` | eye | A short toast every 3.5 s |
+
+Test toasts and the test banner never enter the history and are removed when the test ends.
+
+Core's local events (`aeterna_core:selftest`, `selftestEnd` and the focus events) count only when `aeterna_core`
+fired them, and open test state is torn down when `aeterna_core` stops.
+
 ## Tests
 
 From the repository root:

@@ -10,6 +10,7 @@ All notable changes to `aeterna_notify` are documented here. The format follows
 
 ### Added
 
+- Self-tests (0.2) registered with `aeterna_core`: `toast_opts`, `merge_key`, `action_forged`, `countdown_clock` (server), `history_pull` (client), `toast_types`, `stack_merge`, `sound_plays`, `countdown_banner`, `motion_reduced` (eye) and `action_press` (ped). Test toasts and the test banner stay out of the history and are removed when the test ends. Written by Claude Code - Claude Opus 5.5 (agent engineer).
 - Toast fields `actions` (1–2 buttons), `sound`, `history` and `merge`. Actions are pressed with the key mappings `+aeterna_notify_action1` / `+aeterna_notify_action2` (no default key) or by mouse when the cursor is already free; the press fires `aeterna_notify:action` client-local (client export) or, through the rate-limited `aeterna_notify:sv:action`, server-local (server export). `Config.toast.actionDuration`.
 - Lifetime bar on timed toasts (`Config.toast.lifetimeBar`), not drawn under reduced motion.
 - Optional frontend sounds per toast type (`Config.sound`), the `aeterna_notify_sound` command and client KVP `aeterna_notify:settings:v1`.
