@@ -264,7 +264,7 @@ explicit `set sv_master1 ""` counts as private.
 | `side` | `'server'` · `'client'` | `'server'` | `headless` and `mock` only. `'client'` runs the test on the presser's client through the client-side protocol below; a run with no presser makes it GAP `needs a person`. `ped` and `eye` always run on a client and refuse `side = 'server'` |
 | `players` | `1` · `2` | `1` | `2` = needs player A (the presser) and player B (invited) |
 | `destructive` | boolean | `false` | `true` = the test gives a real player items, or writes a real player's stored data (server KVP, item metadata, files) |
-| `expect` | string ≤ 240 | nil | What a person should see; required for `eye` (empty = FAIL, below). Shown after "Normally you will see" |
+| `expect` | string ≤ 240 | nil | `eye`: what a person should see; required (empty = FAIL, below), shown after "Normally you will see". `ped`: what the presser must do for the test to finish ("Get in a vehicle"), optional; core sends it to the client and passes it as `ctx.expect`, and `aeterna_testkit` shows it while the test runs |
 | `ask` | string ≤ 160 | nil | The question on the eye card (`eye` only). nil = the test name |
 | `timeout` | integer ms | `5000` | Clamped to 500–60000; a value outside logs one `warn` |
 | `skipWhen` | table | nil | `{ resources = { 'pma-voice', … } }` (≤ 8 names ≤ 64): SKIP when any listed resource is not `started`, reason `needs <name>` |
@@ -363,7 +363,7 @@ before its timeout, and every report passes the judging rules above.
 
 1. Server → client `aeterna_core:cl:selftest` to player A (and to B for `players = 2`).
 2. Core's client fires the client-local event `aeterna_core:selftest` → `(runId, name, ctx)` with
-   `ctx = { kind, side = 'client', role = 'A' | 'B', destructive }`. The owner's client script filters on the name
+   `ctx = { kind, side = 'client', role = 'A' | 'B', destructive, expect? }` (`expect` only for `eye` and `ped` tests that set it). The owner's client script filters on the name
    prefix of its own resource.
 3. `ped`, client-side `headless` and client-side `mock`: the owner does its work and calls client export
    `reportSelftest(runId, name, ok, detail, extra)` (same arguments as the server export, plus `'ready'` below). Core's
