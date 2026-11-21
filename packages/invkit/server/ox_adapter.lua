@@ -221,6 +221,32 @@ function A.setMetadata(src, slot, metadata)
     return true
 end
 
+--- Self-test only (phone_device_save): gives one item with `metadata`. true when ox_inventory added it.
+function A.addItem(src, item, count, metadata)
+    if not A.isOxStarted() then
+        return false
+    end
+    local ok, added = pcall(function()
+        return exports.ox_inventory:AddItem(src, item, count, metadata)
+    end)
+    if not ok or not added then
+        logWarn('ox_inventory:AddItem failed', { src = tostring(src), item = tostring(item) })
+        return false
+    end
+    return true
+end
+
+--- Self-test only (phone_device_save): removes `count` of `item` from that one slot.
+function A.removeItem(src, item, count, slot)
+    if not A.isOxStarted() then
+        return false
+    end
+    local ok, removed = pcall(function()
+        return exports.ox_inventory:RemoveItem(src, item, count, nil, slot)
+    end)
+    return ok and removed ~= false
+end
+
 --- (Re)registers the swapItems and createItem hooks for the phone items. `handlers` maps the hook event
 --- name to fn(payload); `itemFilter` is { [name] = true }. An empty filter only removes the old hooks.
 function A.syncPhoneHooks(handlers, itemFilter)
