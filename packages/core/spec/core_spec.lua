@@ -413,6 +413,7 @@ describe('aeterna_core', function()
             assert.are.same({ n = 1, false }, keepCalls[3])
 
             -- focusLost for another resource does NOT clear natives for aeterna_core
+            natives.stub('GetInvokingResource', function() return 'aeterna_core' end)
             natives.fire('aeterna_core:focusLost', 'other_resource', lostTok, 'preempted')
             assert.are.equal(3, #focusCalls)
             assert.are.equal(3, #keepCalls)
@@ -523,6 +524,7 @@ describe('aeterna_core', function()
             assert.are.equal(3, #focusCalls)
             assert.are.same({ n = 2, true, true }, focusCalls[3])
 
+            natives.stub('GetInvokingResource', function() return 'aeterna_core' end)
             natives.fire('aeterna_core:focusLost', 'some_other_res', tok, 'preempted')
             assert.are.equal(3, #focusCalls)
             assert.are.equal(3, #keepCalls)
