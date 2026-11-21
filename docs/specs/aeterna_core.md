@@ -340,6 +340,12 @@ Server-local event `aeterna_core:selftest` → `(runId, name, ctx)`. The third a
 it: `ctx = { kind, side = 'server', a = src|nil, b = src|nil, destructive = boolean }`. Only `headless` and `mock`
 tests with `side = 'server'` are fired on the server; `side = 'client'`, `ped` and `eye` tests go to clients.
 
+**Only core fires these events.** Every owner handler of core's local events (`aeterna_core:selftest`,
+`selftestStarted`, `selftestEnd`, `eyeAsk`, `hello`, and the focus events) returns early unless
+`GetInvokingResource() == 'aeterna_core'`, so another resource cannot fake a test start to make an owner give items,
+open a viewfinder or start a call for a player. When `aeterna_core` stops, owners undo any test preparation they made,
+because no `selftestEnd` will follow.
+
 **Client test started (server).** When core sends a test to a client (`ped`, `eye`, `side = 'client'`, or any test with `players = 2`),
 it first fires the server-local event `aeterna_core:selftestStarted` → `(runId, name, ctx)` with
 `ctx = { kind, side = 'client', a = src, b = src|nil, destructive = boolean }`. The owner's server script filters on its
