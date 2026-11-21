@@ -1298,5 +1298,108 @@ AddEventHandler('playerDropped', function()
     end
 end)
 
+--------------------------------------------------------------------------------
+-- Self-tests (spec § Self-tests (0.2)): server rows. Decisions live in shared/logic/selftest.lua.
+--------------------------------------------------------------------------------
+
+local PS = PhoneSelftest
+
+local function reportSelftest(runId, name, ok, detail, extra)
+    pcall(function() return exports.aeterna_core:reportSelftest(runId, name, ok, detail, extra) end)
+end
+
+-- Core's write guard (AeternaCore.selftest.mayWrite) when this core build has it; core's destructive gate
+-- has already decided before a destructive test is fired either way.
+local function mayWrite(runId, name)
+    local guard = AeternaCore and AeternaCore.selftest and AeternaCore.selftest.mayWrite
+    if type(guard) ~= 'function' then return true end
+    return guard(runId, name) == true
+end
+
+-- The presser's loaded phone, or nil and the SKIP reason.
+local function presserPhone(ctx)
+    local src = type(ctx) == 'table' and tonumber(ctx.a) or nil
+    if not src then return nil, 'needs a presser' end
+    local p = ensureLoaded(src)
+    local dev = activeOf(p)
+    if not dev then return nil, 'presser has no phone' end
+    return src, p, dev
+end
+
+local function zeroClosesAll(runId, name, ctx)
+    local src, p, dev = presserPhone(ctx)
+    if not src then return 'skip', p end
+    local st = p.states[dev.id]
+    if not st or st.dead then return 'skip', 'presser phone is already at 0 %' end
+    if not mayWrite(runId, name) then return false, 'write guard refused' end
+    local before = st.pct
+    local ev = B.set(st, 0, batteryCfg)
+    applyBatteryEvents(src, ev, false)
+    local ok, detail = PS.zeroClosed({
+        dead = isDead(src), powerOff = ev.power == false, device = activeOf(p) ~= nil and not isDead(src),
+        open = badgeMgr:isPhoneOpen(src), screens = playerScreens[src] ~= nil,
+    })
+    applyBatteryEvents(src, B.set(st, before, batteryCfg), false)
+    saveDevice(src)
+    local restored = st.pct == before and not isDead(src)
+    return ok and 'mock' or false, detail, { restored = restored, wrote = true }
+end
+
+local function kvpRoundtrip(runId, name, ctx)
+    local src, p = presserPhone(ctx)
+    if not src then return 'skip', p end
+    if not mayWrite(runId, name) then return false, 'write guard refused' end
+    local key = 'aeterna_phonekit:device:v1:' .. p.who
+    local raw = GetResourceKvpString(key)
+    local sample = { battery = 42.5, fold = p.folds[SINGLE_ID] }
+    writeKvp(key, sample)
+    local ok, detail = PS.kvpRoundtrip(sample, readKvp(key))
+    local restored
+    if type(raw) == 'string' and raw ~= '' then
+        SetResourceKvp(key, raw)
+        restored = GetResourceKvpString(key) == raw
+    else
+        -- no saved value before: write the live state, as unload or drop would
+        saveDevice(src)
+        restored = readKvp(key) ~= nil
+    end
+    return ok and 'mock' or false, detail, { restored = restored, wrote = true }
+end
+
+local SERVER_TESTS = {
+    rules_loaded = function()
+        return PS.rulesLoaded({ mode = MODE, singleModel = SINGLE_MODEL, models = D.MODELS,
+            batteryOn = Cfg.battery ~= false, battery = batteryCfg })
+    end,
+    models_have_apps = function() return PS.modelsHaveApps(D, modelInfo) end,
+    battery_drain_tick = function() return PS.drainTick(B, batteryCfg) end,
+    stale_pulse_is_off = function() return PS.stalePulse(B, batteryCfg) end,
+    battery_zero_closes_all = zeroClosesAll,
+    battery_kvp_roundtrip = kvpRoundtrip,
+    gate_items_silence_denies = function()
+        local ok, detail = PS.silenceDenies(L)
+        -- a made-up check on its own manager: the live gate never changed, so nothing is left to restore
+        return ok and 'mock' or false, detail, { restored = true }
+    end,
+}
+
+AddEventHandler('aeterna_core:selftest', function(runId, name, ctx)
+    if type(GetInvokingResource) ~= 'function' or GetInvokingResource() ~= 'aeterna_core' then return end
+    local short = PS.shortName(selfName(), name)
+    local test = short and SERVER_TESTS[short]
+    if not test then return end
+    local skip = PS.skipReason(short, { battery = batteryCfg ~= false, mode = MODE, lockScreen = Cfg.lockScreen,
+        cover = COVER, model = SINGLE_MODEL, ped = true })
+    if skip then
+        reportSelftest(runId, name, 'skip', skip)
+        return
+    end
+    reportSelftest(runId, name, test(runId, name, ctx))
+end)
+
+for _, r in ipairs(PS.rows(selfName(), translate, function(id) return modelInfo(id).label end)) do
+    pcall(function() return exports.aeterna_core:addSelftest(r.name, r.meta) end)
+end
+
 -- phonekit (re)started: answerers fire `aeterna_phonekit:listen` again.
 TriggerEvent('aeterna_phonekit:hello')

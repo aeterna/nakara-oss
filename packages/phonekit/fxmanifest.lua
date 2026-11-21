@@ -26,6 +26,7 @@ shared_scripts {
     'shared/logic/exitkeys.lua',
     'shared/logic/shell.lua',
     'shared/logic/hooks.lua',
+    'shared/logic/selftest.lua',
 }
 
 client_scripts {

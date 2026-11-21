@@ -61,3 +61,15 @@ Locales.th['phonekit.battery.dead'] = 'แบตเตอรี่โทรศ�
 Locales.th['phonekit.battery.charging'] = 'กำลังชาร์จ'
 Locales.th['phonekit.refused.nodevice'] = 'คุณไม่มีโทรศัพท์'
 Locales.th['phonekit.refused.noapp'] = 'โทรศัพท์เครื่องนี้เปิดแอปนั้นไม่ได้'
+
+-- Self-tests (0.2): expect lines for the testkit eye card, and the page-only test screens and ring card
+Locales.th['phonekit.selftest.expect.model'] = '{model}: กรอบของรุ่นนี้ที่มุมขวาล่าง ขนาดและรูปทรงถูกต้อง แถบสถานะมีเวลาและแบตเตอรี่ หน้าโฮมตามแบบของรุ่น (ไทล์หรือรายการมีหมายเลข) และไม่มีขอบถูกตัด'
+Locales.th['phonekit.selftest.expect.book_two_pane'] = 'Book กางออกกว้าง: รายการอยู่ซ้าย รายละเอียดอยู่ขวา และหน้าที่เปิดไว้ก่อนหน้ายังเปิดอยู่'
+Locales.th['phonekit.selftest.expect.fold_cover'] = 'Fold พับปิด: หน้าจอด้านนอกเล็กๆ มีเวลา แบตเตอรี่ และจำนวนที่รออยู่ เมื่อกางออกจะเห็นหน้าเดิมก่อนพับ'
+Locales.th['phonekit.selftest.expect.lock'] = 'หน้าล็อกมีการ์ดหนึ่งใบของป้ายทดสอบ ปัดขึ้นแล้วไปหน้าโฮม'
+Locales.th['phonekit.selftest.expect.control_centre'] = 'ดึงลงจากแถบสถานะแล้วเห็นขนาดตัวอักษร นาฬิกา 24 ชั่วโมง และประวัติการแจ้งเตือน โดยไม่มีไทล์สัญญาณหรือความสว่าง'
+Locales.th['phonekit.selftest.expect.ring_cover'] = 'Fold พับปิด: การ์ดสายเรียกเข้าทดสอบพร้อมปุ่มรับสายและปฏิเสธบนหน้าจอด้านนอก กดรับสายแล้วส่งผลกลับโดยไม่ต้องกางเครื่อง'
+Locales.th['phonekit.selftest.ring.title'] = 'สายทดสอบ'
+Locales.th['phonekit.selftest.ring.body'] = 'ทดสอบระบบ ไม่มีใครโทรมาจริง'
+Locales.th['phonekit.selftest.screen'] = 'หน้าทดสอบ'
+Locales.th['phonekit.selftest.item'] = 'รายการทดสอบ {n}'
