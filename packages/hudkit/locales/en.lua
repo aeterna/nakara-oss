@@ -50,8 +50,9 @@ local STRINGS = {
     ['hudkit.vehicle.seatbelt.off'] = 'Seatbelt off',
     ['hudkit.selftest.bar_style.expect'] = 'Switching Bar to Ring redraws every status bar as a ring; the status part stays on screen and its layout stand-in matches the new size',
     ['hudkit.selftest.compass_tape.expect'] = 'Turning the camera a full circle moves the tape smoothly; N is at the centre mark when facing north',
-    ['hudkit.selftest.voice_indicator.expect'] = 'The microphone lights while the player talks; changing the proximity mode changes the label',
-    ['hudkit.selftest.voice_radio.expect'] = 'The presser joins a radio channel: the radio icon shows; while the presser transmits it is highlighted',
+    ['hudkit.selftest.voice_indicator.expect'] = 'Talk into your microphone, then change your voice range',
+    ['hudkit.selftest.voice_radio.expect'] = 'Join a radio channel, then talk on the radio',
+    ['hudkit.selftest.seatbelt_event.expect'] = 'Sit in a vehicle until this test ends',
     ['hudkit.selftest.minimap_follows.expect'] = 'The radar stays under its stand-in after dragging it to the top-right and back',
 }
 

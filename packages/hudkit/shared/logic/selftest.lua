@@ -16,7 +16,7 @@ local ROWS = {
     { name = 'compass_tape', kind = 'ped', expect = true, timeout = 10000 },
     { name = 'voice_indicator', kind = 'ped', expect = true, timeout = 30000, needsVoice = true },
     { name = 'voice_radio', kind = 'ped', expect = true, timeout = 30000, needsVoice = true },
-    { name = 'seatbelt_event', kind = 'mock', side = 'client' },
+    { name = 'seatbelt_event', kind = 'mock', side = 'client', expect = true },
     { name = 'minimap_follows', kind = 'ped', expect = true },
 }
 

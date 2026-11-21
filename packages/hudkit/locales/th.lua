@@ -50,8 +50,9 @@ local STRINGS = {
     ['hudkit.vehicle.seatbelt.off'] = 'ยังไม่คาดเข็มขัด',
     ['hudkit.selftest.bar_style.expect'] = 'สลับจากแถบเป็นวงแหวนแล้วแถบสถานะทุกแถบกลายเป็นวงแหวน ส่วนสถานะยังอยู่บนจอ และกรอบแทนในเลย์เอาต์มีขนาดตรงกับขนาดใหม่',
     ['hudkit.selftest.compass_tape.expect'] = 'หมุนกล้องครบรอบแล้วแถบเข็มทิศเลื่อนตามอย่างลื่น เมื่อหันไปทางเหนือ N อยู่ตรงขีดกลาง',
-    ['hudkit.selftest.voice_indicator.expect'] = 'ไมโครโฟนสว่างขึ้นขณะผู้เล่นพูด และเปลี่ยนระยะเสียงแล้วป้ายระยะเปลี่ยนตาม',
-    ['hudkit.selftest.voice_radio.expect'] = 'ผู้กดเข้าช่องวิทยุแล้วไอคอนวิทยุแสดงขึ้น และสว่างเด่นขณะผู้กดส่งเสียงทางวิทยุ',
+    ['hudkit.selftest.voice_indicator.expect'] = 'พูดใส่ไมโครโฟน แล้วเปลี่ยนระยะเสียง',
+    ['hudkit.selftest.voice_radio.expect'] = 'เข้าช่องวิทยุ แล้วพูดทางวิทยุ',
+    ['hudkit.selftest.seatbelt_event.expect'] = 'นั่งอยู่ในรถจนกว่าการทดสอบนี้จะจบ',
     ['hudkit.selftest.minimap_follows.expect'] = 'ลากเรดาร์ไปมุมขวาบนแล้วลากกลับ เรดาร์ยังอยู่ใต้กรอบแทนของมันตลอด',
 }
 
