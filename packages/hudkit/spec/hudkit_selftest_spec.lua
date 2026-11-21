@@ -101,8 +101,11 @@ describe('aeterna_hudkit self-tests', function()
             assert.are.equal('Talk into your microphone, then change your voice range', en.voice_indicator.expect)
             assert.are.equal('Join a radio channel, then talk on the radio', en.voice_radio.expect)
             assert.are.equal('Sit in a vehicle until this test ends', en.seatbelt_event.expect)
+            assert.are.equal('Keep still while the test moves the camera and radar', en.compass_tape.expect)
+            assert.are.equal('Keep still while the test moves the camera and radar', en.minimap_follows.expect)
             local th = by_name(ST.definitions(function(key) return Locales.th[key] end))
-            for _, name in ipairs({ 'voice_indicator', 'voice_radio', 'seatbelt_event' }) do
+            for _, name in ipairs({ 'voice_indicator', 'voice_radio', 'seatbelt_event', 'compass_tape',
+                'minimap_follows' }) do
                 assert.is_string(th[name].expect, name)
                 assert.is_true(utf8.len(th[name].expect) > 0 and utf8.len(th[name].expect) <= 240, name)
             end
