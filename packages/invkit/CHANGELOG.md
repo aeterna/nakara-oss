@@ -12,7 +12,8 @@ All notable changes to `aeterna_invkit` are documented here. The format follows
 - Answers `aeterna_phonekit:asking` (`devices = 'items'`) with every phone item carried, lowest slots first, at most 8; fires `aeterna_phonekit:listen` on start and on `aeterna_phonekit:hello`. Server-local events only; phonekit stays optional.
 - A phone item with no `metadata.phoneId` gets an 8-character hex serial written on first listing; `battery`, `fold` and `color` metadata are passed through when valid.
 - `aeterna_phonekit:deviceSave` writes `battery` (clamped 0–100) and `fold` into the item metadata, keeping other fields, at most once per player per 5000 ms (later saves held, latest per phone written); a phone no longer carried fires `aeterna_phonekit:devicesChanged`.
-- `swapItems` and `createItem` hooks on the mapped items fire `aeterna_phonekit:devicesChanged` for each player involved, on the next tick after ox_inventory applies the change.
+- Held saves are written at once when the player drops or `aeterna_invkit` stops; a `deviceSave` arriving within 2 s after the player dropped is written at once if the item is still there, otherwise dropped with a `debug` log. No `devicesChanged` fires for a dropped player.
+- `swapItems` and `createItem` hooks on the mapped items fire `aeterna_phonekit:devicesChanged` for each player involved (integer player inventory ids of connected players only, never a stash), on the next tick after ox_inventory applies the change.
 - README section on adding phone items and images to ox_inventory.
 
 Agent: Claude Code - Claude Opus 5.5 (agent engineer)

@@ -26,6 +26,8 @@ Personal stashes and a server-validated item-use progress registry around `ox_in
    ensure aeterna_invkit
    ```
 
+4. Phone item mode (0.2, optional): set `Config.phone.enabled = true` here **and** `Config.devices = 'items'` in `aeterna_phonekit`. Each setting does nothing without the other: phonekit asks for phone items only in `items` mode, and invkit answers only when `Config.phone.enabled` is on. See [Phone items](#phone-items--โทรศัพท์แบบไอเทม-02) for the ox_inventory item entries.
+
 ## Config / การตั้งค่า (`config.lua`)
 
 | Key | Default | Meaning / ความหมาย |
