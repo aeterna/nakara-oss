@@ -8,6 +8,22 @@ local HERE = debug.getinfo(1, 'S').source:match('^@(.*)/[^/]*$') or '.'
 local DIR = HERE .. '/..'
 local CORE = HERE .. '/../../core'
 
+-- Fires one of core's local events as aeterna_core (the handlers drop the same event from anyone else).
+local function fireCore(name, ...)
+    local prev = rawget(_G, 'GetInvokingResource')
+    rawset(_G, 'GetInvokingResource', function() return 'aeterna_core' end)
+    natives.fire(name, ...)
+    rawset(_G, 'GetInvokingResource', prev)
+end
+
+-- The same event fired by another resource.
+local function fireAs(who, name, ...)
+    local prev = rawget(_G, 'GetInvokingResource')
+    rawset(_G, 'GetInvokingResource', function() return who end)
+    natives.fire(name, ...)
+    rawset(_G, 'GetInvokingResource', prev)
+end
+
 local function loadModules()
     natives.reset()
     rawset(_G, 'Locales', nil)
@@ -272,11 +288,17 @@ describe('aeterna_uikit self-tests: wrappers', function()
         resource.load_resource(DIR, 'server')
         assert.are.equal(9, #added)
 
-        natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.forged_action', { kind = 'headless', side = 'server' })
-        natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_notify.toast_opts', { kind = 'headless', side = 'server' })
+        fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.forged_action', { kind = 'headless', side = 'server' })
+        fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_notify.toast_opts', { kind = 'headless', side = 'server' })
         assert.are.equal(1, #reports)
         assert.are.equal('aeterna_uikit.forged_action', reports[1].name)
         assert.is_true(reports[1].ok, reports[1].detail)
+    end)
+
+    it('the server drops a selftest event that does not come from aeterna_core', function()
+        reports = {}
+        fireAs('evil_res', 'aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.forged_action', { kind = 'headless', side = 'server' })
+        assert.are.equal(0, #reports)
     end)
 
     describe('client', function()
@@ -303,7 +325,7 @@ describe('aeterna_uikit self-tests: wrappers', function()
 
         it('focus_lost_closes: a real focus loss closes the test panel and the owner gets __close', function()
             loadClient()
-            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.focus_lost_closes', { kind = 'ped', side = 'client' })
+            fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.focus_lost_closes', { kind = 'ped', side = 'client' })
             natives.advance(2000)
             assert.are.equal(1, #reports)
             assert.are.equal('pass', reports[1].ok, reports[1].detail)
@@ -314,7 +336,7 @@ describe('aeterna_uikit self-tests: wrappers', function()
 
         it('tabs_switch: the page click reaches the owner with the tab id', function()
             loadClient()
-            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.tabs_switch', { kind = 'ped', side = 'client' })
+            fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.tabs_switch', { kind = 'ped', side = 'client' })
             natives.advance(500)
             local drive = lastUi('selftest:drive')
             assert.is_truthy(drive)
@@ -332,7 +354,7 @@ describe('aeterna_uikit self-tests: wrappers', function()
 
         it('tabs_switch fails when the page never answers', function()
             loadClient()
-            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.tabs_switch', { kind = 'ped', side = 'client' })
+            fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.tabs_switch', { kind = 'ped', side = 'client' })
             natives.advance(5000)
             assert.are.equal(1, #reports)
             assert.are.equal('fail', reports[1].ok)
@@ -340,11 +362,11 @@ describe('aeterna_uikit self-tests: wrappers', function()
 
         it('panel_every_block opens the panel and reports ready; selftestEnd closes it', function()
             loadClient()
-            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.panel_every_block', { kind = 'eye', side = 'client' })
+            fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.panel_every_block', { kind = 'eye', side = 'client' })
             natives.advance(500)
             assert.are.equal('ready', reports[1].ok)
             assert.is_truthy(lastUi('panel:open'))
-            natives.fire('aeterna_core:selftestEnd', 'r1-abcd', 'aeterna_uikit.panel_every_block')
+            fireCore('aeterna_core:selftestEnd', 'r1-abcd', 'aeterna_uikit.panel_every_block')
             assert.is_truthy(lastUi('panel:close'))
         end)
 
@@ -357,18 +379,40 @@ describe('aeterna_uikit self-tests: wrappers', function()
                 requestFocus = function() return 'tok_1' end,
                 releaseFocus = function() return true end,
             })
-            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.overlay_pauses', { kind = 'eye', side = 'client' })
+            fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.overlay_pauses', { kind = 'eye', side = 'client' })
             natives.advance(100)
-            natives.fire('aeterna_core:focusPaused', 'aeterna_uikit', 'tok_1')
-            natives.fire('aeterna_core:focusResumed', 'aeterna_uikit', 'tok_1')
+            fireCore('aeterna_core:focusPaused', 'aeterna_uikit', 'tok_1')
+            fireCore('aeterna_core:focusResumed', 'aeterna_uikit', 'tok_1')
             assert.are.equal(1, #infos)
             assert.matches('resum', infos[1].msg)
             assert.are.equal('pass', infos[1].fields.result)
         end)
 
+        it('drops core events that do not come from aeterna_core', function()
+            loadClient()
+            fireAs('evil_res', 'aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.panel_every_block', { kind = 'eye' })
+            natives.advance(500)
+            assert.are.equal(0, #reports)
+            assert.is_nil(lastUi('panel:open'))
+
+            fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.panel_every_block', { kind = 'eye', side = 'client' })
+            natives.advance(500)
+            fireAs('evil_res', 'aeterna_core:selftestEnd', 'r1-abcd', 'aeterna_uikit.panel_every_block')
+            fireAs('evil_res', 'aeterna_core:focusLost', 'aeterna_uikit', nil, 'preempted')
+            assert.is_nil(lastUi('panel:close'))
+        end)
+
+        it('closes its test panel when aeterna_core stops', function()
+            loadClient()
+            fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.panel_every_block', { kind = 'eye', side = 'client' })
+            natives.advance(500)
+            natives.fire('onResourceStop', 'aeterna_core')
+            assert.is_truthy(lastUi('panel:close'))
+        end)
+
         it('ignores tests of other resources', function()
             loadClient()
-            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_notify.toast_types', { kind = 'eye', side = 'client' })
+            fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_notify.toast_types', { kind = 'eye', side = 'client' })
             natives.advance(2000)
             assert.are.equal(0, #reports)
             assert.is_nil(lastUi('panel:open'))

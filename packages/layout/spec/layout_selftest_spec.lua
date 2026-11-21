@@ -7,6 +7,22 @@ local resource = require('helpers.resource')
 local HERE = debug.getinfo(1, 'S').source:match('^@(.*)/[^/]*$') or '.'
 local DIR = HERE .. '/..'
 local CORE = HERE .. '/../../core'
+
+-- Fires one of core's local events as aeterna_core (the handlers drop the same event from anyone else).
+local function fireCore(name, ...)
+    local prev = rawget(_G, 'GetInvokingResource')
+    rawset(_G, 'GetInvokingResource', function() return 'aeterna_core' end)
+    natives.fire(name, ...)
+    rawset(_G, 'GetInvokingResource', prev)
+end
+
+-- The same event fired by another resource.
+local function fireAs(who, name, ...)
+    local prev = rawget(_G, 'GetInvokingResource')
+    rawset(_G, 'GetInvokingResource', function() return who end)
+    natives.fire(name, ...)
+    rawset(_G, 'GetInvokingResource', prev)
+end
 local CORE_IMPORT = { ['@aeterna_core/import.lua'] = CORE .. '/import.lua' }
 
 local CFG = { snap = 8, snapSteps = { 8, 16, 32 }, scale = { min = 0.5, max = 2.0, step = 0.05 }, maxElements = 64 }
@@ -243,11 +259,17 @@ describe('aeterna_layout self-tests: wrappers', function()
         resource.load_resource(DIR, 'server', { externals = CORE_IMPORT })
         assert.are.equal(8, #added)
 
-        natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_layout.import_validate', { kind = 'headless', side = 'server' })
-        natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_layout.grid_drag', { kind = 'ped', side = 'client' })
+        fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_layout.import_validate', { kind = 'headless', side = 'server' })
+        fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_layout.grid_drag', { kind = 'ped', side = 'client' })
         assert.are.equal(1, #reports)
         assert.are.equal('aeterna_layout.import_validate', reports[1].name)
         assert.is_true(reports[1].ok, reports[1].detail)
+    end)
+
+    it('the server drops a selftest event that does not come from aeterna_core', function()
+        reports = {}
+        fireAs('evil_res', 'aeterna_core:selftest', 'r1-abcd', 'aeterna_layout.import_validate', { kind = 'headless', side = 'server' })
+        assert.are.equal(0, #reports)
     end)
 
     describe('client', function()
@@ -284,7 +306,7 @@ describe('aeterna_layout self-tests: wrappers', function()
         end
 
         local function fire(short, kind, side)
-            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_layout.' .. short, { kind = kind, side = side or 'client' })
+            fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_layout.' .. short, { kind = kind, side = side or 'client' })
         end
 
         it('clamp_on_grow keeps the grown test element on screen, removes it and reports mock restored', function()
@@ -330,7 +352,7 @@ describe('aeterna_layout self-tests: wrappers', function()
             assert.are.equal('ready', reports[1].ok)
             assert.is_true(#h.sent('editor:open') >= 1)
             natives.advance(7000)
-            natives.fire('aeterna_core:selftestEnd', 'r1-abcd', 'aeterna_layout.preset_apply')
+            fireCore('aeterna_core:selftestEnd', 'r1-abcd', 'aeterna_layout.preset_apply')
             assert.are.equal(1, #h.sent('editor:close'))
             assert.is_nil(natives.get_kvp('aeterna_layout:places:v1'))
         end)
@@ -384,6 +406,30 @@ describe('aeterna_layout self-tests: wrappers', function()
             natives.advance(100)
             assert.are.equal('pass', reports[1].ok)
             assert.matches('nothing to clear', reports[1].detail, 1, true)
+        end)
+
+        it('drops core events that do not come from aeterna_core', function()
+            loadClient()
+            h.cb('screen', { w = 1920, h = 1080 })
+            fireAs('evil_res', 'aeterna_core:selftest', 'r1-abcd', 'aeterna_layout.preset_apply', { kind = 'eye' })
+            natives.advance(100)
+            assert.are.equal(0, #reports)
+            assert.are.equal(0, #h.sent('editor:open'))
+            fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_layout.preset_apply', { kind = 'eye', side = 'client' })
+            natives.advance(100)
+            fireAs('evil_res', 'aeterna_core:selftestEnd', 'r1-abcd', 'aeterna_layout.preset_apply')
+            fireAs('evil_res', 'aeterna_core:focusLost', 'aeterna_layout', 'tok_1')
+            assert.are.equal(0, #h.sent('editor:close'))
+        end)
+
+        it('cancels its editor session when aeterna_core stops', function()
+            loadClient()
+            h.cb('screen', { w = 1920, h = 1080 })
+            fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_layout.preset_apply', { kind = 'eye', side = 'client' })
+            natives.advance(100)
+            natives.fire('onResourceStop', 'aeterna_core')
+            assert.are.equal(1, #h.sent('editor:close'))
+            assert.is_nil(natives.get_kvp('aeterna_layout:places:v1'))
         end)
 
         it('reset_from_menu clears the saved layout and reports a declared write', function()

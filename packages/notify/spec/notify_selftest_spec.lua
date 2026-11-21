@@ -8,6 +8,22 @@ local HERE = debug.getinfo(1, 'S').source:match('^@(.*)/[^/]*$') or '.'
 local DIR = HERE .. '/..'
 local CORE = HERE .. '/../../core'
 
+-- Fires one of core's local events as aeterna_core (the handlers drop the same event from anyone else).
+local function fireCore(name, ...)
+    local prev = rawget(_G, 'GetInvokingResource')
+    rawset(_G, 'GetInvokingResource', function() return 'aeterna_core' end)
+    natives.fire(name, ...)
+    rawset(_G, 'GetInvokingResource', prev)
+end
+
+-- The same event fired by another resource.
+local function fireAs(who, name, ...)
+    local prev = rawget(_G, 'GetInvokingResource')
+    rawset(_G, 'GetInvokingResource', function() return who end)
+    natives.fire(name, ...)
+    rawset(_G, 'GetInvokingResource', prev)
+end
+
 local LOGIC_FILES = {
     'shared/logic/notify.lua',
     'shared/logic/actions.lua',
@@ -290,12 +306,18 @@ describe('aeterna_notify self-tests: wrappers', function()
         resource.load_resource(DIR, 'server')
         assert.are.equal(11, #added)
 
-        natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_notify.countdown_clock', { kind = 'headless', side = 'server' })
-        natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_notify.history_pull', { kind = 'headless', side = 'client' })
-        natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.spec_limits', { kind = 'headless', side = 'server' })
+        fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_notify.countdown_clock', { kind = 'headless', side = 'server' })
+        fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_notify.history_pull', { kind = 'headless', side = 'client' })
+        fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.spec_limits', { kind = 'headless', side = 'server' })
         assert.are.equal(1, #reports)
         assert.are.equal('aeterna_notify.countdown_clock', reports[1].name)
         assert.is_true(reports[1].ok, reports[1].detail)
+    end)
+
+    it('the server drops a selftest event that does not come from aeterna_core', function()
+        reports = {}
+        fireAs('evil_res', 'aeterna_core:selftest', 'r1-abcd', 'aeterna_notify.countdown_clock', { kind = 'headless', side = 'server' })
+        assert.are.equal(0, #reports)
     end)
 
     describe('client', function()
@@ -326,7 +348,7 @@ describe('aeterna_notify self-tests: wrappers', function()
         end
 
         local function fire(short, kind, side)
-            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_notify.' .. short, { kind = kind, side = side or 'client' })
+            fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_notify.' .. short, { kind = kind, side = side or 'client' })
         end
 
         it('history_pull passes and leaves the player history as it was', function()
@@ -389,13 +411,33 @@ describe('aeterna_notify self-tests: wrappers', function()
             assert.are.equal('st_action', presses[1].args[1].toastId)
         end)
 
+        it('drops core events that do not come from aeterna_core', function()
+            loadClient()
+            fireAs('evil_res', 'aeterna_core:selftest', 'r1-abcd', 'aeterna_notify.toast_types', { kind = 'eye' })
+            natives.advance(100)
+            assert.are.equal(0, #reports)
+            assert.are.equal(0, count('toast:add'))
+            fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_notify.toast_types', { kind = 'eye', side = 'client' })
+            natives.advance(100)
+            fireAs('evil_res', 'aeterna_core:selftestEnd', 'r1-abcd', 'aeterna_notify.toast_types')
+            assert.are.equal(0, count('toast:clear'))
+        end)
+
+        it('clears its test toasts when aeterna_core stops', function()
+            loadClient()
+            fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_notify.toast_types', { kind = 'eye', side = 'client' })
+            natives.advance(100)
+            natives.fire('onResourceStop', 'aeterna_core')
+            assert.are.equal(4, count('toast:clear'))
+        end)
+
         it('toast_types shows four toasts and clears them when the test ends', function()
             loadClient()
             fire('toast_types', 'eye')
             natives.advance(100)
             assert.are.equal('ready', reports[1].ok)
             assert.are.equal(4, count('toast:add'))
-            natives.fire('aeterna_core:selftestEnd', 'r1-abcd', 'aeterna_notify.toast_types')
+            fireCore('aeterna_core:selftestEnd', 'r1-abcd', 'aeterna_notify.toast_types')
             assert.are.equal(4, count('toast:clear'))
             assert.are.equal(0, #exports.aeterna_notify:history())
         end)
