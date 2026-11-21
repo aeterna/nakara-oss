@@ -122,6 +122,22 @@ sha256sum -c SHA256SUMS --ignore-missing
 
 Then read the capability table above (or `oss.json` inside the zip).
 
+## Self-tests / การทดสอบตัวเอง
+
+Registered with `aeterna_core` on start like every kit package, and run from this menu ([spec § Self-tests](../../docs/specs/aeterna_testkit.md#self-tests)).
+ลงทะเบียนกับ `aeterna_core` ตอนเริ่ม resource และกดทดสอบได้จากเมนูนี้เอง
+
+| Name | Kind | Players | Checks |
+|---|---|---|---|
+| `aeterna_testkit.scrub` | headless | 1 | A detail with a name, a `license:` id, an IPv4 and a `C:\` path comes out as `A`, `[id]`, `[ip]`, `[path]` |
+| `aeterna_testkit.report_schema` | headless | 1 | A sample run builds JSON with exactly the keys of `schema/report-1.schema.json` (top level, `env`, `counts`, each row) and Markdown that ends with the footer |
+| `aeterna_testkit.save` | headless | 1 | `SaveResourceFile` of `reports/latest.json` and `reports/latest.md` returns true and `LoadResourceFile` reads the same content back |
+| `aeterna_testkit.env` | headless, `side = 'client'` | 1 | Player A's client has a game build and a resolution inside the ranges `aeterna_testkit:sv:env` accepts |
+| `aeterna_testkit.eye_card` | eye | 1 | The person sees the card in the lower left corner with a question and Pass, Doesn't match, Skip, over the menu panel that stays open |
+| `aeterna_testkit.eye_card_b` | eye | 2 | Player B sees the same card, headed "as player B" |
+
+`save` writes each report file back with the content it already holds (a sample report when the file is missing), so a test run never loses the last report. It writes only this resource's own report files, so it is not destructive.
+
 ## Tests
 
 From the repository root:

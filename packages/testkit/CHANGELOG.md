@@ -16,3 +16,4 @@ All notable changes to `aeterna_testkit` are documented here. The format follows
 - Console command `aeterna_testkit_run [--json] [--only <name or prefix>]`, registered restricted and source 0 only.
 - A run is cleared, player B released and roles reset when `aeterna_core` stops mid-run.
 - Thai and English locales, capability manifest (`oss.json`), bundled IBM Plex Sans Thai (OFL-1.1, `NOTICE`), and busted specs (`spec/testkit_spec.lua`).
+- Own self-tests (spec § Self-tests): `scrub`, `report_schema` and `save` on the server, `env` on player A's client, and the `eye_card` and `eye_card_b` eye cards, registered with `aeterna_core:addSelftest` on start. Pure rules in `shared/logic/selftest.lua`, busted cases in `spec/selftest_spec.lua`.
