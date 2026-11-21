@@ -51,7 +51,6 @@ when they upgrade.
 | `Config.maxTotalMB` | `1024` | All photos together; at the cap every shutter refuses with `camera.disk_full` and one `warn` per hour |
 | `Config.quality` | `0.8` | JPEG quality passed to `screenshot-basic`, 0.5–0.95 |
 | `Config.cooldownMs` | `3000` | Minimum time between two shots of one player |
-| `Config.gallery.source` | `'http'` | `http`: the gallery loads images from this resource's HTTP handler · `event`: the server sends one image at a time over a latent net event (fallback, § Gallery) |
 
 ## Identity
 
@@ -83,25 +82,43 @@ when started, else `lic:<license identifier>`, read on the server only.
 
 ## Taking a photo
 
-1. The client checks its own cooldown, hides the overlay, `DisplayHud(false)`, `DisplayRadar(false)`, waits two
-   frames, and sends `aeterna_camera:sv:shoot { mode = 'back'|'selfie' }`.
-2. The server rate limits, checks that the player has the viewfinder open (it sent `cl:viewfinder` and has not seen a
-   close), `Config.cooldownMs`, `Config.perCharacter`, `Config.maxTotalMB`, and that
-   `GetResourceState('screenshot-basic') == 'started'`.
-3. The server calls `exports['screenshot-basic']:requestClientScreenshot(src, { encoding = 'jpg', quality =
-   Config.quality }, cb)`. The server asks; the client does not upload on its own.
-4. In `cb(err, data)`: `data` must be a `data:image/jpeg;base64,` URI. The server decodes it (pure Lua base64 in
-   `shared/logic/`), checks the JPEG start bytes `FF D8 FF` and end bytes `FF D9`, and the size against
-   `Config.maxBytes`. Anything else is refused with `camera.failed` and a `warn` with the reason (never the data).
-5. The server draws an id (below), writes `photos/<id>.jpg` with `SaveResourceFile(GetCurrentResourceName(),
+The server decides whether a photo may be taken and hands out a single-use ticket; the client captures its own
+screen and sends the image back with that ticket. This is the ticket model of the private phone the kit is based on,
+with a different transport (see "Why this transport" below).
+
+1. The client checks its own cooldown and sends `aeterna_camera:sv:shoot { mode = 'back'|'selfie' }`.
+2. The server rate limits and checks that the player has the viewfinder open (it sent `cl:viewfinder` and has not
+   seen a close), `Config.cooldownMs`, `Config.perCharacter`, `Config.maxTotalMB`, and that
+   `GetResourceState('screenshot-basic') == 'started'`. A refusal sends `cl:shot { ok = false, reason }`.
+3. The server draws a ticket (32 lowercase hex, same generator as photo ids), bound to the player's source and
+   character key, valid 30 s, one per player (a new ticket replaces the old one), and sends `cl:capture { ticket }`.
+4. The client hides the overlay, `DisplayHud(false)`, `DisplayRadar(false)`, waits two frames, and calls the
+   **client** export `exports['screenshot-basic']:requestScreenshot({ encoding = 'jpg', quality = Config.quality },
+   cb)`. `cb(data)` receives a `data:image/jpeg;base64,` URI on the client; nothing goes over the network yet.
+5. The client sends `TriggerLatentServerEvent('aeterna_camera:sv:upload', 200000, { ticket, data })`.
+6. The server takes the ticket first (single use: it is gone whatever happens next), and drops the upload when the
+   ticket is unknown, expired, or bound to another source or character. Then: `data` longer than
+   `ceil(Config.maxBytes * 4 / 3) + 32` is refused before decoding; the prefix must be `data:image/jpeg;base64,`; the
+   server decodes it (pure Lua base64 in `shared/logic/`), checks the JPEG start bytes `FF D8 FF`, end bytes `FF D9`
+   and `Config.maxBytes`. Anything else is refused with `camera.failed` and a `warn` with the reason (never the data).
+7. The server draws a photo id (below), writes `photos/<id>.jpg` with `SaveResourceFile(GetCurrentResourceName(),
    'photos/' .. id .. '.jpg', bytes, #bytes)`, updates the index (§ Storage), sends `cl:shot { ok = true, id }`, a
    toast through `aeterna_notify` ("Photo saved"), and fires `aeterna_camera:saved`.
-6. The client restores the HUD and overlay on `cl:shot` or after 5 s, whichever comes first.
+8. The client restores the HUD and overlay on `cl:shot` or after 10 s, whichever comes first.
 
-**Not verified yet** (W0 spike on the kit-test server): `requestClientScreenshot` on Enhanced; whether the capture
-includes NUI frames (the overlay is hidden either way); whether `SaveResourceFile` and `LoadResourceFile` keep binary
-bytes intact. If binary does not survive, the spike result changes the file to `photos/<id>.b64` (base64 text) and
-the handler decodes on serve; `files.write` covers both.
+### Why this transport (W0 spike, kit-test server on Enhanced, 2026-11-21)
+
+| Path | Result |
+| --- | --- |
+| Server export `requestClientScreenshot` | No answer, 4 of 4 tries: the client builds its upload URL as `http://` + `GetCurrentServerEndpoint()`, and on Enhanced that call returned `https://127.0.0.1:30150/`, so the URL is malformed |
+| Client export `requestScreenshotUpload` to this resource's own `SetHttpHandler` (the private phone's path), with the URL forms `https://<endpoint>`, `http://<host>` and `http://` + raw endpoint | No request reached the server in any form, 2 × 3 tries (10 s each) |
+| Client export `requestScreenshot` + `TriggerLatentServerEvent` | **Works**, 2 of 2: capture 78–106 ms, 118 619 and 320 959 characters, valid JPEG (88 945 and 240 702 bytes, 1920 × 1080) |
+| `SaveResourceFile` then `LoadResourceFile` of the JPEG | Byte-identical, both times. Writing into a folder that does not exist returns `false` |
+
+Not measured: whether the capture includes NUI frames (the overlay is hidden before every capture either way).
+
+`screenshot-basic` from its repository is a builder resource (yarn + webpack at server start), which Enhanced
+refuses. The README tells owners to use a pre-built `dist/` and names the upstream commit tested (5e89d4a).
 
 ### Photo id
 
@@ -128,16 +145,18 @@ id.
 - Opening the Gallery tile closes the phone the same way as Camera and opens this package's own NUI panel, placed
   where the phone was, because a uikit panel spec has no image block. Close or ESC returns to the game.
 - The server sends `cl:gallery { items = { {id, ts, mode, bytes}, … } }`, newest first, for the current character.
-- `http` source: thumbnails and the full view load from `http(s)://<endpoint>/aeterna_camera/p/<id>.jpg`, with
-  `<endpoint>` from `GetCurrentServerEndpoint()` on the client. **Not verified yet:** whether CEF (Chrome 103) loads an
-  image from the server's own endpoint from inside a NUI page (mixed content is upgraded to HTTPS by Chrome). If it
-  does not, the owner sets `Config.gallery.source = 'event'`, and smoke step 4 decides the default.
-- `event` source: the grid shows date tiles without thumbnails; opening a photo sends `sv:photo { id }` and the server
-  answers with `cl:photo { id, data }` (a data URI) over `TriggerLatentClientEvent` at 200 000 bytes/s.
+- Thumbnails and the full view load from `http://<host>/aeterna_camera/p/<id>.jpg`. `<host>` is
+  `GetCurrentServerEndpoint()` on the client with any `scheme://` and trailing `/` removed. Measured in the W0 spike:
+  the endpoint came back as `https://127.0.0.1:30150/`; the `http://` image loaded inside NUI (1920 × 1080, 36 ms) and
+  the `https://` one failed. **Not verified:** a join through the server list or a `cfx.re` link rather than a direct
+  connect, which may return a different endpoint form; the smoke covers it when such a server exists.
 - Delete: a button in the full view opens a confirm row inside the gallery page itself (Delete / Cancel; ESC =
   Cancel), so no other resource takes focus; on Delete the client sends `sv:delete { id }`.
 - The gallery takes focus through `aeterna_core` like the viewfinder. Under core's overlay mode it is paused, not
   closed: it stays on screen, ignores input, and resumes when focus returns (ADR 0005 decision 7).
+
+There is no server → client image transfer. (The spike's attempt to send a photo back over a latent client event
+stopped the spike server with exit 139; whether the event or the spike's own encoder caused it was not isolated.)
 
 ## Delete
 
@@ -180,11 +199,11 @@ reason `owner` (the player deleted it), `admin`, or the `removePhoto` reason.
 | `aeterna_camera:sv:shoot` | client → server | `{ mode: 'back'|'selfie' }` | 1 / 1000 ms (plus `Config.cooldownMs`) |
 | `aeterna_camera:sv:close` | client → server | none | 4 / 1000 ms |
 | `aeterna_camera:sv:delete` | client → server | `{ id: string = 32, pattern ^[0-9a-f]+$ }` | 3 / 1000 ms |
-| `aeterna_camera:sv:photo` | client → server | `{ id: string = 32, pattern ^[0-9a-f]+$ }` (`event` source only) | 2 / 1000 ms |
+| `aeterna_camera:sv:upload` | client → server (latent) | `{ ticket: string = 32, pattern ^[0-9a-f]+$; data: string ≤ ceil(Config.maxBytes × 4 / 3) + 32 }` | 1 / 1000 ms |
 | `aeterna_camera:cl:viewfinder` | server → client | `{ count, cap }` | — |
+| `aeterna_camera:cl:capture` | server → client | `{ ticket: string = 32 }` | — |
 | `aeterna_camera:cl:shot` | server → client | `{ ok: boolean, id?: string, reason?: string ≤ 32 }` | — |
 | `aeterna_camera:cl:gallery` | server → client | `{ items: array ≤ 500 }` | — |
-| `aeterna_camera:cl:photo` | server → client (latent) | `{ id, data: string ≤ 4 200 000 }` | — |
 | `aeterna_camera:saved` | server-local | see § Hook | — |
 | `aeterna_camera:removed` | server-local | `(id, reason)` | — |
 
@@ -193,7 +212,7 @@ The Camera and Gallery tiles open through phonekit's `aeterna_phonekit:app` serv
 ## NUI messages
 
 Lua → NUI: `aeterna:theme`, `locale`, `vf:show {count, cap, mode}`, `vf:hide`, `vf:mode {mode}`,
-`gallery:show {items, base, source}`, `gallery:photo {id, data}`, `gallery:removed {id}`, `gallery:hide`.
+`gallery:show {items, base}`, `gallery:removed {id}`, `gallery:hide`.
 NUI → Lua callbacks: `close {}`, `open {id}`, `delete {id}`, `escape {}`. Each is validated; `id` must match
 `^[0-9a-f]{32}$` and be in the list last sent. Images are set through `img.src` only; text through `textContent`.
 
@@ -240,9 +259,9 @@ one `warn` when it does not. Nothing in client KVP.
   "httpHandlers": ["p/*"],
   "convars": { "read": [], "write": [] },
   "netEvents": { "server": ["aeterna_camera:sv:shoot", "aeterna_camera:sv:close", "aeterna_camera:sv:delete",
-                            "aeterna_camera:sv:photo"],
-                 "client": ["aeterna_camera:cl:viewfinder", "aeterna_camera:cl:shot", "aeterna_camera:cl:gallery",
-                            "aeterna_camera:cl:photo"] },
+                            "aeterna_camera:sv:upload"],
+                 "client": ["aeterna_camera:cl:viewfinder", "aeterna_camera:cl:capture", "aeterna_camera:cl:shot",
+                            "aeterna_camera:cl:gallery"] },
   "nui": true, "db": { "tables": [], "ddl": false }, "files": { "write": ["photos/*"] } }
 ```
 
@@ -266,10 +285,13 @@ busted (pure logic in `shared/logic/`):
 2. Id and path guard: generated ids match `^[0-9a-f]{32}$`; the handler router answers 404 for `../`, upper-case hex,
    31 or 33 characters, other extensions, and ids not in the index; 429 after 60 requests in 10 s.
 3. Index: add, per-character cap, total cap, delete frees bytes, `total` repair at start.
-4. Ownership: delete or `sv:photo` for another character's id is dropped.
+4. Ownership: delete of another character's id is dropped.
 5. Shoot gate: no viewfinder open, cooldown, cap, `screenshot-basic` not started → refused with the right reason and
-   no `requestClientScreenshot` call (fake exports table).
-6. Hook: a successful save fires exactly one `aeterna_camera:saved` with every field.
+   no ticket issued.
+6. Tickets: single use (a second upload with the same ticket is dropped); expired after 30 s; bound to source and
+   character (another source or a switched character is dropped); a new shoot replaces the old ticket; an upload
+   over the length cap is refused before decoding.
+7. Hook: a successful save fires exactly one `aeterna_camera:saved` with every field.
 
 Smoke (kit-test server):
 
@@ -277,7 +299,7 @@ Smoke (kit-test server):
    battery (phonekit `setBattery(src, 0)`) closes the viewfinder.
 2. With `screenshot-basic`: take a photo; no overlay, HUD or radar in the image; toast; the counter goes up.
 3. Restart the resource and reconnect: the gallery still lists the photo; the file is under `photos/`.
-4. Gallery with `source = 'http'`, then `'event'`: which one shows images in CEF decides the default.
+4. Gallery: thumbnails and the full view load over `http://<host>`.
 5. Delete: the photo leaves the gallery and its URL answers 404; `aeterna_camera_remove` from the console.
 6. A test listener on `aeterna_camera:saved` logs the id and reads the file with `LoadResourceFile`.
 7. Stop `screenshot-basic`: the shutter shows the unavailable line; the gallery still works.
@@ -306,5 +328,5 @@ report, so the result is MOCK. `shoot_and_view` writes a real photo file and the
 
 All busted cases pass, the scanner change above is merged, `fivem-devkit safety` reports 0 errors and 0 over-declared
 items, `check-kit-graph` accepts the edges and the runtime-detected `screenshot-basic`, the smoke steps pass on the
-kit-test server (including the binary and CEF decisions), the self-tests report PASS, SKIP or MOCK, and the owner has
+kit-test server, the self-tests report PASS, SKIP or MOCK, and the owner has
 passed the screenshots.

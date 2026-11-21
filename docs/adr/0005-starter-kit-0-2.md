@@ -160,10 +160,16 @@ facts that shape the decisions below:
   reason, never to an error.
 - The scanner changes in W0 cover: the `loadscreen` manifest key counted as NUI, and `SaveResourceFile` paths built
   from a literal prefix that matches a glob declared in `oss.json` (`photos/*`, needed by `aeterna_camera`).
-- Measured in the W0 spike on the kit-test server (2026-11-21): the `pma-voice` call export runs on Enhanced but carries
-  no audio there (decision 4). Still to measure before the code that relies on them: `screenshot-basic` on Enhanced,
-  binary-safe `SaveResourceFile`, images served by a resource's own HTTP handler inside CEF 103, and whether CEF passes
-  the system reduced-motion setting.
+- Measured in the W0 spike on the kit-test server (Enhanced, 2026-11-21):
+  - the `pma-voice` call export runs but carries no audio (decision 4);
+  - `screenshot-basic`'s server-requested capture and its upload to a resource's own HTTP handler never reach the
+    server; the client export `requestScreenshot` plus a latent server event works, so `aeterna_camera` uses that
+    with a server-issued single-use ticket (camera spec § Taking a photo);
+  - `SaveResourceFile` and `LoadResourceFile` keep JPEG bytes intact;
+  - a NUI page loads an image from the resource's HTTP handler over `http://` (not `https://`), once the scheme and
+    trailing slash are removed from `GetCurrentServerEndpoint()`, which returned `https://127.0.0.1:30150/`;
+  - CEF 103 reports `prefers-reduced-motion: no-preference` with the Windows animation setting untouched; whether it
+    follows that setting when switched off is not measured.
 - Calls on Legacy are not tested by the kit-test server, which runs Enhanced only. The `pma-voice` path stays
   unverified in game until a Legacy server is available.
 - A combined zip means one more attested asset per release and one more workflow job to keep pinned and linted.
