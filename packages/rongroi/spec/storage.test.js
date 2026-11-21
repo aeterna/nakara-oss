@@ -398,6 +398,49 @@ test('file: checkIntegrity reports a wiped index against the marker', () => {
     assert.deepEqual(restarted.checkIntegrity(), { expected: 3, found: 0, missingCaseFiles: 0 });
 });
 
+// Three cases, index-0 wiped, restart and checkIntegrity; then one more case is opened.
+function wipedThenOpened() {
+    const env = fileEnv();
+    const marker = memoryMarker();
+    const storage = createStorage(env.backend, { marker });
+    for (const [caseId, ticket] of [['case-a', TICKET_A], ['case-b', TICKET_B], ['case-c', '3'.repeat(32)]]) {
+        open(storage, caseId, ticket);
+    }
+    env.backend.remove('index-0');
+    const restarted = createStorage(env.backend, { marker });
+    restarted.load();
+    assert.deepEqual(restarted.checkIntegrity(), { expected: 3, found: 0, missingCaseFiles: 0 });
+    open(restarted, 'case-d', '4'.repeat(32));
+    return { env, marker, restarted };
+}
+
+test('file: a start-up loss stays in the marker after a later open and a restart', () => {
+    const { env, marker } = wipedThenOpened();
+    assert.equal(marker.box.value, 4);
+    const again = createStorage(env.backend, { marker });
+    again.load();
+    assert.deepEqual(again.checkIntegrity(), { expected: 4, found: 1, missingCaseFiles: 0 });
+});
+
+test('file: forgetMissing resets a start-up loss to the real total', () => {
+    const { marker, restarted } = wipedThenOpened();
+    assert.equal(marker.box.value, 4);
+    assert.equal(restarted.forgetMissing(), 0);
+    assert.equal(marker.box.value, 1);
+});
+
+test('file: the marker follows deletePlayerData', () => {
+    const env = fileEnv();
+    const marker = memoryMarker();
+    const storage = createStorage(env.backend, { marker });
+    open(storage, 'case-a', TICKET_A, 100, { identifier: 'license:abc' });
+    open(storage, 'case-b', TICKET_B, 200, { identifier: 'license:abc' });
+    open(storage, 'case-c', '3'.repeat(32), 300, { identifier: 'license:def' });
+    assert.equal(marker.box.value, 3);
+    assert.deepEqual(storage.deletePlayerData('license:abc'), [TICKET_A, TICKET_B]);
+    assert.equal(marker.box.value, 1);
+});
+
 test('file: checkIntegrity counts a case file that reads null', () => {
     const env = fileEnv();
     const marker = memoryMarker();

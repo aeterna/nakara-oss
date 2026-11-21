@@ -472,6 +472,10 @@ function createPanel(deps) {
 
     function forgetMissingReports(src) {
         if (!isStaff(src) || !rateLimit('staff', src, STAFF_LIMIT)) return false;
+        if (storageWarning === null) {
+            send(src, PANEL_DATA, casesReply());
+            return true;
+        }
         try { storage.forgetMissing(); } catch {
             refuse(src, 'delete_failed');
             return false;

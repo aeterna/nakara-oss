@@ -82,8 +82,9 @@
         };
     }
 
+    // Only lost index entries raise the warning: a case file that reads null is a state ADR 0001 section 4 designs on purpose.
     function integrityWarning(check) {
-        if (check.expected === null || (check.expected <= check.found && check.missingCaseFiles === 0)) return null;
+        if (check.expected === null || check.expected <= check.found) return null;
         log(`stored reports missing: expected ${check.expected}, found ${check.found}, case files missing ${check.missingCaseFiles} — was the folder replaced without cache/?`);
         return { expected: check.expected, found: check.found, missingCaseFiles: check.missingCaseFiles };
     }

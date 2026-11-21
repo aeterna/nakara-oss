@@ -454,6 +454,20 @@ test('forgetMissingReports removes entries whose case file is gone and clears th
     }]);
 });
 
+test('forgetMissingReports without a storage warning replies with the cases payload and skips the scan', () => {
+    const h = makeHarness();
+    let scans = 0;
+    const forgetMissing = h.storage.forgetMissing;
+    h.storage.forgetMissing = () => { scans += 1; return forgetMissing(); };
+    assert.equal(h.panel.forgetMissingReports(STAFF), true);
+    assert.equal(scans, 0);
+    assert.deepEqual(h.sent, [{
+        src: STAFF,
+        event: 'nakara_rongroi:panel:data',
+        payload: { screen: 'cases', cases: [], storageWarning: null },
+    }]);
+});
+
 test('rate limit windows prune ended entries only above 256 entries', () => {
     const windows = new Map();
     for (let i = 0; i < 256; i += 1) windows.set(`staff:${i}`, { end: 2000, count: 1 });

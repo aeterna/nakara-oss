@@ -123,7 +123,7 @@
     function warningBanner(root, data, t) {
         var warning = member(data, 'storageWarning');
         if (!isObject(warning)) return;
-        var count = Math.max(num(warning.expected) - num(warning.found), 0) + num(warning.missingCaseFiles);
+        var count = Math.max(num(warning.expected) - num(warning.found), 0);
         var box = el('div', 'banner storage-warning');
         box.appendChild(el('p', '', (t.storageWarningText || '{n} stored reports are missing.').replace('{n}', String(count))));
         var forget = el('button', 'button secondary', t.storageWarningButton || 'Remove the missing entries');

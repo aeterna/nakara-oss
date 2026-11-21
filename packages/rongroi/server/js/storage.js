@@ -60,10 +60,12 @@ function createStorage(backend, { marker } = {}) {
     }
     const pages = [];
     const damagedPages = new Set();
+    // Entries the marker says were lost at start-up. Kept in the marker so later writes do not erase the warning.
+    let lost = 0;
 
     // The marker holds the index total after every index write, so a later load can see that entries vanished.
     function recordTotal() {
-        if (marker) marker.set(pages.reduce((sum, page) => sum + page.length, 0));
+        if (marker) marker.set(pages.reduce((sum, page) => sum + page.length, 0) + lost);
     }
     // An index entry is missing its case when the case file reads null (or the entry has no usable caseId).
     function caseMissing(entry) {
@@ -245,7 +247,9 @@ function createStorage(backend, { marker } = {}) {
             }
         }
         const found = pages.reduce((sum, page) => sum + page.length, 0);
-        return { expected: marker ? marker.get() : null, found, missingCaseFiles };
+        const expected = marker ? marker.get() : null;
+        if (expected !== null) lost = Math.max(expected - found, 0);
+        return { expected, found, missingCaseFiles };
     }
 
     // Drop the index entries whose case file is gone. A damaged page is empty in memory, so it is never rewritten.
@@ -259,6 +263,7 @@ function createStorage(backend, { marker } = {}) {
             pages[page] = kept;
             removed += dropped;
         }
+        lost = 0;
         recordTotal();
         return removed;
     }
