@@ -384,7 +384,7 @@ when there is no presser (ADR 0005 decision 7, W0 fix D3). Plain `headless` / `m
 | `compass_tape` | ped | 1 | n | Turning the camera a full circle moves the tape smoothly; N is at the centre mark when facing north | `Config.compass.enabled = false` |
 | `voice_indicator` | ped | 1 | n | The microphone lights while the player talks; changing the proximity mode changes the label | `pma-voice` not started, or `Config.voice.enabled = false` |
 | `voice_radio` | ped | 1 | n | The presser joins a radio channel: the radio icon shows; while the presser transmits it is highlighted | `pma-voice` not started, or `Config.voice.enabled = false` |
-| `seatbelt_event` | mock (client) | 1 | n | — (the test fires `true`, `false` and `nil` on the presser's client in a vehicle, checks the NUI state, then fires `nil` to restore) | `Config.seatbelt.enabled = false` |
+| `seatbelt_event` | mock (client) | 1 | n | — (waits up to 20 s for the presser to sit in a vehicle, SKIP `presser is not in a vehicle` after; timeout 30000; then fires `true`, `false` and `nil` on the presser's client in a vehicle, checks the NUI state, then fires `nil` to restore) | `Config.seatbelt.enabled = false` |
 | `minimap_follows` | ped | 1 | n | The radar stays under its stand-in after dragging it to the top-right and back | — |
 
 ### Done when (0.2)

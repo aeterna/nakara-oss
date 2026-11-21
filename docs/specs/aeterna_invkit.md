@@ -317,6 +317,12 @@ Kind `mock (client)` = `side = 'client'`: the test runs on the presser's client 
 | `phone_no_item` | ped | 1 | n | With no phone item, opening the phone is refused with phonekit's "no phone" toast | ox_inventory or `aeterna_phonekit` not started, or `Config.phone.enabled = false` |
 | `phone_device_save` | mock | 1 | y | — (gives the presser a test phone item, fires `deviceSave` with battery 42 and fold `closed`, checks the item's metadata, then removes the item) | ox_inventory not started, or `Config.phone.enabled = false` |
 
+The three phone rows check invkit's half only: the presser's own inventory as invkit reads it (which phones it would
+offer, and that the dropped or missing item is gone). phonekit's control centre, Fold screen and "no phone" toast stay
+phonekit's own self-tests. Each carries an `expect` instruction telling the presser what to carry or drop.
+`item_use` intercepts a use only for the presser's item tagged with the run id (`aeterna_selftest`); every other use,
+by anyone, goes to ox_inventory untouched.
+
 `item_use` and `phone_device_save` are destructive (ADR 0005 decision 7, W0 fix D4): they give a real player items
 and write item metadata. They SKIP while core's destructive gate is closed, and they add and remove only the items
 they create, so the presser's own inventory ends as it began when they pass.
