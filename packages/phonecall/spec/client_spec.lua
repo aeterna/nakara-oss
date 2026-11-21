@@ -11,7 +11,8 @@ local function boot()
     natives.reset({ resource = 'aeterna_phonecall', side = 'client' })
     local invoker = { name = 'aeterna_core' }
     natives.stub('GetInvokingResource', function() return invoker.name end)
-    natives.stub('RegisterCommand', function() end)
+    local commands = {}
+    natives.stub('RegisterCommand', function(name, fn) commands[name] = fn end)
     natives.stub('RegisterKeyMapping', function() end)
     local reports = {}
     natives.stub_export('aeterna_core', 'reportSelftest', function(runId, name, state, detail)
@@ -22,7 +23,7 @@ local function boot()
         externals = { ['@aeterna_core/import.lua'] = DIR .. '/../core/import.lua' },
     })
     natives.advance(0)
-    return { invoker = invoker, reports = reports }
+    return { invoker = invoker, reports = reports, commands = commands }
 end
 
 describe('aeterna_phonecall client', function()
@@ -35,6 +36,15 @@ describe('aeterna_phonecall client', function()
         natives.fire('aeterna_core:selftest', 'r1', 'aeterna_phonecall.my_number', { kind = 'eye', role = 'A' })
         assert.are.equal(1, #w.reports)
         assert.are.equal('ready', w.reports[1].state)
+    end)
+
+    it('a set-up failure state does not replace a real call, so the hangup key still works', function()
+        local w = boot()
+        natives.fire_net('aeterna_phonecall:cl:state', 0, { callId = 'c1', state = 'active', peer = '555-0001' })
+        natives.fire_net('aeterna_phonecall:cl:state', 0, { callId = 'st-nonumber', state = 'ended', peer = '',
+            reason = 'unavailable' })
+        w.commands['+aeterna_phonecall_hangup']()
+        assert.are.equal(1, #natives.emitted('server', 'aeterna_phonecall:sv:hangup'))
     end)
 
     it('a selftestEnd from another resource does not tear down a running test', function()
