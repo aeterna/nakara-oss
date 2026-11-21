@@ -2,8 +2,8 @@
 
 - Package: `packages/phonecall` · resource `aeterna_phonecall` · version 0.1.0 · wave W2 of Starter Kit 0.2 · status spec
 - Depends on: `aeterna_core` (validation, rate limit, ACE, locale, keys, self-tests), `aeterna_uikit` (panel
-  spec format), `aeterna_phonekit` (App API, contacts, ring screen); `pma-voice` optional, detected at run time —
-  [ADR 0005](../adr/0005-starter-kit-0-2.md) decisions 2, 3, 4 and 6
+  spec format), `aeterna_phonekit` (App API, contacts, ring screen); FXServer's voice-channel natives on Enhanced;
+  `pma-voice` optional on Legacy, detected at run time — [ADR 0005](../adr/0005-starter-kit-0-2.md) decisions 2, 3, 4 and 6
 
 ## Purpose and limits
 
@@ -13,8 +13,9 @@ shell of its own.
 
 - Numbers and messages are server data the player must not edit, so they live in **server-side resource KVP** of this
   resource, keyed by character (ADR 0005 decision 3). No database tables (`db.ddl = false`).
-- Calls need `pma-voice`. When it is not started, messages and numbers still work, the dialer shows "Calls are not
-  available on this server", and the call self-tests report SKIP. `pma-voice` is never in `dependencies`.
+- Calls need a voice backend (§ Voice): on FiveM Enhanced, FXServer's own voice channels (always there); on Legacy,
+  `pma-voice`. With no backend (Legacy without `pma-voice`), messages and numbers still work, the dialer shows "Calls
+  are not available on this server", and the call self-tests report SKIP. `pma-voice` is never in `dependencies`.
 
 Not in 0.1: group calls, voicemail, pictures in messages, calling services by short code, call recording, a phone
 book of other players, message search.
@@ -26,7 +27,7 @@ ensure aeterna_core
 ensure aeterna_uikit
 ensure aeterna_notify
 ensure aeterna_phonekit
-ensure pma-voice           # optional, for calls
+ensure pma-voice           # Legacy only, optional, for calls (Enhanced does not need it)
 ensure aeterna_phonecall
 add_ace group.admin aeterna.phonecall.admin allow
 ```
@@ -44,7 +45,7 @@ add_ace group.admin aeterna.phonecall.admin allow
 | `Config.sms.keep` | `100` | Messages kept per character, incoming and outgoing together; the oldest leave first. 10–100 |
 | `Config.call.ringSeconds` | `30` | Ringing without an answer becomes `missed` |
 | `Config.call.maxMinutes` | `60` | An active call ends with reason `limit` |
-| `Config.call.channelBase` | `20000` | First `pma-voice` call channel this package uses; it uses `channelBase + 1` … `channelBase + 9999` |
+| `Config.call.channelBase` | `20000` | Legacy only: first `pma-voice` call channel this package uses; it uses `channelBase + 1` … `channelBase + 9999` |
 | `Config.recentCalls` | `30` | Call log entries kept per character |
 
 ## Identity
@@ -82,9 +83,9 @@ add_ace group.admin aeterna.phonecall.admin allow
 
 ## Calls
 
-Calls exist only while `GetResourceState('pma-voice') == 'started'`, checked when a call is placed and on
-`onResourceStart` / `onResourceStop` of `pma-voice`. If `pma-voice` stops during a call, the call ends with reason
-`voice_off`.
+Calls exist only while a voice backend is available (§ Voice): always on Enhanced; on Legacy while
+`GetResourceState('pma-voice') == 'started'`, checked when a call is placed and on `onResourceStart` /
+`onResourceStop` of `pma-voice`. If `pma-voice` stops during a call on Legacy, the call ends with reason `voice_off`.
 
 ### States
 
@@ -100,17 +101,46 @@ reason `busy`. End reasons: `hangup`, `declined`, `missed`, `busy`, `unavailable
 callee's phone cannot call, or the callee is the caller), `dropped` (a player left or switched character), `limit`,
 `voice_off`.
 
-### Voice (`pma-voice` exports used)
+### Voice
 
-Server exports only, so the server decides who is in a call:
+The server picks the backend once at start, from the `gamename` convar (server only; it is not replicated, so the
+client never reads it):
+
+| `gamename` | Backend | Available when |
+| --- | --- | --- |
+| `gta5enhanced` | `channels`: FXServer's server-side voice channels | `CreateVoiceChannel`, `AddPlayerToVoiceChannel`, `RemovePlayerFromVoiceChannel`, `SetPlayerMutedInVoiceChannel` and `DeleteVoiceChannel` are functions (checked at start) |
+| anything else | `pma`: `pma-voice` call channels | `pma-voice` is started |
+
+Enhanced removed Mumble, so `pma-voice`'s per-player call targets carry no audio there even though its export runs
+(W0 spike, ADR 0005 decision 4). On Enhanced this package never calls `pma-voice`, started or not.
+
+Both backends are driven by the server only, so the server decides who is in a call.
+
+**`channels` (Enhanced):**
+
+| Moment | Call |
+| --- | --- |
+| Call becomes `active` | `CreateVoiceChannel(0, 0.0)` (mode 0: every member hears every other member, across the whole map), wrapped in `pcall`; an error, a non-number, a negative id or `65535` (channel table full) ends the call with reason `voice_off` and one `warn` with the result. Then `AddPlayerToVoiceChannel(ch, src)` and `SetPlayerMutedInVoiceChannel(ch, src, false)` for both players (adding resets the mute flag; the second call states it) |
+| Call ends from `active` | `RemovePlayerFromVoiceChannel(ch, src)` in `pcall` for each player still connected (FXServer already removes a player who left), then `DeleteVoiceChannel(ch)` in `pcall` |
+
+Mode 1 and 3 channels are spatial and refuse a max distance of 0 with an error, so the package uses mode 0 only. A
+player may be in other channels at the same time (a server's proximity or radio channels); this package touches only
+the channel it created.
+
+**`pma` (Legacy):**
 
 | Moment | Call |
 | --- | --- |
 | Call becomes `active` | `exports['pma-voice']:setPlayerCall(src, channel)` for both players, `channel = Config.call.channelBase + n` with `n` the lowest free slot |
 | Call ends from `active` | `exports['pma-voice']:setPlayerCall(src, 0)` for each player still connected; the channel is freed |
 
-No other `pma-voice` export is used. The export name and arguments are checked against the `pma-voice` version the
-README lists as tested; **behaviour on FXServer Enhanced is not verified yet** (the W0 spike on the kit-test server).
+`setPlayerCall` returns silently when the server sets `voice_enableCalls 0`; the README says so. No other
+`pma-voice` export is used.
+
+**Verified so far:** the W0 spike on the kit-test server (Enhanced, 2026-11-21) ran `setPlayerCall(src, 20001)` and
+`(src, 0)` against `pma-voice` v7.0.2-rc3: no error, and its state bag moved 20001 → 0, but Enhanced carries no audio
+through it. The `channels` path is checked in this package's W3 smoke on the kit-test server. The `pma` path is **not
+verified in game**: the kit-test server runs Enhanced only.
 
 ### Ring
 
@@ -246,16 +276,16 @@ spike). If a write fails, the oldest messages are dropped until it fits and one 
 { "http": [], "commands": [],
   "registeredCommands": ["+aeterna_phonecall_answer", "-aeterna_phonecall_answer", "+aeterna_phonecall_hangup",
                          "-aeterna_phonecall_hangup", "aeterna_phonecall_number", "aeterna_phonecall_setnumber"],
-  "convars": { "read": [], "write": [] },
+  "convars": { "read": ["gamename"], "write": [] },
   "netEvents": { "server": ["aeterna_phonecall:sv:names", "aeterna_phonecall:sv:answer",
                             "aeterna_phonecall:sv:hangup"],
                  "client": ["aeterna_phonecall:cl:state", "aeterna_phonecall:cl:askNames"] },
   "nui": false, "db": { "tables": [], "ddl": false }, "files": { "write": [] } }
 ```
 
-No HTTP hosts, no convars, no `SaveResourceFile`. `nui` is `false`: there is no page and no `SetNuiFocus` call;
+No HTTP hosts, no `SaveResourceFile`. The only convar read is `gamename` (server, once at start). `nui` is `false`: there is no page and no `SetNuiFocus` call;
 focus stays with phonekit. The `pma-voice` and `qbx_core` exports are reached only after `GetResourceState` says they
-are started.
+are started. The voice-channel natives are FXServer server natives called by name (never through `InvokeNative`).
 
 ## Tests
 
@@ -269,17 +299,23 @@ busted (pure logic in `shared/logic/`):
 4. Rate limits: 1 / 2 s, 15 / 60 s, pair 6 / 60 s, `sendSms` 30 / 60 s per resource.
 5. Call state machine: dialing → ringing → active → ended for each end reason; a call to a busy player ends `busy`;
    self-call ends `unavailable`; ring timeout ends `missed`; channel slots allocated lowest-free and released.
-6. Voice gate: with `pma-voice` not started, dial ends `unavailable` with `phonecall.call.unavailable_server` and no
-   `setPlayerCall` call is made (fake exports table).
-7. Names map: over 100 keys or long values refused; labels fall back to the number.
+6. Voice backend: `gta5enhanced` picks `channels` and never touches the fake `pma-voice` exports; any other value picks
+   `pma`; `pma` with `pma-voice` not started ends dial `unavailable` with `phonecall.call.unavailable_server` and makes
+   no `setPlayerCall` call; `channels` with a missing native counts as no backend.
+7. `channels` (fake natives): a call creates one mode-0 channel, adds and unmutes both players, and on end removes the
+   players still connected and deletes the channel once; a create error, a negative id or 65535 ends the call
+   `voice_off` and adds nobody; remove and delete errors are caught.
+8. Names map: over 100 keys or long values refused; labels fall back to the number.
 
 Smoke (kit-test server, two clients A and B):
 
 1. First open assigns a number; reconnect keeps it; `aeterna_phonecall_setnumber` changes it and frees the old one.
 2. A texts B (online and offline); B's badge and toast; threads and read state survive a reconnect.
-3. With `pma-voice`: A calls B, B answers from the fold cover screen, both hear each other at a distance, A hangs up.
-   B declines; B does not answer (missed); A calls B while B is in a call (busy).
-4. Stop `pma-voice` during a call: it ends `voice_off`; the dialer shows the unavailable line.
+3. Enhanced (`channels`): A calls B, B answers from the fold cover screen, both hear each other at a distance, A hangs
+   up. B declines; B does not answer (missed); A calls B while B is in a call (busy). Repeat step 3's first call once
+   with `pma-voice` started and once without: audio works both times.
+4. Legacy (`pma`), only when a Legacy test server exists: the same calls; stop `pma-voice` during a call: it ends
+   `voice_off`; the dialer shows the unavailable line. Until then the README lists the `pma` path as untested.
 5. Save an unknown number as a contact; the thread shows the name; Call from Contacts opens the dialer.
 6. Screenshots of dialer, in-call, incoming, threads in all three presets for the owner's visual gate.
 
@@ -292,10 +328,14 @@ Smoke (kit-test server, two clients A and B):
 | `aeterna_phonecall.sms_store_cap` | mock | 1 | n | — | — |
 | `aeterna_phonecall.sms_rate_limit` | headless | 1 | n | — | — |
 | `aeterna_phonecall.voice_detect` | headless | 1 | n | — | — |
+| `aeterna_phonecall.voice_channel` | headless | 1 | n | — | backend is not `channels` |
 | `aeterna_phonecall.my_number` | eye | 1 | n | Open the Phone app: your number is shown in the header in the server's format | — |
 | `aeterna_phonecall.sms_ab` | eye | 2 | y | B's phone shows a toast "Self-test" from A's number (or A's contact name) and the Messages tile gets a badge of 1 | — |
-| `aeterna_phonecall.call_ab` | eye | 2 | n | B sees an incoming call from A (on the cover screen if B holds a closed fold); after B answers, both see a running timer and can hear each other; after A hangs up both see "Call ended" | `pma-voice` not started |
-| `aeterna_phonecall.call_busy` | ped | 2 | n | — | `pma-voice` not started |
+| `aeterna_phonecall.call_ab` | eye | 2 | n | B sees an incoming call from A (on the cover screen if B holds a closed fold); after B answers, both see a running timer and can hear each other; after A hangs up both see "Call ended" | no voice backend |
+| `aeterna_phonecall.call_busy` | ped | 2 | n | — | no voice backend |
+
+`voice_detect` reports PASS with the backend in its detail (`channels`, `pma` or `none`; `none` is still PASS, since a
+server without calls is a valid setup). `voice_channel` creates one mode-0 channel and deletes it, with no player in it.
 
 Mock tests use the fake keys `test:a` and `test:b` in place of `<who>`, and delete every KVP key they wrote before they report,
 so the result is MOCK with the state restored. `sms_ab` writes one real message into A's and B's stored lists (body "Self-test"),

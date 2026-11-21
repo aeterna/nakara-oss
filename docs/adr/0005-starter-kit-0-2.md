@@ -75,6 +75,13 @@ facts that shape the decisions below:
    Same conditions as `oxmysql` today: only when `GetResourceState` says it is started, never listed in
    `dependencies`, and the feature that needs it reports itself unavailable (and its self-test reports SKIP) when it is
    absent. `AGENTS.md` rule 5 changes with this ADR.
+   **Calls on FiveM Enhanced (owner, 2026-11-21, after the W0 spike).** Enhanced has no Mumble: `pma-voice`'s call
+   export runs and sets its state (`callChannel` 20001 → 0 on the kit-test server), but per-player call targets carry
+   no audio there. On Enhanced (`gamename` convar `gta5enhanced`) `aeterna_phonecall` therefore puts both players in a
+   voice channel of its own with FXServer's server-side voice-channel natives (`CreateVoiceChannel`,
+   `AddPlayerToVoiceChannel`, `RemovePlayerFromVoiceChannel`, `SetPlayerMutedInVoiceChannel`, `DeleteVoiceChannel`), and
+   never calls `pma-voice`. On Legacy it uses `pma-voice` as above. Natives are part of FXServer, not a resource, so
+   this adds no dependency. Nakara City's own voice resource uses the same natives for calls on Enhanced.
 
 5. **The phone (phonekit 0.2).** The App API, KVP keys and events of 0.1 stay. The look changes:
    - eight models: keypad, burner, qwerty, slab (default), fold (vertical clamshell with a cover screen), pro, book
@@ -92,8 +99,9 @@ facts that shape the decisions below:
    Device rules come from the private phone as behaviour statements in the spec. Its shell, colours, fonts and app
    list are not ported.
 
-6. **Calls and photos are add-ons.** `aeterna_phonecall` (numbers, contacts, messages; calls when `pma-voice` is
-   started) and `aeterna_camera` (viewfinder and gallery; photos when `screenshot-basic` is started) are apps inside
+6. **Calls and photos are add-ons.** `aeterna_phonecall` (numbers, contacts, messages; calls through FXServer's voice
+   channels on Enhanced, or through `pma-voice` on Legacy when it is started) and `aeterna_camera` (viewfinder and
+   gallery; photos when `screenshot-basic` is started) are apps inside
    the phone. Photos are saved on the server's disk with `SaveResourceFile` under the resource's own folder and served by
    its own HTTP handler. The kit never uploads anywhere: a local event `aeterna_camera:saved` lets a server owner's own
    resource forward photos where they like. The kit never reads a webhook or API-key convar.
@@ -148,12 +156,14 @@ facts that shape the decisions below:
   first. They are maintainer paths (rule 7), so the owner reviews them.
 - A server that upgrades from 0.1 sees a larger phone. The upgrade note in each changed spec and in the guide covers
   saved layout scales and the new convars.
-- Calls and photos depend on resources this repo does not publish. They degrade to "unavailable" with a reason, never
-  to an error.
+- Photos, and calls on Legacy, depend on resources this repo does not publish. They degrade to "unavailable" with a
+  reason, never to an error.
 - The scanner changes in W0 cover: the `loadscreen` manifest key counted as NUI, and `SaveResourceFile` paths built
   from a literal prefix that matches a glob declared in `oss.json` (`photos/*`, needed by `aeterna_camera`).
-- Not yet measured on FXServer Enhanced, so a W0 spike on the kit-test server comes before the code that relies on
-  them: the `pma-voice` exports and state names used, `screenshot-basic` on Enhanced, binary-safe
-  `SaveResourceFile`, images served by a resource's own HTTP handler inside CEF 103, and whether CEF passes the
-  system reduced-motion setting.
+- Measured in the W0 spike on the kit-test server (2026-11-21): the `pma-voice` call export runs on Enhanced but carries
+  no audio there (decision 4). Still to measure before the code that relies on them: `screenshot-basic` on Enhanced,
+  binary-safe `SaveResourceFile`, images served by a resource's own HTTP handler inside CEF 103, and whether CEF passes
+  the system reduced-motion setting.
+- Calls on Legacy are not tested by the kit-test server, which runs Enhanced only. The `pma-voice` path stays
+  unverified in game until a Legacy server is available.
 - A combined zip means one more attested asset per release and one more workflow job to keep pinned and linted.

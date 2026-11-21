@@ -277,9 +277,12 @@ What it reads (all on the client):
 | On a radio channel | state bag `LocalPlayer.state.radioChannel` (number; `0` or `nil` = none) |
 | Transmitting on radio | the client-local event `pma-voice:radioActive` → `(boolean)` |
 
-These state bag keys and the event name are what current `pma-voice` releases publish, but they are **not verified
-yet** against the version on the kit-test server; the W0 spike reads them there and this table is corrected before
-W1 starts. A key that is absent leaves its part of the indicator hidden, never an error.
+These state bag keys and the event name were checked against the `pma-voice` v7.0.2-rc3 source in the W0 spike
+(2026-11-21): `proximity` is set as `{ index, distance, mode }`, `radioChannel` by the server, and
+`pma-voice:radioActive` fired with `true` / `false`. A key that is absent leaves its part of the indicator hidden,
+never an error. FiveM Enhanced has no Mumble (ADR 0005 decision 4), so whether the proximity mode and radio there
+still mean anything is **not verified**; the W3 smoke checks it, and if they do not, hudkit hides those two parts
+on Enhanced (talking still shows: it comes from a game native).
 
 Reading another resource's state bag keys and listening to its local event needs no `oss.json` capability
 (no `RegisterNetEvent`, no export).
