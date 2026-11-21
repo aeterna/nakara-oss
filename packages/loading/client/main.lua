@@ -66,3 +66,16 @@ CreateThread(function()
     end)
     closePage()
 end)
+
+-- Self-tests run on the presser's client (spec § Self-tests (0.2)); results go back through aeterna_core's
+-- client-local event with `owner`, never through a core export.
+AddEventHandler('aeterna_core:selftest', function(runId, name)
+    if GetInvokingResource() ~= 'aeterna_core' or not LoadingSelftest.owns(RESOURCE, name) then return end
+    if name == RESOURCE .. '.shut_down' then
+        local ok, detail = LoadingSelftest.shutDown(GetIsLoadingScreenActive())
+        TriggerEvent('aeterna_core:selftest:report', RESOURCE, runId, name, ok, detail)
+    elseif name == RESOURCE .. '.page_looked_right' then
+        -- Nothing to set up: the person answers from what they saw when they joined.
+        TriggerEvent('aeterna_core:selftest:report', RESOURCE, runId, name, 'ready', '')
+    end
+end)

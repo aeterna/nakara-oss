@@ -12,7 +12,10 @@ loadscreen 'html/index.html'
 loadscreen_manual_shutdown 'yes'
 loadscreen_cursor 'yes'
 
-shared_script 'shared/logic/loading.lua'
+shared_scripts {
+    'shared/logic/loading.lua',
+    'shared/logic/selftest.lua',
+}
 
 client_script 'client/main.lua'
 
