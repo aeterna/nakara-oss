@@ -37,7 +37,8 @@ describe('aeterna_camera self-tests', function()
             ['aeterna_camera.viewfinder'] = { kind = 'eye', players = 1, destructive = false,
                 expect = '<camera.selftest.viewfinder>' },
             ['aeterna_camera.shoot_and_view'] = { kind = 'eye', players = 1, destructive = true,
-                expect = '<camera.selftest.shoot_and_view>', skipWhen = { resources = { 'screenshot-basic' } } },
+                expect = '<camera.selftest.shoot_and_view>', skipWhen = { resources = { 'screenshot-basic' } },
+                timeout = 15000 },
         }
         for name, meta in pairs(expected) do
             assert.is_not_nil(byName[name], name)
@@ -130,5 +131,11 @@ describe('aeterna_camera self-tests', function()
         local steps = ST.VIEWFINDER_STEPS
         assert.are.same({ 'open', 'selfie', 'close' }, { steps[1].action, steps[2].action, steps[3].action })
         assert.is_true(steps[#steps].at < 4500)
+    end)
+
+    it('the shoot_and_view client waits fit inside its 15 s timeout', function()
+        assert.are.equal(5000, ST.SHOOT_WAIT_VIEWFINDER_MS)
+        assert.are.equal(8000, ST.SHOOT_WAIT_GALLERY_MS)
+        assert.is_true(ST.SHOOT_WAIT_VIEWFINDER_MS + ST.SHOOT_WAIT_GALLERY_MS < 15000)
     end)
 end)
