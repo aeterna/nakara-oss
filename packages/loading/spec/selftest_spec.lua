@@ -91,14 +91,18 @@ describe('aeterna_loading self-tests', function()
     end)
 
     describe('server script (local events only)', function()
+        -- `config` is the decoded html/config.json; json.decode is stubbed so the case needs no JSON library.
         local function boot(coreState, config)
-            natives.reset({ resource = OWNER, side = 'server' })
+            natives.reset({ resource = OWNER, side = 'server', json = {
+                encode = function() return '' end,
+                decode = function(s) if s == 'CONFIG' then return config end error('not json') end,
+            } })
             natives.stub('GetResourceState', function(name)
                 if name == 'aeterna_core' then return coreState end
                 return 'missing'
             end)
             natives.stub('LoadResourceFile', function(_, path)
-                if path == 'html/config.json' then return config end
+                if path == 'html/config.json' then return 'CONFIG' end
                 return nil
             end)
             natives.stub('print', function() end)
@@ -106,12 +110,16 @@ describe('aeterna_loading self-tests', function()
             return resource.load_resource(DIR, 'server')
         end
 
+        local function defaults()
+            return LoadingLogic.defaults()
+        end
+
         local function adds()
             return natives.emitted('local', 'aeterna_core:selftest:add')
         end
 
         it('registers the four rows with owner first when core is already started', function()
-            boot('started', readFile(DIR .. '/html/config.json'))
+            boot('started', defaults())
             local list = adds()
             assert.are.equal(4, #list)
             for _, e in ipairs(list) do assert.are.equal(OWNER, e.args[1]) end
@@ -121,7 +129,7 @@ describe('aeterna_loading self-tests', function()
         end)
 
         it('sends nothing while core is not started, and registers again on every hello', function()
-            boot('stopped', readFile(DIR .. '/html/config.json'))
+            boot('stopped', defaults())
             assert.are.equal(0, #adds())
             natives.fire('aeterna_core:hello')
             assert.are.equal(4, #adds())
@@ -130,7 +138,7 @@ describe('aeterna_loading self-tests', function()
         end)
 
         it('reports config_valid and local_paths_only through aeterna_core:selftest:report with owner', function()
-            boot('started', readFile(DIR .. '/html/config.json'))
+            boot('started', defaults())
             natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_loading.config_valid', { kind = 'headless' })
             natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_loading.local_paths_only', { kind = 'headless' })
             local reps = natives.emitted('local', 'aeterna_core:selftest:report')
@@ -142,7 +150,7 @@ describe('aeterna_loading self-tests', function()
         end)
 
         it('fails config_valid and local_paths_only for a config with a remote background', function()
-            boot('started', '{"serverName":"X","background":"https://example.invalid/bg.jpg"}')
+            boot('started', { serverName = 'X', background = 'https://example.invalid/bg.jpg' })
             natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_loading.config_valid', {})
             natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_loading.local_paths_only', {})
             local reps = natives.emitted('local', 'aeterna_core:selftest:report')
@@ -153,7 +161,7 @@ describe('aeterna_loading self-tests', function()
         end)
 
         it('ignores tests of other resources and events not fired by aeterna_core', function()
-            boot('started', readFile(DIR .. '/html/config.json'))
+            boot('started', defaults())
             natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_core.core', {})
             natives.stub('GetInvokingResource', function() return 'someone_else' end)
             natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_loading.config_valid', {})
