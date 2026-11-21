@@ -2,6 +2,9 @@
 
 local H = HudLogic
 local M = MinimapLogic
+local C = CompassLogic
+local V = VoiceLogic
+local S = SeatbeltLogic
 
 local settingsOpen = false
 local focusToken = nil
@@ -10,6 +13,11 @@ local cachedNeeds = {}
 local appliedPlaces = {}
 local lastValues = nil
 local lastVehicleVisible = nil
+local focusPaused = false
+local lastCompassDeg = nil
+local lastInVehicle = false
+local lastSeatbelt = nil
+local seatbeltSent = false
 
 local LOCALE_KEYS = {
     'hudkit.menu.entry',
@@ -44,13 +52,45 @@ local LOCALE_KEYS = {
     'hudkit.dir.sw',
     'hudkit.dir.w',
     'hudkit.dir.nw',
+    'hudkit.settings.barStyle',
+    'hudkit.settings.barStyle.bar',
+    'hudkit.settings.barStyle.ring',
+    'hudkit.part.compass',
+    'hudkit.part.voice',
+    'hudkit.voice.mode.1',
+    'hudkit.voice.mode.2',
+    'hudkit.voice.mode.3',
+    'hudkit.voice.radio',
+    'hudkit.vehicle.seatbelt.on',
+    'hudkit.vehicle.seatbelt.off',
 }
 
 local elementSizes = {
     status = { w = 220, h = 64 },
     vehicle = { w = 180, h = 72 },
     street = { w = 240, h = 48 },
+    compass = { w = 320, h = 44 },
+    voice = { w = 120, h = 32 },
 }
+
+-- Parts drawn in hudkit's own NUI (the minimap is drawn by the game).
+local NUI_PARTS = { status = true, vehicle = true, street = true, compass = true, voice = true }
+
+local function compassEnabled()
+    return not (Config and Config.compass and Config.compass.enabled == false)
+end
+
+local function seatbeltEnabled()
+    return not (Config and Config.seatbelt and Config.seatbelt.enabled == false)
+end
+
+local function compassSpan()
+    return C.clampSpan(Config and Config.compass and Config.compass.span)
+end
+
+local function selfResource()
+    return type(GetCurrentResourceName) == 'function' and GetCurrentResourceName() or 'aeterna_hudkit'
+end
 
 local function logWarn(msg, fields)
     if AeternaCore and AeternaCore.log and type(AeternaCore.log.warn) == 'function' then
@@ -79,6 +119,7 @@ local function loadSettings()
         numbers = false,
         speedUnit = Config and Config.speedUnit or 'kmh',
         minimapMode = Config and Config.minimap and Config.minimap.mode or 'always',
+        barStyle = Config and Config.barStyle or 'bar',
     }
     if AeternaCore and AeternaCore.kvp and type(AeternaCore.kvp.get) == 'function' then
         local stored = AeternaCore.kvp.get('settings', 1, nil)
@@ -99,6 +140,14 @@ local extraBarsRegistry = H.createBarsRegistry({
     warn = logWarn,
     maxBars = 8,
 })
+
+local seatbelt = S.create({ warn = logWarn })
+
+local voiceDetector = V.createDetector({
+    enabled = not (Config and Config.voice and Config.voice.enabled == false),
+})
+local voiceState = { talking = false, proximity = nil, radioChannel = nil, radioActive = false }
+local lastVoiceMsg = nil
 
 local function syncThemeAndLocale()
     if not localeReady then
@@ -275,6 +324,44 @@ local function registerLayoutElements()
         owner = selfName,
     })
 
+    -- Compass tape (0.2): top-centre, unless the server turned it off.
+    if compassEnabled() then
+        TriggerEvent('aeterna_layout:add', {
+            id = 'compass',
+            label = translate('hudkit.part.compass'),
+            w = elementSizes.compass.w,
+            h = elementSizes.compass.h,
+            x = 0.50,
+            y = 0.02,
+            ax = 0.5,
+            ay = 0.0,
+            scalable = true,
+            hideable = true,
+            owner = selfName,
+        })
+    end
+
+    -- Voice indicator (0.2): only while pma-voice is started; placed just above the status part.
+    if voiceDetector.isActive() then
+        local _, screenH = 1920, 1080
+        if type(GetActiveScreenResolution) == 'function' then
+            _, screenH = GetActiveScreenResolution()
+        end
+        TriggerEvent('aeterna_layout:add', {
+            id = 'voice',
+            label = translate('hudkit.part.voice'),
+            w = elementSizes.voice.w,
+            h = elementSizes.voice.h,
+            x = 0.18,
+            y = 0.95 - (elementSizes.status.h + 8) / math.max(1, screenH or 1080),
+            ax = 0.0,
+            ay = 1.0,
+            scalable = true,
+            hideable = true,
+            owner = selfName,
+        })
+    end
+
     -- Minimap part (hideable is false; visibility managed by minimapMode)
     TriggerEvent('aeterna_layout:add', {
         id = 'minimap',
@@ -335,17 +422,20 @@ local function openSettings()
     end
     focusToken = tok
     settingsOpen = true
+    focusPaused = false
     syncThemeAndLocale()
     sendUi({
         type = 'settings:open',
         settings = settings,
         low = Config and Config.low or 20,
+        span = compassSpan(),
     })
 end
 
 local function closeSettings(releaseFocus)
     if not settingsOpen then return end
     settingsOpen = false
+    focusPaused = false
     sendUi({ type = 'settings:close' })
     if releaseFocus ~= false and focusToken then
         local tok = focusToken
@@ -358,24 +448,178 @@ local function closeSettings(releaseFocus)
     end
 end
 
+-- While another resource holds core's focus overlay the card stays open and ignores its page (core 0.2 § Focus).
+-- The page may already have hidden the card or changed a control, so it gets its state back.
+local function ignoredWhilePaused()
+    if not (settingsOpen and focusPaused) then return false end
+    sendUi({
+        type = 'settings:open',
+        settings = settings,
+        low = Config and Config.low or 20,
+        span = compassSpan(),
+    })
+    return true
+end
+
+local function sendPlace(id, place)
+    sendUi({
+        type = 'hud:place',
+        id = id,
+        x = place.x,
+        y = place.y,
+        ax = place.ax,
+        ay = place.ay,
+        scale = place.scale,
+        hidden = place.hidden,
+    })
+end
+
+local function isInVehicle()
+    local ped = type(PlayerPedId) == 'function' and PlayerPedId() or 0
+    if ped == 0 or type(IsPedInAnyVehicle) ~= 'function' then return false end
+    return IsPedInAnyVehicle(ped, false) == true
+end
+
+-- Seatbelt icon: true / false / nil (hidden). Sent only when it changes, unless forced.
+local function sendSeatbelt(inVeh, force)
+    local state = nil
+    if seatbeltEnabled() then
+        state = seatbelt.display(inVeh)
+    end
+    if not force and seatbeltSent and state == lastSeatbelt then return end
+    seatbeltSent = true
+    lastSeatbelt = state
+    sendUi({ type = 'hud:seatbelt', state = state })
+end
+
+-- Voice indicator state for NUI. `mode` is absent when no label applies (the page hides it).
+local function voiceMessage()
+    if not voiceDetector.isActive() then
+        return { available = false, talking = false, radio = false, radioActive = false }
+    end
+    local mode = nil
+    local label = V.modeLabel(voiceState.proximity)
+    if label and label.key then
+        mode = translate(label.key)
+    elseif label and label.meters then
+        mode = label.meters .. ' m'
+    end
+    local radio = V.radioOn(voiceState.radioChannel)
+    return {
+        available = true,
+        talking = voiceState.talking == true,
+        mode = mode,
+        radio = radio,
+        radioActive = radio and voiceState.radioActive == true,
+    }
+end
+
+local function sendVoice(force)
+    local msg = voiceMessage()
+    local prev = lastVoiceMsg
+    if not force and prev and prev.available == msg.available and prev.talking == msg.talking
+        and prev.mode == msg.mode and prev.radio == msg.radio and prev.radioActive == msg.radioActive then
+        return
+    end
+    lastVoiceMsg = msg
+    sendUi({
+        type = 'hud:voice',
+        available = msg.available,
+        talking = msg.talking,
+        mode = msg.mode,
+        radio = msg.radio,
+        radioActive = msg.radioActive,
+    })
+end
+
+local function readLocalState(key)
+    local ok, val = pcall(function()
+        if LocalPlayer and LocalPlayer.state then
+            return LocalPlayer.state[key]
+        end
+    end)
+    if ok then return val end
+    return nil
+end
+
+local function isOwnBag(bagName)
+    local ply = type(PlayerId) == 'function' and PlayerId() or 0
+    local myServerId = type(GetPlayerServerId) == 'function' and GetPlayerServerId(ply) or 1
+    return bagName == ('player:' .. myServerId)
+end
+
+-- Reading pma-voice: two state bag keys and one client-local event. No export, no dependency.
+local voiceReaders = nil
+
+local function startVoiceReading()
+    if voiceReaders then return end
+    voiceReaders = { bags = {} }
+    voiceState.proximity = readLocalState('proximity')
+    voiceState.radioChannel = readLocalState('radioChannel')
+    voiceState.radioActive = false
+    voiceState.talking = false
+    if type(AddStateBagChangeHandler) == 'function' then
+        voiceReaders.bags[#voiceReaders.bags + 1] = AddStateBagChangeHandler('proximity', nil, function(bagName, _, value)
+            if not isOwnBag(bagName) then return end
+            voiceState.proximity = value
+            sendVoice()
+        end)
+        voiceReaders.bags[#voiceReaders.bags + 1] = AddStateBagChangeHandler('radioChannel', nil, function(bagName, _, value)
+            if not isOwnBag(bagName) then return end
+            voiceState.radioChannel = value
+            if not V.radioOn(value) then
+                voiceState.radioActive = false
+            end
+            sendVoice()
+        end)
+    end
+    voiceReaders.radioEvent = AddEventHandler('pma-voice:radioActive', function(active)
+        voiceState.radioActive = (active == true)
+        sendVoice()
+    end)
+end
+
+local function stopVoiceReading()
+    if not voiceReaders then return end
+    if type(RemoveStateBagChangeHandler) == 'function' then
+        for i = 1, #voiceReaders.bags do
+            RemoveStateBagChangeHandler(voiceReaders.bags[i])
+        end
+    end
+    if voiceReaders.radioEvent and type(RemoveEventHandler) == 'function' then
+        RemoveEventHandler(voiceReaders.radioEvent)
+    end
+    voiceReaders = nil
+    voiceState.proximity = nil
+    voiceState.radioChannel = nil
+    voiceState.radioActive = false
+    voiceState.talking = false
+end
+
+local function checkVoice()
+    local state = type(GetResourceState) == 'function' and GetResourceState(V.RESOURCE) or 'missing'
+    local action = voiceDetector.update(state)
+    if action == 'register' then
+        startVoiceReading()
+        registerLayoutElements()
+        sendVoice(true)
+    elseif action == 'remove' then
+        stopVoiceReading()
+        appliedPlaces['voice'] = nil
+        TriggerEvent('aeterna_layout:remove', { id = 'voice', owner = selfResource() })
+        sendVoice(true)
+    end
+end
+
 -- Layout protocol events
 AddEventHandler('aeterna_layout:apply', function(owner, id, place)
     local selfName = type(GetCurrentResourceName) == 'function' and GetCurrentResourceName() or 'aeterna_hudkit'
     if owner ~= selfName then return end
     if not id or type(place) ~= 'table' then return end
 
-    if id == 'status' or id == 'vehicle' or id == 'street' then
+    if NUI_PARTS[id] then
         appliedPlaces[id] = place
-        sendUi({
-            type = 'hud:place',
-            id = id,
-            x = place.x,
-            y = place.y,
-            ax = place.ax,
-            ay = place.ay,
-            scale = place.scale,
-            hidden = place.hidden,
-        })
+        sendPlace(id, place)
     elseif id == 'minimap' then
         applyMinimapPlace(place)
     end
@@ -383,6 +627,24 @@ end)
 
 AddEventHandler('aeterna_layout:hello', function()
     registerLayoutElements()
+end)
+
+-- pma-voice started or stopped after hudkit (runtime detection, ADR 0005 decision 4)
+AddEventHandler('onClientResourceStart', function(resName)
+    if resName == V.RESOURCE then checkVoice() end
+end)
+
+AddEventHandler('onClientResourceStop', function(resName)
+    if resName == V.RESOURCE then checkVoice() end
+end)
+
+-- Seatbelt state from another resource (client-local). The last resource that fired it owns it.
+AddEventHandler('aeterna_hudkit:seatbelt', function(payload)
+    local inv = type(GetInvokingResource) == 'function' and GetInvokingResource() or nil
+    local owner = inv or (type(payload) == 'table' and payload.owner) or 'unknown'
+    if seatbelt.set(owner, payload) then
+        sendSeatbelt(isInVehicle())
+    end
 end)
 
 -- External bars events
@@ -417,6 +679,9 @@ AddEventHandler('onResourceStop', function(stoppedRes)
     if removed > 0 then
         sendUi({ type = 'hud:bars', bars = extraBarsRegistry.getSortedBars(false) })
     end
+    if seatbelt.ownerStopped(stoppedRes) then
+        sendSeatbelt(lastInVehicle)
+    end
 end)
 
 -- Server -> Client Net Event (opened from uikit menu)
@@ -434,12 +699,27 @@ AddEventHandler('aeterna_core:focusLost', function(owner, token)
     end
 end)
 
+-- Focus overlay (core 0.2): paused keeps the card open; resumed gives input back.
+AddEventHandler('aeterna_core:focusPaused', function(owner, token)
+    if owner ~= selfResource() then return end
+    if token ~= nil and focusToken ~= nil and token ~= focusToken then return end
+    if settingsOpen then
+        focusPaused = true
+    end
+end)
+
+AddEventHandler('aeterna_core:focusResumed', function(owner, token)
+    if owner ~= selfResource() then return end
+    if token ~= nil and focusToken ~= nil and token ~= focusToken then return end
+    focusPaused = false
+end)
+
 -- NUI Callbacks
 RegisterNUICallback('ready', function(data, cb)
     if type(cb) == 'function' then cb({ ok = true }) end
     if type(data) == 'table' and type(data.sizes) == 'table' then
         for id, sz in pairs(data.sizes) do
-            if type(sz) == 'table' and tonumber(sz.w) and tonumber(sz.h) then
+            if NUI_PARTS[id] and type(sz) == 'table' and tonumber(sz.w) and tonumber(sz.h) then
                 elementSizes[id] = {
                     w = math.max(8, math.min(2000, math.floor(tonumber(sz.w) + 0.5))),
                     h = math.max(8, math.min(2000, math.floor(tonumber(sz.h) + 0.5))),
@@ -452,6 +732,7 @@ RegisterNUICallback('ready', function(data, cb)
     -- Reset change-detection state
     lastValues = nil
     lastVehicleVisible = nil
+    lastCompassDeg = nil
     localeReady = false
 
     syncThemeAndLocale()
@@ -461,6 +742,7 @@ RegisterNUICallback('ready', function(data, cb)
         type = 'settings:apply',
         settings = settings,
         low = Config and Config.low or 20,
+        span = compassSpan(),
     })
 
     -- Resend extra bars
@@ -471,19 +753,14 @@ RegisterNUICallback('ready', function(data, cb)
 
     -- Resend part positions and hidden states from layout
     for id, place in pairs(appliedPlaces) do
-        if id == 'status' or id == 'vehicle' or id == 'street' then
-            sendUi({
-                type = 'hud:place',
-                id = id,
-                x = place.x,
-                y = place.y,
-                ax = place.ax,
-                ay = place.ay,
-                scale = place.scale,
-                hidden = place.hidden,
-            })
+        if NUI_PARTS[id] then
+            sendPlace(id, place)
         end
     end
+
+    -- Resend voice and seatbelt state (compass follows on the next tick)
+    sendVoice(true)
+    sendSeatbelt(lastInVehicle, true)
 
     -- Resend vehicle runtime visibility
     local ped = type(PlayerPedId) == 'function' and PlayerPedId() or 0
@@ -500,6 +777,7 @@ end)
 
 RegisterNUICallback('settings', function(data, cb)
     if type(cb) == 'function' then cb({ ok = true }) end
+    if ignoredWhilePaused() then return end
     if type(data) ~= 'table' then return end
     local key = data.key
     local val = data.value
@@ -519,12 +797,14 @@ end)
 
 RegisterNUICallback('layoutEditor', function(data, cb)
     if type(cb) == 'function' then cb({ ok = true }) end
+    if ignoredWhilePaused() then return end
     closeSettings(true)
     ExecuteCommand('aeterna_layout')
 end)
 
 RegisterNUICallback('close', function(data, cb)
     if type(cb) == 'function' then cb({ ok = true }) end
+    if ignoredWhilePaused() then return end
     closeSettings(true)
 end)
 
@@ -548,9 +828,7 @@ if type(AddStateBagChangeHandler) == 'function' and Config and Config.needs then
     for i = 1, #Config.needs do
         local needKey = Config.needs[i]
         AddStateBagChangeHandler(needKey, nil, function(bagName, key, value)
-            local ply = type(PlayerId) == 'function' and PlayerId() or 0
-            local myServerId = type(GetPlayerServerId) == 'function' and GetPlayerServerId(ply) or 1
-            if bagName == ('player:' .. myServerId) then
+            if isOwnBag(bagName) then
                 cachedNeeds[key] = tonumber(value)
             end
         end)
@@ -636,6 +914,15 @@ CreateThread(function()
 
             updateMinimapVisibility(inVeh)
 
+            lastInVehicle = (inVeh == true)
+            sendSeatbelt(lastInVehicle)
+
+            if voiceDetector.isActive() and type(NetworkIsPlayerTalking) == 'function' then
+                local ply = type(PlayerId) == 'function' and PlayerId() or 0
+                voiceState.talking = NetworkIsPlayerTalking(ply) == true
+                sendVoice()
+            end
+
             -- Street and compass
             local coords = (type(GetEntityCoords) == 'function') and GetEntityCoords(ped) or vector3(0.0, 0.0, 0.0)
             local streetName = ''
@@ -650,10 +937,21 @@ CreateThread(function()
             end
 
             local camRotZ = 0.0
+            local rawCamZ = 0.0
             if type(GetGameplayCamRot) == 'function' then
                 local rot = GetGameplayCamRot(2)
                 if rot and rot.z then
+                    rawCamZ = rot.z
                     camRotZ = (360.0 - rot.z) % 360.0
+                end
+            end
+
+            -- Compass tape: only when the whole-degree heading changes.
+            if compassEnabled() then
+                local deg = C.fromCamRot(rawCamZ)
+                if deg ~= lastCompassDeg then
+                    lastCompassDeg = deg
+                    sendUi({ type = 'hud:compass', deg = deg })
                 end
             end
             local _, headingKey = H.headingSector(camRotZ)
@@ -709,3 +1007,4 @@ CreateThread(function()
 end)
 
 registerLayoutElements()
+checkVoice()

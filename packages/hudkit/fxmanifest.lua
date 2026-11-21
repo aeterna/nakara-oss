@@ -21,6 +21,9 @@ shared_scripts {
     'locales/th.lua',
     'shared/logic/hud.lua',
     'shared/logic/minimap.lua',
+    'shared/logic/compass.lua',
+    'shared/logic/voice.lua',
+    'shared/logic/seatbelt.lua',
 }
 
 client_scripts {

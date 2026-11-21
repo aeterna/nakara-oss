@@ -36,6 +36,17 @@ local STRINGS = {
     ['hudkit.dir.sw'] = 'SW',
     ['hudkit.dir.w'] = 'W',
     ['hudkit.dir.nw'] = 'NW',
+    ['hudkit.settings.barStyle'] = 'Bar style',
+    ['hudkit.settings.barStyle.bar'] = 'Bar',
+    ['hudkit.settings.barStyle.ring'] = 'Ring',
+    ['hudkit.part.compass'] = 'Compass',
+    ['hudkit.part.voice'] = 'Voice',
+    ['hudkit.voice.mode.1'] = 'Whisper',
+    ['hudkit.voice.mode.2'] = 'Normal',
+    ['hudkit.voice.mode.3'] = 'Shout',
+    ['hudkit.voice.radio'] = 'Radio',
+    ['hudkit.vehicle.seatbelt.on'] = 'Seatbelt on',
+    ['hudkit.vehicle.seatbelt.off'] = 'Seatbelt off',
 }
 
 for k, v in pairs(STRINGS) do

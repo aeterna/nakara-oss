@@ -36,6 +36,17 @@ local STRINGS = {
     ['hudkit.dir.sw'] = 'SW',
     ['hudkit.dir.w'] = 'W',
     ['hudkit.dir.nw'] = 'NW',
+    ['hudkit.settings.barStyle'] = 'รูปแบบแถบ',
+    ['hudkit.settings.barStyle.bar'] = 'แถบ',
+    ['hudkit.settings.barStyle.ring'] = 'วงแหวน',
+    ['hudkit.part.compass'] = 'เข็มทิศ',
+    ['hudkit.part.voice'] = 'เสียงพูด',
+    ['hudkit.voice.mode.1'] = 'กระซิบ',
+    ['hudkit.voice.mode.2'] = 'ปกติ',
+    ['hudkit.voice.mode.3'] = 'ตะโกน',
+    ['hudkit.voice.radio'] = 'วิทยุ',
+    ['hudkit.vehicle.seatbelt.on'] = 'คาดเข็มขัดแล้ว',
+    ['hudkit.vehicle.seatbelt.off'] = 'ยังไม่คาดเข็มขัด',
 }
 
 for k, v in pairs(STRINGS) do
