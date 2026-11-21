@@ -189,7 +189,7 @@ Registered with `aeterna_core` on start; `aeterna_testkit` runs them from its me
 | `exit_contract` | ped | n | ESC closes, an open within 300 ms of the close is ignored, the bound open key closes | never |
 | `eye_model_<id>` (8) | eye | n | The person checks each model's frame, status bar and home | never |
 | `eye_book_two_pane` | eye | n | Book opened wide: list left, detail right | never |
-| `eye_fold_cover` | eye | n | Fold closed: the cover screen | never |
+| `eye_fold_cover` | eye | n | Fold closed: the cover screen | `Config.cover = false` (`cover is off`) |
 | `eye_lock` | eye | n | The lock screen with one test card | `Config.lockScreen = false` |
 | `eye_control_centre` | eye | n | The control centre (opened by the test) | never |
 | `eye_battery_dead` | eye | y | The server sets the presser's battery to 0 (saved) before the card: the phone closes, the open is refused with the battery dead toast; the old value comes back when the test ends | `Config.battery = false` |

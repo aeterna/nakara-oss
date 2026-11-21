@@ -76,6 +76,7 @@ function P.skipReason(short, env)
     end
     if short == 'clamp_on_unfold' and env.model ~= 'book' then return 'held model is not book' end
     if short == 'eye_lock' and env.lockScreen ~= true then return 'Config.lockScreen is false' end
+    if short == 'eye_fold_cover' and env.cover == false then return 'cover is off' end
     if short == 'ring_cover' then
         if env.model ~= 'fold' then return 'held model is not fold' end
         if env.cover == false then return 'Config.cover is false' end
