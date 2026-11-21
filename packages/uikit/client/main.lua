@@ -51,6 +51,13 @@ local function sendUi(msg)
     end
 end
 
+-- The page learns the pause state too, so its own buttons and keys do nothing while paused.
+local function setPaused(flag)
+    if paused == flag then return end
+    paused = flag
+    sendUi({ type = 'focus:paused', paused = flag })
+end
+
 local function syncThemeAndLocale()
     if not localeReady then
         local strings = {}
@@ -73,7 +80,7 @@ local function acquireFocus(opts)
     local ok, tok = pcall(function()
         return AeternaCore.requestFocus(opts)
     end)
-    paused = false
+    setPaused(false)
     if ok and type(tok) == 'string' then
         focusToken = tok
         return tok
@@ -86,7 +93,7 @@ local function dropFocus()
     if not focusToken then return end
     local tok = focusToken
     focusToken = nil
-    paused = false
+    setPaused(false)
     pcall(function()
         AeternaCore.releaseFocus(tok)
     end)
@@ -200,25 +207,19 @@ end
 -- Focus overlay (core 0.2): stay on screen, ignore input, send nothing; a skill check's marker stops.
 AddEventHandler('aeterna_core:focusPaused', function(owner, token)
     if not isOurFocusEvent(owner, token) or not focusToken then return end
-    paused = true
-    if activePrompt and activePrompt.kind == 'skill' and not activePrompt.done then
-        sendUi({ type = 'prompt:skill', action = 'pause' })
-    end
+    setPaused(true)
 end)
 
 AddEventHandler('aeterna_core:focusResumed', function(owner, token)
     if not isOurFocusEvent(owner, token) or not paused then return end
-    paused = false
-    if activePrompt and activePrompt.kind == 'skill' and not activePrompt.done then
-        sendUi({ type = 'prompt:skill', action = 'resume' })
-    end
+    setPaused(false)
 end)
 
 -- Focus loss handler from aeterna_core (a real loss closes even while paused)
 AddEventHandler('aeterna_core:focusLost', function(owner, token, reason)
     if not isOurFocusEvent(owner, token) then return end
     focusToken = nil
-    paused = false
+    setPaused(false)
 
     if activePrompt and not activePrompt.done then
         activePrompt.done = true

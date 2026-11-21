@@ -370,9 +370,9 @@ local function validateEmptyOpt(e, path)
     return true, nil, { icon = cleanIcon, label = cleanLbl, body = cleanBody }
 end
 
--- 0.2 `search = true | { placeholder? }` of list; nil/false = off.
+-- 0.2 `search = true | { placeholder? }` of list; absent = off (false is refused, as the spec allows only these two).
 local function validateSearchOpt(search, path)
-    if search == nil or search == false then return true, nil, nil end
+    if search == nil then return true, nil, nil end
     if search == true then return true, nil, {} end
     if type(search) ~= 'table' then
         return false, path .. ': type'
@@ -1125,6 +1125,9 @@ function L.validatePatch(spec, patch)
         end
 
         if partial.disabled ~= nil then
+            if btype == 'table' or btype == 'tabs' then
+                return false, ('blocks.%s.disabled: not supported'):format(blockId)
+            end
             if type(partial.disabled) ~= 'boolean' then
                 return false, ('blocks.%s.disabled: type'):format(blockId)
             end

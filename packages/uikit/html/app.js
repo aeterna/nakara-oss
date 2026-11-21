@@ -29,14 +29,41 @@ let blockState = new Map();
 let progressTimer = null;
 let skillState = null;
 let tabsState = null;
+let paused = false; // 0.2: a focus overlay from another resource pauses uikit; the page ignores input
 const exitTimers = new Map();
 
+// Returns false (and sends nothing) while paused, so callers keep their card on screen.
 function postCallback(name, payload) {
+    if (paused) return false;
     fetch('https://aeterna_uikit/' + name, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json; charset=UTF-8' },
         body: JSON.stringify(payload || {}),
     }).catch(() => {});
+    return true;
+}
+
+function setPaused(flag) {
+    paused = flag === true;
+    document.getElementById('uikit-root').classList.toggle('uikit-paused', paused);
+    if (skillState) {
+        if (paused) skillState.pause();
+        else skillState.resume();
+    }
+}
+
+// While paused, keys and clicks never reach a control (typing, toggles, slider, tabs, ESC).
+for (const kind of ['keydown', 'mousedown', 'click']) {
+    window.addEventListener(kind, (event) => {
+        if (!paused) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+    }, true);
+}
+
+function answerPrompt(kind, value) {
+    if (!postCallback('promptResult', { kind, value })) return;
+    closePrompt();
 }
 
 function clearChildren(el) {
@@ -334,17 +361,12 @@ function applyTabVisibility() {
     }
 }
 
-function decimalsOf(step) {
-    const text = String(step);
-    const dot = text.indexOf('.');
-    return dot < 0 ? 0 : text.length - dot - 1;
-}
-
 function buildSlider(block) {
     const min = Number(block.min);
     const max = Number(block.max);
     const step = Number(block.step) > 0 ? Number(block.step) : 1;
-    const decimals = decimalsOf(step);
+    const sliderMath = window.AeternaUikitSlider;
+    const decimals = Math.min(20, Math.max(sliderMath.decimalsOf(step), sliderMath.decimalsOf(min)));
 
     const wrap = document.createElement('div');
     wrap.className = 'slider-group';
@@ -384,16 +406,10 @@ function buildSlider(block) {
 
     const state = { type: 'slider', value: min, disabled: false };
 
-    // Snap to the step grid so what the page sends always passes the server re-check.
-    function snap(v) {
-        const n = Math.round((Number(v) - min) / step);
-        const snapped = Math.min(max, Math.max(min, min + n * step));
-        return Number(snapped.toFixed(decimals));
-    }
-
+    // Snap to the step grid (html/slider-math.js) so what the page sends passes the server re-check.
     function setValue(v) {
-        state.value = snap(Number.isFinite(Number(v)) ? v : min);
-        const pct = ((state.value - min) / (max - min)) * 100;
+        state.value = sliderMath.snap(v, min, max, step);
+        const pct = Math.min(100, ((state.value - min) / (max - min)) * 100);
         fill.style.width = pct + '%';
         thumb.style.left = pct + '%';
         const text = state.value.toFixed(decimals);
@@ -938,8 +954,7 @@ function openConfirmPrompt(prompt) {
     titleEl.textContent = String(prompt.title || '');
     header.appendChild(titleEl);
     header.appendChild(createCloseButton(() => {
-        postCallback('promptResult', { kind: 'confirm', value: false });
-        closePrompt();
+        answerPrompt('confirm', false);
     }));
     card.appendChild(header);
 
@@ -958,8 +973,7 @@ function openConfirmPrompt(prompt) {
     cancelBtn.className = 'btn btn-secondary';
     cancelBtn.textContent = String(prompt.cancel || locale['uikit.confirm.cancel']);
     cancelBtn.addEventListener('click', () => {
-        postCallback('promptResult', { kind: 'confirm', value: false });
-        closePrompt();
+        answerPrompt('confirm', false);
     });
 
     const okBtn = document.createElement('button');
@@ -967,8 +981,7 @@ function openConfirmPrompt(prompt) {
     okBtn.className = 'btn ' + (prompt.danger ? 'btn-danger' : 'btn-primary');
     okBtn.textContent = String(prompt.confirm || locale['uikit.confirm.ok']);
     okBtn.addEventListener('click', () => {
-        postCallback('promptResult', { kind: 'confirm', value: true });
-        closePrompt();
+        answerPrompt('confirm', true);
     });
 
     actions.appendChild(cancelBtn);
@@ -990,8 +1003,7 @@ function openInputPrompt(prompt) {
     titleEl.textContent = String(prompt.title || '');
     header.appendChild(titleEl);
     header.appendChild(createCloseButton(() => {
-        postCallback('promptResult', { kind: 'input', value: null });
-        closePrompt();
+        answerPrompt('input', null);
     }));
     card.appendChild(header);
 
@@ -1035,8 +1047,7 @@ function openInputPrompt(prompt) {
     cancelBtn.className = 'btn btn-secondary';
     cancelBtn.textContent = String(prompt.cancel || locale['uikit.confirm.cancel']);
     cancelBtn.addEventListener('click', () => {
-        postCallback('promptResult', { kind: 'input', value: null });
-        closePrompt();
+        answerPrompt('input', null);
     });
 
     const submitBtn = document.createElement('button');
@@ -1058,8 +1069,7 @@ function openInputPrompt(prompt) {
                 values[c.id] = String(c.el.value || '');
             }
         }
-        postCallback('promptResult', { kind: 'input', value: values });
-        closePrompt();
+        answerPrompt('input', values);
     });
 
     actions.appendChild(cancelBtn);
@@ -1118,8 +1128,8 @@ function updateProgressPrompt(prompt) {
 }
 
 function handleSkillMessage(msg) {
-    if (msg.action === 'hit' || msg.action === 'pause' || msg.action === 'resume') {
-        if (skillState) skillState[msg.action]();
+    if (msg.action === 'hit') {
+        if (skillState) skillState.hit();
         return;
     }
     const prompt = msg.prompt;
@@ -1235,6 +1245,7 @@ function handleSkillMessage(msg) {
 
     setupRound();
     skillState.raf = requestAnimationFrame(step);
+    if (paused) skillState.pause();
 }
 
 function showHints(hints) {
@@ -1271,6 +1282,8 @@ window.addEventListener('message', (event) => {
 
     if (msg.type === 'aeterna:theme') {
         applyThemeOverride(msg.href);
+    } else if (msg.type === 'focus:paused') {
+        setPaused(msg.paused === true);
     } else if (msg.type === 'locale' && msg.strings && typeof msg.strings === 'object') {
         locale = { ...locale, ...msg.strings };
     } else if (msg.type === 'panel:open' && msg.panel) {

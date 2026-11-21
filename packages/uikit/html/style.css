@@ -661,6 +661,13 @@ html, body {
     .motion-enter { transform: none; }
 }
 
+/* 0.2 paused by a focus overlay: the screen stays, nothing under it takes the pointer. */
+.uikit-paused .layer,
+.uikit-paused .card,
+.uikit-paused .skill-card {
+    pointer-events: none !important;
+}
+
 /* Keyboard accessibility focus ring (ADR 0004 decision 13) */
 button:focus-visible,
 input:focus-visible,

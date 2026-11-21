@@ -111,6 +111,7 @@ From the repository root:
 
 ```sh
 busted --lpath='./packages/devkit/busted/?.lua;./?.lua;./?/init.lua' --pattern=_spec packages/uikit/spec
+node --test packages/uikit/spec/   # slider grid math of the page (html/slider-math.js)
 ```
 
 ## License

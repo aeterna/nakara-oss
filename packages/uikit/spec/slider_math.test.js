@@ -1,10 +1,10 @@
-'use strict';
-
 // Slider grid math the page uses before it sends a value (html/slider-math.js).
 // Run: node --test packages/uikit/spec/
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { snap, decimalsOf } = require('../html/slider-math.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import '../html/slider-math.js';
+
+const { snap, decimalsOf } = globalThis.AeternaUikitSlider;
 
 // The server's check (shared/logic/uikit.lua L.isSliderValue): in range, grid index within 1e-6.
 function onServerGrid(v, min, max, step) {
