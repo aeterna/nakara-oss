@@ -7,12 +7,12 @@
     "commands": [],
     "registeredCommands": ["aeterna_core_selftest"],
     "convars": {
-      "read": ["aeterna_locale", "aeterna_timezone", "aeterna_theme", "aeterna_core_log_level"],
+      "read": ["aeterna_locale", "aeterna_timezone", "aeterna_theme", "aeterna_core_log_level", "aeterna_theme_preset"],
       "write": []
     },
     "netEvents": {
       "server": [],
-      "client": []
+      "client": ["aeterna_core:cl:selftest", "aeterna_core:cl:selftestEnd"]
     },
     "nui": true,
     "db": {
