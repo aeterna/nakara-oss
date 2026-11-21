@@ -2,18 +2,6 @@
   "version": 1,
   "leases": [
     {
-      "id": "kit02-w2-st-c-8104a54d",
-      "repo": "nakara-oss",
-      "lane": "kit02-w2-st-c",
-      "host": "mac",
-      "scope": [
-        "packages/{phonekit,loading,testkit}/**"
-      ],
-      "plan": "kit-v02",
-      "acquired": "2026-11-21T15:06:36Z",
-      "expires": "2026-11-21T19:06:36Z"
-    },
-    {
       "id": "kit02-w2-phonecall-7c14eac5",
       "repo": "nakara-oss",
       "lane": "kit02-w2-phonecall",
