@@ -31,6 +31,7 @@ local LOCALE_KEYS = {
     'hudkit.vehicle.gear',
     'hudkit.unit.kmh',
     'hudkit.unit.mph',
+    'hudkit.unit.m',
     'hudkit.part.status',
     'hudkit.part.vehicle',
     'hudkit.part.street',
@@ -502,7 +503,7 @@ local function voiceMessage()
     if label and label.key then
         mode = translate(label.key)
     elseif label and label.meters then
-        mode = label.meters .. ' m'
+        mode = label.meters .. ' ' .. translate('hudkit.unit.m')
     end
     local radio = V.radioOn(voiceState.radioChannel)
     return {
@@ -639,10 +640,10 @@ AddEventHandler('onClientResourceStop', function(resName)
 end)
 
 -- Seatbelt state from another resource (client-local). The last resource that fired it owns it.
+-- The owner is the invoking resource only; a payload field naming one is not trusted.
 AddEventHandler('aeterna_hudkit:seatbelt', function(payload)
     local inv = type(GetInvokingResource) == 'function' and GetInvokingResource() or nil
-    local owner = inv or (type(payload) == 'table' and payload.owner) or 'unknown'
-    if seatbelt.set(owner, payload) then
+    if seatbelt.set(inv, payload) then
         sendSeatbelt(isInVehicle())
     end
 end)
@@ -937,21 +938,10 @@ CreateThread(function()
             end
 
             local camRotZ = 0.0
-            local rawCamZ = 0.0
             if type(GetGameplayCamRot) == 'function' then
                 local rot = GetGameplayCamRot(2)
                 if rot and rot.z then
-                    rawCamZ = rot.z
                     camRotZ = (360.0 - rot.z) % 360.0
-                end
-            end
-
-            -- Compass tape: only when the whole-degree heading changes.
-            if compassEnabled() then
-                local deg = C.fromCamRot(rawCamZ)
-                if deg ~= lastCompassDeg then
-                    lastCompassDeg = deg
-                    sendUi({ type = 'hud:compass', deg = deg })
                 end
             end
             local _, headingKey = H.headingSector(camRotZ)
@@ -983,6 +973,27 @@ CreateThread(function()
     end
 end)
 
+-- Compass tape thread: follows the camera at ~20 Hz so the tape moves smoothly. It reads only
+-- GetGameplayCamRot and sends only when the whole degree changes; it idles while the element is hidden.
+if compassEnabled() then
+    CreateThread(function()
+        while true do
+            Wait(50)
+            local place = appliedPlaces['compass']
+            if place and place.hidden then
+                Wait(450)
+            elseif type(GetGameplayCamRot) == 'function' then
+                local rot = GetGameplayCamRot(2)
+                local deg = C.fromCamRot(rot and rot.z or 0.0)
+                if deg ~= lastCompassDeg then
+                    lastCompassDeg = deg
+                    sendUi({ type = 'hud:compass', deg = deg })
+                end
+            end
+        end
+    end)
+end
+
 -- Resolution & safezone watcher thread
 CreateThread(function()
     local lastResW, lastResH, lastSafezone = 0, 0, 0
@@ -1003,6 +1014,9 @@ CreateThread(function()
         end
 
         hideBaseHealthArmour()
+
+        -- pma-voice may still read 'starting' when onClientResourceStart fires; catch it here.
+        checkVoice()
     end
 end)
 

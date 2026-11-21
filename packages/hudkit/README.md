@@ -96,11 +96,11 @@ TriggerEvent('aeterna_hudkit:seatbelt', { on = false }) -- unfastened (shown in 
 TriggerEvent('aeterna_hudkit:seatbelt', nil)            -- hide the icon
 ```
 
-The icon shows in the `vehicle` part only while the player is in a vehicle. The last resource that fired the event owns the state; when it stops, the icon is hidden. hudkit never blocks leaving a vehicle and never adds ejection.
+The icon shows in the `vehicle` part only while the player is in a vehicle. The last resource that fired the event owns the state (taken from the invoking resource, never from the payload); only that resource can hide it with `nil`, and when it stops, the icon is hidden. hudkit never blocks leaving a vehicle and never adds ejection.
 
 ## Voice indicator / สถานะเสียงพูด (0.2)
 
-hudkit checks `GetResourceState('pma-voice')` on start and whenever `pma-voice` starts or stops. It never lists `pma-voice` as a dependency and never calls its exports. It reads:
+hudkit checks `GetResourceState('pma-voice')` on start, whenever `pma-voice` starts or stops, and once a second. It never lists `pma-voice` as a dependency and never calls its exports. It reads:
 
 | Value | Source |
 |---|---|

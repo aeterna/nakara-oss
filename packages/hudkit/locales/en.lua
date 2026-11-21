@@ -15,6 +15,7 @@ local STRINGS = {
     ['hudkit.vehicle.gear'] = 'Gear',
     ['hudkit.unit.kmh'] = 'km/h',
     ['hudkit.unit.mph'] = 'mph',
+    ['hudkit.unit.m'] = 'm',
     ['hudkit.part.status'] = 'Status bars',
     ['hudkit.part.vehicle'] = 'Vehicle panel',
     ['hudkit.part.street'] = 'Street and compass',

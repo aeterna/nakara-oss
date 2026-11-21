@@ -23,6 +23,14 @@ All notable changes to `aeterna_hudkit` are documented here. The format follows
 - While another resource holds `aeterna_core`'s focus overlay, the settings card stays open and ignores input.
 - Font sizes use the theme type tokens (`--fs-1` … `--fs-5`, `--lh`) instead of pixel values.
 - `ready` accepts sizes only for hudkit's own parts.
+- The compass tape has its own ~50 ms thread (camera heading only, sent on whole-degree change, idle while the element is hidden) instead of the 200 ms value tick.
+- `pma-voice` is also checked every second, so a resource still reading `starting` at `onClientResourceStart` is picked up.
+- The voice distance label uses the locale key `hudkit.unit.m` (en `m`, th `ม.`).
+- `aeterna_hudkit:seatbelt` takes its owner from the invoking resource only; a `nil` payload is honoured only from the owner, and an event with no invoking resource is refused.
+
+### Fixed
+
+- Extra bar `label` length is counted in UTF-8 characters (`utf8.len`) instead of bytes, so Thai labels up to 24 characters are accepted; invalid UTF-8 is refused (0.1 bug).
 
 ## [0.1.0] - 2026-11-18
 

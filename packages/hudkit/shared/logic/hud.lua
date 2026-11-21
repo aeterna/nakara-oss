@@ -117,7 +117,9 @@ function HudLogic.createBarsRegistry(options)
             return false
         end
         local label = def.label
-        if type(label) ~= 'string' or #label < 1 or #label > 24 then
+        -- Length in characters, not bytes (Thai is 3 bytes each); invalid UTF-8 (utf8.len -> nil) is refused.
+        local labelLen = type(label) == 'string' and utf8.len(label) or nil
+        if not labelLen or labelLen < 1 or labelLen > 24 then
             warn('aeterna_hudkit: extra bar invalid label', { owner = owner, id = id })
             return false
         end

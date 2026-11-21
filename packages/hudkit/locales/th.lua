@@ -15,6 +15,7 @@ local STRINGS = {
     ['hudkit.vehicle.gear'] = 'เกียร์',
     ['hudkit.unit.kmh'] = 'กม./ชม.',
     ['hudkit.unit.mph'] = 'ไมล์/ชม.',
+    ['hudkit.unit.m'] = 'ม.',
     ['hudkit.part.status'] = 'แถบสถานะ',
     ['hudkit.part.vehicle'] = 'แผงยานพาหนะ',
     ['hudkit.part.street'] = 'ตำแหน่งและเข็มทิศ',
