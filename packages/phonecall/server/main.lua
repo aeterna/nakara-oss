@@ -333,10 +333,22 @@ end
 
 local refusedSeq = 0
 
--- The reason a dial was refused, on the dialer's number field.
+-- The reason a dial was refused, on the dialer's number field; the next dial from that dialer puts the label
+-- back (a freshly drawn dialer always starts with the plain label).
 local function showRefusal(src, screenId, reason)
-    if screenId then
+    local s = sessions[src]
+    if screenId and s then
+        s.refused = s.refused or {}
+        s.refused[screenId] = true
         update(src, screenId, { blocks = { number = { label = cut(t('phonecall.end.' .. reason), 40) } } })
+    end
+end
+
+local function clearRefusal(src, screenId)
+    local s = sessions[src]
+    if screenId and s and s.refused and s.refused[screenId] then
+        s.refused[screenId] = nil
+        update(src, screenId, { blocks = { number = { label = t('phonecall.dial.title') } } })
     end
 end
 
@@ -424,6 +436,7 @@ local function dialFrom(src, input, screenId)
     local ok, _, clean = AeternaCore.validate({ number = input }, L.DIAL_SCHEMA)
     if not ok then return end
     if not L.checkDial(AeternaCore.rateLimit, src) then return end
+    clearRefusal(src, screenId)
     local mine = assignNumber(s.who)
     if not mine then return end
     local calleeWho = ownerOf(N.digits(clean.number))
@@ -988,18 +1001,27 @@ end)
 -- 500 ms later, so each client already knows its test when the first call state or toast arrives.
 local tracker = T.createTracker()
 
+local function setupFailed(a, b, callId)
+    sendState(a, callId, 'ended', '', 'unavailable')
+    sendState(b, callId, 'ended', '', 'unavailable')
+end
+
 local function selftestPair(runId, name, a, b)
     local sa, sb = session(a), session(b)
-    if not sa or not sb then return end
-    local na, nb = assignNumber(sa.who), assignNumber(sb.who)
-    if not na or not nb then return end
+    if not sa or not sb then return setupFailed(a, b, 'st-nosession') end
     if name == PREFIX .. 'sms_ab' then
+        -- the only destructive row: numbers are assigned and the message written only once the guard allows it
         if not AeternaCore.selftest.mayWrite(runId, name) then return end
+        local na, nb = assignNumber(sa.who), assignNumber(sb.who)
+        if not na or not nb then return setupFailed(a, b, 'st-nonumber') end
         S.deliver(smsIo, { fromWho = sa.who, toWho = sb.who, fromPeer = N.digits(na), toPeer = N.digits(nb),
             body = 'Self-test', ts = os.time(), keep = Cfg.sms.keep, idOut = nextId(), idIn = nextId() })
         notifyMessage(b, peerLabel(b, na), 'Self-test')
         return
     end
+    -- call tests are not destructive: they use the numbers the players already have
+    local na, nb = numberOf(sa.who), numberOf(sb.who)
+    if not na or not nb then return setupFailed(a, b, 'st-nonumber') end
     if not backend:available() then
         sendState(a, 'selftest', 'ended', nb, 'voice_off')
         sendState(b, 'selftest', 'ended', na, 'voice_off')

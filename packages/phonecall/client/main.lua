@@ -105,7 +105,11 @@ end
 local function onCallState(data)
     for name, p in pairs(pending) do
         local short = name:sub(#PREFIX + 1)
-        if not p.reported and (short == 'call_ab' or short == 'call_busy') then
+        local setup = T.setupFailure(data.callId)
+        if not p.reported and short == 'sms_ab' and setup then
+            p.reported = true
+            report(p.runId, name, 'fail', setup)
+        elseif not p.reported and (short == 'call_ab' or short == 'call_busy') then
             local state, detail = T.callOutcome(short, p.role, data)
             if state then
                 p.reported = true

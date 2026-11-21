@@ -104,9 +104,22 @@ function T.voiceChannel(kind, ok, detail)
     return 'fail', detail
 end
 
+-- Set-up failures the server sends to both players as an ended call state with one of these call ids (the
+-- cl:state schema has no free text), so the test fails with a reason instead of timing out.
+T.SETUP_FAILURES = {
+    ['st-nonumber'] = 'open the phone once first',
+    ['st-nosession'] = 'a player has no character loaded',
+}
+
+function T.setupFailure(callId)
+    return callId ~= nil and T.SETUP_FAILURES[callId] or nil
+end
+
 -- Client side of call_ab and call_busy: what one `cl:state` means for this role. nil = keep waiting.
 function T.callOutcome(test, role, st)
     if type(st) ~= 'table' then return nil end
+    local setup = T.setupFailure(st.callId)
+    if setup then return 'fail', setup end
     if st.state == 'ended' and st.reason == 'voice_off' then return 'skip', 'no voice backend' end
     if test == 'call_busy' then
         if role ~= 'A' then return nil end

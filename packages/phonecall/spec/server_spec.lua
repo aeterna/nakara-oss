@@ -436,6 +436,8 @@ describe('aeterna_phonecall server', function()
             end
             assert.is_true(restored)
             -- a fresh dialer is drawn with the plain label
+            natives.advance(1100)
+            natives.fire_net('aeterna_phonecall:sv:hangup', 1)
             openApp(1, 'phone')
             assert.are.equal('Number', blockById(lastSpec(w.kit, 1, 'phone'), 'number').label)
         end)
