@@ -299,3 +299,9 @@ AddEventHandler('playerDropped', function()
         useManager:removePlayer(src)
     end
 end)
+
+-- Read and set points for server/selftest.lua (same resource; nothing here crosses resources).
+InvkitServerSelftestHooks = {
+    useManager = useManager,
+    syncOxHook = syncOxHook,
+}

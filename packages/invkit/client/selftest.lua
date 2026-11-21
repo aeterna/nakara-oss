@@ -1,12 +1,14 @@
--- client/selftest.lua -- runs aeterna_invkit.stash_open on the presser's client. It sends the same request as
--- the bound key (aeterna_invkit:sv:open) at the presser's position and watches for the stash opening or the
--- refusal; decisions live in shared/logic/selftest.lua.
+-- client/selftest.lua -- runs the aeterna_invkit client self-tests on the presser's client: stash_open (sends
+-- the same request as the bound key at the presser's position), item_use (watches the item the server gave for
+-- this run go through one use) and the three phone ped rows (read the presser's own ox_inventory and build the
+-- device list invkit answers phonekit with). Decisions live in shared/logic/selftest.lua.
 
 local ST = InvkitSelftest
 local L = InvkitLogic
 
 local running = {} -- [full name] = runId
 local lastRefusal = nil
+local useCount = 0 -- aeterna_invkit:cl:use events seen while item_use runs
 
 local function report(runId, name, state, detail, extra)
     exports.aeterna_core:reportSelftest(runId, name, state, detail, extra)
@@ -63,17 +65,91 @@ local function stashOpen(runId, name)
     report(runId, name, watch.verdict())
 end
 
+AddEventHandler('aeterna_invkit:cl:use', function()
+    useCount = useCount + 1
+end)
+
+-- Tagged test items of this run, from the client's own ox_inventory view: item name and count.
+local function taggedItem(runId)
+    for _, item in ipairs(ST.USE_ITEMS) do
+        local ok, count = pcall(function()
+            return exports.ox_inventory:Search('count', item, { aeterna_selftest = runId })
+        end)
+        if ok and (tonumber(count) or 0) > 0 then return item, tonumber(count) end
+    end
+    return nil, 0
+end
+
+local function waitFor(runId, name, ms, check)
+    local waited = 0
+    while waited < ms and running[name] == runId do
+        if check() then return true end
+        Wait(250)
+        waited = waited + 250
+    end
+    return check()
+end
+
+-- The server gives the item and starts the use (aeterna_core:selftestStarted); this side watches it.
+local function itemUse(runId, name)
+    useCount = 0
+    local item, before = nil, 0
+    waitFor(runId, name, ST.ITEM_WAIT_MS, function()
+        item, before = taggedItem(runId)
+        return item ~= nil
+    end)
+    local after = before
+    if item then
+        waitFor(runId, name, ST.USE_WAIT_MS, function()
+            local _, n = taggedItem(runId)
+            after = n
+            return useCount >= 1 and after == 0
+        end)
+        Wait(500) -- a second use would show up here
+    end
+    if running[name] ~= runId then return end
+    report(runId, name, ST.itemUseVerdict({ before = before, uses = useCount, after = after }))
+end
+
+local function phoneDevices()
+    local map = InvkitPhoneLogic.validateItemMap(Config.phone and Config.phone.items)
+    local names = InvkitPhoneLogic.itemNames(map)
+    if #names == 0 then return {} end
+    local ok, result = pcall(function() return exports.ox_inventory:Search('slots', names) end)
+    if not ok or type(result) ~= 'table' then return nil end
+    return ST.devicesFrom(InvkitPhoneLogic, InvkitPhoneLogic.collectSlots(result, names), map)
+end
+
+local function phoneWatch(runId, name, short)
+    local watch = ST.newPhoneWatch(short)
+    waitFor(runId, name, ST.PHONE_WATCH_MS, function() return watch.observe(phoneDevices()) end)
+    if running[name] ~= runId then return end
+    report(runId, name, watch.verdict())
+end
+
+local CLIENT_TESTS = {
+    stash_open = stashOpen,
+    item_use = itemUse,
+    phone_two_items = phoneWatch,
+    phone_drop_active = phoneWatch,
+    phone_no_item = phoneWatch,
+}
+
 AddEventHandler('aeterna_core:selftest', function(runId, name)
-    if ST.shortName(name) ~= 'stash_open' then return end
-    local oxStarted = GetResourceState('ox_inventory') == 'started'
-    local reason = ST.skipReason('stash_open', Config, { oxStarted = oxStarted })
+    local short = ST.shortName(name)
+    local test = short and CLIENT_TESTS[short]
+    if not test then return end
+    local reason = ST.skipReason(short, Config, {
+        oxStarted = GetResourceState('ox_inventory') == 'started',
+        phonekitStarted = GetResourceState('aeterna_phonekit') == 'started',
+    })
     if reason then
         report(runId, name, 'skip', reason)
         return
     end
     running[name] = runId
     CreateThread(function()
-        stashOpen(runId, name)
+        test(runId, name, short)
     end)
 end)
 

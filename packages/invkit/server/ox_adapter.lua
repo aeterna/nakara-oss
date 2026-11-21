@@ -221,7 +221,7 @@ function A.setMetadata(src, slot, metadata)
     return true
 end
 
---- Self-test only (phone_device_save): gives one item with `metadata`. true when ox_inventory added it.
+--- Self-test only: gives one item with `metadata`. true when ox_inventory added it.
 function A.addItem(src, item, count, metadata)
     if not A.isOxStarted() then
         return false
@@ -236,15 +236,27 @@ function A.addItem(src, item, count, metadata)
     return true
 end
 
---- Self-test only (phone_device_save): removes `count` of `item` from that one slot.
-function A.removeItem(src, item, count, slot)
+--- Self-test only: removes `count` of `item` whose metadata matches `metadata` (the test's own tag), so an
+--- item the player already had is never taken.
+function A.removeTagged(src, item, count, metadata)
     if not A.isOxStarted() then
         return false
     end
     local ok, removed = pcall(function()
-        return exports.ox_inventory:RemoveItem(src, item, count, nil, slot)
+        return exports.ox_inventory:RemoveItem(src, item, count, metadata)
     end)
     return ok and removed ~= false
+end
+
+--- Self-test only: how many of `item` the player carries, or nil when ox_inventory cannot say.
+function A.itemCount(src, item)
+    if not A.isOxStarted() then
+        return nil
+    end
+    local ok, count = pcall(function()
+        return exports.ox_inventory:GetItemCount(src, item)
+    end)
+    return ok and tonumber(count) or nil
 end
 
 --- (Re)registers the swapItems and createItem hooks for the phone items. `handlers` maps the hook event

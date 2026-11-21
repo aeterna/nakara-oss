@@ -1,9 +1,8 @@
 -- shared/logic/selftest.lua -- natives-free rules of the aeterna_invkit 0.2 self-tests
 -- (docs/specs/aeterna_invkit.md § Self-tests (0.2)). Each judge returns state, detail, extra for
 -- exports.aeterna_core:reportSelftest; server/selftest.lua and client/selftest.lua stay thin.
---
--- item_use, phone_two_items, phone_drop_active and phone_no_item are not registered: as the spec writes them
--- they need work the side they run on cannot do (see the package README, "Self-tests").
+-- Client tests that need server state (item_use) are prepared by the server on aeterna_core:selftestStarted and
+-- torn down on the server-local aeterna_core:selftestEnd; the result still comes only from the client.
 
 InvkitSelftest = InvkitSelftest or {}
 
@@ -13,13 +12,31 @@ local PREFIX = 'aeterna_invkit.'
 InvkitSelftest.STASH_WATCH_MS = 50000
 -- phone_device_save waits this long for its save to land (invkit holds saves up to one 5000 ms window).
 InvkitSelftest.SAVE_WAIT_MS = 7000
+-- item_use: the client waits this long for the tagged test item, then this long for the use to finish.
+InvkitSelftest.ITEM_WAIT_MS = 6000
+InvkitSelftest.USE_WAIT_MS = 8000
+-- item_use: the server starts the use this long after giving the item, once the client listens.
+InvkitSelftest.USE_START_DELAY_MS = 1500
+-- The phone ped rows wait this long for the presser's inventory to match.
+InvkitSelftest.PHONE_WATCH_MS = 50000
+
+-- item_use gives one of these ox_inventory default items, the first that no resource has registered.
+InvkitSelftest.USE_ITEMS = { 'water', 'burger', 'sandwich' }
+InvkitSelftest.USE_DEF = { label = 'Self-test', duration = 1500, consume = 1, cancelable = false }
+
+local OX = { 'ox_inventory' }
+local OX_PHONEKIT = { 'ox_inventory', 'aeterna_phonekit' }
 
 local ROWS = {
     { name = 'stash_id', kind = 'headless' },
     { name = 'use_state_machine', kind = 'headless' },
     { name = 'phone_item_map', kind = 'headless' },
-    { name = 'stash_open', kind = 'ped', expect = true, timeout = 60000, needsOx = true },
-    { name = 'phone_device_save', kind = 'mock', destructive = true, timeout = 15000, needsOx = true },
+    { name = 'stash_open', kind = 'ped', expect = true, timeout = 60000, needs = OX },
+    { name = 'item_use', kind = 'mock', side = 'client', destructive = true, timeout = 20000, needs = OX },
+    { name = 'phone_two_items', kind = 'ped', expect = true, timeout = 60000, needs = OX_PHONEKIT },
+    { name = 'phone_drop_active', kind = 'ped', expect = true, timeout = 60000, needs = OX_PHONEKIT },
+    { name = 'phone_no_item', kind = 'ped', expect = true, timeout = 60000, needs = OX_PHONEKIT },
+    { name = 'phone_device_save', kind = 'mock', destructive = true, timeout = 15000, needs = OX },
 }
 
 local KNOWN = {}
@@ -31,9 +48,10 @@ function InvkitSelftest.definitions(t)
     local out = {}
     for i, row in ipairs(ROWS) do
         local meta = { kind = row.kind, players = 1, destructive = row.destructive == true }
+        if row.side then meta.side = row.side end
         if row.expect then meta.expect = t('invkit.selftest.' .. row.name .. '.expect') end
         if row.timeout then meta.timeout = row.timeout end
-        if row.needsOx then meta.skipWhen = { resources = { 'ox_inventory' } } end
+        if row.needs then meta.skipWhen = { resources = { table.unpack(row.needs) } } end
         out[i] = { name = row.name, meta = meta }
     end
     return out
@@ -46,20 +64,32 @@ function InvkitSelftest.shortName(fullName)
     return KNOWN[short] and short or nil
 end
 
---- The only reasons a row may report SKIP (the spec's "Skip when" column). env.oxStarted = ox_inventory started.
+local PHONE_PED = { phone_two_items = true, phone_drop_active = true, phone_no_item = true }
+
+--- The only reasons a row may report SKIP: the spec's "Skip when" column, plus 'needs a presser' for the
+--- server mock on a run nobody pressed. env = { oxStarted, phonekitStarted, presser } (false = known missing).
 function InvkitSelftest.skipReason(name, cfg, env)
     cfg = type(cfg) == 'table' and cfg or {}
     env = type(env) == 'table' and env or {}
-    local phoneOff = not (type(cfg.phone) == 'table' and cfg.phone.enabled == true)
+    local enabled = nil
+    if type(cfg.phone) == 'table' then enabled = cfg.phone.enabled end
+    local phoneOff = enabled ~= true and ('Config.phone.enabled = ' .. tostring(enabled)) or nil
     if name == 'phone_item_map' then
-        if phoneOff then return 'Config.phone.enabled = false' end
+        return phoneOff
     elseif name == 'stash_open' then
         if env.oxStarted == false then return 'needs ox_inventory' end
         local points = type(cfg.stash) == 'table' and cfg.stash.points or nil
         if type(points) ~= 'table' or #points == 0 then return 'no stash point configured' end
+    elseif name == 'item_use' then
+        if env.oxStarted == false then return 'needs ox_inventory' end
+    elseif PHONE_PED[name] then
+        if env.oxStarted == false then return 'needs ox_inventory' end
+        if env.phonekitStarted == false then return 'needs aeterna_phonekit' end
+        return phoneOff
     elseif name == 'phone_device_save' then
         if env.oxStarted == false then return 'needs ox_inventory' end
-        if phoneOff then return 'Config.phone.enabled = false' end
+        if phoneOff then return phoneOff end
+        if env.presser == false then return 'needs a presser' end
     end
     return nil
 end
@@ -219,13 +249,17 @@ end
 
 InvkitSelftest.SAVE = { battery = 42, fold = 'closed' }
 
---- r = { given, item, id, metadata (of the test item after the save), gone (the test item is gone again) }.
+--- r = { guard, given, item, id, metadata (of the test item after the save), gone (the test item count is back
+--- to what it was before) }. guard = false: the write guard refused, nothing was given.
 function InvkitSelftest.deviceSaveVerdict(r)
     r = r or {}
+    if r.guard == false then
+        return 'fail', 'the write guard refused the test write', { restored = true }
+    end
     if not r.given then
         return 'fail', ('could not give the test phone item %s'):format(tostring(r.item)), { restored = true }
     end
-    local extra = { restored = r.gone == true, wrote = true }
+    local extra = { restored = r.gone == true }
     local md = type(r.metadata) == 'table' and r.metadata or {}
     local bad = firstMismatch({
         { 'battery', md.battery, InvkitSelftest.SAVE.battery },
@@ -239,6 +273,105 @@ function InvkitSelftest.deviceSaveVerdict(r)
         return 'fail', 'the test phone item was not removed', extra
     end
     return 'mock', 'deviceSave wrote battery 42 and fold closed into the item; the item is removed', extra
+end
+
+--- item_use: the first test item `isTaken(name)` says no resource has registered, or nil.
+function InvkitSelftest.pickUseItem(isTaken)
+    for _, name in ipairs(InvkitSelftest.USE_ITEMS) do
+        if not isTaken(name) then return name end
+    end
+    return nil
+end
+
+--- item_use, judged on the presser's client: r = { before = tagged items before the use, uses = progress bars
+--- started for it, after = tagged items when the use ended }.
+function InvkitSelftest.itemUseVerdict(r)
+    r = r or {}
+    local after = tonumber(r.after) or 0
+    local extra = { restored = after == 0 }
+    if (tonumber(r.before) or 0) ~= 1 then
+        extra.step, extra.expected = 1, 'one test item'
+        return 'fail', 'the test item never arrived', extra
+    end
+    if r.uses ~= 1 then
+        extra.step, extra.expected = 2, 'one progress bar'
+        return 'fail', ('%d progress bars ran for the test item'):format(tonumber(r.uses) or 0), extra
+    end
+    if after ~= 0 then
+        extra.step, extra.expected = 3, 'test item removed'
+        return 'fail', 'the test item was not removed after the use', extra
+    end
+    return 'mock', 'the item was given, its progress bar ran once and the item was removed', extra
+end
+
+--- The device list invkit answers phonekit with, built from the presser's own ox_inventory slots (the client
+--- view). A phone with no phoneId yet gets a stand-in id here; nothing is written.
+function InvkitSelftest.devicesFrom(P, slots, map)
+    if type(slots) ~= 'table' then return nil end
+    local n = 0
+    local devices = P.buildDevices(slots, map, function() n = n + 1; return n end)
+    return devices
+end
+
+local function byModel(devices, model)
+    for _, d in ipairs(devices or {}) do
+        if d.model == model then return d end
+    end
+    return nil
+end
+
+--- The three phone ped rows: observe(devices) with the current device list (nil = inventory not readable)
+--- returns true once the presser's inventory shows what the row checks; verdict() gives the result.
+function InvkitSelftest.newPhoneWatch(name)
+    local w = {}
+    local seenTwo = nil -- ids carried when two or more phones were seen
+    local last = nil
+    local result = nil
+
+    function w.observe(devices)
+        if type(devices) ~= 'table' then return false end
+        last = devices
+        if name == 'phone_two_items' then
+            local fold, slab = byModel(devices, 'fold'), byModel(devices, 'slab')
+            if fold and slab then
+                result = ('fold (battery %s) and slab (battery %s) both in the device list'):format(
+                    tostring(fold.battery), tostring(slab.battery))
+            end
+        elseif name == 'phone_drop_active' then
+            if #devices >= 2 then
+                seenTwo = {}
+                for _, d in ipairs(devices) do seenTwo[d.id] = true end
+            elseif seenTwo and #devices >= 1 then
+                local kept = 0
+                for _, d in ipairs(devices) do if seenTwo[d.id] then kept = kept + 1 end end
+                if kept == #devices then
+                    result = 'a dropped phone left the device list; the other phone stays in it'
+                end
+            end
+        elseif name == 'phone_no_item' then
+            if #devices == 0 then
+                result = 'no phone carried: invkit answers an empty device list, which phonekit refuses'
+            end
+        end
+        return result ~= nil
+    end
+
+    function w.verdict()
+        if result then return 'pass', result end
+        if last == nil then return 'fail', 'could not read the presser inventory' end
+        if name == 'phone_two_items' then
+            local missing = {}
+            if not byModel(last, 'fold') then missing[#missing + 1] = 'fold' end
+            if not byModel(last, 'slab') then missing[#missing + 1] = 'slab' end
+            return 'fail', 'no ' .. table.concat(missing, ' and ') .. ' phone item carried'
+        elseif name == 'phone_drop_active' then
+            if not seenTwo then return 'fail', 'the presser never carried two phones' end
+            return 'fail', 'no phone was dropped while the other stayed'
+        end
+        return 'fail', ('%d phone items still carried'):format(#last)
+    end
+
+    return w
 end
 
 return InvkitSelftest
