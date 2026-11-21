@@ -20,7 +20,9 @@ function L.validateSlot(slot, side)
     if type(slot.id) ~= 'string' or #slot.id < 1 or #slot.id > 32 or not slot.id:match('^[%w_%-]+$') then
         return false, 'id: must be string 1-32 chars matching ^[%w_%-]+$'
     end
-    if type(slot.label) ~= 'string' or #slot.label < 1 or #slot.label > 20 then
+    -- Lengths a player sees count characters (Thai is 3 bytes each); utf8.len is nil for invalid UTF-8.
+    local labelLen = type(slot.label) == 'string' and utf8.len(slot.label) or nil
+    if not labelLen or labelLen < 1 or labelLen > 20 then
         return false, 'label: must be string 1-20 characters'
     end
     if slot.icon ~= nil and (type(slot.icon) ~= 'string' or not L.ICONS[slot.icon]) then
@@ -42,7 +44,8 @@ function L.validateSlot(slot, side)
             if type(w.jobs) ~= 'table' then return false, 'when.jobs: must be array' end
             if #w.jobs > 8 then return false, 'when.jobs: exceeds 8 items' end
             for i = 1, #w.jobs do
-                if type(w.jobs[i]) ~= 'string' or #w.jobs[i] > 32 then
+                local jobLen = type(w.jobs[i]) == 'string' and utf8.len(w.jobs[i]) or nil
+                if not jobLen or jobLen > 32 then
                     return false, 'when.jobs[' .. i .. ']: must be string <= 32 chars'
                 end
             end
@@ -274,14 +277,14 @@ end
 function L.pointerToSlot(dx, dy, radius, deadZone, totalPositions)
     local r, dz = radius or 150, deadZone or 0.35
     if math.sqrt(dx * dx + dy * dy) < (r * dz) then return nil end
-    local angle = math.deg(math.atan2(dx, -dy))
+    local angle = math.deg(math.atan(dx, -dy))
     return L.angleToSlot(angle, totalPositions)
 end
 
 function L.stickToSlot(x, y, deadZone, totalPositions)
     local dz = deadZone or 0.35
     if math.sqrt(x * x + y * y) < dz then return nil end
-    local angle = math.deg(math.atan2(x, -y))
+    local angle = math.deg(math.atan(x, -y))
     return L.angleToSlot(angle, totalPositions)
 end
 
