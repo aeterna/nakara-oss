@@ -478,3 +478,51 @@ end)
 if Config.menuEntry ~= false then
     uikit('addMenuEntry', { id = 'testkit', label = Menu.cut(t('testkit.menu.title'), 60), icon = 'check', ace = ACE })
 end
+
+-- Own self-tests (spec § Self-tests). save rewrites the report files with what they already hold (or a sample
+-- report when there is none), so a test run never loses the last report.
+local Selftest = TestkitLogic.selftest
+
+local function readSchema()
+    local raw = LoadResourceFile(RES, 'schema/report-1.schema.json')
+    if type(raw) ~= 'string' then return nil end
+    local ok, schema = pcall(json.decode, raw)
+    return ok and schema or nil
+end
+
+local function saveCheck()
+    local built = Report.build(Selftest.sampleInput())
+    local sample = { json = Report.encode(built), md = Report.markdown(built, t('testkit.report.footer')) }
+    local function keep(path, k)
+        local content = LoadResourceFile(RES, path)
+        if type(content) ~= 'string' or content == '' then content = sample[k] end
+        return content
+    end
+    local json1, md1 = keep('reports/latest.json', 'json'), keep('reports/latest.md', 'md')
+    -- literal paths: they are the two files oss.json declares
+    local okJson = SaveResourceFile(RES, 'reports/latest.json', json1, -1)
+    local okMd = SaveResourceFile(RES, 'reports/latest.md', md1, -1)
+    return Selftest.save({
+        json = { saved = okJson == true, wrote = json1, back = LoadResourceFile(RES, 'reports/latest.json') },
+        md = { saved = okMd == true, wrote = md1, back = LoadResourceFile(RES, 'reports/latest.md') },
+    })
+end
+
+AddEventHandler('aeterna_core:selftest', function(runId, name)
+    if GetInvokingResource() ~= 'aeterna_core' or not Selftest.owns(RES, name) then return end
+    local ok, detail
+    if name == RES .. '.scrub' then
+        ok, detail = Selftest.scrub(Scrub, AeternaCore.text.clean)
+    elseif name == RES .. '.report_schema' then
+        ok, detail = Selftest.reportSchema(Report, readSchema(), json.decode, t('testkit.report.footer'))
+    elseif name == RES .. '.save' then
+        ok, detail = saveCheck()
+    else
+        return
+    end
+    core('reportSelftest', runId, name, ok, detail)
+end)
+
+for _, r in ipairs(Selftest.rows(RES, t)) do
+    core('addSelftest', r.name, r.meta)
+end

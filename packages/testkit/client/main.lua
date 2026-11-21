@@ -87,11 +87,31 @@ RegisterNetEvent('aeterna_testkit:cl:role', function(payload)
     if ok then role = p.role end
 end)
 
-RegisterNetEvent('aeterna_testkit:cl:askEnv', function()
+local function envValues()
     local w, h = GetActiveScreenResolution()
-    TriggerServerEvent('aeterna_testkit:sv:env', {
-        gameBuild = math.tointeger(GetGameBuildNumber()) or 0, w = math.tointeger(w) or 0, h = math.tointeger(h) or 0,
-    })
+    return math.tointeger(GetGameBuildNumber()) or 0, math.tointeger(w) or 0, math.tointeger(h) or 0
+end
+
+RegisterNetEvent('aeterna_testkit:cl:askEnv', function()
+    local gameBuild, w, h = envValues()
+    TriggerServerEvent('aeterna_testkit:sv:env', { gameBuild = gameBuild, w = w, h = h })
+end)
+
+-- Own client self-tests: env checks the values askEnv sends; the eye cards need no set-up (the menu panel the
+-- run was started from is the uikit panel behind the card).
+local Selftest = TestkitLogic.selftest
+
+AddEventHandler('aeterna_core:selftest', function(runId, name)
+    if GetInvokingResource() ~= 'aeterna_core' or not Selftest.owns(RES, name) then return end
+    local ok, detail
+    if name == RES .. '.env' then
+        ok, detail = Selftest.env(envValues())
+    elseif name == RES .. '.eye_card' or name == RES .. '.eye_card_b' then
+        ok, detail = 'ready', ''
+    else
+        return
+    end
+    pcall(function() return exports.aeterna_core:reportSelftest(runId, name, ok, detail) end)
 end)
 
 RegisterNUICallback('eyeAnswer', function(data, cb)
