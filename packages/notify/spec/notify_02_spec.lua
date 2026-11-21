@@ -6,6 +6,14 @@ local resource = require('helpers.resource')
 local HERE = debug.getinfo(1, 'S').source:match('^@(.*)/[^/]*$') or '.'
 local DIR = HERE .. '/..'
 
+-- Fires one of core's local events as aeterna_core (the handlers drop the same event from anyone else).
+local function fireCore(name, ...)
+    local prev = rawget(_G, 'GetInvokingResource')
+    rawset(_G, 'GetInvokingResource', function() return 'aeterna_core' end)
+    natives.fire(name, ...)
+    rawset(_G, 'GetInvokingResource', prev)
+end
+
 local LOGIC_FILES = {
     'shared/logic/notify.lua',
     'shared/logic/actions.lua',
@@ -615,14 +623,14 @@ describe('aeterna_notify 0.2', function()
             local res = resource.load_resource(DIR, 'client')
             assert.is_true(res.exports.showMotd())
 
-            natives.fire('aeterna_core:focusPaused', 'aeterna_notify', 'tok')
+            fireCore('aeterna_core:focusPaused', 'aeterna_notify', 'tok')
             nuiCallbacks.motdClose({ dismiss = true }, function() end)
             nuiCallbacks.escape({}, function() end)
             assert.are.equal(0, #nuiOfType(nui, 'motd:hide'))
             assert.is_nil(natives.get_kvp('aeterna_notify:motd_seen:v1'))
 
-            natives.fire('aeterna_core:focusResumed', 'aeterna_notify', 'tok')
-            natives.fire('aeterna_core:focusLost', 'aeterna_notify', 'tok', 'preempted')
+            fireCore('aeterna_core:focusResumed', 'aeterna_notify', 'tok')
+            fireCore('aeterna_core:focusLost', 'aeterna_notify', 'tok', 'preempted')
             assert.are.equal(1, #nuiOfType(nui, 'motd:hide'))
             assert.is_nil(natives.get_kvp('aeterna_notify:motd_seen:v1'))
         end)

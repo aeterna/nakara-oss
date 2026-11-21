@@ -181,6 +181,9 @@ where client tests are GAP). Spec: `docs/specs/aeterna_notify.md` § Self-tests 
 
 Test toasts and the test banner never enter the history and are removed when the test ends.
 
+Core's local events (`aeterna_core:selftest`, `selftestEnd` and the focus events) count only when `aeterna_core`
+fired them, and open test state is torn down when `aeterna_core` stops.
+
 ## Tests
 
 From the repository root:

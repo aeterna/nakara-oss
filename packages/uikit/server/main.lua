@@ -245,6 +245,7 @@ pcall(function()
 end)
 
 AddEventHandler('aeterna_core:selftest', function(runId, name)
+    if GetInvokingResource() ~= 'aeterna_core' then return end
     local short = Selftests.shortName(name)
     if not short then return end
     local ok, detail = Selftests.run(short, L)

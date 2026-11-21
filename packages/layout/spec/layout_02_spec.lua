@@ -6,6 +6,14 @@ local resource = require('helpers.resource')
 
 local HERE = debug.getinfo(1, 'S').source:match('^@(.*)/[^/]*$') or '.'
 local DIR = HERE .. '/..'
+
+-- Fires one of core's local events as aeterna_core (the handlers drop the same event from anyone else).
+local function fireCore(name, ...)
+    local prev = rawget(_G, 'GetInvokingResource')
+    rawset(_G, 'GetInvokingResource', function() return 'aeterna_core' end)
+    natives.fire(name, ...)
+    rawset(_G, 'GetInvokingResource', prev)
+end
 local CORE_IMPORT = { ['@aeterna_core/import.lua'] = DIR .. '/../core/import.lua' }
 
 local function load_logic()
@@ -581,14 +589,14 @@ describe('aeterna_layout 0.2', function()
             local h = loadClient()
             natives.fire('aeterna_layout:add', def({ id = 'status' }))
             natives.fire_net('aeterna_layout:cl:open', 1)
-            natives.fire('aeterna_core:focusPaused', 'aeterna_layout', 'tok_1')
+            fireCore('aeterna_core:focusPaused', 'aeterna_layout', 'tok_1')
             local n = #natives.emitted('local', 'aeterna_layout:apply')
             h.cb('moved', { owner = 'aeterna_hudkit', id = 'status', x = 0.1, y = 0.1, ax = 0, ay = 0, scale = 1 })
             h.cb('done', {})
             assert.are.equal(n, #natives.emitted('local', 'aeterna_layout:apply'))
             assert.is_nil(natives.get_kvp('aeterna_layout:places:v1'))
 
-            natives.fire('aeterna_core:focusResumed', 'aeterna_layout', 'tok_1')
+            fireCore('aeterna_core:focusResumed', 'aeterna_layout', 'tok_1')
             h.cb('moved', { owner = 'aeterna_hudkit', id = 'status', x = 0.1, y = 0.1, ax = 0, ay = 0, scale = 1 })
             assert.are.equal(n + 1, #natives.emitted('local', 'aeterna_layout:apply'))
             h.cb('done', {})

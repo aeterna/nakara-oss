@@ -126,6 +126,9 @@ Client tests open a test panel on the presser's client only. Its actions go to a
 the server's validation, never to the server; an open panel is replaced as if the server had opened a new one.
 `focus_lost_closes` fires core's `aeterna_core:focusLost` event itself, because one resource cannot be a second one.
 
+Core's local events (`aeterna_core:selftest`, `selftestEnd` and the focus events) count only when `aeterna_core`
+fired them, and open test state is torn down when `aeterna_core` stops.
+
 ## Tests
 
 From the repository root:

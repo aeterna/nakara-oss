@@ -6,6 +6,14 @@ local resource = require('helpers.resource')
 local HERE = debug.getinfo(1, 'S').source:match('^@(.*)/[^/]*$') or '.'
 local DIR = HERE .. '/..'
 
+-- Fires one of core's local events as aeterna_core (the handlers drop the same event from anyone else).
+local function fireCore(name, ...)
+    local prev = rawget(_G, 'GetInvokingResource')
+    rawset(_G, 'GetInvokingResource', function() return 'aeterna_core' end)
+    natives.fire(name, ...)
+    rawset(_G, 'GetInvokingResource', prev)
+end
+
 local function validFullSpec()
     return {
         title = 'Vehicle Shop',
@@ -708,7 +716,7 @@ describe('aeterna_uikit', function()
                 size = 'md',
                 blocks = {},
             })
-            natives.fire('aeterna_core:focusLost', 'aeterna_uikit', 'tok_1', 'preempted')
+            fireCore('aeterna_core:focusLost', 'aeterna_uikit', 'tok_1', 'preempted')
             local closeAction = natives.last_emitted('server', 'aeterna_uikit:sv:action')
             assert.is_truthy(closeAction)
             assert.are.equal('p1', closeAction.args[1].panelId)

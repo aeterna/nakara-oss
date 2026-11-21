@@ -225,13 +225,20 @@ local function isOurFocusEvent(owner, token)
     return true
 end
 
+-- Core's local events count only when aeterna_core fired them, so another resource cannot fake one.
+local function fromCore()
+    return GetInvokingResource() == 'aeterna_core'
+end
+
 -- Focus overlay (core 0.2): stay on screen, ignore input, send nothing; a skill check's marker stops.
 AddEventHandler('aeterna_core:focusPaused', function(owner, token)
+    if not fromCore() then return end
     if not isOurFocusEvent(owner, token) or not focusToken then return end
     setPaused(true)
 end)
 
 AddEventHandler('aeterna_core:focusResumed', function(owner, token)
+    if not fromCore() then return end
     if not isOurFocusEvent(owner, token) or not paused then return end
     setPaused(false)
     if selftest and selftest.onResumed then
@@ -239,8 +246,8 @@ AddEventHandler('aeterna_core:focusResumed', function(owner, token)
     end
 end)
 
--- Focus loss handler from aeterna_core (a real loss closes even while paused)
-AddEventHandler('aeterna_core:focusLost', function(owner, token, reason)
+-- Focus loss from aeterna_core (a real loss closes even while paused)
+local function handleFocusLost(owner, token, reason)
     if not isOurFocusEvent(owner, token) then return end
     focusToken = nil
     setPaused(false)
@@ -270,6 +277,11 @@ AddEventHandler('aeterna_core:focusLost', function(owner, token, reason)
             })
         end
     end
+end
+
+AddEventHandler('aeterna_core:focusLost', function(owner, token, reason)
+    if not fromCore() then return end
+    handleFocusLost(owner, token, reason)
 end)
 
 -- NUI Callbacks
@@ -751,14 +763,14 @@ function CLIENT_TESTS.slider_keyboard(st)
     drive(st, { type = 'selftest:drive', op = 'slider', block = Selftests.SLIDER.id, press = 'act' }, Selftests.judgeSlider)
 end
 
--- Fires the event core sends when another resource takes focus without the overlay option, then hands the token
--- back, because core still counts it as held.
+-- Runs the handler of core's focusLost event as core would when another resource takes focus without the overlay
+-- option, then hands the token back, because core still counts it as held.
 function CLIENT_TESTS.focus_lost_closes(st)
     CreateThread(function()
         Wait(RENDER_WAIT_MS)
         if st.ended then return end
         local tok = focusToken
-        TriggerEvent('aeterna_core:focusLost', GetCurrentResourceName(), tok, 'preempted')
+        handleFocusLost(GetCurrentResourceName(), tok, 'preempted')
         local open = currentPanel ~= nil and currentPanel.panelId == st.panelId
         local ok, detail = Selftests.judgeFocusLost({ panelOpen = open, close = lastResult(st) })
         if tok then
@@ -769,6 +781,7 @@ function CLIENT_TESTS.focus_lost_closes(st)
 end
 
 AddEventHandler('aeterna_core:selftest', function(runId, name)
+    if not fromCore() then return end
     local short = Selftests.shortName(name)
     local run = short and CLIENT_TESTS[short]
     if not run then return end
@@ -779,7 +792,15 @@ AddEventHandler('aeterna_core:selftest', function(runId, name)
 end)
 
 AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
+    if not fromCore() then return end
     if selftest and selftest.runId == runId and selftest.name == name then
+        endSelftest()
+    end
+end)
+
+-- Core stopping ends the run: close the test panel.
+AddEventHandler('onResourceStop', function(resName)
+    if resName == 'aeterna_core' then
         endSelftest()
     end
 end)

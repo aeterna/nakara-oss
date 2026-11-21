@@ -154,6 +154,9 @@ session when it ends, so no test except `reset_from_menu` writes the saved layou
 `aeterna_core_allow_destructive` is on and the server is not listed publicly; it prints the layout as import text to
 the F8 console before it clears it.
 
+Core's local events (`aeterna_core:selftest`, `selftestEnd` and the focus events) count only when `aeterna_core`
+fired them, and open test state is torn down when `aeterna_core` stops.
+
 ## Tests
 
 From the repository root:

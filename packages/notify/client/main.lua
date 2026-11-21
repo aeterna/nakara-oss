@@ -651,6 +651,11 @@ AddEventHandler('playerSpawned', function()
     tryShowMotd()
 end)
 
+-- Core's local events count only when aeterna_core fired them, so another resource cannot fake one.
+local function fromCore()
+    return GetInvokingResource() == 'aeterna_core'
+end
+
 local function ownsFocusEvent(owner, token)
     if owner ~= selfName() then return false end
     if token ~= nil and focusToken ~= nil and token ~= focusToken then return false end
@@ -658,6 +663,7 @@ local function ownsFocusEvent(owner, token)
 end
 
 AddEventHandler('aeterna_core:focusPaused', function(owner, token)
+    if not fromCore() then return end
     if not ownsFocusEvent(owner, token) then return end
     if motdOpen then
         motdPaused = true
@@ -665,11 +671,13 @@ AddEventHandler('aeterna_core:focusPaused', function(owner, token)
 end)
 
 AddEventHandler('aeterna_core:focusResumed', function(owner, token)
+    if not fromCore() then return end
     if not ownsFocusEvent(owner, token) then return end
     motdPaused = false
 end)
 
 AddEventHandler('aeterna_core:focusLost', function(owner, token)
+    if not fromCore() then return end
     if owner ~= nil and owner ~= selfName() then return end
     if token ~= nil and focusToken ~= nil and token ~= focusToken then return end
     focusToken = nil
@@ -934,6 +942,7 @@ AddEventHandler('aeterna_notify:action', function(press)
 end)
 
 AddEventHandler('aeterna_core:selftest', function(runId, name)
+    if not fromCore() then return end
     local short = Selftests.shortName(name)
     local run = short and CLIENT_TESTS[short]
     if not run then return end
@@ -948,7 +957,15 @@ AddEventHandler('aeterna_core:selftest', function(runId, name)
 end)
 
 AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
+    if not fromCore() then return end
     if selftest and selftest.runId == runId and selftest.name == name then
+        endSelftest()
+    end
+end)
+
+-- Core stopping ends the run: remove the test toasts and banner.
+AddEventHandler('onResourceStop', function(resName)
+    if resName == 'aeterna_core' then
         endSelftest()
     end
 end)
