@@ -57,4 +57,18 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://aeterna.github.io/nakara-oss/en/starter-kit/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://aeterna.github.io/nakara-oss/en/starter-kit/"/>
   </url>
+  <url>
+    <loc>https://aeterna.github.io/nakara-oss/starter-kit/theme/</loc>
+    <lastmod>{{site.date}}</lastmod>
+    <xhtml:link rel="alternate" hreflang="th" href="https://aeterna.github.io/nakara-oss/starter-kit/theme/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://aeterna.github.io/nakara-oss/en/starter-kit/theme/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://aeterna.github.io/nakara-oss/en/starter-kit/theme/"/>
+  </url>
+  <url>
+    <loc>https://aeterna.github.io/nakara-oss/en/starter-kit/theme/</loc>
+    <lastmod>{{site.date}}</lastmod>
+    <xhtml:link rel="alternate" hreflang="th" href="https://aeterna.github.io/nakara-oss/starter-kit/theme/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://aeterna.github.io/nakara-oss/en/starter-kit/theme/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://aeterna.github.io/nakara-oss/en/starter-kit/theme/"/>
+  </url>
 </urlset>

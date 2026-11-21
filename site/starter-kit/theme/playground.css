@@ -1,0 +1,61 @@
+/* Theme playground (site/starter-kit/theme/). The site's own look stays in ../../styles.css.
+   Everything inside .kit-stage uses only the Starter Kit tokens from kit-theme.css, so a preset switch shows what a
+   kit screen looks like with that preset. */
+.presets{display:flex;flex-wrap:wrap;gap:10px;margin:24px 0 8px}
+.preset-btn{height:40px;padding:0 18px;border-radius:999px;border:1px solid var(--line2);background:transparent;color:var(--text);font:inherit;font-size:15px;cursor:pointer;transition:background-color .15s var(--ease)}
+.preset-btn:hover{background:var(--raised)}
+.preset-btn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.cfg-line{margin:12px 0 0}
+
+.kit-stage{font-family:var(--font);font-size:var(--fs-3);line-height:var(--lh);color:var(--text);background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius-l);padding:20px;margin:20px 0;display:grid;grid-template-columns:1fr 1fr;gap:16px;
+  transition:background-color var(--enter) var(--ease),color var(--enter) var(--ease)}
+.kit-stage *{box-sizing:border-box}
+.kit-stage p{margin:0;color:inherit}
+.k-label{font-size:var(--fs-1);color:var(--text-3);margin-bottom:8px}
+.k-box{background:var(--raised);border:1px solid var(--line);border-radius:var(--radius-m);padding:var(--pad);min-width:0}
+
+/* aeterna_notify toast */
+.k-toast{display:flex;gap:12px;align-items:flex-start}
+.k-toast::before{content:"";flex:none;width:4px;align-self:stretch;border-radius:2px;background:var(--accent)}
+.k-toast-t{font-size:var(--fs-4);font-weight:600}
+.k-toast-b{color:var(--text-2)}
+
+/* aeterna_uikit confirm */
+.k-panel-t{font-size:var(--fs-5);font-weight:600;margin-bottom:4px}
+.k-panel-b{color:var(--text-2);margin-bottom:14px}
+.k-actions{display:flex;flex-wrap:wrap;gap:8px}
+.k-btn{height:34px;padding:0 14px;border-radius:var(--radius-s);border:1px solid var(--line);background:transparent;color:var(--text);font:inherit;font-size:var(--fs-3);cursor:default}
+.k-btn-p{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+
+/* aeterna_uikit progress */
+.k-track{height:8px;border-radius:999px;background:var(--track);overflow:hidden;margin:8px 0 6px}
+.k-fill{height:100%;width:62%;background:var(--accent);border-radius:inherit}
+.k-sub{font-size:var(--fs-2);color:var(--text-3)}
+
+/* aeterna_hudkit status bars */
+.k-bars{display:grid;gap:10px}
+.k-bar{display:grid;grid-template-columns:72px 1fr;gap:10px;align-items:center;font-size:var(--fs-2);color:var(--text-2)}
+.k-bar .k-track{margin:0}
+.k-good .k-fill{background:var(--good);width:84%}
+.k-warn .k-fill{background:var(--warn);width:38%}
+.k-bad .k-fill{background:var(--bad);width:16%}
+
+/* aeterna_uikit menu */
+.k-menu{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.k-menu li{padding:8px 10px;border-radius:var(--radius-s);display:flex;justify-content:space-between;gap:10px}
+.k-menu li.on{background:var(--surface);box-shadow:inset 3px 0 0 var(--accent)}
+.k-menu .k-sub{align-self:center}
+
+/* status chips */
+.k-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.k-chip{font-size:var(--fs-2);padding:2px 10px;border-radius:999px;border:1px solid currentColor}
+.k-chip-good{color:var(--good)}
+.k-chip-warn{color:var(--warn)}
+.k-chip-bad{color:var(--bad)}
+
+/* token table (site look, live swatches) */
+.tok-sw{display:inline-block;width:18px;height:18px;border-radius:5px;border:1px solid var(--line2);vertical-align:middle}
+
+@media (max-width:640px){ .kit-stage{grid-template-columns:1fr;padding:14px} }
+.kit-stage + .prose{margin-top:8px}
