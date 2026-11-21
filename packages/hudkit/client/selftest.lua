@@ -59,9 +59,16 @@ local function voiceWatch(runId, name)
     report(runId, name, watch.verdict())
 end
 
--- Fires the three payloads through hudkit's own event handler while the presser sits in a vehicle and reads
+-- Waits up to SEATBELT_WAIT_MS for the presser to sit in a vehicle (the row's instruction), then fires the three
+-- payloads through hudkit's own event handler and reads
 -- the icon state that handler sent to the page; then puts the previous state and owner back.
 local function seatbeltEvent(runId, name)
+    local waited = 0
+    while not hooks.isInVehicle() and waited < ST.SEATBELT_WAIT_MS and stillRunning(runId, name) do
+        Wait(250)
+        waited = waited + 250
+    end
+    if not stillRunning(runId, name) then return end
     if not hooks.isInVehicle() then
         report(runId, name, ST.seatbeltVerdict(nil, true, false))
         return
