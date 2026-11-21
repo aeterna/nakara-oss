@@ -218,7 +218,8 @@ release.
 - **`commands`, `registeredCommands`, `convars.*`, `netEvents.*`, `db.tables`, `files.write`** —
   exact names, or globs with `*` (`nakara_metrics_*`, `nakara_metrics:*`). A `files.write` glob also
   covers a runtime-built path whose literal prefix it matches: `photos/*` covers
-  `SaveResourceFile(GetCurrentResourceName(), 'photos/' .. id .. '.jpg', …)`.
+  `SaveResourceFile(GetCurrentResourceName(), 'photos/' .. id .. '.jpg', …)`. The scanner cannot see the runtime
+  part, so the package must validate it (for example a fixed-length hex id) so it can never hold `..` or `/`.
 - **`httpHandlers`** — paths under `/<resource>/` answered by `SetHttpHandler`; a trailing `*`
   matches a prefix. Optional. The scanner sees only that a handler exists, so any `SetHttpHandler`
   makes every declared entry used; entries with no `SetHttpHandler` in the package are
