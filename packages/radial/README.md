@@ -35,10 +35,10 @@ A radial menu for the AETERNA Starter Kit: a ring of 4–8 slots around the scre
 |---|---|---|
 | `Config.mode` | `'hold'` | `hold`: open while the key is held; releasing picks the slot under the pointer, or closes when none. `toggle`: press to open, pick with a click or accept, press again or Esc to close / `hold` กดค้างเพื่อเปิด ปล่อยเพื่อเลือก · `toggle` กดเปิด คลิกเลือก กดอีกครั้งหรือ Esc เพื่อปิด |
 | `Config.radius` | `150` | Ring radius in px at 1080p / รัศมีวงที่ความสูงจอ 1080 px |
-| `Config.deadZone` | `0.35` | Centre area, as a fraction of the radius (mouse) or of the stick range (gamepad), where no slot is hovered / พื้นที่กลางวงที่ไม่เลือกช่องใด |
+| `Config.deadZone` | `0.35` | Centre area, as a fraction of the radius (mouse) or of the stick range (gamepad), where no slot is hovered; a value outside 0–1 falls back to `0.35` with a `warn` / พื้นที่กลางวงที่ไม่เลือกช่องใด (นอกช่วง 0–1 จะใช้ `0.35`) |
 | `Config.maxPerOwner` | `64` | Slots one resource may register, client and server counted apart; more are refused with a `warn` / จำนวนช่องสูงสุดต่อทรัพยากร |
 | `Config.maxTotal` | `128` | Slots across all resources, per side / จำนวนช่องรวมสูงสุดต่อฝั่ง |
-| `Config.whileDead` | `false` | When `false`, the menu does not open while the player's ped is dead or ragdolling / เมื่อเป็น `false` จะเปิดเมนูไม่ได้ขณะตายหรือล้ม |
+| `Config.whileDead` | `false` | When `false`, the menu does not open while the player's ped is dead or ragdolling, and an open menu closes when that happens / เมื่อเป็น `false` จะเปิดเมนูไม่ได้ขณะตายหรือล้ม และเมนูที่เปิดอยู่จะปิดเอง |
 
 Shared convars read via `aeterna_core`: `aeterna_locale` (`en` or `th`), `aeterna_theme`, `aeterna_theme_preset` (all set with `setr`).
 
@@ -61,7 +61,8 @@ Shared convars read via `aeterna_core`: `aeterna_locale` (`en` or `th`), `aetern
 }
 ```
 
-- A slot whose `parent` is itself a child, or names a slot of another resource, is refused (`parent: depth` / `parent: unknown`). A group with no visible children is hidden.
+- A slot whose `parent` is itself a child, names a slot of another resource, or that already has children, is refused (`parent: depth` / `parent: unknown`). A group with no visible children is hidden; a slot whose children are all removed is an ordinary slot again.
+- A server pick of a child must also pass its group's `vehicle`, `jobs`/`grade` and `ace`.
 - Custom conditions are flags: the owning resource evaluates its own check and calls `setFlag(name, value)` when the result changes. The server does **not** re-check flags; the owner re-checks its own state in its handler. Flags reset when the owner stops.
 
 ## Exports & Events / การเรียกใช้งาน
