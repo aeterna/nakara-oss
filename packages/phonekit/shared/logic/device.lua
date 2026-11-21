@@ -56,11 +56,14 @@ function D.parseAppSpec(specStr)
     return spec
 end
 
+-- A nil spec means "no config spec": the model's shipped default applies (burner '*,-contacts', else '*').
 function D.isAppAllowed(parsedSpecOrStr, appId, appMeta, modelId)
     if appId == 'settings' then return true end
     local m = D.MODELS[modelId]
     if m and m.calls == false and appMeta and appMeta.needs == 'voice' then return false end
-    local spec = type(parsedSpecOrStr) == 'table' and parsedSpecOrStr or D.parseAppSpec(parsedSpecOrStr)
+    local specIn = parsedSpecOrStr
+    if specIn == nil then specIn = (m and m.defaultApps) or '*' end
+    local spec = type(specIn) == 'table' and specIn or D.parseAppSpec(specIn)
     if spec.excluded[appId] then return false end
     if spec.included[appId] then return true end
     return spec.wildcard == true
@@ -86,25 +89,120 @@ function D.pickActiveDevice(devices, lastChosenId)
     return best
 end
 
+D.MAX_DEVICES = 8
+
+local function cleanDevice(d)
+    if type(d) ~= 'table' or type(d.id) ~= 'string' or #d.id < 1 or #d.id > 64 or not D.MODELS[d.model] then
+        return nil
+    end
+    local battery = tonumber(d.battery)
+    if battery and (battery ~= battery or battery < 0 or battery > 100) then battery = nil end
+    local fold = (d.fold == 'open' or d.fold == 'closed') and d.fold or nil
+    local color = tonumber(d.color)
+    if color and (color < 0 or color ~= math.floor(color)) then color = nil end
+    return { id = d.id, model = d.model, battery = battery, fold = fold, color = color }
+end
+
+-- Returns true, devices (1-8 cleaned entries) or false, reasonKey.
 function D.validateGateAnswer(answer)
-    if not answer or answer.allow == false then return false, (answer and answer.reason) or 'denied' end
+    if type(answer) ~= 'table' then return false, 'phonekit.refused.default' end
+    if answer.allow == false then
+        local reason = (type(answer.reason) == 'string' and answer.reason ~= '') and answer.reason or 'phonekit.refused.default'
+        return false, reason
+    end
     local list = answer.devices
-    if not list and answer.id and answer.model then
+    if list == nil and answer.id ~= nil then
         list = { { id = answer.id, model = answer.model, battery = answer.battery, fold = answer.fold, color = answer.color } }
     end
     if type(list) ~= 'table' then return false, 'phonekit.refused.nodevice' end
     local valid, seen = {}, {}
     for _, d in ipairs(list) do
-        if type(d) == 'table' and type(d.id) == 'string' and #d.id > 0 and #d.id <= 64 and D.MODELS[d.model] and not seen[d.id] then
-            seen[d.id] = true
-            valid[#valid + 1] = d
+        local c = cleanDevice(d)
+        if c and not seen[c.id] then
+            seen[c.id] = true
+            valid[#valid + 1] = c
+            if #valid >= D.MAX_DEVICES then break end
         end
     end
-    return #valid > 0 and true or false, #valid > 0 and valid or 'phonekit.refused.nodevice'
+    if #valid == 0 then return false, 'phonekit.refused.nodevice' end
+    return true, valid
 end
 
 function D.resolveMode(configDevices)
     return configDevices == 'items' and 'items' or 'single'
+end
+
+D.UNIVERSE_NAMES = {
+    keypad = 'Whiz Keypad', burner = 'Badger Burner', qwerty = 'Badger Qwerty', slab = 'Facade Slab',
+    fold = 'Facade Fold', pro = 'iFruit Pro', book = 'iFruit Book', pad = 'iFruit Pad',
+}
+
+D.COLORS = {
+    keypad = { '#33363B', '#3A5F8F', '#D9762B' },
+    burner = { '#18191B', '#4B5240' },
+    qwerty = { '#2B2D30', '#B8BCC2' },
+    slab = { '#3D4046', '#C9CCD1', '#CDBB9A', '#5C7FA8' },
+    fold = { '#36383D', '#D4C3A3', '#6F8F7A' },
+    pro = { '#45474B', '#BDBFC2', '#3F536E', '#B9A584' },
+    book = { '#404247', '#CED0D3' },
+    pad = { '#C4C7CB', '#4E5056', '#6C8DB3' },
+}
+
+local function cleanColors(list)
+    if type(list) ~= 'table' then return nil end
+    local out = {}
+    for _, c in ipairs(list) do
+        if type(c) == 'string' and c:match('^#%x%x%x%x%x%x$') then out[#out + 1] = c end
+    end
+    return #out > 0 and out or nil
+end
+
+local function plainLabel(s)
+    if type(s) ~= 'string' then return nil end
+    local clean = s:gsub('[%c]', ''):match('^%s*(.-)%s*$')
+    if clean == '' then return nil end
+    local ok, n = pcall(utf8.len, clean)
+    if not ok or not n or n > 24 then return nil end
+    return clean
+end
+
+-- Per-model settings: `Config.models[m]` keys win, missing keys take the shipped default.
+-- opts = { names = 'neutral' | 'universe', t = translate fn, prop = Config.prop }
+function D.resolveModel(modelId, cfgModels, opts)
+    local id = D.MODELS[modelId] and modelId or 'slab'
+    local m = D.MODELS[id]
+    local o = type(opts) == 'table' and opts or {}
+    local cfg = type(cfgModels) == 'table' and type(cfgModels[id]) == 'table' and cfgModels[id] or {}
+    local label = plainLabel(cfg.label)
+    if not label then
+        if o.names == 'universe' then
+            label = D.UNIVERSE_NAMES[id]
+        elseif type(o.t) == 'function' then
+            label = o.t('phonekit.model.' .. id)
+        else
+            label = m.name
+        end
+    end
+    local apps = type(cfg.apps) == 'string' and cfg.apps or (m.defaultApps or '*')
+    local prop = (type(cfg.prop) == 'string' and cfg.prop ~= '') and cfg.prop
+        or ((type(o.prop) == 'string' and o.prop ~= '') and o.prop or 'prop_npc_phone_02')
+    return { id = id, label = label, apps = apps, colors = cleanColors(cfg.colors) or D.COLORS[id], prop = prop,
+        voice = m.calls ~= false }
+end
+
+-- Hex colour for a 0-based index into the model's colours (gate answers send 0 for the first);
+-- missing or out of range = the first colour.
+function D.colorAt(modelId, cfgModels, index)
+    local colors = D.resolveModel(modelId, cfgModels, {}).colors
+    local i = tonumber(index)
+    return (i and colors[i + 1]) or colors[1]
+end
+
+-- Server resource KVP owner part: `cid:<character id>` when known, else `lic:<license>`.
+function D.whoKey(cid, license)
+    if type(cid) == 'string' and cid ~= '' then return 'cid:' .. cid end
+    if type(license) == 'string' and license ~= '' then return 'lic:' .. license end
+    return nil
 end
 
 return DeviceLogic

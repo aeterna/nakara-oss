@@ -89,7 +89,8 @@ describe('aeterna_phonekit 0.2 additions', function()
             assert.are.same({ '#112233' }, custom.colors)
             assert.are.equal('p2', custom.prop)
             assert.are.equal('#45474B', D.resolveModel('pro', { pro = { colors = { 'bad' } } }, {}).colors[1])
-            assert.are.equal('#3A5F8F', D.colorAt('keypad', nil, 2))
+            assert.are.equal('#3A5F8F', D.colorAt('keypad', nil, 1))
+            assert.are.equal('#33363B', D.colorAt('keypad', nil, 0))
             assert.are.equal('#33363B', D.colorAt('keypad', nil, 9))
         end)
 
@@ -227,7 +228,7 @@ describe('aeterna_phonekit 0.2 additions', function()
             assert.is_true(ev.save)
         end)
 
-        it('warns only going down, once per value, never at 0; 0 powers off and above 0 powers on', function()
+        it('warns only going down, once per crossing, never at 0; 0 powers off and above 0 powers on', function()
             local st = B.createState(21)
             local ev = B.set(st, 19.5, cfg)
             assert.are.same({ 20 }, ev.warn)
@@ -236,7 +237,7 @@ describe('aeterna_phonekit 0.2 additions', function()
             ev = B.set(st, 25, cfg)
             assert.are.same({}, ev.warn)
             ev = B.set(st, 4, cfg)
-            assert.are.same({ 10, 5 }, ev.warn)
+            assert.are.same({ 20, 10, 5 }, ev.warn)
             ev = B.set(st, 0, cfg)
             assert.are.same({}, ev.warn)
             assert.is_false(ev.power)
@@ -396,7 +397,7 @@ describe('aeterna_phonekit 0.2 additions', function()
         it('addContact limits and contactsChanged fires once per change', function()
             local saved, changes = nil, 0
             local hook = H.createContactsHook({
-                load = function() return {} end,
+                load = function() return saved or {} end,
                 save = function(list) saved = list end,
                 onChange = function() changes = changes + 1 end,
             })

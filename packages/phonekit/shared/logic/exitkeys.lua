@@ -41,8 +41,13 @@ function E.decide(state, input)
         return state.screen == 'cc' and 'close_cc' or 'back'
     end
 
+    -- Open key: an F-key always puts the phone away; a letter, digit or punctuation key only when no field has
+    -- focus (then it types) and no screen used the key (then nothing happens).
     if state.openKeyCode and code == state.openKeyCode then
-        return (state.isFieldFocused and not isF) and 'edit' or 'close'
+        if isF then return 'close' end
+        if state.isFieldFocused then return 'edit' end
+        if state.screenUsedKey then return 'none' end
+        return 'close'
     end
 
     return 'none'
