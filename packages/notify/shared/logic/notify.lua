@@ -538,16 +538,11 @@ function L.createToastQueue(cfg)
         elseif type(c.toastId) == 'string' and L.isValidId(c.toastId, 24) then
             toastId = c.toastId
         else
-            toastId = 't' .. L.base36(self.seq)
+            -- Client-made auto ids are c + base-36; server-made ones are s + base-36 (set by the server).
+            toastId = 'c' .. L.base36(self.seq)
         end
         clean.toastId = toastId
         clean.key = clean.id or ('#' .. L.base36(self.seq))
-        -- Auto toastIds of client and server toasts both count from t1, so history keeps them apart.
-        if clean.id then
-            clean.historyId = clean.id
-        else
-            clean.historyId = (c.origin == 'server' and 's:' or 'c:') .. toastId
-        end
         clean.owner = owner
         clean.origin = c.origin == 'server' and 'server' or 'client'
         clean.count = 1

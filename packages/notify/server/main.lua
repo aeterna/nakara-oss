@@ -118,7 +118,7 @@ local function sendToastToPlayer(src, opts, owner)
         clean.toastId = clean.id
     else
         toastSeq = toastSeq + 1
-        clean.toastId = 't' .. L.base36(toastSeq)
+        clean.toastId = 's' .. L.base36(toastSeq)
     end
     clean.owner = owner or selfName()
     if clean.id and not clean.actions then

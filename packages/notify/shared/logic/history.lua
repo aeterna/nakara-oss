@@ -75,7 +75,7 @@ end
 
 function L.historyFromToast(item, at)
     return {
-        id = item.historyId or item.toastId,
+        id = item.toastId,
         owner = item.owner,
         kind = 'toast',
         type = item.type,

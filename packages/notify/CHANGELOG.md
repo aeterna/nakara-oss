@@ -28,7 +28,7 @@ All notable changes to `aeterna_notify` are documented here. The format follows
 
 - A toast with `actions` and an `id` longer than 24 characters is refused (`id: maxLen 24 with actions`) instead of showing buttons that could never be pressed.
 - The server keeps open action toasts per owner resource + `toastId` (8 per player per owner); resending the same `id` without actions drops that owner's record.
-- History ids of toasts without an `id` are `c:<toastId>` (client) or `s:<toastId>` (server), so the two counters cannot collide.
+- Auto `toastId`s are `c` + base-36 for client-made toasts and `s` + base-36 for server-made ones, so a client toast and a server toast on screen at once never share an id; history uses the same id.
 - `cancelCountdown` only works for the resource that started the countdown; a countdown ends with `cancelled = true` when its owner resource or notify stops.
 - The README no longer names the phone package (ADR 0005 decision 2).
 

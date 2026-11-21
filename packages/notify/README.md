@@ -82,10 +82,10 @@ Shared convars read via `aeterna_core`: `aeterna_locale` (`en` or `th`, set with
 | `exports.aeterna_notify:notify(opts)` | `toastId` or `false, err` | Shows a toast (`{ id?, title, description?, type = 'info'\|'success'\|'warning'\|'error', duration?, icon?, actions?, sound?, history?, merge? }`). |
 | `exports.aeterna_notify:clear(id?)` | `boolean` | Removes one toast by `id`, or clears all toasts when `id` is omitted. |
 | `exports.aeterna_notify:showMotd()` | `boolean` | Shows the MOTD card if enabled, valid, and not already dismissed for the current `version`. |
-| `exports.aeterna_notify:history(limit?)` | `table` | Newest entries first, at most `limit` (`1–50`, default `50`): `{ id, owner, kind = 'toast'\|'announce'\|'countdown', type, title, description, icon, count, at }`. `id` is the toast's own `id` when given, otherwise `c:<toastId>` for a client-made toast and `s:<toastId>` for a server-made one. `at` is in seconds. Actions are never kept. |
+| `exports.aeterna_notify:history(limit?)` | `table` | Newest entries first, at most `limit` (`1–50`, default `50`): `{ id, owner, kind = 'toast'\|'announce'\|'countdown', type, title, description, icon, count, at }`. `id` is the toast's `toastId`. `at` is in seconds. Actions are never kept. |
 | `exports.aeterna_notify:clearHistory()` | `nil` | Empties the history. |
 
-0.2 toast fields: `actions` = 1–2 `{ id, label, variant? }` (`id` ≤ 32 matching `^[%w_%-]+$` and unique, `label` ≤ 20, `variant` `primary` or `secondary`, default `secondary`; a third entry, a bad id or an over-long label drops all actions with one `warn`); `sound`, `history`, `merge` are booleans, default `true`. `toastId` is the toast's `id` when given, otherwise `t` + a base-36 counter. A toast with `actions` and an `id` longer than 24 characters is refused with `id: maxLen 24 with actions` (a press carries at most 24).
+0.2 toast fields: `actions` = 1–2 `{ id, label, variant? }` (`id` ≤ 32 matching `^[%w_%-]+$` and unique, `label` ≤ 20, `variant` `primary` or `secondary`, default `secondary`; a third entry, a bad id or an over-long label drops all actions with one `warn`); `sound`, `history`, `merge` are booleans, default `true`. `toastId` is the toast's `id` when given, otherwise `c` + a base-36 counter for a client-made toast or `s` + a base-36 counter for a server-made one (at most 24 characters). A toast with `actions` and an `id` longer than 24 characters is refused with `id: maxLen 24 with actions` (a press carries at most 24).
 
 ```lua
 local toastId = exports.aeterna_notify:notify({
