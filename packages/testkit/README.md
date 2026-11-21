@@ -11,7 +11,7 @@ One button that tests a whole Starter Kit install: a menu that runs every self-t
 - **It judges nothing (ไม่ตัดสินผลเอง):** `aeterna_core` owns the registry, the run lock, the destructive gate and every result state. This package is the menu, the eye card, the player B invite and the report.
 - **Menu (เมนู):** a `lg` `aeterna_uikit` panel with the kit versions, the destructive gate of the last run, player B status, progress, counts, one row per suite (`passed/total`, PASS · SKIP · MOCK count as passed), and the buttons Run all · Invite player B · Cancel run (your own run only) · Show report. Picking a suite opens its tests. While another run holds `aeterna_core`, the menu shows the phase and seconds of that run and never a name.
 - **Eye card (การ์ดตรวจด้วยตา):** a small card in the lower left corner (360 px) with the question, "Normally you will see: …" and Pass · Doesn't match · Skip. It takes focus as an `aeterna_core` overlay, so an open phone or panel stays open and gets its focus back after the answer. ESC = Skip. Skip, ESC and no answer are GAP, never SKIP.
-- **Player B (ผู้เล่น B):** type a server id; that player sees a confirm with no names on either side, and can leave the role at any time with the key mapping `+aeterna_testkit_leave` or by disconnecting. Without B, every two-player test is GAP `needs player B`.
+- **Player B (ผู้เล่น B):** type a server id in the invite panel the server opens; that player sees a confirm with no names on either side, and can leave the role at any time with the key mapping `+aeterna_testkit_leave` or by disconnecting. Without B, every two-player test is GAP `needs player B`.
 - **Report (รายงาน):** JSON (`aeterna_testkit.report/1`, [schema](schema/report-1.schema.json)) and Markdown, printed to the server console and saved to `reports/latest.json` and `reports/latest.md` (each run overwrites both). The name to attach it under is `kit-<core version>-<runId>.md`.
 - **Deliberate limits (ขอบเขตที่จำกัดไว้):** no run history beyond the last report, no upload, no scheduled runs, no single eye test from chat. It registers no self-tests of its own in 0.1.0.
 
@@ -58,7 +58,7 @@ Shared convars read through `aeterna_core`: `aeterna_locale` (`en` or `th`), `ae
 
 ## Console command / คำสั่งคอนโซล
 
-`aeterna_testkit_run [--json] [--only <name or prefix>]` — server console, txAdmin or rcon only (source 0). From a player it does nothing and logs one `warn` without the player's name. It prints one line per row as results arrive, then the Markdown report (or the JSON report as one line with `--json`), and saves both files. When another run is going it prints the busy line and exits. Console runs have no player, so `ped`, `eye` and two-player tests are GAP.
+`aeterna_testkit_run [--json] [--only <name or prefix>]` — server console, txAdmin or rcon only (source 0). From a player it does nothing and logs one `warn` without the player's name. It prints one line per row as results arrive, then the Markdown report (or the JSON report as one line with `--json`), and saves both files. When another run is going it prints the busy line and exits. Console runs have no player, so `ped`, `eye` and two-player tests are GAP, and there are no player names to scrub (identifier, IP and path scrubbing still applies). The command is registered restricted, and the handler also refuses any source other than 0.
 
 ```text
 aeterna_testkit_run
@@ -76,7 +76,7 @@ aeterna_testkit_run --only aeterna_phonekit
 | Run | run id, start time (UTC), duration, `by = console | menu`, player B yes/no, destructive gate `on`/`off`, cancelled |
 | Rows | suite, name, kind, players, destructive, state, detail, ms, step, expected (at most 500; more sets `truncated`) |
 
-**Never in it / ไม่มีในรายงาน:** player names, server ids, identifiers of any kind, IP addresses, convar values, file system paths, the server name or the host. Every `detail` and `expected` is scrubbed before it is stored, printed or saved: player A and B names → `A` / `B`; `license:`, `license2:`, `steam:`, `fivem:`, `xbl:`, `live:`, `ip:` identifiers → `[id]`; IPv4 (with port) and IPv6 → `[ip]`; absolute paths → `[path]`; then cleaned to 300 characters.
+**Never in it / ไม่มีในรายงาน:** player names, server ids, identifiers of any kind, IP addresses, convar values, file system paths, the server name or the host. Every `detail` and `expected` is scrubbed before it is stored, printed or saved: player A and B names (whole words, 3 characters or more) → `A` / `B`; `license:`, `license2:`, `steam:`, `fivem:`, `discord:`, `xbl:`, `live:`, `ip:` identifiers, and any other `<letters>:` followed by 15 or more digits → `[id]`; IPv4 (with port) and IPv6 → `[ip]`; absolute paths, also after `(`, `=` or `@` and in stack frames such as `@res/server/main.lua:12` → `[path]`; then cleaned to 300 characters.
 
 ## Exports / การเรียกใช้งาน
 
@@ -105,7 +105,7 @@ What this resource is allowed to do to your server, from [`oss.json`](oss.json).
 | Registered commands | `aeterna_testkit_run`, `+aeterna_testkit_menu`, `-aeterna_testkit_menu`, `+aeterna_testkit_leave`, `-aeterna_testkit_leave` |
 | Convars read | `version` |
 | Convars written | none |
-| Server net events (accepted from clients) | `aeterna_testkit:sv:open`, `aeterna_testkit:sv:invite`, `aeterna_testkit:sv:inviteAnswer`, `aeterna_testkit:sv:leave`, `aeterna_testkit:sv:env` |
+| Server net events (accepted from clients) | `aeterna_testkit:sv:open`, `aeterna_testkit:sv:inviteAnswer`, `aeterna_testkit:sv:leave`, `aeterna_testkit:sv:env` |
 | Client net events (accepted from the server) | `aeterna_testkit:cl:invite`, `aeterna_testkit:cl:role`, `aeterna_testkit:cl:askEnv` |
 | NUI | yes (the eye card) |
 | Database tables | none (no DDL) |
