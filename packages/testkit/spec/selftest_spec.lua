@@ -174,12 +174,24 @@ describe('aeterna_testkit self-tests', function()
             assert.are.same({ false, 'reports/latest.json: read back differs' }, { S.save(good) })
         end)
 
-        it('env passes for a game build and resolution in range', function()
-            assert.are.same({ true, 'game build 3258 · 1920x1080' }, { S.env(3258, 1920, 1080) })
-            assert.is_false((S.env(0, 1920, 1080)))
-            assert.is_false((S.env(3258, 100, 1080)))
-            assert.is_false((S.env(3258, 1920, 9000)))
-            assert.are.same({ false, 'game build 3258 · 1920x1080.5 out of range' }, { S.env(3258, 1920, 1080.5) })
+        it('env checks the askEnv reply against the sv:env schema', function()
+            local V = assert(loadfile(DIR .. '/../core/shared/logic/validate.lua'))().validate
+            assert.are.same({ true, 'game build 3258 · 1920x1080' },
+                { S.env(V, { gameBuild = 3258, w = 1920, h = 1080 }) })
+            assert.is_false((S.env(V, { gameBuild = 0, w = 1920, h = 1080 })))
+            assert.is_false((S.env(V, { gameBuild = 3258, w = 100, h = 1080 })))
+            assert.is_false((S.env(V, { gameBuild = 3258, w = 1920, h = 9000 })))
+            local ok, detail = S.env(V, { gameBuild = 3258, w = 1920 })
+            assert.is_false(ok)
+            assert.is_truthy(detail:find('^askEnv reply refused: '))
+        end)
+
+        it('the server checks sv:env with the same schema', function()
+            local f = assert(io.open(DIR .. '/server/main.lua', 'rb'))
+            local src = f:read('*a')
+            f:close()
+            assert.is_truthy(src:find('AeternaCore.validate(payload, Selftest.ENV_SCHEMA)', 1, true))
+            assert.is_nil(src:find('local ENV_SCHEMA', 1, true))
         end)
     end)
 
@@ -247,12 +259,15 @@ describe('aeterna_testkit self-tests', function()
             assert.are.same({ 'reports/latest.json', 'reports/latest.md' }, saved)
         end)
 
-        it('save writes a sample report when there is none yet', function()
+        it('save skips with no report yet and writes nothing', function()
             boot()
             natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_testkit.save', {})
-            assert.is_true(reports[1][3])
-            assert.is_truthy(files['reports/latest.json']:find('aeterna_testkit.report/1', 1, true))
-            assert.is_truthy(files['reports/latest.md']:find('# Starter Kit test report', 1, true))
+            assert.are.same({ 'skip', 'no report yet' }, { reports[1][3], reports[1][4] })
+            files['reports/latest.json'] = '{"old":1}'
+            natives.fire('aeterna_core:selftest', 'r2-abcd', 'aeterna_testkit.save', {})
+            assert.are.same({ 'skip', 'no report yet' }, { reports[2][3], reports[2][4] })
+            assert.are.same({}, saved)
+            assert.is_nil(files['reports/latest.md'])
         end)
 
         it('ignores other resources\' tests and events not fired by aeterna_core', function()
@@ -265,11 +280,12 @@ describe('aeterna_testkit self-tests', function()
     end)
 
     describe('client handler', function()
-        local reports
+        local reports, warns, schemas, failReport
 
         local function boot()
             natives.reset({ resource = OWNER, side = 'client' })
-            reports = {}
+            reports, warns, schemas, failReport = {}, {}, {}, false
+            local V = assert(loadfile(DIR .. '/../core/shared/logic/validate.lua'))().validate
             natives.spy('SendNUIMessage')
             natives.spy('RegisterNUICallback')
             natives.spy('RegisterKeyMapping')
@@ -278,28 +294,49 @@ describe('aeterna_testkit self-tests', function()
             natives.stub('GetGameBuildNumber', function() return 3258 end)
             natives.stub('GetActiveScreenResolution', function() return 1920, 1080 end)
             natives.stub('AeternaCore', {
-                log = { debug = function() end, info = function() end, warn = function() end, error = function() end },
+                log = { debug = function() end, info = function() end, error = function() end,
+                    warn = function(msg, fields) warns[#warns + 1] = { msg = msg, fields = fields } end },
                 t = function(k) return k end,
                 key = function() end,
-                validate = function(v) return true, nil, v end,
+                validate = function(v, schema)
+                    schemas[#schemas + 1] = schema
+                    return V(v, schema)
+                end,
                 requestFocus = function() return 'tok' end,
                 releaseFocus = function() return true end,
                 themeMessage = function() return { type = 'aeterna:theme' } end,
             })
             natives.stub_export('aeterna_core', 'reportSelftest', function(runId, name, ok, detail)
+                if failReport then error('core is gone') end
                 reports[#reports + 1] = { runId, name, ok, detail }
                 return true
             end)
             resource.load_resource(DIR, 'client')
         end
 
-        it('answers env with the values askEnv sends', function()
+        it('answers env by checking the askEnv reply against the sv:env schema', function()
             boot()
             natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_testkit.env', { kind = 'headless', side = 'client' })
             assert.are.same({ { 'r1-abcd', 'aeterna_testkit.env', true, 'game build 3258 · 1920x1080' } }, reports)
+            assert.are.equal(TestkitLogic.selftest.ENV_SCHEMA, schemas[#schemas])
             natives.fire('aeterna_testkit:cl:askEnv')
             assert.are.same({ gameBuild = 3258, w = 1920, h = 1080 },
                 natives.last_emitted('server', 'aeterna_testkit:sv:env').args[1])
+        end)
+
+        it('a game reporting no resolution fails env', function()
+            boot()
+            natives.stub('GetActiveScreenResolution', function() return nil, nil end)
+            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_testkit.env', { kind = 'headless', side = 'client' })
+            assert.is_false(reports[1][3])
+        end)
+
+        it('logs a failed reportSelftest at warn instead of hiding it', function()
+            boot()
+            failReport = true
+            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_testkit.eye_card', { kind = 'eye', role = 'A' })
+            assert.are.equal(1, #warns)
+            assert.are.equal('reportSelftest failed', warns[1].msg)
         end)
 
         it('marks both eye cards ready for player A and player B', function()
