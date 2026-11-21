@@ -121,3 +121,13 @@ test('the reason tables cover every code the controller can return', () => {
         }
     }
 });
+
+test('a public origin set in server.cfg is locked in the view model and marks the relay', () => {
+    const settingsUi = require('../web/ui/settings.js');
+    const vm = settingsUi.viewModel({ settings: { publicOrigin: 'https://relay.example.org', fromServerCfg: ['publicOrigin'], transport: 'relay' } });
+    const field = vm.fields.find((f) => f.name === 'publicOrigin');
+    assert.equal(field.locked, true);
+    assert.equal(field.relay, true);
+    const plain = settingsUi.viewModel({ settings: { publicOrigin: 'http://1.2.3.4:30120' } });
+    assert.equal(plain.fields.find((f) => f.name === 'publicOrigin').locked, false);
+});

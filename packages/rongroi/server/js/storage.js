@@ -145,7 +145,7 @@ function createStorage(backend, { marker } = {}) {
         return entries ? entries.map((entry) => ({ ...entry })) : [];
     }
 
-    function saveReport({ caseId, ticket, reportSha256, receivedAt, record, declined, address } = {}) {
+    function saveReport({ caseId, ticket, reportSha256, receivedAt, record, declined, address, addressSource } = {}) {
         const found = findEntry(caseId);
         if (!found) throw new Error('rongroi storage: case is not in the index');
         if (ticket !== found.entry.ticket) {
@@ -158,6 +158,10 @@ function createStorage(backend, { marker } = {}) {
         const addressFacts = typeof address === 'string'
             ? { address, address_edition_form: 'as_given' }
             : {};
+        // Through a Relay the address is what the Relay reports (ADR 0097 section 3), labelled as such.
+        if (typeof address === 'string' && (addressSource === 'relay-socket' || addressSource === 'relay-forwarded')) {
+            addressFacts.address_source = addressSource;
+        }
         backend.write(caseKey(caseId), {
             ...data,
             caseId,

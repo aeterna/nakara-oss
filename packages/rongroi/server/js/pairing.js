@@ -24,6 +24,8 @@ function loadCanonical() {
 const { canonicalize } = loadCanonical();
 
 const PREFIX = 'rr1.';
+const PREFIX_V2 = 'rr2.';
+const BASE_PATH_RE = /^[a-z0-9_-]{1,64}$/;
 const ORIGIN_RE = /^(https?):\/\/(\[[0-9a-f:.]+\]|[a-z0-9.-]+)(?::([0-9]{1,5}))?$/i;
 const TICKET_RE = /^[0-9a-f]{32}$/;
 const POLICY_HASH_RE = /^[0-9a-f]{16}$/;
@@ -119,6 +121,42 @@ function pairingCode(input) {
     return PREFIX + Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
 }
 
+// rr2 code (aeterna-rongroi ADR 0097 section 2): rr1's six members plus base_path and transport. The origin must
+// already be normalised (`new URL(o).origin`), because Connect binds envelope v2 to the exact string; a relay
+// code needs https. Returns { code, binding } where binding is envelope v2's additional data.
+function pairingCodeV2(input) {
+    if (input === null || typeof input !== 'object' || Array.isArray(input)) {
+        throw new TypeError('pairing code input must be an object');
+    }
+    const { serverOrigin, basePath, transport, ticket, nonce, expiresAt, policyHash: hash, kitPublicKey } = input;
+    checkOrigin(serverOrigin);
+    if (new URL(serverOrigin).origin !== serverOrigin) throw new TypeError('serverOrigin must be normalised');
+    if (typeof basePath !== 'string' || !BASE_PATH_RE.test(basePath) || basePath === 'v1') {
+        throw new TypeError('basePath must match [a-z0-9_-]{1,64} and not be "v1"');
+    }
+    if (transport !== 'direct' && transport !== 'relay') throw new TypeError('transport must be direct or relay');
+    if (transport === 'relay' && !serverOrigin.startsWith('https://')) throw new TypeError('a relay origin must be https');
+    checkTicket(ticket);
+    checkNonce(nonce);
+    checkExpiresAt(expiresAt);
+    checkPolicyHash(hash);
+    checkKitPublicKey(kitPublicKey);
+    const payload = {
+        server_origin: serverOrigin,
+        base_path: basePath,
+        transport,
+        ticket,
+        nonce,
+        expires_at: formatExpiresAt(expiresAt),
+        policy_hash: hash,
+        kit_public_key: kitPublicKey,
+    };
+    return {
+        code: PREFIX_V2 + Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url'),
+        binding: { base_path: basePath, policy_hash: hash, server_origin: serverOrigin, ticket, transport },
+    };
+}
+
 // First 64 bits of SHA-256 over the canonical policy without its top-level `policy_hash` member.
 function policyHash(policy) {
     if (policy === null || typeof policy !== 'object' || Array.isArray(policy)) {
@@ -132,5 +170,5 @@ function policyHash(policy) {
 
 // Loaded directly as a server_script FXServer provides no CommonJS `module`; the specs still get the export.
 if (typeof module !== 'undefined') {
-    module.exports = { pairingCode, policyHash, checkOrigin };
+    module.exports = { pairingCode, pairingCodeV2, policyHash, checkOrigin };
 }

@@ -154,24 +154,29 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
         res.send(body);
     }
 
-    // Shared by a direct POST and the last chunk: verify the whole report and answer it.
-    function finish(req, res, ticket, sha, uploadId, raw) {
+    // Shared by a direct POST, the last chunk and a relay envelope: verify the whole report, store it and consume
+    // the ticket. Returns { status, why } with ADR 0089's status codes; `why` is a fixed log string.
+    function verify({ ticket, sha, uploadId, raw, address, addressSource }) {
+        const bad = (status, why, keep) => {
+            if (!keep) store.drop(uploadId);
+            return { status, why };
+        };
         if (crypto.createHash('sha256').update(raw).digest('hex') !== sha) {
-            store.drop(uploadId);
-            return fail(res, 422, 'rongroi http: report sha mismatch', ticket);
+            return bad(422, 'rongroi http: report sha mismatch');
         }
+        const found = store.lookup(ticket);
         let opened;
         try {
-            opened = openEnvelope(raw.toString('utf8'), kit.privateKey, kit.publicKey, ticket);
+            const options = found && found.accept === 2 ? { accept: 2, binding: found.binding } : { accept: 1 };
+            opened = openEnvelope(raw.toString('utf8'), kit.privateKey, kit.publicKey, ticket, options);
         } catch (err) {
-            store.drop(uploadId);
             if (err instanceof EnvelopeError && err.code === 'malformed') {
-                return fail(res, 400, 'rongroi http: report envelope malformed', ticket);
+                return bad(400, 'rongroi http: report envelope malformed');
             }
             if (err instanceof EnvelopeError && err.code === 'not_authentic') {
-                return fail(res, 422, 'rongroi http: report envelope not authentic', ticket);
+                return bad(422, 'rongroi http: report envelope not authentic');
             }
-            return fail(res, 500, 'rongroi http: report envelope check failed', ticket);
+            return bad(500, 'rongroi http: report envelope check failed');
         }
         let record;
         try {
@@ -180,57 +185,75 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
             record = undefined;
         }
         if (record === null || typeof record !== 'object' || Array.isArray(record)) {
-            store.drop(uploadId);
-            return fail(res, 422, 'rongroi http: report record rejected', ticket);
+            return bad(422, 'rongroi http: report record rejected');
         }
         // K1 section 10: refuse a record past the shape caps before it reaches storage.
         if (!checkRecordCaps(record).ok) {
-            store.drop(uploadId);
-            return fail(res, 422, 'rongroi http: report record caps rejected', ticket);
+            return bad(422, 'rongroi http: report record caps rejected');
         }
-        const found = store.lookup(ticket);
         const nonce = found ? found.nonce : null;
         const binding = record.binding;
         if (binding === null || typeof binding !== 'object' || Array.isArray(binding)
             || binding.ticket !== ticket || binding.nonce !== nonce) {
-            store.drop(uploadId);
-            return fail(res, 422, 'rongroi http: report binding rejected', ticket);
+            return bad(422, 'rongroi http: report binding rejected');
         }
         const declined = record.scan === 'declined';
         if (!declined && record.schema !== 2) {
-            store.drop(uploadId);
-            return fail(res, 422, 'rongroi http: report schema rejected', ticket);
+            return bad(422, 'rongroi http: report schema rejected');
         }
         if (store.stateOf(ticket) === 'consumed') {
             const consumed = store.consume(ticket, sha);
-            if (!consumed.ok) {
-                store.drop(uploadId);
-                return fail(res, consumed.status, 'rongroi http: report consume refused', ticket);
-            }
-            return reply(res, 200);
+            if (!consumed.ok) return bad(consumed.status, 'rongroi http: report consume refused');
+            return { status: 200, why: null };
         }
         if (!store.isOpen(uploadId)) {
             const gone = !found || found.state === 'expired';
-            return fail(res, gone ? 410 : 422, 'rongroi http: report upload slot gone', ticket);
+            return bad(gone ? 410 : 422, 'rongroi http: report upload slot gone', true);
         }
         const event = { caseId: found.caseId, ticket, reportSha256: sha, receivedAt: now() };
-        // The uploader's address is a raw fact, not parsed: its shape differs between FXServer editions.
-        if (typeof req.address === 'string') event.address = req.address;
+        // The uploader's address is a raw fact, not parsed: its shape differs between FXServer editions. Through a
+        // relay it is what the Relay reports, labelled with how the Relay learned it (ADR 0097 section 3).
+        if (typeof address === 'string') event.address = address;
+        if (typeof addressSource === 'string') event.addressSource = addressSource;
         if (declined) event.declined = true;
         else event.record = record;
         try {
             onReport(event);
         } catch {
-            store.drop(uploadId);
-            return fail(res, 500, 'rongroi http: onReport failed', ticket);
+            return bad(500, 'rongroi http: onReport failed');
         }
         const consumed = store.consume(ticket, sha);
-        if (!consumed.ok) {
-            store.drop(uploadId);
-            return fail(res, consumed.status, 'rongroi http: report consume refused', ticket);
-        }
+        if (!consumed.ok) return bad(consumed.status, 'rongroi http: report consume refused');
         freeDropped(consumed.dropped);
-        return reply(res, 200);
+        return { status: 200, why: null };
+    }
+
+    function finish(req, res, ticket, sha, uploadId, raw) {
+        const address = typeof req.address === 'string' ? req.address : undefined;
+        const result = verify({ ticket, sha, uploadId, raw, address });
+        if (result.status === 200) return reply(res, 200);
+        return fail(res, result.status, result.why, ticket);
+    }
+
+    // One envelope the Kit pulled from a Rongroi Relay (ADR 0097 section 3). Returns the status to post back as
+    // the result: 200 means accepted. Never throws.
+    function ingestRelay({ ticket, sha, raw, receivedAt, address, addressSource } = {}) {
+        try {
+            if (typeof ticket !== 'string' || !TICKET_RE.test(ticket) || typeof sha !== 'string' || !SHA256_RE.test(sha)
+                || !Buffer.isBuffer(raw)) {
+                return 400;
+            }
+            if (raw.length > MAX_SLICE_BYTES * MAX_CHUNK_TOTAL) return 413;
+            const begun = store.beginUpload(ticket, sha, { receivedAt });
+            if (!begun.ok) return begun.status;
+            if (begun.repeat) return 200;
+            const result = verify({ ticket, sha, uploadId: begun.uploadId, raw, address, addressSource });
+            if (result.status !== 200) log(result.why, ticket);
+            return result.status;
+        } catch {
+            log('rongroi http: relay envelope failed', typeof ticket === 'string' && TICKET_RE.test(ticket) ? ticket : undefined);
+            return 500;
+        }
     }
 
     function handleReport(req, res, headers) {
@@ -458,6 +481,7 @@ function createHandler({ store, kit, now, onReport, log = () => {} }) {
             internalError(res, state.ticket);
         }
     };
+    handler.ingestRelay = ingestRelay;
     handler.sweep = () => {
         store.expireDue();
         freeDropped(store.sweepIdle());

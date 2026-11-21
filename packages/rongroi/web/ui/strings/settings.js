@@ -22,6 +22,8 @@
             deletePlayerConfirm: 'Delete player data',
             deletePlayerCancel: 'Cancel',
             corrupt: '{count} stored settings could not be read and use their defaults.',
+            fromServerCfg: 'Set in server.cfg (rongroi_public_origin). Change it there.',
+            fromServerCfgRelay: 'Reports go through the Rongroi Relay set in server.cfg (rongroi_relay_url).',
             fields: {
                 publicOrigin: 'Public origin',
                 retentionDays: 'Retention days',
@@ -57,6 +59,8 @@
             deletePlayerConfirm: 'ลบข้อมูลผู้เล่น',
             deletePlayerCancel: 'ยกเลิก',
             corrupt: 'อ่านการตั้งค่าที่บันทึกไว้ {count} รายการไม่ได้ จึงใช้ค่าเริ่มต้น',
+            fromServerCfg: 'ตั้งไว้ใน server.cfg (rongroi_public_origin) แก้ได้ที่นั่น',
+            fromServerCfgRelay: 'รายงานส่งผ่าน Rongroi Relay ที่ตั้งไว้ใน server.cfg (rongroi_relay_url)',
             fields: {
                 publicOrigin: 'ที่อยู่สาธารณะ',
                 retentionDays: 'จำนวนวันเก็บรักษา',

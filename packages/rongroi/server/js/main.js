@@ -30,7 +30,11 @@
         () => require('./tickets.js'),
         () => require('./server/js/tickets.js'),
     );
-    const { pairingCode, policyHash } = loadModule(
+    const { createRelayClient, parseRelayConfig } = loadModule(
+        () => require('./relay.js'),
+        () => require('./server/js/relay.js'),
+    );
+    const { pairingCode, pairingCodeV2, policyHash, checkOrigin } = loadModule(
         () => require('./pairing.js'),
         () => require('./server/js/pairing.js'),
     );
@@ -57,6 +61,9 @@
     const crypto = require('crypto');
 
     const STAFF_ACE = 'nakara_rongroi.staff';
+    const RELAY_GRACE_MS = 10 * 60 * 1000; // pull a relay ticket until 10 minutes past expires_at (ADR 0097 §3)
+    const RELAY_PULL_MS = 3000;
+    const RELAY_RESULTS = [200, 404, 409, 410, 422, 500];
     const NET_WINDOW_MS = 10000;
     const NET_LIMIT = 60;
     const NET_WINDOW_MAX = 256;
@@ -142,7 +149,42 @@
         const backend = edition === 'enhanced' ? createFileBackend() : createKvpBackend(kvp);
         const marker = edition === 'enhanced' ? entriesMarker(kvp) : null;
         const storage = createStorage(backend, { marker });
-        const settings = createSettings(kvp);
+        const storedSettings = createSettings(kvp);
+
+        // Server-only convars (ADR 0001 section 14): set with `set`, never `setr`. When present they win over the
+        // panel; the relay key is never logged or sent to a client.
+        let cfgOrigin = GetConvar('rongroi_public_origin', '');
+        if (cfgOrigin) {
+            try {
+                checkOrigin(cfgOrigin);
+                cfgOrigin = new URL(cfgOrigin).origin;
+            } catch {
+                log('rongroi_public_origin ignored: not http(s)://host[:port]');
+                cfgOrigin = '';
+            }
+        }
+        const RELAY_URL = GetConvar('rongroi_relay_url', '');
+        const relayParsed = parseRelayConfig({
+            url: RELAY_URL,
+            id: GetConvar('rongroi_relay_id', ''),
+            key: GetConvar('rongroi_relay_key', ''),
+        });
+        if (!relayParsed.ok && relayParsed.reason !== 'off') log(`relay off: ${relayParsed.reason}`);
+        const relay = relayParsed.ok
+            ? createRelayClient({ config: relayParsed.config, fetchImpl: (path, init) => fetch(RELAY_URL + path, init), log })
+            : null;
+        if (relay) log(`relay on: ${relay.origin} as ${relay.id}`);
+        const fromServerCfg = [];
+        if (relay || cfgOrigin) fromServerCfg.push('publicOrigin');
+        const settings = {
+            ...storedSettings,
+            get() {
+                const values = storedSettings.get();
+                if (relay) return { ...values, publicOrigin: relay.origin, fromServerCfg, transport: 'relay' };
+                if (cfgOrigin) return { ...values, publicOrigin: cfgOrigin, fromServerCfg };
+                return values;
+            },
+        };
         const kit = loadOrCreateKitKey(kvp);
         const store = new TicketStore({ now: Date.now, randomBytes: crypto.randomBytes });
         const onReport = (event) => {
@@ -159,6 +201,36 @@
         }
         store.restoreConsumed(storage.consumedSnapshot());
         log(`storage ${edition}`);
+
+        // One place makes every pairing code. Relay tickets get an rr2 code bound to the Relay, registered there
+        // with the exact policy bytes the Relay serves (the same bytes handlePolicy would serve); others keep rr1.
+        function makeCode({ ticket, nonce, expiresAt, policy, serverOrigin }) {
+            const hash = policyHash(policy);
+            if (!relay) {
+                return pairingCode({ serverOrigin, ticket, nonce, expiresAt, policyHash: hash, kitPublicKey: kit.publicKey });
+            }
+            const found = store.lookup(ticket);
+            const made = pairingCodeV2({
+                serverOrigin: relay.origin, basePath: relay.id, transport: 'relay', ticket, nonce, expiresAt,
+                policyHash: hash, kitPublicKey: kit.publicKey,
+            });
+            if (found && !found.binding && found.state === 'issued') {
+                store.setBinding(ticket, made.binding);
+                const policyBody = JSON.stringify({ ...policy, policy_hash: hash });
+                relay.register({ ticket, expiresAt, policyBody }).catch(() => log('rongroi relay: register failed', ticket));
+            }
+            return made.code;
+        }
+
+        // Forgetting a relay ticket (case deleted, key rotated) also deletes what the Relay holds for it.
+        if (relay) {
+            const forget = store.forget.bind(store);
+            store.forget = (ticket) => {
+                const found = store.lookup(ticket);
+                if (found && found.binding) relay.remove(ticket).catch(() => {});
+                return forget(ticket);
+            };
+        }
 
         function isStaff(src) {
             return nativeBool(IsPlayerAceAllowed(src, STAFF_ACE));
@@ -189,6 +261,7 @@
             randomBytes: crypto.randomBytes,
             rotateKitKey: () => rotateKitKey(kvp),
             storageWarning,
+            makeCode,
         });
 
         // One case every 250 ms: a storage write blocks the tick, and Enhanced's writes are the slowest
@@ -248,13 +321,12 @@
                     ticket: issued.ticket,
                     nonce: issued.nonce,
                     expiresAt: issued.expiresAt,
-                    pairingCode: pairingCode({
+                    pairingCode: makeCode({
                         serverOrigin,
                         ticket: issued.ticket,
                         nonce: issued.nonce,
                         expiresAt: issued.expiresAt,
-                        policyHash: policyHash(policy),
-                        kitPublicKey: kit.publicKey,
+                        policy,
                     }),
                 };
             } catch (err) {
@@ -300,13 +372,12 @@
             const policy = isObject(found.policy) ? found.policy : data.policy;
             if (!isObject(policy)) return null;
             try {
-                return pairingCode({
+                return makeCode({
                     serverOrigin,
                     ticket: data.ticket,
                     nonce: found.nonce,
                     expiresAt: data.expiresAt,
-                    policyHash: policyHash(policy),
-                    kitPublicKey: kit.publicKey,
+                    policy,
                 });
             } catch {
                 return null;
@@ -391,7 +462,33 @@
             panel.playerDropped(src);
         });
 
-        RegisterCommand('rongroi', (src) => {
+        async function runDoctor() {
+            const line = (ok, text) => console.log(`nakara_rongroi doctor: ${ok ? 'ok  ' : 'FAIL'} ${text}`);
+            line(true, `edition ${edition}, storage ${edition === 'enhanced' ? 'files in cache/rongroi-reports' : 'KVP'}`);
+            const values = settings.get();
+            line(typeof values.publicOrigin === 'string' && values.publicOrigin.length > 0,
+                `public origin ${values.publicOrigin || '(not set)'}${fromServerCfg.length ? ' (from server.cfg)' : ''}`);
+            if (edition === 'enhanced' && marker) {
+                const check = storage.checkIntegrity();
+                line(!(check.expected > check.found), `stored reports: expected ${check.expected}, found ${check.found}`);
+            }
+            if (!relay) {
+                line(relayParsed.reason === 'off', relayParsed.reason === 'off' ? 'relay not configured (direct uploads)' : `relay: ${relayParsed.reason}`);
+                if (relayParsed.reason === 'off') {
+                    console.log('nakara_rongroi doctor: note this server cannot test reachability from outside its own network');
+                }
+                return;
+            }
+            const h = await relay.health();
+            line(h.ok && h.server === relay.id, `relay ${relay.origin} answers ${h.status}${h.server ? `, key is for ${h.server}` : ''}`);
+            console.log('nakara_rongroi doctor: relay key is set (value not shown)');
+        }
+
+        RegisterCommand('rongroi', (src, args) => {
+            if (src === 0 && Array.isArray(args) && args[0] === 'doctor') {
+                runDoctor().catch(() => console.log('nakara_rongroi doctor: FAIL could not finish'));
+                return;
+            }
             if (typeof src !== 'number' || !Number.isInteger(src) || src <= 0) return;
             if (isStaff(src)) {
                 panel.panelOpen(src);
@@ -410,6 +507,31 @@
         } : null));
         SetHttpHandler(handler);
         setInterval(() => handler.sweep(), 10000);
+
+        if (relay) {
+            let pulling = false;
+            setInterval(async () => {
+                if (pulling) return;
+                pulling = true;
+                try {
+                    for (const ticket of store.relayTickets(RELAY_GRACE_MS)) {
+                        const envelopes = await relay.pending(ticket);
+                        for (const e of envelopes) {
+                            let status = handler.ingestRelay({ ticket, sha: e.sha256, raw: e.raw, receivedAt: e.receivedAt,
+                                address: e.address, addressSource: e.addressSource });
+                            if (status === 429) continue; // a slot is busy: leave it on the Relay, try next round
+                            if (status === 400 || status === 413) status = 422;
+                            if (!RELAY_RESULTS.includes(status)) status = 500;
+                            await relay.result(ticket, e.sha256, status);
+                        }
+                    }
+                } catch {
+                    log('rongroi relay: pull failed');
+                } finally {
+                    pulling = false;
+                }
+            }, RELAY_PULL_MS);
+        }
     } catch {
         console.log('nakara_rongroi: startup failed');
     }
