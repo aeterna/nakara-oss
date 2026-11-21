@@ -6,6 +6,24 @@ All notable changes to `aeterna_notify` are documented here. The format follows
 
 ## Unreleased
 
+0.2.0, written by Claude Code - Claude Opus 5.5 (agent engineer), from `docs/specs/aeterna_notify.md` "0.2 additions" (ADR 0005).
+
+### Added
+
+- Toast fields `actions` (1–2 buttons), `sound`, `history` and `merge`. Actions are pressed with the key mappings `+aeterna_notify_action1` / `+aeterna_notify_action2` (no default key) or by mouse when the cursor is already free; the press fires `aeterna_notify:action` client-local (client export) or, through the rate-limited `aeterna_notify:sv:action`, server-local (server export). `Config.toast.actionDuration`.
+- Lifetime bar on timed toasts (`Config.toast.lifetimeBar`), not drawn under reduced motion.
+- Optional frontend sounds per toast type (`Config.sound`), the `aeterna_notify_sound` command and client KVP `aeterna_notify:settings:v1`.
+- Countdown announcements: server exports `announceCountdown` / `cancelCountdown`, the `aeterna_announce_countdown` command, client event `aeterna_notify:cl:countdown`, server-local `aeterna_notify:countdownEnd`, `Config.countdown.marks`.
+- Client exports `history` / `clearHistory`, client-local `aeterna_notify:added`, `Config.history.max`.
+- The MOTD stays on screen and ignores input while `aeterna_core`'s focus overlay pauses it.
+- Theme type tokens (`--fs-1` … `--fs-5`, `--lh`) in `style.css`, and the `aeterna_theme_preset` preset on the page.
+
+### Changed
+
+- Identical toasts now merge into one with `×n` by default (`Config.toast.merge = false` restores the 0.1 stack; `merge = false` exempts one toast).
+- The client `notify` export returns the `toastId` instead of `true`; the server export's `clean` carries `toastId`.
+- MOTD buttons and ESC wait for the client to close the card instead of hiding it in the page first.
+
 ## [0.1.0] - 2026-11-18
 
 - Bundle the IBM Plex Sans Thai font (OFL-1.1).

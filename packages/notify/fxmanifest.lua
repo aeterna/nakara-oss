@@ -5,7 +5,7 @@ lua54 'yes'
 name 'aeterna_notify'
 author 'AETERNA'
 description 'Toast notifications with actions, server-wide announcement and countdown banners, notification history, and message of the day (MOTD) for the AETERNA Starter Kit.'
-version '0.1.0'
+version '0.2.0'
 repository 'https://github.com/aeterna/nakara-oss'
 
 dependencies {
