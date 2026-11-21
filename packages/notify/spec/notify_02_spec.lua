@@ -628,6 +628,144 @@ describe('aeterna_notify 0.2', function()
         end)
     end)
 
+    describe('9. Q3 review fixes', function()
+        local L
+        before_each(function()
+            natives.reset()
+            L = loadLogic()
+        end)
+
+        it('refuses actions when the toast id is longer than 24 characters', function()
+            local acts = { { id = 'yes', label = 'Yes' } }
+            local ok24, err24, c24 = L.validateToastOpts({ id = string.rep('a', 24), title = 'Q', actions = acts })
+            assert.is_true(ok24)
+            assert.is_nil(err24)
+            assert.are.equal(1, #c24.actions)
+            for _, n in ipairs({ 25, 32 }) do
+                local ok, err = L.validateToastOpts({ id = string.rep('a', n), title = 'Q', actions = acts })
+                assert.is_false(ok, 'len ' .. n)
+                assert.are.equal('id: maxLen 24 with actions', err)
+            end
+            assert.is_true((L.validateToastOpts({ id = string.rep('a', 32), title = 'Q' })))
+        end)
+
+        it('server: the sender gets the error for a long id with actions', function()
+            natives.reset({ resource = 'aeterna_notify', side = 'server', invoker = 'my_job', players = { [1] = 'Alice' } })
+            natives.spy('RegisterCommand')
+            natives.stub('AeternaCore', coreStub())
+            local res = resource.load_resource(DIR, 'server')
+            local ok, err = res.exports.notify(1, { id = string.rep('b', 25), title = 'Q', actions = { { id = 'yes', label = 'Yes' } } })
+            assert.is_false(ok)
+            assert.are.equal('id: maxLen 24 with actions', err)
+            assert.are.equal(0, #natives.emitted('client', 'aeterna_notify:cl:toast'))
+        end)
+
+        it('does not name the phone package anywhere in notify', function()
+            local files = { 'README.md', 'CHANGELOG.md', 'fxmanifest.lua', 'oss.json', 'config.lua',
+                'client/main.lua', 'server/main.lua', 'shared/logic/notify.lua', 'shared/logic/actions.lua',
+                'shared/logic/countdown.lua', 'shared/logic/history.lua', 'html/app.js', 'html/index.html' }
+            for i = 1, #files do
+                local f = assert(io.open(DIR .. '/' .. files[i], 'rb'))
+                local text = f:read('*a')
+                f:close()
+                assert.is_nil(text:lower():find('phonekit', 1, true), files[i])
+            end
+        end)
+
+        it('keys the action tracker by owner + toastId with the cap of 8 per owner', function()
+            local tr = L.createActionTracker({ max = 8, graceMs = 2000 })
+            for i = 1, 8 do
+                tr:track(1, { toastId = 'a' .. i, actions = { 'x' }, duration = 4000, owner = 'res_a' }, 0)
+            end
+            for i = 1, 9 do
+                tr:track(1, { toastId = 'b' .. i, actions = { 'x' }, duration = 4000, owner = 'res_b' }, 0)
+            end
+            assert.are.equal(16, tr:count(1))
+            assert.is_false((tr:press(1, 'b1', 'x', 10)))
+            for i = 1, 8 do
+                assert.is_true((tr:press(1, 'a' .. i, 'x', 10)), 'a' .. i)
+            end
+
+            tr:track(1, { toastId = 'offer', actions = { 'take' }, duration = 4000, owner = 'res_a' }, 0)
+            tr:track(1, { toastId = 'offer', actions = { 'take' }, duration = 4000, owner = 'res_b' }, 0)
+            tr:untrack(1, 'res_a', 'offer')
+            local ok, rec = tr:press(1, 'offer', 'take', 10)
+            assert.is_true(ok)
+            assert.are.equal('res_b', rec.owner)
+            assert.is_false((tr:press(1, 'offer', 'take', 10)))
+        end)
+
+        it('server: resending the same id without actions deletes that owner\'s record only', function()
+            natives.reset({ resource = 'aeterna_notify', side = 'server', invoker = 'res_a', players = { [1] = 'Alice' } })
+            natives.spy('RegisterCommand')
+            natives.stub('AeternaCore', coreStub())
+            local res = resource.load_resource(DIR, 'server')
+            local acts = { { id = 'take', label = 'Take' } }
+            res.exports.notify(1, { id = 'offer', title = 'Offer', actions = acts })
+            natives.stub('GetInvokingResource', function() return 'res_b' end)
+            res.exports.notify(1, { id = 'offer', title = 'Offer B', actions = acts })
+            res.exports.notify(1, { id = 'offer', title = 'Plain B' })
+            natives.fire_net('aeterna_notify:sv:action', 1, { toastId = 'offer', action = 'take' })
+            local evs = natives.emitted('local', 'aeterna_notify:action')
+            assert.are.equal(1, #evs)
+            assert.are.equal('res_a', evs[1].args[2].owner)
+        end)
+
+        it('gives client and server auto toasts separate history ids', function()
+            local q = L.createToastQueue({ max = 4, defaultDuration = 4000, merge = true })
+            local _, _, rc = q:push({ title = 'Local' }, { now = 0, owner = 'x', origin = 'client' })
+            local _, _, rs = q:push({ title = 'Remote' }, { now = 0, owner = 'x', origin = 'server', toastId = rc.toast.toastId })
+            assert.are.equal(rc.toast.toastId, rs.toast.toastId)
+            local h = L.createHistory(50)
+            h:upsert(L.historyFromToast(rc.toast, 1))
+            h:upsert(L.historyFromToast(rs.toast, 2))
+            assert.are.equal(2, h:count())
+            local list = h:list()
+            assert.are_not.equal(list[1].id, list[2].id)
+            local _, _, rid = q:push({ id = 'job', title = 'With id' }, { now = 0, owner = 'x', origin = 'server' })
+            assert.are.equal('job', L.historyFromToast(rid.toast, 3).id)
+        end)
+
+        it('countdown: only the starting owner may cancel; an owner stop cancels its countdown', function()
+            local ended = {}
+            local cd = L.createCountdown({ fire = function(p) ended[#ended + 1] = p end })
+            local id = cd:start({ title = 'Restart', seconds = 30 }, 0, 'res_a')
+            assert.is_false(cd:cancel(id, 'res_b'))
+            assert.is_false(cd:cancelOwnedBy('res_b'))
+            assert.are.equal(0, #ended)
+            assert.is_true(cd:cancelOwnedBy('res_a'))
+            assert.are.same({ countdownId = id, cancelled = true }, ended[1])
+        end)
+
+        it('server: cancelCountdown from another resource is refused; owner or notify stopping ends it cancelled', function()
+            natives.reset({ resource = 'aeterna_notify', side = 'server', invoker = 'res_a', players = { [1] = 'Alice' } })
+            natives.spy('RegisterCommand')
+            natives.stub('AeternaCore', coreStub())
+            local res = resource.load_resource(DIR, 'server')
+
+            local id = res.exports.announceCountdown({ title = 'Restart', seconds = 60 })
+            natives.stub('GetInvokingResource', function() return 'res_b' end)
+            assert.is_false(res.exports.cancelCountdown(id))
+            natives.fire('onResourceStop', 'res_b')
+            assert.are.equal(0, #natives.emitted('local', 'aeterna_notify:countdownEnd'))
+            natives.fire('onResourceStop', 'res_a')
+            local ends = natives.emitted('local', 'aeterna_notify:countdownEnd')
+            assert.are.equal(1, #ends)
+            assert.are.same({ countdownId = id, cancelled = true }, ends[1].args[1])
+            local hide = natives.last_emitted('client', 'aeterna_notify:cl:countdown').args[1]
+            assert.is_true(hide.hide)
+
+            local id2 = res.exports.announceCountdown({ title = 'Restart', seconds = 60 })
+            assert.is_string(id2)
+            natives.fire('onResourceStop', 'aeterna_notify')
+            ends = natives.emitted('local', 'aeterna_notify:countdownEnd')
+            assert.are.equal(2, #ends)
+            assert.are.same({ countdownId = id2, cancelled = true }, ends[2].args[1])
+            natives.advance(70000)
+            assert.are.equal(2, #natives.emitted('local', 'aeterna_notify:countdownEnd'))
+        end)
+    end)
+
     describe('8. manifest and locales', function()
         it('is version 0.2.0 and every 0.2 locale key exists in th and en', function()
             local f = assert(io.open(DIR .. '/fxmanifest.lua', 'rb'))
