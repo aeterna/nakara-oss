@@ -12,6 +12,18 @@
       "plan": "kit02",
       "acquired": "2026-11-21T06:48:19Z",
       "expires": "2026-11-21T10:48:19Z"
+    },
+    {
+      "id": "kit02-e3-d0836233",
+      "repo": "nakara-oss",
+      "lane": "kit02-e3",
+      "host": "mac",
+      "scope": [
+        "docs/specs/theme.css"
+      ],
+      "plan": "kit02",
+      "acquired": "2026-11-21T06:48:23Z",
+      "expires": "2026-11-21T10:48:23Z"
     }
   ]
 }
