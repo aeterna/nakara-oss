@@ -1,9 +1,8 @@
 -- shared/logic/selftest.lua -- natives-free rules of the aeterna_radial 0.2 self-tests
 -- (docs/specs/aeterna_radial.md § Self-tests (0.2)). Judges return state, detail for
 -- exports.aeterna_core:reportSelftest; server/selftest.lua and client/selftest.lua stay thin.
---
--- server_recheck is not registered: as a ped test it runs on the client, but it needs a server slot and a
--- server-side drop that the client can neither create nor see (see the package README, "Self-tests").
+-- server_recheck is prepared by the server on aeterna_core:selftestStarted (a vehicle-only server slot sent to
+-- the presser alone) and judged on the client.
 
 RadialSelftest = RadialSelftest or {}
 
@@ -11,10 +10,17 @@ local PREFIX = 'aeterna_radial.'
 
 -- An eye test opens the ring and waits this long for the person to act before it asks for the card.
 RadialSelftest.EYE_WATCH_MS = 50000
+-- gamepad: with no pad input at all for this long, ask for the card (the person can press Skip).
+RadialSelftest.PAD_IDLE_MS = 8000
+-- server_recheck: how long the client waits for the test slot, then for the server's answer to the pick.
+RadialSelftest.SLOT_WAIT_MS = 2000
+RadialSelftest.DROP_WAIT_MS = 1500
+RadialSelftest.RECHECK_ID = 'selftest_recheck'
 
 local ROWS = {
     { name = 'registry', kind = 'headless' },
     { name = 'conditions', kind = 'headless' },
+    { name = 'server_recheck', kind = 'ped' },
     { name = 'open_pick', kind = 'eye' },
     { name = 'child_ring', kind = 'eye' },
     { name = 'gamepad', kind = 'eye' },
@@ -32,6 +38,8 @@ function RadialSelftest.definitions(t)
         if row.kind == 'eye' then
             meta.expect = t('radial.selftest.' .. row.name .. '.expect')
             meta.timeout = 60000
+        elseif row.kind == 'ped' then
+            meta.timeout = 10000
         end
         out[i] = { name = row.name, meta = meta }
     end
@@ -144,13 +152,14 @@ function RadialSelftest.pickedLine(t, label)
     return t('radial.selftest.picked', { label = label })
 end
 
---- observe(ev) returns true once the person has done what the card will ask about:
---- ev = { type = 'pick', id } or { type = 'state', open, parentId?, hoverId? }.
+--- observe(ev, elapsedMs) returns true once the person has done what the card will ask about:
+--- ev = { type = 'pick', id } or { type = 'state', open, parentId?, hoverId?, pad? } (pad = last input was a
+--- gamepad). gamepad: only a close made with the pad counts; with no pad input at all, PAD_IDLE_MS is enough.
 function RadialSelftest.newEyeWatch(name)
-    local sawOpen, sawChild = false, false
+    local sawOpen, sawChild, sawPad = false, false, false
     local w = {}
 
-    function w.observe(ev)
+    function w.observe(ev, elapsedMs)
         if type(ev) ~= 'table' then return false end
         if name == 'open_pick' then
             return ev.type == 'pick' and type(ev.id) == 'string' and ev.id:match('^selftest_%d$') ~= nil
@@ -160,11 +169,32 @@ function RadialSelftest.newEyeWatch(name)
             if ev.open and ev.parentId == 'selftest_group' then sawChild = true end
             return sawChild and ev.open == true and ev.parentId == nil and ev.hoverId == 'selftest_group'
         end
-        if ev.open then sawOpen = true end
-        return sawOpen and not ev.open
+        if ev.pad then sawPad = true end
+        if ev.open and ev.pad then sawOpen = true end
+        if sawOpen and not ev.open and ev.pad then return true end
+        return not sawPad and (tonumber(elapsedMs) or 0) >= RadialSelftest.PAD_IDLE_MS
     end
 
     return w
+end
+
+--- server_recheck: the temporary server slot, shown only in a vehicle.
+function RadialSelftest.recheckSlot(t)
+    t = t or function(key) return key end
+    return { id = RadialSelftest.RECHECK_ID, label = t('radial.selftest.recheck'), when = { vehicle = 'in' } }
+end
+
+--- r = { arrived = the test slot reached the presser, stillThere = it is still there after the pick }.
+--- The server takes the slot back only when it accepts the pick, so a slot still there means it dropped it.
+function RadialSelftest.recheckVerdict(r)
+    r = r or {}
+    if not r.arrived then
+        return 'fail', 'the test server slot never reached the presser'
+    end
+    if not r.stillThere then
+        return 'fail', 'the server accepted a vehicle-only pick from a player on foot'
+    end
+    return 'pass', 'the server dropped a vehicle-only pick from a player on foot'
 end
 
 return RadialSelftest

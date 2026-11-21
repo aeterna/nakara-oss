@@ -1,6 +1,7 @@
--- client/selftest.lua -- runs the aeterna_radial eye self-tests on the presser's client: adds temporary slots
--- under the owner aeterna_radial, opens the ring, waits for the person to use it, then asks for the eye card
--- (the card takes focus, so the person acts first). Decisions live in shared/logic/selftest.lua.
+-- client/selftest.lua -- runs the aeterna_radial client self-tests on the presser's client. Eye tests add
+-- temporary slots under the owner aeterna_radial, open the ring, wait for the person to use it, then ask for the
+-- eye card (the card takes focus, so the person acts first). server_recheck sends a forged pick for the
+-- vehicle-only server slot the server prepared for this run. Decisions live in shared/logic/selftest.lua.
 
 local ST = RadialSelftest
 local hooks = RadialSelftestHooks
@@ -37,7 +38,7 @@ local function run(test)
     end
     local waited = 0
     while current == test and waited < ST.EYE_WATCH_MS do
-        if test.picked or test.watch.observe(hooks.state()) then break end
+        if test.picked or test.watch.observe(hooks.state(), waited) then break end
         Wait(100)
         waited = waited + 100
     end
@@ -53,8 +54,33 @@ AddEventHandler('aeterna_radial:select', function(owner, id)
     if test.watch.observe({ type = 'pick', id = id }) then test.picked = true end
 end)
 
+-- server_recheck: on foot, pick the vehicle-only server slot straight to the server (the client's own check is
+-- skipped on purpose, as a forged pick would). The server takes the slot back only if it accepts the pick.
+local function serverRecheck(runId, name)
+    local function there() return hooks.hasServerSlot(RESOURCE, ST.RECHECK_ID) end
+    local waited = 0
+    while not there() and waited < ST.SLOT_WAIT_MS do
+        Wait(100)
+        waited = waited + 100
+    end
+    local arrived = there()
+    if arrived then
+        TriggerServerEvent('aeterna_radial:sv:select', { owner = RESOURCE, id = ST.RECHECK_ID })
+        Wait(ST.DROP_WAIT_MS)
+    end
+    report(runId, name, ST.recheckVerdict({ arrived = arrived, stillThere = there() }))
+end
+
 AddEventHandler('aeterna_core:selftest', function(runId, name)
     local short = ST.shortName(name)
+    if short == 'server_recheck' then
+        if hooks.inVehicle() then
+            report(runId, name, 'skip', 'presser is in a vehicle')
+            return
+        end
+        CreateThread(function() serverRecheck(runId, name) end)
+        return
+    end
     if short ~= 'open_pick' and short ~= 'child_ring' and short ~= 'gamepad' then return end
     if current then cleanUp(current) end
     local test = { runId = runId, name = name, short = short, watch = ST.newEyeWatch(short), ids = {}, labels = {} }

@@ -100,7 +100,9 @@ end)
 RegisterNetEvent('aeterna_radial:sv:hello', function()
     local src = source
     if not AeternaCore.rateLimit(src, 'radial:hello', 2, 5000) then return end
-    local slots = L.listSlots(registry, 'server', function(stored) return passesAce(src, stored) end)
+    local slots = L.listSlots(registry, 'server', function(stored)
+        return passesAce(src, stored) and not RadialServerSelftestHooks.isPrivate(stored)
+    end)
     TriggerClientEvent('aeterna_radial:cl:slots', src, { slots = slots })
 end)
 
@@ -133,3 +135,13 @@ AddEventHandler('onResourceStop', function(resource)
         sendSlot(-1, { op = 'remove', owner = resource, id = roots[i] })
     end
 end)
+
+-- Read and set points for server/selftest.lua (same resource; nothing here crosses resources).
+-- A self-test slot goes only to its presser, never to other players on join.
+local privateSlots = {} -- [id] = true for this resource's self-test server slots
+RadialServerSelftestHooks = {
+    registry = registry,
+    sendSlot = sendSlot,
+    setPrivate = function(id, on) privateSlots[id] = on or nil end,
+    isPrivate = function(stored) return stored.owner == GetCurrentResourceName() and privateSlots[stored.id] == true end,
+}

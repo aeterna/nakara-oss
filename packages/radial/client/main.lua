@@ -390,11 +390,14 @@ RadialSelftestHooks = {
         return ok
     end,
     state = function()
-        if not menu then return { type = 'state', open = false } end
+        local pad = not IsUsingKeyboard(0)
+        if not menu then return { type = 'state', open = false, pad = pad } end
         local hovered = L.slotAt(menu.ring, menu.hover)
         return { type = 'state', open = true, parentId = menu.parent and menu.parent.id or nil,
-            hoverId = hovered and hovered.id or nil }
+            hoverId = hovered and hovered.id or nil, pad = pad }
     end,
+    hasServerSlot = function(owner, id) return serverReg:getSlot(owner, id, 'server') ~= nil end,
+    inVehicle = function() return vehicleState(PlayerPedId()) ~= 'out' end,
 }
 
 -- Ask for the server slots; ask once more if the first answer is lost (sv:hello allows 2 per 5 s).
