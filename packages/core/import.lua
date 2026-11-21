@@ -787,19 +787,23 @@ if not IsDuplicityVersion() then
 
     if not AeternaCore._focusLostHandler then
         AeternaCore._focusLostHandler = AddEventHandler('aeterna_core:focusLost', function(owner, token, reason)
+            if GetInvokingResource() ~= 'aeterna_core' then return end
             if owner == GetCurrentResourceName() then
                 SetNuiFocusKeepInput(false)
                 SetNuiFocus(false, false)
             end
         end)
         -- Overlay: a paused holder clears its natives (its page stays) and gets its options back on resume.
+        -- Only core fires the focus events; any other invoker is ignored.
         AddEventHandler('aeterna_core:focusPaused', function(owner)
+            if GetInvokingResource() ~= 'aeterna_core' then return end
             if owner == GetCurrentResourceName() then
                 SetNuiFocusKeepInput(false)
                 SetNuiFocus(false, false)
             end
         end)
         AddEventHandler('aeterna_core:focusResumed', function(owner, token)
+            if GetInvokingResource() ~= 'aeterna_core' then return end
             local memo = AeternaCore._focusMemo
             if owner == GetCurrentResourceName() and memo and memo.token == token then
                 SetNuiFocus(memo.keyboard, memo.cursor)
