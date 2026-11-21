@@ -129,6 +129,14 @@ describe('aeterna_phonecall', function()
             assert.are.equal(1, #errors)
         end)
 
+        it('ringSeconds is at most 60, the length of the phonekit ring card', function()
+            local warns = 0
+            local cfg = C.resolve({ call = { ringSeconds = 90 } }, function() warns = warns + 1 end, function() end)
+            assert.are.equal(30, cfg.call.ringSeconds)
+            assert.are.equal(1, warns)
+            assert.are.equal(60, C.resolve({ call = { ringSeconds = 60 } }, function() end, function() end).call.ringSeconds)
+        end)
+
         it('clamps ranges and keeps defaults', function()
             local warns = 0
             local cfg = C.resolve({ sms = { maxLen = 999, keep = 3 }, call = { ringSeconds = 30 } },
@@ -368,9 +376,23 @@ describe('aeterna_phonecall', function()
         end)
 
         it('re-validates dial and send payloads with the spec schemas', function()
-            assert.are.equal(20, L.DIAL_SCHEMA.fields.number.maxLen)
-            assert.are.equal('^[%d%-%s%+%(%)]+$', L.SEND_SCHEMA.fields.number.pattern)
-            assert.are.equal(300, L.SEND_SCHEMA.fields.body.maxLen)
+            coreText()
+            local v = AeternaCore.validate
+            local ok, _, clean = v({ number = '(555) 01-42' }, L.DIAL_SCHEMA)
+            assert.is_true(ok)
+            assert.are.equal('(555) 01-42', clean.number)
+            assert.is_false((v({ number = '555-01a2' }, L.DIAL_SCHEMA)))
+            -- core's maxLen cuts rather than refuses: a 21-digit number comes back as its first 20 digits
+            local _, _, long = v({ number = string.rep('5', 21) }, L.DIAL_SCHEMA)
+            assert.are.equal(20, #long.number)
+            assert.is_false((v({ number = 5550142 }, L.DIAL_SCHEMA)))
+            assert.is_false((v({ number = '5550142', extra = 1 }, L.DIAL_SCHEMA)))
+            assert.is_true((v({ number = '5550142', body = 'hi' }, L.SEND_SCHEMA)))
+            local okLong, _, cut = v({ number = '5550142', body = string.rep('ก', 400) }, L.SEND_SCHEMA)
+            assert.is_true(okLong)
+            assert.are.equal(300, AeternaCore.text.len(cut.body))
+            assert.is_false((v({ number = '5550142' }, L.SEND_SCHEMA)))
+            assert.is_false((v({ number = '', body = 'hi' }, L.SEND_SCHEMA)))
         end)
     end)
 
@@ -476,6 +498,24 @@ describe('aeterna_phonecall', function()
             assert.is_nil(mgr:finish(call, 'boom'))
             assert.are.equal('ringing', call.state)
             assert.is_nil(mgr:finish({ state = 'ended' }, 'hangup'))
+        end)
+
+        it('canAnswer finds the ringing call for its callee without changing its state', function()
+            local call = assert(mgr:dial(1, 2, OK))
+            assert.is_nil(mgr:canAnswer(1))
+            assert.are.equal(call, mgr:canAnswer(2))
+            assert.are.equal('ringing', call.state)
+            assert.is_nil(call.activeAt)
+            mgr:answer(2)
+            assert.is_nil(mgr:canAnswer(2))
+        end)
+
+        it('a call ended from ringing was never active and has no seconds', function()
+            local call = assert(mgr:dial(1, 2, OK))
+            clock.now = 10
+            mgr:finish(call, 'voice_off')
+            assert.is_false(call.wasActive)
+            assert.are.equal(0, call.seconds)
         end)
 
         it('allocates channel slots lowest-free and releases them', function()
@@ -674,6 +714,17 @@ describe('aeterna_phonecall', function()
             assert.is_false((M.validate('x')))
         end)
 
+        it('coalesces names updates into one trailing send at least 5 s after the previous one', function()
+            local th = M.createThrottle(5000)
+            assert.are.equal(0, th:request(1000))        -- askNames: send now
+            assert.are.equal(4000, th:request(2000))     -- contactsChanged 1 s later: one trailing send at 6000
+            assert.is_nil(th:request(3000))              -- already scheduled
+            th:fire(6000)
+            assert.are.equal(5000, th:request(6500))     -- 0.5 s after the trailing send: wait until 11000
+            th:fire(11000)
+            assert.are.equal(0, th:request(16000))
+        end)
+
         it('labels fall back to the number', function()
             local names = { ['5550142'] = 'Mint' }
             assert.are.equal('Mint', M.label(names, '555-0142'))
@@ -816,24 +867,21 @@ describe('aeterna_phonecall', function()
             assert.are.equal('skip', T.callOutcome('call_busy', 'A', { state = 'ended', reason = 'voice_off' }))
         end)
 
-        it('pairs A and B of one two-player test once', function()
-            local pairs_ = T.createPairs()
-            assert.is_nil(pairs_:join('r1', 'aeterna_phonecall.sms_ab', 'A', 1))
-            assert.is_nil(pairs_:join('r1', 'aeterna_phonecall.sms_ab', 'A', 1))
-            local p = pairs_:join('r1', 'aeterna_phonecall.sms_ab', 'B', 2)
-            assert.are.same({ a = 1, b = 2 }, p)
-            assert.is_nil(pairs_:join('r1', 'aeterna_phonecall.sms_ab', 'B', 2))
-            assert.is_nil(pairs_:join('r2', 'aeterna_phonecall.sms_ab', 'A', 3))
-            assert.is_nil(pairs_:join('r2', 'aeterna_phonecall.sms_ab', 'B', 3))
-            pairs_:clear('r2', 'aeterna_phonecall.sms_ab')
-            assert.is_nil(pairs_:join('r2', 'aeterna_phonecall.sms_ab', 'B', 4))
-        end)
-
-        it('a run row that is final means the test is no longer in flight', function()
-            local status = { rows = { { name = 'aeterna_phonecall.sms_ab' } } }
-            assert.is_false(T.inFlight(status, 'aeterna_phonecall.sms_ab'))
-            assert.is_true(T.inFlight(status, 'aeterna_phonecall.call_ab'))
-            assert.is_false(T.inFlight(nil, 'aeterna_phonecall.call_ab'))
+        it('tracks two-player tests from selftestStarted until selftestEnd', function()
+            local tr = T.createTracker()
+            local ctx = { kind = 'eye', side = 'client', a = 1, b = 2, destructive = true }
+            assert.are.same({ a = 1, b = 2 }, tr:start('r1', 'aeterna_phonecall.sms_ab', ctx))
+            assert.is_true(tr:active('r1', 'aeterna_phonecall.sms_ab'))
+            -- a second start of the same test, a missing or identical B, or a test that is not ours: nothing to do
+            assert.is_nil(tr:start('r1', 'aeterna_phonecall.sms_ab', ctx))
+            assert.is_nil(tr:start('r2', 'aeterna_phonecall.call_ab', { a = 3 }))
+            assert.is_nil(tr:start('r2', 'aeterna_phonecall.call_ab', { a = 3, b = 3 }))
+            assert.is_nil(tr:start('r2', 'aeterna_phonecall.my_number', { a = 3, b = 4 }))
+            assert.is_nil(tr:start('r2', 'aeterna_phonecall.call_busy', nil))
+            tr:finish('r1', 'aeterna_phonecall.sms_ab')
+            assert.is_false(tr:active('r1', 'aeterna_phonecall.sms_ab'))
+            assert.is_nil(next(tr.items))
+            assert.are.same({ a = 5, b = 6 }, tr:start('r3', 'aeterna_phonecall.call_busy', { a = 5, b = 6 }))
         end)
     end)
 end)

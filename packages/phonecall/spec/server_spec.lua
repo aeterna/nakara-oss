@@ -7,15 +7,19 @@ local resource = require('helpers.resource')
 local HERE = debug.getinfo(1, 'S').source:match('^@(.*)/[^/]*$') or '.'
 local DIR = HERE .. '/..'
 
-local function boot(gamename, pmaStarted)
+-- opts = { qbx = true, createResult = n, ringError = 'busy', mayWrite = boolean }
+local function boot(gamename, pmaStarted, opts)
+    local o = opts or {}
     natives.reset({
         resource = 'aeterna_phonecall', side = 'server',
         convars = { gamename = gamename },
         players = { [1] = 'A', [2] = 'B' },
     })
-    local kit = { tiles = {}, shown = {}, rings = {}, live = {}, activity = {}, notified = {}, badges = {} }
+    local kit = { tiles = {}, shown = {}, rings = {}, live = {}, activity = {}, activityCalls = {}, notified = {},
+        badges = {}, updates = {}, stopped = {} }
     natives.stub('GetResourceState', function(name)
         if name == 'pma-voice' and pmaStarted then return 'started' end
+        if name == 'qbx_core' and o.qbx then return 'started' end
         if name == 'aeterna_phonekit' or name == 'aeterna_core' then return 'started' end
         return 'missing'
     end)
@@ -23,33 +27,51 @@ local function boot(gamename, pmaStarted)
     natives.stub('IsPlayerAceAllowed', function() return false end)
     local commands = {}
     natives.stub('RegisterCommand', function(name, fn) commands[name] = fn end)
-    local voice = { create = 0, add = {}, delete = {} }
-    natives.stub('CreateVoiceChannel', function(mode) voice.create = voice.create + 1 voice.mode = mode return 3 end)
+    local voice = { create = 0, add = {}, remove = {}, delete = {} }
+    natives.stub('CreateVoiceChannel', function(mode)
+        voice.create = voice.create + 1
+        voice.mode = mode
+        return o.createResult or 3
+    end)
     natives.stub('AddPlayerToVoiceChannel', function(ch, src) voice.add[#voice.add + 1] = { ch, src } end)
     natives.stub('SetPlayerMutedInVoiceChannel', function() end)
-    natives.stub('RemovePlayerFromVoiceChannel', function() end)
+    natives.stub('RemovePlayerFromVoiceChannel', function(ch, src) voice.remove[#voice.remove + 1] = { ch, src } end)
     natives.stub('DeleteVoiceChannel', function(ch) voice.delete[#voice.delete + 1] = ch end)
     local pmaCalls = {}
     natives.stub_export('pma-voice', 'setPlayerCall', function(src, ch) pmaCalls[#pmaCalls + 1] = { src, ch } end)
+    natives.stub_export('qbx_core', 'GetPlayer', function(src)
+        return { PlayerData = { citizenid = 'CID' .. tostring(src), source = src } }
+    end)
     natives.stub_export('aeterna_phonekit', 'addTile', function(app) kit.tiles[app.id] = app return true end)
     natives.stub_export('aeterna_phonekit', 'showApp', function(src, id, spec)
         kit.shown[#kit.shown + 1] = { src = src, id = id, spec = spec }
         return 's' .. #kit.shown
     end)
-    natives.stub_export('aeterna_phonekit', 'updateApp', function() return true end)
+    natives.stub_export('aeterna_phonekit', 'updateApp', function(src, screenId, patch)
+        kit.updates[#kit.updates + 1] = { src = src, screenId = screenId, patch = patch }
+        return true
+    end)
     natives.stub_export('aeterna_phonekit', 'badge', function(src, id, n) kit.badges[src] = n return n end)
-    natives.stub_export('aeterna_phonekit', 'notifyApp', function(src, id, opts)
-        kit.notified[#kit.notified + 1] = { src = src, id = id, opts = opts }
+    natives.stub_export('aeterna_phonekit', 'notifyApp', function(src, id, nopts)
+        kit.notified[#kit.notified + 1] = { src = src, id = id, opts = nopts }
         return true
     end)
     natives.stub_export('aeterna_phonekit', 'canCall', function() return true end)
-    natives.stub_export('aeterna_phonekit', 'ring', function(src, id, opts)
-        kit.rings[#kit.rings + 1] = { src = src, id = id, opts = opts }
+    natives.stub_export('aeterna_phonekit', 'ring', function(src, id, ropts)
+        if o.ringError then return nil, o.ringError end
+        kit.rings[#kit.rings + 1] = { src = src, id = id, opts = ropts }
         return 'ring_' .. #kit.rings
     end)
-    natives.stub_export('aeterna_phonekit', 'stopRing', function() return true end)
-    natives.stub_export('aeterna_phonekit', 'live', function(src, opts) kit.live[src] = opts return true end)
-    natives.stub_export('aeterna_phonekit', 'activity', function(src, kind, on) kit.activity[src] = on return true end)
+    natives.stub_export('aeterna_phonekit', 'stopRing', function(src, ringId)
+        kit.stopped[#kit.stopped + 1] = { src, ringId }
+        return true
+    end)
+    natives.stub_export('aeterna_phonekit', 'live', function(src, lopts) kit.live[src] = lopts return true end)
+    natives.stub_export('aeterna_phonekit', 'activity', function(src, kind, on)
+        kit.activity[src] = on
+        kit.activityCalls[#kit.activityCalls + 1] = { src, on }
+        return true
+    end)
     local selftests = {}
     natives.stub_export('aeterna_core', 'addSelftest', function(name, meta)
         selftests[#selftests + 1] = { name = name, meta = meta }
@@ -60,11 +82,37 @@ local function boot(gamename, pmaStarted)
         reports[name] = { state = state, detail = detail, extra = extra }
         return true
     end)
+    local mayWriteCalls = {}
+    natives.stub_export('aeterna_core', 'selftestMayWrite', function(runId, name)
+        mayWriteCalls[#mayWriteCalls + 1] = { runId, name }
+        return o.mayWrite == true
+    end)
     local res = resource.load_resource(DIR, 'server', {
         externals = { ['@aeterna_core/import.lua'] = DIR .. '/../core/import.lua' },
     })
     natives.advance(0)
-    return { res = res, commands = commands, kit = kit, voice = voice, pmaCalls = pmaCalls, selftests = selftests, reports = reports }
+    return { res = res, commands = commands, kit = kit, voice = voice, pmaCalls = pmaCalls, selftests = selftests,
+        reports = reports, mayWriteCalls = mayWriteCalls }
+end
+
+local function as(src, name, ...)
+    rawset(_G, 'source', src)
+    natives.fire(name, ...)
+    rawset(_G, 'source', nil)
+end
+
+local function openApp(src, id)
+    natives.fire('aeterna_phonekit:app', src, { owner = 'aeterna_phonecall', id = id })
+end
+
+local function act(src, screenId, action, values)
+    natives.fire('aeterna_phonekit:action', src, { owner = 'aeterna_phonecall', screenId = screenId, action = action,
+        values = values or {} })
+end
+
+local function kvpList(key)
+    local raw = natives.get_kvp(key)
+    return raw and json.decode(raw) or nil
 end
 
 local function lastSpec(kit, src, id)
@@ -77,6 +125,23 @@ end
 local function blockById(spec, id)
     for _, b in ipairs(spec.blocks) do
         if b.id == id then return b end
+    end
+end
+
+-- A calls B from the Phone app. Returns B's number.
+local function callB(w)
+    openApp(2, 'phone')
+    local numB = w.res.exports.getNumber(2)
+    openApp(1, 'phone')
+    local _, homeId = lastSpec(w.kit, 1, 'phone')
+    act(1, homeId, 'call', { number = numB })
+    return numB
+end
+
+local function stateTo(src)
+    local list = natives.emitted('client', 'aeterna_phonecall:cl:state')
+    for i = #list, 1, -1 do
+        if list[i].target == src then return list[i].args[1] end
     end
 end
 
@@ -202,5 +267,126 @@ describe('aeterna_phonecall server', function()
         local legacy = boot('gta5', true)
         natives.fire('aeterna_core:selftest', 'r2', 'aeterna_phonecall.voice_channel', { side = 'server' })
         assert.are.equal('skip', legacy.reports['aeterna_phonecall.voice_channel'].state)
+    end)
+
+    describe('round 2', function()
+        local LIC1, LIC2 = 'lic:license:1', 'lic:license:2'
+
+        it('a refused dial shows the reason on the dialer and stores an unknown peer as digits', function()
+            local w = boot('gta5enhanced')
+            openApp(1, 'phone')
+            local _, homeId = lastSpec(w.kit, 1, 'phone')
+            act(1, homeId, 'call', { number = '555 99-99' })
+            local up = w.kit.updates[#w.kit.updates]
+            assert.are.equal(homeId, up.screenId)
+            assert.are.equal('Number not available', up.patch.blocks.number.label)
+            assert.are.equal('5559999', kvpList('aeterna_phonecall:calls:v1:' .. LIC1)[1].peer)
+        end)
+
+        it('a failed ring: the callee gets no ended state and no log entry, the caller gets the same reason', function()
+            local w = boot('gta5enhanced', false, { ringError = 'busy' })
+            callB(w)
+            assert.are.equal('busy', stateTo(1).reason)
+            assert.is_nil(stateTo(2))
+            assert.is_nil(kvpList('aeterna_phonecall:calls:v1:' .. LIC2))
+            assert.are.equal('busy', kvpList('aeterna_phonecall:calls:v1:' .. LIC1)[1].result)
+        end)
+
+        it('voice failing on answer: no answered log and no unmatched activity(false)', function()
+            local w = boot('gta5enhanced', false, { createResult = 65535 })
+            callB(w)
+            act(2, 'ring_1', '__answer')
+            assert.are.equal('voice_off', stateTo(1).reason)
+            assert.are.equal(0, #w.kit.activityCalls)
+            assert.are.equal('voice_off', kvpList('aeterna_phonecall:calls:v1:' .. LIC1)[1].result)
+            assert.are.equal('voice_off', kvpList('aeterna_phonecall:calls:v1:' .. LIC2)[1].result)
+        end)
+
+        it('playerDropped during a call ends it dropped; the channel is deleted and only B is removed', function()
+            local w = boot('gta5enhanced')
+            callB(w)
+            act(2, 'ring_1', '__answer')
+            natives.remove_player(1)
+            as(1, 'playerDropped', 'quit')
+            assert.are.equal('dropped', stateTo(2).reason)
+            assert.are.same({ { 3, 2 } }, w.voice.remove)
+            assert.are.same({ 3 }, w.voice.delete)
+            assert.is_nil(w.res.exports.callState(2))
+        end)
+
+        it('onResourceStop of this resource stops rings and deletes channels', function()
+            local w = boot('gta5enhanced')
+            callB(w)
+            act(2, 'ring_1', '__answer')
+            natives.add_player(3, 'C')
+            natives.add_player(4, 'D')
+            local s3 = w.kit.stopped
+            openApp(4, 'phone')
+            local numD = w.res.exports.getNumber(4)
+            openApp(3, 'phone')
+            local _, home3 = lastSpec(w.kit, 3, 'phone')
+            act(3, home3, 'call', { number = numD })
+            assert.are.equal(2, #w.kit.rings)
+            natives.fire('onResourceStop', 'aeterna_phonecall')
+            assert.are.same({ 4, 'ring_2' }, s3[#s3])
+            assert.are.same({ 3 }, w.voice.delete)
+        end)
+
+        it('qbx: PlayerLoaded keys the character by citizenid; OnPlayerUnload ends a call dropped', function()
+            local w = boot('gta5enhanced', false, { qbx = true })
+            natives.fire('QBCore:Server:PlayerLoaded', { PlayerData = { source = 1, citizenid = 'CID1' } })
+            natives.fire('QBCore:Server:PlayerLoaded', { PlayerData = { source = 2, citizenid = 'CID2' } })
+            callB(w)
+            assert.is_truthy(natives.get_kvp('aeterna_phonecall:number:v1:cid:CID2'))
+            assert.is_nil(natives.get_kvp('aeterna_phonecall:number:v1:' .. LIC2))
+            act(2, 'ring_1', '__answer')
+            natives.fire('QBCore:Server:OnPlayerUnload', 2)
+            assert.are.equal('dropped', stateTo(1).reason)
+        end)
+
+        it('sms_ab: A and B come from selftestStarted; the write waits for mayWrite', function()
+            local w = boot('gta5enhanced', false, { mayWrite = true })
+            local ctx = { kind = 'eye', side = 'client', a = 1, b = 2, destructive = true }
+            natives.fire('aeterna_core:selftestStarted', 'r1', 'aeterna_phonecall.sms_ab', ctx)
+            natives.advance(600)
+            assert.are.same({ { 'r1', 'aeterna_phonecall.sms_ab' } }, w.mayWriteCalls)
+            assert.are.equal('Self-test', kvpList('aeterna_phonecall:sms:v1:' .. LIC2)[1].body)
+            assert.are.equal('Self-test', w.kit.notified[1].opts.body)
+
+            local closed = boot('gta5enhanced', false, { mayWrite = false })
+            natives.fire('aeterna_core:selftestStarted', 'r2', 'aeterna_phonecall.sms_ab', ctx)
+            natives.advance(600)
+            assert.is_nil(natives.get_kvp('aeterna_phonecall:sms:v1:' .. LIC2))
+            assert.are.equal(0, #closed.kit.notified)
+        end)
+
+        it('call_busy and call_ab write no call log; selftestEnd clears the test before its delayed start', function()
+            local w = boot('gta5enhanced')
+            local ctx = { kind = 'ped', side = 'client', a = 1, b = 2, destructive = false }
+            natives.fire('aeterna_core:selftestStarted', 'r1', 'aeterna_phonecall.call_busy', ctx)
+            natives.advance(600)
+            assert.are.equal('busy', stateTo(1).reason)
+            natives.fire('aeterna_core:selftestEnd', 'r1', 'aeterna_phonecall.call_busy')
+
+            natives.fire('aeterna_core:selftestStarted', 'r1', 'aeterna_phonecall.call_ab', ctx)
+            natives.advance(600)
+            assert.are.equal('ringing', stateTo(2).state)
+            natives.fire_net('aeterna_phonecall:sv:hangup', 1)
+            natives.fire('aeterna_core:selftestEnd', 'r1', 'aeterna_phonecall.call_ab')
+            assert.is_nil(natives.get_kvp('aeterna_phonecall:calls:v1:' .. LIC1))
+            assert.is_nil(natives.get_kvp('aeterna_phonecall:calls:v1:' .. LIC2))
+            assert.are.equal(0, #w.mayWriteCalls)
+
+            local rings = #w.kit.rings
+            natives.fire('aeterna_core:selftestStarted', 'r2', 'aeterna_phonecall.call_ab', ctx)
+            natives.fire('aeterna_core:selftestEnd', 'r2', 'aeterna_phonecall.call_ab')
+            natives.advance(600)
+            assert.are.equal(rings, #w.kit.rings)
+        end)
+
+        it('no longer accepts a selftest net event from clients', function()
+            boot('gta5enhanced')
+            assert.is_false(natives.is_net_event('aeterna_phonecall:sv:selftest'))
+        end)
     end)
 end)
