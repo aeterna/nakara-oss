@@ -36,6 +36,8 @@ jobs:
         run: npm test --workspace packages/rongroi
       - name: nakara_tickets resource specs
         run: npm test --workspace packages/tickets
+      - name: Starter Kit NUI logic specs
+        run: npm run test:nui
       - name: static checks (dogfood)
         run: node packages/devkit/bin/fivem-devkit.js check
       - name: safety scan (every package + template)

@@ -13,7 +13,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "npm run test --workspaces --if-present && npm run test:lua",
+    "test": "npm run test --workspaces --if-present && npm run test:nui && npm run test:lua",
+    "test:nui": "node --test packages/uikit/spec/slider_math.test.js packages/loading/spec/logic.test.js",
     "test:lua": "busted --config-file=.busted",
     "check": "node packages/devkit/bin/fivem-devkit.js check",
     "safety": "node packages/devkit/bin/fivem-devkit.js safety",
