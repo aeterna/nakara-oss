@@ -67,8 +67,11 @@ end
 local function boot(opts)
     opts = opts or {}
     natives.reset({ resource = 'aeterna_invkit', side = 'server', invoker = 'aeterna_phonekit' })
-    local warns = {}
+    local warns, debugs = {}, {}
     local ox = fakeOx(opts.inv or {})
+    for id in pairs(opts.inv or {}) do
+        if type(id) == 'number' then natives.add_player(id, 'player' .. id) end
+    end
     if opts.oxStarted == false then ox.started = false end
 
     natives.stub('GetResourceState', function(name)
@@ -77,7 +80,7 @@ local function boot(opts)
     end)
     natives.stub('AeternaCore', {
         log = {
-            debug = function() end,
+            debug = function(msg, fields) debugs[#debugs + 1] = { msg = msg, fields = fields } end,
             info = function() end,
             warn = function(msg, fields) warns[#warns + 1] = { msg = msg, fields = fields } end,
             error = function() end,
@@ -96,7 +99,15 @@ local function boot(opts)
     natives.spy('RegisterCommand')
 
     local res = resource.load_resource(DIR, 'server', { skip = { ['config.lua'] = true } })
-    return { res = res, ox = ox, warns = warns }
+    return { res = res, ox = ox, warns = warns, debugs = debugs }
+end
+
+-- Fire playerDropped as FXServer does: `source` is the leaving player.
+local function drop(src)
+    local prev = rawget(_G, 'source')
+    rawset(_G, 'source', src)
+    natives.fire('playerDropped', 'quit')
+    rawset(_G, 'source', prev)
 end
 
 local function ask(src, checkId, devices)
@@ -384,6 +395,73 @@ describe('aeterna_invkit 0.2 phone items', function()
         end)
     end)
 
+    describe('5h. deviceSave around player drop and resource stop', function()
+        local b, inv
+        before_each(function()
+            inv = { [1] = {
+                [1] = { name = 'phone_fold', slot = 1, count = 1, metadata = { phoneId = 'cafe0001', battery = 50 } },
+            } }
+            b = boot({ inv = inv })
+        end)
+
+        it('5h1. save first, then drop: the held save is written at once on drop', function()
+            save(1, { id = 'cafe0001', battery = 49 })
+            natives.advance(1000)
+            save(1, { id = 'cafe0001', battery = 44 })
+            assert.are.equal(1, #b.ox.writes)
+            drop(1)
+            assert.are.equal(2, #b.ox.writes)
+            assert.are.equal(44, inv[1][1].metadata.battery)
+            natives.advance(10000)
+            assert.are.equal(2, #b.ox.writes)
+        end)
+
+        it('5h2. drop first, then save: written at once while the inventory is still there', function()
+            save(1, { id = 'cafe0001', battery = 49 })
+            drop(1)
+            natives.advance(500)
+            save(1, { id = 'cafe0001', battery = 41, fold = 'closed' })
+            assert.are.equal(2, #b.ox.writes)
+            assert.are.equal(41, inv[1][1].metadata.battery)
+            assert.are.equal('closed', inv[1][1].metadata.fold)
+        end)
+
+        it('5h3. drop first, then save with the inventory gone: nothing written, debug log, no devicesChanged', function()
+            drop(1)
+            inv[1] = nil
+            save(1, { id = 'cafe0001', battery = 30 })
+            natives.advance(0)
+            assert.are.equal(0, #b.ox.writes)
+            assert.are.equal(0, changedFor(1))
+            assert.is_true(#b.debugs >= 1)
+        end)
+
+        it('5h4. no devicesChanged for a dropped player from a late hook report', function()
+            b.ox.hooks.swapItems({
+                source = 1, action = 'move',
+                fromInventory = 1, fromType = 'player', fromSlot = { name = 'phone_fold', slot = 1 },
+                toInventory = 1, toType = 'player', toSlot = 5,
+            })
+            drop(1)
+            natives.advance(0)
+            assert.are.equal(0, changedFor(1))
+        end)
+
+        it('5h5. invkit stopping writes every held save', function()
+            inv[2] = { [3] = { name = 'phone', slot = 3, count = 1, metadata = { phoneId = 'cafe0002', battery = 80 } } }
+            natives.add_player(2, 'player2')
+            save(1, { id = 'cafe0001', battery = 49 })
+            save(2, { id = 'cafe0002', battery = 79 })
+            save(1, { id = 'cafe0001', battery = 48 })
+            save(2, { id = 'cafe0002', battery = 78 })
+            assert.are.equal(2, #b.ox.writes)
+            natives.fire('onResourceStop', 'aeterna_invkit')
+            assert.are.equal(4, #b.ox.writes)
+            assert.are.equal(48, inv[1][1].metadata.battery)
+            assert.are.equal(78, inv[2][3].metadata.battery)
+        end)
+    end)
+
     describe('6. devicesChanged', function()
         local b
         before_each(function()
@@ -435,6 +513,19 @@ describe('aeterna_invkit 0.2 phone items', function()
             natives.advance(0)
             assert.are.equal(1, changedFor(2))
             assert.are.equal(1, #natives.emitted('local', 'aeterna_phonekit:devicesChanged'))
+        end)
+
+        it('6f. a numeric or numeric-string stash id is not taken for a player', function()
+            b.ox.hooks.createItem({ inventoryId = '2', item = { name = 'phone_pad' }, metadata = {}, count = 1 })
+            b.ox.hooks.createItem({ inventoryId = 77, item = { name = 'phone_pad' }, metadata = {}, count = 1 })
+            b.ox.hooks.createItem({ inventoryId = 2.5, item = { name = 'phone_pad' }, metadata = {}, count = 1 })
+            b.ox.hooks.swapItems({
+                source = 1, action = 'move',
+                fromInventory = '1', fromType = 'stash', fromSlot = { name = 'phone', slot = 1 },
+                toInventory = 1, toType = 'stash', toSlot = 2,
+            })
+            natives.advance(0)
+            assert.are.equal(0, #natives.emitted('local', 'aeterna_phonekit:devicesChanged'))
         end)
 
         it('6e. an unmapped item does not fire it', function()
