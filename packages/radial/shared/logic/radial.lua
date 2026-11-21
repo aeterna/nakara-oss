@@ -80,11 +80,25 @@ end
 local Registry = {}
 Registry.__index = Registry
 
+local function copyList(list)
+    if list == nil then return nil end
+    local out = {}
+    for i = 1, #list do out[i] = list[i] end
+    return out
+end
+
+-- A copy of the schema fields only: nothing a caller adds (such as a forged isGroup) is stored.
+local function copyWhen(w)
+    if w == nil then return nil end
+    return { vehicle = w.vehicle, jobs = copyList(w.jobs), grade = w.grade, ace = w.ace, flags = copyList(w.flags) }
+end
+
 function L.createRegistry(config)
     local reg = {
         config = config or { maxPerOwner = 64, maxTotal = 128 },
         slots = { client = {}, server = {} },
         flags = {},
+        remoteGroups = {}, -- client mirror only: server slots the server says are groups
     }
     return setmetatable(reg, Registry)
 end
@@ -103,7 +117,21 @@ function Registry:countTotal(side)
     return count
 end
 
-function Registry:addSlot(owner, slot, side)
+function Registry:hasChildren(owner, id, side)
+    for _, child in pairs((self.slots[side] and self.slots[side][owner]) or {}) do
+        if child.parent == id then return true end
+    end
+    return false
+end
+
+-- A slot is a group while it has children. On a client mirror of server slots, the server's word also
+-- counts, since a player may receive a group but none of its children (their ACE fails).
+function Registry:isGroup(owner, id, side)
+    return self:hasChildren(owner, id, side) or self.remoteGroups[side .. ':' .. owner .. ':' .. id] == true
+end
+
+-- `remoteGroup` is passed only by the client mirror of server slots, from the server's payload.
+function Registry:addSlot(owner, slot, side, remoteGroup)
     local s = side or 'client'
     local ok, err = L.validateSlot(slot, s)
     if not ok then return false, err end
@@ -112,7 +140,8 @@ function Registry:addSlot(owner, slot, side)
     self.slots[s][owner] = self.slots[s][owner] or {}
 
     if slot.parent ~= nil then
-        local parentSlot = self.slots[s][owner] and self.slots[s][owner][slot.parent]
+        if slot.parent == slot.id or self:hasChildren(owner, slot.id, s) then return false, 'parent: depth' end
+        local parentSlot = self.slots[s][owner][slot.parent]
         if not parentSlot then return false, 'parent: unknown' end
         if parentSlot.parent ~= nil then return false, 'parent: depth' end
     end
@@ -127,15 +156,11 @@ function Registry:addSlot(owner, slot, side)
         end
     end
 
-    local stored = {}
-    for k, v in pairs(slot) do stored[k] = v end
-    stored.owner, stored.side = owner, s
-    if existing and existing.isGroup then stored.isGroup = true end
-    if slot.parent ~= nil then
-        self.slots[s][owner][slot.parent].isGroup = true
-    end
-
-    self.slots[s][owner][slot.id] = stored
+    self.slots[s][owner][slot.id] = {
+        id = slot.id, label = slot.label, icon = slot.icon, order = slot.order, parent = slot.parent,
+        when = copyWhen(slot.when), owner = owner, side = s,
+    }
+    self.remoteGroups[s .. ':' .. owner .. ':' .. slot.id] = remoteGroup == true or nil
     return true
 end
 
@@ -151,6 +176,7 @@ function Registry:removeSlot(owner, id, side)
     for _, s in ipairs(sides) do
         if self.slots[s] and self.slots[s][owner] and self.slots[s][owner][id] then
             self.slots[s][owner][id] = nil
+            self.remoteGroups[s .. ':' .. owner .. ':' .. id] = nil
             removed = true
             for childId, childSlot in pairs(self.slots[s][owner]) do
                 if childSlot.parent == id then self.slots[s][owner][childId] = nil end
@@ -161,8 +187,10 @@ function Registry:removeSlot(owner, id, side)
 end
 
 function Registry:removeByOwner(owner)
-    if self.slots.client then self.slots.client[owner] = nil end
-    if self.slots.server then self.slots.server[owner] = nil end
+    for _, side in ipairs({ 'client', 'server' }) do
+        for id in pairs(self.slots[side][owner] or {}) do self.remoteGroups[side .. ':' .. owner .. ':' .. id] = nil end
+        self.slots[side][owner] = nil
+    end
     self.flags[owner] = nil
 end
 
@@ -246,8 +274,8 @@ function L.evalCondition(cond, ctx)
         if cond.grade ~= nil and (c.grade or 0) < cond.grade then return false end
     end
 
-    if cond.ace ~= nil and c.can and type(c.can) == 'function' then
-        if not c.can(c.src or 1, cond.ace) then return false end
+    if cond.ace ~= nil then
+        if type(c.can) ~= 'function' or not c.can(c.src, cond.ace) then return false end
     end
 
     if cond.flags ~= nil then
@@ -288,19 +316,27 @@ function L.stickToSlot(x, y, deadZone, totalPositions)
     return L.angleToSlot(angle, totalPositions)
 end
 
--- Server re-check of a pick. Groups open rings and are never picked; flags live on the client, so the
--- server skips them and the owner re-checks its own state in its handler.
+local function withoutFlags(when)
+    if when and when.flags then
+        return { vehicle = when.vehicle, jobs = when.jobs, grade = when.grade, ace = when.ace }
+    end
+    return when
+end
+
+-- Server re-check of a pick. Groups open rings and are never picked. A child must also pass its group's
+-- conditions (depth is 1). Flags live on the client, so the server skips them and the owner re-checks its
+-- own state in its handler.
 function L.handleServerPick(src, owner, id, registry, ctx)
     if not registry or type(registry.getSlot) ~= 'function' then return false end
     local slot = registry:getSlot(owner, id, 'server')
-    if not slot or slot.isGroup then return false end
+    if not slot or registry:isGroup(owner, id, 'server') then return false end
     local c = ctx or {}
     c.src, c.owner = src, owner
-    local when = slot.when
-    if when and when.flags then
-        when = { vehicle = when.vehicle, jobs = when.jobs, grade = when.grade, ace = when.ace }
+    if slot.parent ~= nil then
+        local parent = registry:getSlot(owner, slot.parent, 'server')
+        if not parent or not L.evalCondition(withoutFlags(parent.when), c) then return false end
     end
-    if not L.evalCondition(when, c) then return false end
+    if not L.evalCondition(withoutFlags(slot.when), c) then return false end
     return true, { owner = owner, id = id }
 end
 
@@ -359,7 +395,8 @@ function L.ringFor(registries, parent, ctx)
                 for _, s in pairs(slots) do
                     if sameParent(s, side, parent) then
                         local show = visible(s)
-                        if show and s.isGroup then
+                        local isGroup = reg:isGroup(s.owner, s.id, side)
+                        if show and isGroup then
                             show = false
                             for _, child in ipairs(children(side, s)) do
                                 if visible(child) then show = true; break end
@@ -367,7 +404,7 @@ function L.ringFor(registries, parent, ctx)
                         end
                         entries[#entries + 1] = {
                             owner = s.owner, side = side, id = s.id, label = s.label, icon = s.icon,
-                            order = s.order, when = s.when, isGroup = s.isGroup == true, visible = show,
+                            order = s.order, when = s.when, isGroup = isGroup, visible = show,
                         }
                     end
                 end
@@ -399,11 +436,11 @@ function L.stepIndex(current, count, dir)
     return ((current - 1 + dir) % count) + 1
 end
 
--- Copy of a stored slot for a client: owner included, side and ace left out.
-function L.publicSlot(stored)
+-- Copy of a stored slot for a client: owner and group mark included, side and ace left out.
+function L.publicSlot(stored, isGroup)
     local out = {
         owner = stored.owner, id = stored.id, label = stored.label, icon = stored.icon,
-        order = stored.order, parent = stored.parent, isGroup = stored.isGroup == true or nil,
+        order = stored.order, parent = stored.parent, isGroup = isGroup == true or nil,
     }
     if stored.when then
         local w = stored.when
@@ -431,9 +468,16 @@ function L.listSlots(registry, side, filter)
     table.sort(roots, byKey)
     table.sort(kids, byKey)
     local out = {}
-    for i = 1, #roots do out[#out + 1] = L.publicSlot(roots[i]) end
+    for i = 1, #roots do out[#out + 1] = L.publicSlot(roots[i], registry:isGroup(roots[i].owner, roots[i].id, side)) end
     for i = 1, #kids do out[#out + 1] = L.publicSlot(kids[i]) end
     return out
+end
+
+-- Config.deadZone must be a fraction in 0-1; anything else falls back to 0.35 with a warn.
+function L.checkDeadZone(value, warn)
+    if type(value) == 'number' and value >= 0 and value <= 1 then return value end
+    if warn then warn('Config.deadZone must be a number from 0 to 1; using 0.35') end
+    return 0.35
 end
 
 return RadialLogic
