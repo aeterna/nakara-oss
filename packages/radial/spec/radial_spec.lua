@@ -87,6 +87,14 @@ describe('aeterna_radial', function()
             assert.is_truthy(err and err:match('^label:'))
         end)
 
+        it('counts label length in characters, so 20 Thai characters pass and 21 fail', function()
+            local okTwenty = L.validateSlot({ id = 'test', label = string.rep('ก', 20) }, 'client')
+            assert.is_true(okTwenty)
+            local ok, err = L.validateSlot({ id = 'test', label = string.rep('ก', 21) }, 'client')
+            assert.is_false(ok)
+            assert.is_truthy(err and err:match('^label:'))
+        end)
+
         it('fails with path when when.jobs exceeds 8 items', function()
             local jobs = {}
             for i = 1, 9 do jobs[i] = 'job_' .. i end
@@ -243,6 +251,25 @@ describe('aeterna_radial', function()
 
             assert.are.equal(1, L.angleToSlot(0, 5))
             assert.are.equal(2, L.angleToSlot(72, 5))
+        end)
+
+        it('maps a pointer outside the dead zone with screen y down, slot 1 at the top, clockwise', function()
+            assert.are.equal(1, L.pointerToSlot(0, -100, 150, 0.35, 4))
+            assert.are.equal(2, L.pointerToSlot(100, 0, 150, 0.35, 4))
+            assert.are.equal(3, L.pointerToSlot(0, 100, 150, 0.35, 4))
+            assert.are.equal(4, L.pointerToSlot(-100, 0, 150, 0.35, 4))
+            assert.are.equal(2, L.pointerToSlot(70, -70, 150, 0.35, 8))
+            assert.are.equal(8, L.pointerToSlot(-70, -70, 150, 0.35, 8))
+            assert.are.equal(2, L.pointerToSlot(95, -31, 150, 0.35, 5))
+        end)
+
+        it('maps a stick outside the dead zone with y down, slot 1 at the top, clockwise', function()
+            assert.are.equal(1, L.stickToSlot(0, -1, 0.35, 4))
+            assert.are.equal(2, L.stickToSlot(1, 0, 0.35, 4))
+            assert.are.equal(3, L.stickToSlot(0, 1, 0.35, 4))
+            assert.are.equal(4, L.stickToSlot(-1, 0, 0.35, 4))
+            assert.are.equal(5, L.stickToSlot(0, 1, 0.35, 8))
+            assert.are.equal(4, L.stickToSlot(-0.5, 0.9, 0.35, 5))
         end)
 
         it('returns nil/none when input is within dead zone', function()
