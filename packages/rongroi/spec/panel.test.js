@@ -31,14 +31,15 @@ function counted(seed) {
     return (n) => Buffer.from(Array.from({ length: n }, () => (seed.value = (seed.value + 1) & 0xff)));
 }
 
-function makeHarness({ publicOrigin = ORIGIN, serverName = 'Example City' } = {}) {
+function makeHarness({ publicOrigin = ORIGIN, serverName = 'Example City', storageWarning = null } = {}) {
     let ms = 1000000;
     const store = new TicketStore({ now: () => ms, randomBytes: counted({ value: 0 }) });
     const kvp = new Map();
     const settings = createSettings({ get: (key) => kvp.get(key), set: (key, value) => kvp.set(key, value) });
     if (publicOrigin !== null) settings.set('publicOrigin', publicOrigin);
     if (serverName !== null) settings.set('serverName', serverName);
-    const storage = createStorage(memoryBackend());
+    const backend = memoryBackend();
+    const storage = createStorage(backend);
     storage.load();
     const players = new Map([[PLAYER, {
         name: 'Player One', identifier: 'license:player', endpoint: '203.0.113.55',
@@ -52,7 +53,7 @@ function makeHarness({ publicOrigin = ORIGIN, serverName = 'Example City' } = {}
     const panelKit = { ...kit };
     let rotateCalls = 0;
     const panel = createPanel({
-        settings, storage, store, kit: panelKit, now: () => ms,
+        settings, storage, store, kit: panelKit, now: () => ms, storageWarning,
         isStaff: (src) => staff.has(src),
         getPlayer: (src) => players.get(src) || players.get(Number(src)) || null,
         send: (src, event, payload) => sent.push({ src, event, payload }),
@@ -66,7 +67,7 @@ function makeHarness({ publicOrigin = ORIGIN, serverName = 'Example City' } = {}
         },
     });
     return {
-        panel, storage, store, settings, kit: panelKit, staff, sent, caseCalls,
+        panel, storage, backend, store, settings, kit: panelKit, staff, sent, caseCalls,
         rotateCalls: () => rotateCalls,
         advance: (delta) => { ms += delta; },
     };
@@ -427,6 +428,30 @@ test('rotateKey calls rotateKitKey once and invalidates issued and uploading tic
     h.sent.length = 0;
     assert.equal(h.panel.requestCode(PLAYER), false);
     assert.deepEqual(h.sent, []);
+});
+
+test('storageWarning rides on the cases payload and forgetMissingReports is staff only', () => {
+    const warning = { expected: 3, found: 1, missingCaseFiles: 0 };
+    const h = makeHarness({ storageWarning: warning });
+    assert.equal(h.panel.forgetMissingReports(2), false);
+    assert.deepEqual(h.sent, []);
+    assert.equal(h.panel.panelOpen(STAFF), true);
+    assert.deepEqual(h.sent.at(-1).payload.storageWarning, warning);
+});
+
+test('forgetMissingReports removes entries whose case file is gone and clears the warning', () => {
+    const h = makeHarness({ storageWarning: { expected: 1, found: 1, missingCaseFiles: 1 } });
+    assert.equal(h.panel.panelOpenCase(STAFF, PLAYER), true);
+    const { caseId } = h.storage.entries()[0];
+    h.backend.remove(h.storage.caseKey(caseId));
+    h.sent.length = 0;
+    assert.equal(h.panel.forgetMissingReports(STAFF), true);
+    assert.deepEqual(h.storage.entries(), []);
+    assert.deepEqual(h.sent, [{
+        src: STAFF,
+        event: 'nakara_rongroi:panel:data',
+        payload: { screen: 'cases', cases: [], storageWarning: null },
+    }]);
 });
 
 test('rate limit windows prune ended entries only above 256 entries', () => {

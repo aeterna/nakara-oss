@@ -369,6 +369,76 @@ test('a non-array page stays damaged in memory and is never written', () => {
     assert.deepEqual([restarted.listCases({ page: 0 }), restarted.listCases({ page: 1 }).map((e) => e.caseId)], [[], ['case-a']]);
 });
 
+function memoryMarker(initial = null) {
+    const box = { value: initial };
+    return { box, get: () => box.value, set: (n) => { box.value = n; } };
+}
+
+test('file: the marker follows the index total after open and delete', () => {
+    const env = fileEnv();
+    const marker = memoryMarker();
+    const storage = createStorage(env.backend, { marker });
+    open(storage, 'case-a', TICKET_A);
+    open(storage, 'case-b', TICKET_B);
+    assert.equal(marker.box.value, 2);
+    assert.equal(storage.deleteCase('case-a'), TICKET_A);
+    assert.equal(marker.box.value, 1);
+});
+
+test('file: checkIntegrity reports a wiped index against the marker', () => {
+    const env = fileEnv();
+    const marker = memoryMarker();
+    const storage = createStorage(env.backend, { marker });
+    for (const [caseId, ticket] of [['case-a', TICKET_A], ['case-b', TICKET_B], ['case-c', '3'.repeat(32)]]) {
+        open(storage, caseId, ticket);
+    }
+    env.backend.remove('index-0');
+    const restarted = createStorage(env.backend, { marker });
+    assert.deepEqual(restarted.load(), { damaged: 0 });
+    assert.deepEqual(restarted.checkIntegrity(), { expected: 3, found: 0, missingCaseFiles: 0 });
+});
+
+test('file: checkIntegrity counts a case file that reads null', () => {
+    const env = fileEnv();
+    const marker = memoryMarker();
+    const storage = createStorage(env.backend, { marker });
+    open(storage, 'case-a', TICKET_A);
+    open(storage, 'case-b', TICKET_B);
+    open(storage, 'case-c', '3'.repeat(32));
+    env.backend.remove(storage.caseKey('case-b'));
+    const restarted = createStorage(env.backend, { marker });
+    restarted.load();
+    assert.deepEqual(restarted.checkIntegrity(), { expected: 3, found: 3, missingCaseFiles: 1 });
+});
+
+test('file: forgetMissing removes only the entries without a case file and rewrites the marker', () => {
+    const env = fileEnv();
+    const marker = memoryMarker();
+    const storage = createStorage(env.backend, { marker });
+    open(storage, 'case-a', TICKET_A);
+    open(storage, 'case-b', TICKET_B);
+    open(storage, 'case-c', '3'.repeat(32));
+    env.backend.remove(storage.caseKey('case-b'));
+    assert.equal(storage.forgetMissing(), 1);
+    assert.deepEqual(storage.entries().map((entry) => entry.caseId), ['case-a', 'case-c']);
+    assert.equal(marker.box.value, 2);
+    const restarted = createStorage(env.backend, { marker });
+    assert.deepEqual(restarted.load(), { damaged: 0 });
+    assert.deepEqual(restarted.checkIntegrity(), { expected: 2, found: 2, missingCaseFiles: 0 });
+    assert.equal(restarted.getCase('case-c').ticket, '3'.repeat(32));
+});
+
+test('without a marker checkIntegrity expects null and forgetMissing still works', () => {
+    const env = fileEnv();
+    const storage = createStorage(env.backend);
+    open(storage, 'case-a', TICKET_A);
+    open(storage, 'case-b', TICKET_B);
+    env.backend.remove(storage.caseKey('case-b'));
+    assert.deepEqual(storage.checkIntegrity(), { expected: null, found: 2, missingCaseFiles: 1 });
+    assert.equal(storage.forgetMissing(), 1);
+    assert.deepEqual(storage.entries().map((entry) => entry.caseId), ['case-a']);
+});
+
 test('consumedSnapshot omits entries restoreConsumed would reject', () => {
     const env = fileEnv();
     const storage = createStorage(env.backend);

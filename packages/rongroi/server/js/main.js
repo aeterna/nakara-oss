@@ -69,6 +69,25 @@
         return value !== null && typeof value === 'object' && !Array.isArray(value);
     }
 
+    // The Enhanced index total lives in KVP, which survives a folder replace; anything but a non-negative integer reads null.
+    const ENTRIES_KEY = 'rongroi:filestore:entries';
+    function entriesMarker(store) {
+        return {
+            get() {
+                const text = store.get(ENTRIES_KEY);
+                const value = Number(text);
+                return typeof text === 'string' && /^[0-9]+$/.test(text) && Number.isSafeInteger(value) ? value : null;
+            },
+            set(n) { store.set(ENTRIES_KEY, String(n)); },
+        };
+    }
+
+    function integrityWarning(check) {
+        if (check.expected === null || (check.expected <= check.found && check.missingCaseFiles === 0)) return null;
+        log(`stored reports missing: expected ${check.expected}, found ${check.found}, case files missing ${check.missingCaseFiles} — was the folder replaced without cache/?`);
+        return { expected: check.expected, found: check.found, missingCaseFiles: check.missingCaseFiles };
+    }
+
     // Read the first present member of a net-event payload.
     function field(payload, names) {
         if (!isObject(payload)) return undefined;
@@ -120,7 +139,8 @@
         };
         const edition = detectEdition((_, fallback) => GetConvar('gamename', fallback));
         const backend = edition === 'enhanced' ? createFileBackend() : createKvpBackend(kvp);
-        const storage = createStorage(backend);
+        const marker = edition === 'enhanced' ? entriesMarker(kvp) : null;
+        const storage = createStorage(backend, { marker });
         const settings = createSettings(kvp);
         const kit = loadOrCreateKitKey(kvp);
         const store = new TicketStore({ now: Date.now, randomBytes: crypto.randomBytes });
@@ -130,6 +150,12 @@
         };
         const { damaged } = storage.load();
         if (damaged > 0) log(`index damaged: ${damaged} pages`);
+        // A Kit upgraded from one without the marker starts from the index it already has.
+        let storageWarning = null;
+        if (marker) {
+            if (marker.get() === null) marker.set(storage.entries().length);
+            storageWarning = integrityWarning(storage.checkIntegrity());
+        }
         store.restoreConsumed(storage.consumedSnapshot());
         log(`storage ${edition}`);
 
@@ -161,6 +187,7 @@
             send,
             randomBytes: crypto.randomBytes,
             rotateKitKey: () => rotateKitKey(kvp),
+            storageWarning,
         });
 
         // One case every 250 ms: a storage write blocks the tick, and Enhanced's writes are the slowest
@@ -351,6 +378,11 @@
             const src = source;
             if (!rateLimit(src)) return;
             panel.deletePlayer(src, asIdentifier(payload));
+        });
+        onNet('nakara_rongroi:panel:forgetMissing', () => {
+            const src = source;
+            if (!rateLimit(src)) return;
+            panel.forgetMissingReports(src);
         });
 
         on('playerDropped', () => {

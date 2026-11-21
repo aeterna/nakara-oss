@@ -6,6 +6,12 @@ All notable changes to `nakara_rongroi` are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- Enhanced keeps a stored-report count in KVP (`rongroi:filestore:entries`). At start-up the Kit logs one line when
+  reports are missing, for example after the folder was replaced without `cache/`, and the staff panel shows a
+  banner with a button that removes the missing entries (`nakara_rongroi:panel:forgetMissing`).
+
 ## [0.1.0] - 2026-11-17
 
 ### Added
