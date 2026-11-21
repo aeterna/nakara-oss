@@ -17,6 +17,10 @@ let locale = {
     'uikit.skill.bind': 'Space',
     'uikit.key.unbound': 'Unbound',
     'uikit.close': 'Close',
+    'uikit.search.placeholder': 'Search',
+    'uikit.search.none': 'Nothing matches',
+    'uikit.table.empty': 'No rows',
+    'uikit.tabs.label': 'Sections',
 };
 
 let currentPanel = null;
@@ -24,19 +28,94 @@ let blockElements = new Map();
 let blockState = new Map();
 let progressTimer = null;
 let skillState = null;
+let tabsState = null;
+let paused = false; // 0.2: a focus overlay from another resource pauses uikit; the page ignores input
+const exitTimers = new Map();
 
+// Returns false (and sends nothing) while paused, so callers keep their card on screen.
 function postCallback(name, payload) {
+    if (paused) return false;
     fetch('https://aeterna_uikit/' + name, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json; charset=UTF-8' },
         body: JSON.stringify(payload || {}),
     }).catch(() => {});
+    return true;
+}
+
+function setPaused(flag) {
+    paused = flag === true;
+    document.getElementById('uikit-root').classList.toggle('uikit-paused', paused);
+    if (skillState) {
+        if (paused) skillState.pause();
+        else skillState.resume();
+    }
+}
+
+// While paused, keys and clicks never reach a control (typing, toggles, slider, tabs, ESC).
+for (const kind of ['keydown', 'mousedown', 'click']) {
+    window.addEventListener(kind, (event) => {
+        if (!paused) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+    }, true);
+}
+
+function answerPrompt(kind, value) {
+    if (!postCallback('promptResult', { kind, value })) return;
+    closePrompt();
 }
 
 function clearChildren(el) {
     while (el.firstChild) {
         el.removeChild(el.firstChild);
     }
+}
+
+// Motion (0.2): cards enter with a fade and an 8 px rise over --enter and leave with a fade over --fast.
+// Under prefers-reduced-motion theme.css sets both to 0ms and style.css drops the rise.
+function cssMs(name) {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    const n = parseFloat(raw);
+    if (Number.isNaN(n)) return 0;
+    return raw.endsWith('ms') ? n : n * 1000;
+}
+
+function cancelExit(layer) {
+    const t = exitTimers.get(layer);
+    if (t) {
+        clearTimeout(t);
+        exitTimers.delete(layer);
+    }
+}
+
+function showLayerCard(layer, card) {
+    cancelExit(layer);
+    clearChildren(layer);
+    card.classList.add('motion-enter');
+    layer.appendChild(card);
+    layer.classList.remove('hidden');
+    void card.offsetWidth; // commit the start state so the transition runs
+    card.classList.remove('motion-enter');
+}
+
+// The answer is never held back: callers post their callback first, then hide.
+function hideLayer(layer, animate) {
+    cancelExit(layer);
+    const card = layer.firstElementChild;
+    const ms = animate && card ? cssMs('--fast') : 0;
+    if (ms <= 0) {
+        clearChildren(layer);
+        layer.classList.add('hidden');
+        return;
+    }
+    card.classList.add('motion-exit');
+    card.setAttribute('aria-hidden', 'true');
+    exitTimers.set(layer, setTimeout(() => {
+        exitTimers.delete(layer);
+        clearChildren(layer);
+        layer.classList.add('hidden');
+    }, ms));
 }
 
 function applyThemeOverride(href) {
@@ -89,6 +168,8 @@ function collectPanelValues() {
             out[id] = st.checked === true;
         } else if (st.type === 'select') {
             out[id] = String(st.control.value || '');
+        } else if (st.type === 'slider' || st.type === 'tabs') {
+            out[id] = st.value;
         }
     }
     return out;
@@ -162,6 +243,292 @@ function renderButtonsRow(container, items, onAction) {
     }
 }
 
+function buildEmptyState(opt, action, onAction) {
+    const wrap = document.createElement('div');
+    wrap.className = 'empty-state';
+    if (opt.icon) {
+        const svg = window.AeternaUikitIcons.create(opt.icon, 24);
+        if (svg) {
+            const iconWrap = document.createElement('span');
+            iconWrap.className = 'empty-icon';
+            iconWrap.appendChild(svg);
+            wrap.appendChild(iconWrap);
+        }
+    }
+    const labelEl = document.createElement('p');
+    labelEl.className = 'empty-label';
+    labelEl.textContent = String(opt.label || '');
+    wrap.appendChild(labelEl);
+    let bodyEl = null;
+    if (opt.body) {
+        bodyEl = document.createElement('p');
+        bodyEl.className = 'empty-body';
+        bodyEl.textContent = String(opt.body);
+        wrap.appendChild(bodyEl);
+    }
+    let control = null;
+    if (action && action.id) {
+        control = document.createElement('button');
+        control.type = 'button';
+        control.className = 'btn btn-secondary';
+        control.textContent = String(action.label || '');
+        control.addEventListener('click', () => {
+            if (!control.disabled) onAction(action.id);
+        });
+        wrap.appendChild(control);
+    }
+    return { root: wrap, labelEl, bodyEl, control };
+}
+
+function matchesQuery(item, query) {
+    if (!query) return true;
+    const label = String(item.label || '').toLowerCase();
+    const meta = String(item.meta || '').toLowerCase();
+    return label.includes(query) || meta.includes(query);
+}
+
+// List items filtered by the search box, with the empty state when nothing is left to show.
+function refreshList(ref) {
+    const items = Array.isArray(ref.items) ? ref.items : [];
+    const query = ref.query.trim().toLowerCase();
+    const shown = items.filter((item) => matchesQuery(item, query));
+    renderListItems(ref.itemsWrap, shown, ref.triggerPick);
+    clearChildren(ref.emptyWrap);
+    if (shown.length === 0) {
+        let opt = ref.empty;
+        if (items.length > 0 && !opt) opt = { label: locale['uikit.search.none'] };
+        if (opt) ref.emptyWrap.appendChild(buildEmptyState(opt).root);
+    }
+}
+
+function renderTable(ref) {
+    clearChildren(ref.tbody);
+    clearChildren(ref.emptyWrap);
+    const rows = Array.isArray(ref.rows) ? ref.rows : [];
+    ref.table.classList.toggle('hidden', rows.length === 0);
+    if (rows.length === 0) {
+        const opt = ref.empty || { label: locale['uikit.table.empty'] };
+        ref.emptyWrap.appendChild(buildEmptyState(opt).root);
+        return;
+    }
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const tr = document.createElement('tr');
+        tr.className = 'table-row';
+        const cells = row.cells && typeof row.cells === 'object' ? row.cells : {};
+        for (let c = 0; c < ref.columns.length; c++) {
+            const col = ref.columns[c];
+            const td = document.createElement('td');
+            td.className = col.align === 'end' ? 'cell-end' : 'cell-start';
+            const v = cells[col.id];
+            td.textContent = v === undefined || v === null ? '' : String(v);
+            tr.appendChild(td);
+        }
+        if (ref.selectable) {
+            const disabled = row.disabled === true;
+            tr.classList.add('table-row-selectable');
+            tr.setAttribute('role', 'button');
+            tr.tabIndex = disabled ? -1 : 0;
+            if (disabled) tr.setAttribute('aria-disabled', 'true');
+            const pick = () => {
+                if (!disabled) ref.triggerPick(row.id);
+            };
+            tr.addEventListener('click', pick);
+            tr.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    pick();
+                }
+            });
+        }
+        ref.tbody.appendChild(tr);
+    }
+}
+
+// Blocks with `tab` show only while that tab is active; a newly shown block fades in over --fast.
+function applyTabVisibility() {
+    if (!tabsState) return;
+    for (const ref of blockElements.values()) {
+        if (!ref.tab) continue;
+        const show = ref.tab === tabsState.value;
+        const wasHidden = ref.root.classList.contains('hidden');
+        ref.root.classList.toggle('hidden', !show);
+        if (show && wasHidden) {
+            ref.root.classList.remove('tab-in');
+            void ref.root.offsetWidth;
+            ref.root.classList.add('tab-in');
+        }
+    }
+}
+
+function buildSlider(block) {
+    const min = Number(block.min);
+    const max = Number(block.max);
+    const step = Number(block.step) > 0 ? Number(block.step) : 1;
+    const sliderMath = window.AeternaUikitSlider;
+    const decimals = Math.min(20, Math.max(sliderMath.decimalsOf(step), sliderMath.decimalsOf(min)));
+
+    const wrap = document.createElement('div');
+    wrap.className = 'slider-group';
+    const header = document.createElement('div');
+    header.className = 'slider-header';
+    const labelEl = document.createElement('span');
+    labelEl.className = 'block-label';
+    labelEl.textContent = String(block.label || '');
+    const valueWrap = document.createElement('span');
+    valueWrap.className = 'slider-value';
+    const valueEl = document.createElement('span');
+    valueWrap.appendChild(valueEl);
+    if (block.unit) {
+        const unitEl = document.createElement('span');
+        unitEl.className = 'slider-unit';
+        unitEl.textContent = String(block.unit);
+        valueWrap.appendChild(unitEl);
+    }
+    header.appendChild(labelEl);
+    header.appendChild(valueWrap);
+    wrap.appendChild(header);
+
+    const track = document.createElement('div');
+    track.className = 'slider-track';
+    track.tabIndex = 0;
+    track.setAttribute('role', 'slider');
+    track.setAttribute('aria-label', String(block.label || ''));
+    track.setAttribute('aria-valuemin', String(min));
+    track.setAttribute('aria-valuemax', String(max));
+    const fill = document.createElement('div');
+    fill.className = 'slider-fill';
+    const thumb = document.createElement('div');
+    thumb.className = 'slider-thumb';
+    track.appendChild(fill);
+    track.appendChild(thumb);
+    wrap.appendChild(track);
+
+    const state = { type: 'slider', value: min, disabled: false };
+
+    // Snap to the step grid (html/slider-math.js) so what the page sends passes the server re-check.
+    function setValue(v) {
+        state.value = sliderMath.snap(v, min, max, step);
+        const pct = Math.min(100, ((state.value - min) / (max - min)) * 100);
+        fill.style.width = pct + '%';
+        thumb.style.left = pct + '%';
+        const text = state.value.toFixed(decimals);
+        valueEl.textContent = text;
+        track.setAttribute('aria-valuenow', text);
+    }
+
+    function setDisabled(flag) {
+        state.disabled = flag === true;
+        track.tabIndex = state.disabled ? -1 : 0;
+        track.setAttribute('aria-disabled', state.disabled ? 'true' : 'false');
+    }
+
+    track.addEventListener('keydown', (event) => {
+        if (state.disabled) return;
+        const keySteps = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1, PageDown: -10, PageUp: 10 };
+        if (keySteps[event.key] !== undefined) {
+            setValue(state.value + keySteps[event.key] * step);
+        } else if (event.key === 'Home') {
+            setValue(min);
+        } else if (event.key === 'End') {
+            setValue(max);
+        } else {
+            return;
+        }
+        event.preventDefault();
+    });
+
+    function setFromPointer(clientX) {
+        const rect = track.getBoundingClientRect();
+        if (rect.width <= 0) return;
+        const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+        setValue(min + ratio * (max - min));
+    }
+
+    function onMove(event) {
+        setFromPointer(event.clientX);
+    }
+
+    function onUp() {
+        track.classList.remove('slider-dragging');
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+    }
+
+    track.addEventListener('mousedown', (event) => {
+        if (state.disabled || event.button !== 0) return;
+        track.focus();
+        track.classList.add('slider-dragging');
+        setFromPointer(event.clientX);
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    });
+
+    setValue(block.value);
+    return { wrap, labelEl, track, state, setValue, setDisabled };
+}
+
+function buildTabs(block, panelId) {
+    const bar = document.createElement('div');
+    bar.className = 'tabs-bar';
+    bar.setAttribute('role', 'tablist');
+    bar.setAttribute('aria-label', locale['uikit.tabs.label'] || 'Sections');
+    const items = Array.isArray(block.items) ? block.items : [];
+    const buttons = [];
+    const state = { type: 'tabs', value: block.value };
+
+    function select(id, fromUser) {
+        if (!items.some((item) => item.id === id)) return;
+        const changed = state.value !== id;
+        state.value = id;
+        for (const btn of buttons) {
+            const active = btn.dataset.tab === id;
+            btn.setAttribute('aria-selected', active ? 'true' : 'false');
+            btn.tabIndex = active ? 0 : -1;
+        }
+        applyTabVisibility();
+        if (fromUser && changed && block.report === true) {
+            postCallback('panelAction', { panelId, action: id, values: collectPanelValues() });
+        }
+    }
+
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tab-btn';
+        btn.setAttribute('role', 'tab');
+        btn.dataset.tab = String(item.id);
+        if (item.icon) {
+            const svg = window.AeternaUikitIcons.create(item.icon, 16);
+            if (svg) btn.appendChild(svg);
+        }
+        const span = document.createElement('span');
+        span.textContent = String(item.label || '');
+        btn.appendChild(span);
+        btn.addEventListener('click', () => select(item.id, true));
+        buttons.push(btn);
+        bar.appendChild(btn);
+    }
+
+    bar.addEventListener('keydown', (event) => {
+        const idx = buttons.findIndex((btn) => btn.dataset.tab === state.value);
+        let next = -1;
+        if (event.key === 'ArrowRight') next = (idx + 1) % buttons.length;
+        else if (event.key === 'ArrowLeft') next = (idx - 1 + buttons.length) % buttons.length;
+        else if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = buttons.length - 1;
+        if (next < 0) return;
+        event.preventDefault();
+        select(buttons[next].dataset.tab, true);
+        buttons[next].focus();
+    });
+
+    tabsState = state;
+    select(block.value, false);
+    return { bar, state, select };
+}
+
 function buildBlockNode(block, panelId) {
     const btype = block.type;
     if (btype === 'text') {
@@ -189,8 +556,6 @@ function buildBlockNode(block, panelId) {
             labelEl.textContent = String(block.label);
             wrap.appendChild(labelEl);
         }
-        const itemsWrap = document.createElement('div');
-        itemsWrap.className = 'list-group';
         const triggerPick = (item) => {
             postCallback('panelAction', {
                 panelId,
@@ -198,15 +563,34 @@ function buildBlockNode(block, panelId) {
                 values: collectPanelValues(),
             });
         };
-        renderListItems(itemsWrap, block.items || [], triggerPick);
-        wrap.appendChild(itemsWrap);
-        blockElements.set(block.id, {
+        const ref = {
             type: 'list',
             root: wrap,
             labelEl,
-            itemsWrap,
+            itemsWrap: document.createElement('div'),
+            emptyWrap: document.createElement('div'),
             triggerPick,
-        });
+            items: block.items || [],
+            empty: block.empty || null,
+            query: '',
+        };
+        if (block.search) {
+            const search = document.createElement('input');
+            search.type = 'text';
+            search.className = 'field-input list-search';
+            search.placeholder = String(block.search.placeholder || locale['uikit.search.placeholder']);
+            search.setAttribute('aria-label', search.placeholder);
+            search.addEventListener('input', () => {
+                ref.query = search.value;
+                refreshList(ref);
+            });
+            wrap.appendChild(search);
+        }
+        ref.itemsWrap.className = 'list-group';
+        wrap.appendChild(ref.itemsWrap);
+        wrap.appendChild(ref.emptyWrap);
+        refreshList(ref);
+        blockElements.set(block.id, ref);
         return wrap;
     }
 
@@ -327,6 +711,75 @@ function buildBlockNode(block, panelId) {
         return wrap;
     }
 
+    if (btype === 'tabs') {
+        const tabs = buildTabs(block, panelId);
+        blockState.set(block.id, tabs.state);
+        blockElements.set(block.id, { type: 'tabs', root: tabs.bar, select: tabs.select });
+        return tabs.bar;
+    }
+
+    if (btype === 'slider') {
+        const slider = buildSlider(block);
+        blockState.set(block.id, slider.state);
+        blockElements.set(block.id, {
+            type: 'slider',
+            root: slider.wrap,
+            labelEl: slider.labelEl,
+            setValue: slider.setValue,
+            setDisabled: slider.setDisabled,
+        });
+        return slider.wrap;
+    }
+
+    if (btype === 'table') {
+        const wrap = document.createElement('div');
+        wrap.className = 'table-group';
+        const table = document.createElement('table');
+        table.className = 'data-table';
+        const thead = document.createElement('thead');
+        const headRow = document.createElement('tr');
+        const columns = Array.isArray(block.columns) ? block.columns : [];
+        for (let c = 0; c < columns.length; c++) {
+            const th = document.createElement('th');
+            th.scope = 'col';
+            th.className = columns[c].align === 'end' ? 'cell-end' : 'cell-start';
+            th.textContent = String(columns[c].label || '');
+            headRow.appendChild(th);
+        }
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        const emptyWrap = document.createElement('div');
+        wrap.appendChild(emptyWrap);
+        const ref = {
+            type: 'table',
+            root: wrap,
+            table,
+            tbody,
+            emptyWrap,
+            columns,
+            rows: block.rows || [],
+            empty: block.empty || null,
+            selectable: block.selectable === true,
+            triggerPick: (rowId) => {
+                postCallback('panelAction', { panelId, action: rowId, values: collectPanelValues() });
+            },
+        };
+        renderTable(ref);
+        blockElements.set(block.id, ref);
+        return wrap;
+    }
+
+    if (btype === 'empty') {
+        const empty = buildEmptyState(block, block.action, (actionId) => {
+            postCallback('panelAction', { panelId, action: actionId, values: collectPanelValues() });
+        });
+        blockElements.set(block.id, { type: 'empty', root: empty.root, labelEl: empty.labelEl, control: empty.control });
+        return empty.root;
+    }
+
     if (btype === 'buttons') {
         const row = document.createElement('div');
         row.className = 'buttons-row';
@@ -349,7 +802,7 @@ function openPanel(panel) {
     currentPanel = panel;
     blockElements = new Map();
     blockState = new Map();
-    clearChildren(panelLayer);
+    tabsState = null;
 
     const size = panel.size === 'sm' || panel.size === 'lg' ? panel.size : 'md';
     const card = document.createElement('div');
@@ -400,17 +853,26 @@ function openPanel(panel) {
         body.appendChild(listWrap);
     } else if (Array.isArray(panel.blocks)) {
         for (let i = 0; i < panel.blocks.length; i++) {
-            const node = buildBlockNode(panel.blocks[i], panel.panelId);
-            if (node) body.appendChild(node);
+            const block = panel.blocks[i];
+            const node = buildBlockNode(block, panel.panelId);
+            if (!node) continue;
+            const ref = blockElements.get(block.id);
+            if (ref && typeof block.tab === 'string') ref.tab = block.tab;
+            body.appendChild(node);
         }
+        applyTabVisibility();
     }
 
     card.appendChild(body);
-    panelLayer.appendChild(card);
-    panelLayer.classList.remove('hidden');
+    showLayerCard(panelLayer, card);
 
-    const firstFocusable = card.querySelector('button, input, select');
-    if (firstFocusable) firstFocusable.focus();
+    const focusables = card.querySelectorAll('button, input, select, [tabindex="0"]');
+    for (const el of focusables) {
+        if (el.offsetParent !== null && !el.disabled) {
+            el.focus();
+            break;
+        }
+    }
 }
 
 function updatePanel(panelId, patch) {
@@ -424,11 +886,19 @@ function updatePanel(panelId, patch) {
         if (partial.label !== undefined && ref.labelEl) {
             ref.labelEl.textContent = String(partial.label);
         }
-        if (partial.disabled !== undefined && ref.control) {
-            ref.control.disabled = partial.disabled === true;
+        if (partial.disabled !== undefined) {
+            if (ref.setDisabled) {
+                ref.setDisabled(partial.disabled === true);
+            } else if (ref.control) {
+                ref.control.disabled = partial.disabled === true;
+            }
         }
         if (partial.value !== undefined) {
-            if (ref.type === 'field' || ref.type === 'select') {
+            if (ref.type === 'tabs') {
+                ref.select(String(partial.value), false);
+            } else if (ref.type === 'slider') {
+                ref.setValue(partial.value);
+            } else if (ref.type === 'field' || ref.type === 'select') {
                 ref.control.value = String(partial.value);
             } else if (ref.type === 'toggle' && ref.stateObj) {
                 ref.stateObj.checked = partial.value === true;
@@ -439,26 +909,41 @@ function updatePanel(panelId, patch) {
                 ref.pctEl.textContent = Math.round(clamped * 100) + '%';
             }
         }
+        if (partial.empty !== undefined && (ref.type === 'list' || ref.type === 'table')) {
+            ref.empty = partial.empty || null;
+            if (ref.type === 'table') renderTable(ref);
+        }
+        if (partial.rows !== undefined && ref.type === 'table') {
+            ref.rows = Array.isArray(partial.rows) ? partial.rows : [];
+            renderTable(ref);
+        }
         if (partial.items !== undefined) {
-            if (ref.type === 'list' && ref.itemsWrap) {
-                renderListItems(ref.itemsWrap, partial.items, ref.triggerPick);
+            if (ref.type === 'list') {
+                ref.items = Array.isArray(partial.items) ? partial.items : [];
             } else if (ref.type === 'buttons' && ref.itemsWrap) {
                 renderButtonsRow(ref.itemsWrap, partial.items, ref.triggerBtn);
             }
         }
+        if (ref.type === 'list' && (partial.items !== undefined || partial.empty !== undefined)) {
+            refreshList(ref);
+        }
     }
 }
 
-function closePanel() {
+// A panel replaced by another swaps without an exit animation.
+function closePanel(reason) {
     currentPanel = null;
+    tabsState = null;
     blockElements.clear();
     blockState.clear();
-    clearChildren(panelLayer);
-    panelLayer.classList.add('hidden');
+    hideLayer(panelLayer, reason !== 'replaced');
+}
+
+function closePrompt() {
+    hideLayer(promptLayer, true);
 }
 
 function openConfirmPrompt(prompt) {
-    clearChildren(promptLayer);
     const card = document.createElement('div');
     card.className = 'card card-sm';
 
@@ -469,9 +954,7 @@ function openConfirmPrompt(prompt) {
     titleEl.textContent = String(prompt.title || '');
     header.appendChild(titleEl);
     header.appendChild(createCloseButton(() => {
-        clearChildren(promptLayer);
-        promptLayer.classList.add('hidden');
-        postCallback('promptResult', { kind: 'confirm', value: false });
+        answerPrompt('confirm', false);
     }));
     card.appendChild(header);
 
@@ -490,9 +973,7 @@ function openConfirmPrompt(prompt) {
     cancelBtn.className = 'btn btn-secondary';
     cancelBtn.textContent = String(prompt.cancel || locale['uikit.confirm.cancel']);
     cancelBtn.addEventListener('click', () => {
-        clearChildren(promptLayer);
-        promptLayer.classList.add('hidden');
-        postCallback('promptResult', { kind: 'confirm', value: false });
+        answerPrompt('confirm', false);
     });
 
     const okBtn = document.createElement('button');
@@ -500,22 +981,18 @@ function openConfirmPrompt(prompt) {
     okBtn.className = 'btn ' + (prompt.danger ? 'btn-danger' : 'btn-primary');
     okBtn.textContent = String(prompt.confirm || locale['uikit.confirm.ok']);
     okBtn.addEventListener('click', () => {
-        clearChildren(promptLayer);
-        promptLayer.classList.add('hidden');
-        postCallback('promptResult', { kind: 'confirm', value: true });
+        answerPrompt('confirm', true);
     });
 
     actions.appendChild(cancelBtn);
     actions.appendChild(okBtn);
     card.appendChild(actions);
 
-    promptLayer.appendChild(card);
-    promptLayer.classList.remove('hidden');
+    showLayerCard(promptLayer, card);
     okBtn.focus();
 }
 
 function openInputPrompt(prompt) {
-    clearChildren(promptLayer);
     const card = document.createElement('div');
     card.className = 'card card-sm';
 
@@ -526,9 +1003,7 @@ function openInputPrompt(prompt) {
     titleEl.textContent = String(prompt.title || '');
     header.appendChild(titleEl);
     header.appendChild(createCloseButton(() => {
-        clearChildren(promptLayer);
-        promptLayer.classList.add('hidden');
-        postCallback('promptResult', { kind: 'input', value: null });
+        answerPrompt('input', null);
     }));
     card.appendChild(header);
 
@@ -572,9 +1047,7 @@ function openInputPrompt(prompt) {
     cancelBtn.className = 'btn btn-secondary';
     cancelBtn.textContent = String(prompt.cancel || locale['uikit.confirm.cancel']);
     cancelBtn.addEventListener('click', () => {
-        clearChildren(promptLayer);
-        promptLayer.classList.add('hidden');
-        postCallback('promptResult', { kind: 'input', value: null });
+        answerPrompt('input', null);
     });
 
     const submitBtn = document.createElement('button');
@@ -596,17 +1069,14 @@ function openInputPrompt(prompt) {
                 values[c.id] = String(c.el.value || '');
             }
         }
-        clearChildren(promptLayer);
-        promptLayer.classList.add('hidden');
-        postCallback('promptResult', { kind: 'input', value: values });
+        answerPrompt('input', values);
     });
 
     actions.appendChild(cancelBtn);
     actions.appendChild(submitBtn);
     card.appendChild(actions);
 
-    promptLayer.appendChild(card);
-    promptLayer.classList.remove('hidden');
+    showLayerCard(promptLayer, card);
     if (controls.length > 0) controls[0].el.focus();
 }
 
@@ -615,9 +1085,8 @@ function updateProgressPrompt(prompt) {
         clearInterval(progressTimer);
         progressTimer = null;
     }
-    clearChildren(progressLayer);
     if (!prompt || prompt.active === false) {
-        progressLayer.classList.add('hidden');
+        hideLayer(progressLayer, true);
         return;
     }
 
@@ -642,8 +1111,7 @@ function updateProgressPrompt(prompt) {
     track.appendChild(fill);
     card.appendChild(track);
 
-    progressLayer.appendChild(card);
-    progressLayer.classList.remove('hidden');
+    showLayerCard(progressLayer, card);
 
     const duration = Math.max(300, Number(prompt.duration) || 1000);
     const start = performance.now();
@@ -660,8 +1128,8 @@ function updateProgressPrompt(prompt) {
 }
 
 function handleSkillMessage(msg) {
-    if (msg.action === 'hit' && skillState) {
-        skillState.hit();
+    if (msg.action === 'hit') {
+        if (skillState) skillState.hit();
         return;
     }
     const prompt = msg.prompt;
@@ -669,9 +1137,8 @@ function handleSkillMessage(msg) {
         cancelAnimationFrame(skillState.raf);
     }
     skillState = null;
-    clearChildren(skillLayer);
     if (!prompt || prompt.active === false) {
-        skillLayer.classList.add('hidden');
+        hideLayer(skillLayer, true);
         return;
     }
 
@@ -704,8 +1171,7 @@ function handleSkillMessage(msg) {
     track.appendChild(marker);
     card.appendChild(track);
 
-    skillLayer.appendChild(card);
-    skillLayer.classList.remove('hidden');
+    showLayerCard(skillLayer, card);
 
     let round = 1;
     let pos = 0;
@@ -726,9 +1192,8 @@ function handleSkillMessage(msg) {
         if (!skillState) return;
         if (skillState.raf) cancelAnimationFrame(skillState.raf);
         skillState = null;
-        clearChildren(skillLayer);
-        skillLayer.classList.add('hidden');
         postCallback('promptResult', { kind: 'skill', value: passed });
+        hideLayer(skillLayer, true);
     }
 
     function step(now) {
@@ -747,9 +1212,24 @@ function handleSkillMessage(msg) {
         skillState.raf = requestAnimationFrame(step);
     }
 
+    // While a focus overlay pauses uikit the marker stops where it is and ignores hits.
     skillState = {
         raf: null,
+        paused: false,
+        pause() {
+            if (this.paused) return;
+            this.paused = true;
+            if (this.raf) cancelAnimationFrame(this.raf);
+            this.raf = null;
+        },
+        resume() {
+            if (!this.paused) return;
+            this.paused = false;
+            lastTs = performance.now();
+            this.raf = requestAnimationFrame(step);
+        },
         hit() {
+            if (this.paused) return;
             if (pos >= zoneStart && pos <= (zoneStart + zoneWidth)) {
                 if (round >= totalRounds) {
                     finishSkill(true);
@@ -765,6 +1245,7 @@ function handleSkillMessage(msg) {
 
     setupRound();
     skillState.raf = requestAnimationFrame(step);
+    if (paused) skillState.pause();
 }
 
 function showHints(hints) {
@@ -801,6 +1282,8 @@ window.addEventListener('message', (event) => {
 
     if (msg.type === 'aeterna:theme') {
         applyThemeOverride(msg.href);
+    } else if (msg.type === 'focus:paused') {
+        setPaused(msg.paused === true);
     } else if (msg.type === 'locale' && msg.strings && typeof msg.strings === 'object') {
         locale = { ...locale, ...msg.strings };
     } else if (msg.type === 'panel:open' && msg.panel) {
@@ -809,10 +1292,9 @@ window.addEventListener('message', (event) => {
         updatePanel(msg.panelId, msg.patch);
     } else if (msg.type === 'panel:close') {
         if (msg.panelId === '__prompt') {
-            clearChildren(promptLayer);
-            promptLayer.classList.add('hidden');
+            closePrompt();
         } else {
-            closePanel();
+            closePanel(msg.reason);
         }
     } else if (msg.type === 'prompt:confirm' && msg.prompt) {
         openConfirmPrompt(msg.prompt);

@@ -36,5 +36,6 @@ files {
     'html/fonts/OFL.txt',
     'html/style.css',
     'html/icons.js',
+    'html/slider-math.js',
     'html/app.js',
 }

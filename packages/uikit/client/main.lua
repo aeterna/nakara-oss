@@ -6,6 +6,7 @@ local currentPanel = nil
 local activePrompt = nil
 local activeProgress = nil
 local focusToken = nil
+local paused = false -- 0.2: another resource holds focus as an overlay; ignore all input until it resumes
 local promptSeq = 0
 local localeReady = false
 
@@ -22,6 +23,10 @@ local LOCALE_KEYS = {
     'uikit.key.menu',
     'uikit.key.cancel',
     'uikit.key.skill',
+    'uikit.search.placeholder',
+    'uikit.search.none',
+    'uikit.table.empty',
+    'uikit.tabs.label',
 }
 
 local function logWarn(msg, fields)
@@ -46,6 +51,13 @@ local function sendUi(msg)
     end
 end
 
+-- The page learns the pause state too, so its own buttons and keys do nothing while paused.
+local function setPaused(flag)
+    if paused == flag then return end
+    paused = flag
+    sendUi({ type = 'focus:paused', paused = flag })
+end
+
 local function syncThemeAndLocale()
     if not localeReady then
         local strings = {}
@@ -68,6 +80,7 @@ local function acquireFocus(opts)
     local ok, tok = pcall(function()
         return AeternaCore.requestFocus(opts)
     end)
+    setPaused(false)
     if ok and type(tok) == 'string' then
         focusToken = tok
         return tok
@@ -80,6 +93,7 @@ local function dropFocus()
     if not focusToken then return end
     local tok = focusToken
     focusToken = nil
+    setPaused(false)
     pcall(function()
         AeternaCore.releaseFocus(tok)
     end)
@@ -183,12 +197,29 @@ RegisterNetEvent('aeterna_uikit:cl:close', function(data)
     syncFocusRelease()
 end)
 
--- Focus loss handler from aeterna_core
-AddEventHandler('aeterna_core:focusLost', function(owner, token, reason)
+local function isOurFocusEvent(owner, token)
     local selfName = type(GetCurrentResourceName) == 'function' and GetCurrentResourceName() or 'aeterna_uikit'
-    if owner ~= nil and owner ~= selfName then return end
-    if token ~= nil and focusToken ~= nil and token ~= focusToken then return end
+    if owner ~= nil and owner ~= selfName then return false end
+    if token ~= nil and focusToken ~= nil and token ~= focusToken then return false end
+    return true
+end
+
+-- Focus overlay (core 0.2): stay on screen, ignore input, send nothing; a skill check's marker stops.
+AddEventHandler('aeterna_core:focusPaused', function(owner, token)
+    if not isOurFocusEvent(owner, token) or not focusToken then return end
+    setPaused(true)
+end)
+
+AddEventHandler('aeterna_core:focusResumed', function(owner, token)
+    if not isOurFocusEvent(owner, token) or not paused then return end
+    setPaused(false)
+end)
+
+-- Focus loss handler from aeterna_core (a real loss closes even while paused)
+AddEventHandler('aeterna_core:focusLost', function(owner, token, reason)
+    if not isOurFocusEvent(owner, token) then return end
     focusToken = nil
+    setPaused(false)
 
     if activePrompt and not activePrompt.done then
         activePrompt.done = true
@@ -219,7 +250,7 @@ end)
 -- NUI Callbacks
 RegisterNUICallback('panelAction', function(data, cb)
     if type(cb) == 'function' then cb({ ok = true }) end
-    if type(data) ~= 'table' or not currentPanel then return end
+    if paused or type(data) ~= 'table' or not currentPanel then return end
     if data.panelId ~= currentPanel.panelId then return end
 
     if currentPanel.kind == 'menu' then
@@ -259,7 +290,7 @@ end)
 
 RegisterNUICallback('promptResult', function(data, cb)
     if type(cb) == 'function' then cb({ ok = true }) end
-    if type(data) ~= 'table' then return end
+    if paused or type(data) ~= 'table' then return end
 
     if data.kind == 'progress' and activeProgress then
         if data.value == false and activeProgress.cancelable then
@@ -279,6 +310,7 @@ end)
 
 RegisterNUICallback('escape', function(data, cb)
     if type(cb) == 'function' then cb({ ok = true }) end
+    if paused then return end
 
     if activePrompt and not activePrompt.done then
         if activePrompt.kind == 'input' then
@@ -417,7 +449,7 @@ exports('progress', function(opts)
             break
         end
         disableControls(clean.disable)
-        if clean.cancelable and not clean.disable.mouse and isEscapePressed() then
+        if clean.cancelable and not paused and not clean.disable.mouse and isEscapePressed() then
             prog.cancelled = true
             break
         end
@@ -461,10 +493,10 @@ exports('skillCheck', function(opts)
         if type(DisableControlAction) == 'function' then
             DisableControlAction(0, 22, true)
         end
-        if type(IsDisabledControlJustPressed) == 'function' and IsDisabledControlJustPressed(0, 22) then
+        if not paused and type(IsDisabledControlJustPressed) == 'function' and IsDisabledControlJustPressed(0, 22) then
             sendUi({ type = 'prompt:skill', action = 'hit' })
         end
-        if isEscapePressed() then
+        if not paused and isEscapePressed() then
             p.result = false
             p.done = true
             break
@@ -524,7 +556,7 @@ end, false)
 RegisterCommand('-aeterna_uikit_menu', function() end, false)
 
 RegisterCommand('+aeterna_uikit_cancel', function()
-    if activeProgress and activeProgress.cancelable then
+    if not paused and activeProgress and activeProgress.cancelable then
         activeProgress.cancelled = true
     end
 end, false)
@@ -532,7 +564,7 @@ end, false)
 RegisterCommand('-aeterna_uikit_cancel', function() end, false)
 
 RegisterCommand('+aeterna_uikit_skill', function()
-    if activePrompt and activePrompt.kind == 'skill' and not activePrompt.done then
+    if not paused and activePrompt and activePrompt.kind == 'skill' and not activePrompt.done then
         sendUi({ type = 'prompt:skill', action = 'hit' })
     end
 end, false)

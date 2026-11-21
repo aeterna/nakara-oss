@@ -10,6 +10,18 @@ All notable changes to `aeterna_uikit` are documented here. The format follows
 
 - `slider` block: spec validation (range, step grid, at most 1000 steps, value inside the range) and server-side re-check of its value in `values`.
 - Locale keys `uikit.search.placeholder`, `uikit.search.none`, `uikit.table.empty` and `uikit.tabs.label` (Thai and English).
+- `tabs` block (2–6 tabs, one per spec, switched in the page, active tab in `values`, `report = true` fires the tab id) and `tab` on any block.
+- `table` block (≤ 6 columns, ≤ 50 rows, `selectable = true` makes row ids actions), stand-alone `empty` block with one optional action, and the `empty` option on `list` and `table`.
+- `list.search`: a search box that filters by label and meta in the page; the item limit is 200 with it, 50 without.
+- `detailOf` / `detailItem` top-level spec fields (shape check only; uikit's own window ignores them).
+- NUI rendering of the new blocks; slider keyboard (arrows one step, Page Up / Page Down ten steps, Home / End).
+- Enter and exit motion for panels and prompts (none under reduced motion; `replaced` swaps with no exit; the answer never waits for the animation).
+
+### Changed
+
+- `update` also patches `rows` (table), `value` of `tabs` and `slider` (a slider value out of range or off the step grid is refused) and `empty`.
+- A focus overlay (`aeterna_core` 0.2 `focusPaused` / `focusResumed`) pauses an open panel or prompt instead of closing it; a real `focusLost` still closes with `__close`.
+- Text sizes come from the theme type tokens `--fs-1` … `--fs-4` and `--lh` instead of pixel values.
 
 ## [0.1.0] - 2026-11-18
 

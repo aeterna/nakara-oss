@@ -1,4 +1,5 @@
-/* aeterna_uikit stylesheet — uses only tokens from html/theme.css (ADR 0004 decision 6). */
+/* aeterna_uikit stylesheet — uses only tokens from html/theme.css (ADR 0004 decision 6).
+   Text sizes come from the type tokens --fs-1 … --fs-4 and --lh (ADR 0005 decision 9). */
 
 *, *::before, *::after {
     box-sizing: border-box;
@@ -13,8 +14,8 @@ html, body {
     background: transparent;
     font-family: var(--font);
     color: var(--text);
-    font-size: 14px;
-    line-height: 1.45;
+    font-size: var(--fs-3);
+    line-height: var(--lh);
     user-select: none;
     -webkit-font-smoothing: antialiased;
 }
@@ -83,14 +84,14 @@ html, body {
 }
 
 .card-title {
-    font-size: 16px;
+    font-size: var(--fs-4);
     font-weight: 600;
     color: var(--text);
     word-break: break-word;
 }
 
 .card-subtitle {
-    font-size: 13px;
+    font-size: var(--fs-2);
     color: var(--text-2);
     word-break: break-word;
 }
@@ -125,13 +126,13 @@ html, body {
 
 .block-text {
     color: var(--text-2);
-    font-size: 14px;
+    font-size: var(--fs-3);
     white-space: pre-wrap;
     word-break: break-word;
 }
 
 .block-label {
-    font-size: 13px;
+    font-size: var(--fs-2);
     font-weight: 500;
     color: var(--text-2);
     margin-bottom: 4px;
@@ -165,7 +166,7 @@ html, body {
     gap: 10px;
     cursor: pointer;
     font-family: var(--font);
-    font-size: 14px;
+    font-size: var(--fs-3);
     transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease);
 }
 
@@ -201,7 +202,7 @@ html, body {
 
 .list-item-meta {
     color: var(--text-3);
-    font-size: 12px;
+    font-size: var(--fs-2);
     flex-shrink: 0;
     font-variant-numeric: tabular-nums;
 }
@@ -220,7 +221,7 @@ html, body {
     border-radius: var(--radius-s);
     padding: 8px 10px;
     font-family: var(--font);
-    font-size: 14px;
+    font-size: var(--fs-3);
     transition: border-color var(--fast) var(--ease);
 }
 
@@ -285,7 +286,7 @@ html, body {
 .progress-header {
     display: flex;
     justify-content: space-between;
-    font-size: 13px;
+    font-size: var(--fs-2);
     color: var(--text-2);
     font-variant-numeric: tabular-nums;
 }
@@ -321,7 +322,7 @@ html, body {
     border-radius: var(--radius-s);
     padding: 8px 14px;
     font-family: var(--font);
-    font-size: 14px;
+    font-size: var(--fs-3);
     font-weight: 500;
     cursor: pointer;
     display: inline-flex;
@@ -356,6 +357,7 @@ html, body {
 /* Progress prompt bar */
 .progress-prompt-card {
     width: 320px;
+    transition: opacity var(--enter) var(--ease), transform var(--enter) var(--ease);
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: var(--radius-m);
@@ -376,13 +378,14 @@ html, body {
     flex-direction: column;
     gap: 10px;
     pointer-events: auto;
+    transition: opacity var(--enter) var(--ease), transform var(--enter) var(--ease);
 }
 
 .skill-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 13px;
+    font-size: var(--fs-2);
     color: var(--text-2);
 }
 
@@ -436,21 +439,241 @@ html, body {
     border: 1px solid var(--line);
     border-radius: var(--radius-s);
     padding: 2px 6px;
-    font-size: 12px;
+    font-size: var(--fs-1);
     font-weight: 600;
     color: var(--text);
     font-variant-numeric: tabular-nums;
 }
 
 .hint-label {
-    font-size: 13px;
+    font-size: var(--fs-1);
     color: var(--text-2);
+}
+
+/* 0.2 tabs */
+.tabs-bar {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--line);
+}
+
+.tab-btn {
+    appearance: none;
+    background: transparent;
+    color: var(--text-2);
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 8px 12px;
+    font-family: var(--font);
+    font-size: var(--fs-3);
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: color var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+
+.tab-btn[aria-selected="true"] {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+}
+
+.tab-in {
+    animation: uikit-fade-in var(--fast) var(--ease);
+}
+
+@keyframes uikit-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* 0.2 slider */
+.slider-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.slider-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.slider-header .block-label {
+    margin-bottom: 0;
+}
+
+.slider-value {
+    font-size: var(--fs-3);
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 3px;
+}
+
+.slider-unit {
+    font-size: var(--fs-1);
+    color: var(--text-3);
+}
+
+.slider-track {
+    position: relative;
+    height: 6px;
+    margin: 8px 8px;
+    background: var(--track);
+    border-radius: var(--radius-s);
+    cursor: pointer;
+}
+
+.slider-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background: var(--accent);
+    border-radius: var(--radius-s);
+    transition: width var(--fast) var(--ease);
+}
+
+.slider-thumb {
+    position: absolute;
+    top: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border-radius: var(--radius-l);
+    background: var(--on-accent);
+    border: 2px solid var(--accent);
+    transition: left var(--fast) var(--ease);
+}
+
+.slider-dragging .slider-fill,
+.slider-dragging .slider-thumb {
+    transition: none;
+}
+
+.slider-track[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* 0.2 table */
+.table-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fs-3);
+    font-variant-numeric: tabular-nums;
+}
+
+.data-table th {
+    font-size: var(--fs-1);
+    font-weight: 600;
+    color: var(--text-3);
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--line);
+}
+
+.data-table td {
+    color: var(--text);
+    padding: 8px;
+    border-bottom: 1px solid var(--line);
+    word-break: break-word;
+}
+
+.cell-start { text-align: left; }
+.cell-end { text-align: right; }
+
+.table-row {
+    transition: background var(--fast) var(--ease);
+}
+
+.table-row-selectable {
+    cursor: pointer;
+}
+
+.table-row-selectable:hover,
+.table-row-selectable:focus-visible {
+    background: var(--raised);
+}
+
+.table-row-selectable[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* 0.2 empty state */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 20px 12px;
+    text-align: center;
+}
+
+.empty-icon {
+    color: var(--text-3);
+    display: inline-flex;
+}
+
+.empty-label {
+    font-size: var(--fs-4);
+    font-weight: 600;
+    color: var(--text);
+}
+
+.empty-body {
+    font-size: var(--fs-2);
+    color: var(--text-2);
+}
+
+.empty-state .btn {
+    margin-top: 6px;
+}
+
+/* 0.2 list search */
+.list-search {
+    margin-bottom: 2px;
+}
+
+/* 0.2 motion: enter with a fade and 8 px rise over --enter, leave with a fade over --fast. */
+.motion-enter {
+    opacity: 0;
+    transform: translateY(8px);
+}
+
+.motion-exit {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--fast) var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .motion-enter { transform: none; }
+}
+
+/* 0.2 paused by a focus overlay: the screen stays, nothing under it takes the pointer. */
+.uikit-paused .layer,
+.uikit-paused .card,
+.uikit-paused .skill-card {
+    pointer-events: none !important;
 }
 
 /* Keyboard accessibility focus ring (ADR 0004 decision 13) */
 button:focus-visible,
 input:focus-visible,
-select:focus-visible {
+select:focus-visible,
+[role="slider"]:focus-visible,
+tr[role="button"]:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
