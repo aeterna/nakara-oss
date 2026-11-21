@@ -340,7 +340,7 @@ Server-local event `aeterna_core:selftest` → `(runId, name, ctx)`. The third a
 it: `ctx = { kind, side = 'server', a = src|nil, b = src|nil, destructive = boolean }`. Only `headless` and `mock`
 tests with `side = 'server'` are fired on the server; `side = 'client'`, `ped` and `eye` tests go to clients.
 
-**Client test started (server).** When core sends a client test (`ped`, `eye`, or `side = 'client'`) to its player(s),
+**Client test started (server).** When core sends a test to a client (`ped`, `eye`, `side = 'client'`, or any test with `players = 2`),
 it first fires the server-local event `aeterna_core:selftestStarted` → `(runId, name, ctx)` with
 `ctx = { kind, side = 'client', a = src, b = src|nil, destructive = boolean }`. The owner's server script filters on its
 own name prefix and may prepare server state the client test needs (give an item, set a value, open a slot), and
@@ -352,7 +352,8 @@ needed server set-up for client tests).
 
 **Write guard.** `AeternaCore.selftest.mayWrite(runId, name) -> boolean` (server, from `import.lua`) calls the export
 `selftestMayWrite`. It returns `true` only for a test declared `destructive` in a run whose gate is open. Called by a
-test that is not declared destructive, it returns `false` and marks that test FAIL `undeclared destructive`. Kit
+test that is not declared destructive, it returns `false` and marks that test FAIL `undeclared destructive`. Called by a
+resource that does not own the test, it returns `false` and changes nothing. Kit
 packages call it before any persistent write made inside a test.
 
 ### Client-side protocol (`ped`, `eye`, and `side = 'client'`)
