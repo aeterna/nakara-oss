@@ -24,14 +24,17 @@ shared_scripts {
     'shared/logic/compass.lua',
     'shared/logic/voice.lua',
     'shared/logic/seatbelt.lua',
+    'shared/logic/selftest.lua',
 }
 
 client_scripts {
     'client/main.lua',
+    'client/selftest.lua',
 }
 
 server_scripts {
     'server/main.lua',
+    'server/selftest.lua',
 }
 
 ui_page 'html/index.html'

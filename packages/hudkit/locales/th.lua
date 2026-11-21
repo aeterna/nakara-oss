@@ -48,6 +48,11 @@ local STRINGS = {
     ['hudkit.voice.radio'] = 'วิทยุ',
     ['hudkit.vehicle.seatbelt.on'] = 'คาดเข็มขัดแล้ว',
     ['hudkit.vehicle.seatbelt.off'] = 'ยังไม่คาดเข็มขัด',
+    ['hudkit.selftest.bar_style.expect'] = 'สลับจากแถบเป็นวงแหวนแล้วแถบสถานะทุกแถบกลายเป็นวงแหวน ส่วนสถานะยังอยู่บนจอ และกรอบแทนในเลย์เอาต์มีขนาดตรงกับขนาดใหม่',
+    ['hudkit.selftest.compass_tape.expect'] = 'หมุนกล้องครบรอบแล้วแถบเข็มทิศเลื่อนตามอย่างลื่น เมื่อหันไปทางเหนือ N อยู่ตรงขีดกลาง',
+    ['hudkit.selftest.voice_indicator.expect'] = 'ไมโครโฟนสว่างขึ้นขณะผู้เล่นพูด และเปลี่ยนระยะเสียงแล้วป้ายระยะเปลี่ยนตาม',
+    ['hudkit.selftest.voice_radio.expect'] = 'ผู้กดเข้าช่องวิทยุแล้วไอคอนวิทยุแสดงขึ้น และสว่างเด่นขณะผู้กดส่งเสียงทางวิทยุ',
+    ['hudkit.selftest.minimap_follows.expect'] = 'ลากเรดาร์ไปมุมขวาบนแล้วลากกลับ เรดาร์ยังอยู่ใต้กรอบแทนของมันตลอด',
 }
 
 for k, v in pairs(STRINGS) do
