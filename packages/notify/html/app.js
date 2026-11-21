@@ -1,9 +1,12 @@
-// aeterna_notify NUI runtime — renders toasts, announcement banners, and the MOTD card.
-// Uses textContent only (never innerHTML/outerHTML).
+// aeterna_notify NUI runtime — renders toasts (0.2: actions, x n count, lifetime bar), announcement and countdown
+// banners, and the MOTD card. Uses textContent only (never innerHTML/outerHTML).
 
 const toastStack = document.getElementById('toast-stack');
 const announceLayer = document.getElementById('announce-layer');
+const countdownLayer = document.getElementById('countdown-layer');
 const motdLayer = document.getElementById('motd-layer');
+
+const THEME_PRESETS = ['asphalt', 'paper', 'night-market'];
 
 let locale = {
     'notify.motd.dismiss': "Don't show again",
@@ -11,6 +14,8 @@ let locale = {
     'notify.announce.title': 'Announcement',
     'notify.announce.by': 'By {name}',
     'notify.announce.console': 'Console',
+    'notify.action.unbound': 'Unbound',
+    'notify.countdown.title': 'Countdown',
 };
 
 const DEFAULT_TYPE_ICON = {
@@ -27,6 +32,7 @@ let toastLayoutPlace = null;
 let announceLayoutPlace = null;
 let announceHideTimer = null;
 let motdVisible = false;
+let countdownState = null;
 
 function postCallback(name, payload) {
     fetch('https://aeterna_notify/' + name, {
@@ -39,6 +45,18 @@ function postCallback(name, payload) {
 function clearChildren(el) {
     while (el.firstChild) {
         el.removeChild(el.firstChild);
+    }
+}
+
+// The preset applies only when no owner theme file is set (aeterna_core spec, Theme preset).
+function applyTheme(msg) {
+    const href = msg.href;
+    const hasHref = typeof href === 'string' && href.startsWith('nui://') && href.endsWith('.css');
+    applyThemeOverride(href);
+    if (!hasHref && THEME_PRESETS.includes(msg.preset)) {
+        document.documentElement.setAttribute('data-preset', msg.preset);
+    } else {
+        document.documentElement.removeAttribute('data-preset');
     }
 }
 
@@ -90,32 +108,37 @@ function applyToastStackPosition() {
     }
 }
 
-function applyAnnouncePosition() {
-    announceLayer.classList.remove('pos-announce-default');
+function placeBanner(el) {
+    el.classList.remove('pos-announce-default');
     if (announceLayoutPlace && typeof announceLayoutPlace === 'object') {
         const x = Number(announceLayoutPlace.x) || 0;
         const y = Number(announceLayoutPlace.y) || 0;
         const ax = Number(announceLayoutPlace.ax) || 0;
         const ay = Number(announceLayoutPlace.ay) || 0;
         const scale = Number(announceLayoutPlace.scale) || 1;
-        announceLayer.style.top = (y * 100) + '%';
-        announceLayer.style.left = (x * 100) + '%';
-        announceLayer.style.right = 'auto';
-        announceLayer.style.bottom = 'auto';
-        announceLayer.style.transformOrigin = (ax * 100) + '% ' + (ay * 100) + '%';
-        announceLayer.style.transform = 'translate(' + (-ax * 100) + '%, ' + (-ay * 100) + '%) scale(' + scale + ')';
+        el.style.top = (y * 100) + '%';
+        el.style.left = (x * 100) + '%';
+        el.style.right = 'auto';
+        el.style.bottom = 'auto';
+        el.style.transformOrigin = (ax * 100) + '% ' + (ay * 100) + '%';
+        el.style.transform = 'translate(' + (-ax * 100) + '%, ' + (-ay * 100) + '%) scale(' + scale + ')';
     } else {
-        announceLayer.style.top = '';
-        announceLayer.style.left = '';
-        announceLayer.style.right = '';
-        announceLayer.style.bottom = '';
-        announceLayer.style.transformOrigin = '';
-        announceLayer.style.transform = '';
-        announceLayer.classList.add('pos-announce-default');
+        el.style.top = '';
+        el.style.left = '';
+        el.style.right = '';
+        el.style.bottom = '';
+        el.style.transformOrigin = '';
+        el.style.transform = '';
+        el.classList.add('pos-announce-default');
     }
 }
 
-function populateToastNode(card, toast) {
+function applyAnnouncePosition() {
+    placeBanner(announceLayer);
+    placeBanner(countdownLayer);
+}
+
+function populateToastNode(card, toast, keys) {
     clearChildren(card);
     const kind = ['info', 'success', 'warning', 'error'].includes(toast.type) ? toast.type : 'info';
     card.className = 'toast-card toast-' + kind;
@@ -132,10 +155,18 @@ function populateToastNode(card, toast) {
     const content = document.createElement('div');
     content.className = 'toast-content';
 
+    const titleRow = document.createElement('div');
+    titleRow.className = 'toast-title-row';
+
     const titleEl = document.createElement('div');
     titleEl.className = 'toast-title';
     titleEl.textContent = String(toast.title || '');
-    content.appendChild(titleEl);
+    titleRow.appendChild(titleEl);
+
+    const countEl = document.createElement('span');
+    countEl.className = 'toast-count';
+    titleRow.appendChild(countEl);
+    content.appendChild(titleRow);
 
     if (toast.description) {
         const descEl = document.createElement('div');
@@ -144,7 +175,68 @@ function populateToastNode(card, toast) {
         content.appendChild(descEl);
     }
 
+    const actions = Array.isArray(toast.actions) ? toast.actions.slice(0, 2) : [];
+    if (actions.length > 0) {
+        const row = document.createElement('div');
+        row.className = 'toast-actions';
+        for (let i = 0; i < actions.length; i++) {
+            const action = actions[i];
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn toast-action ' + (action.variant === 'primary' ? 'btn-primary' : 'btn-secondary');
+            const label = document.createElement('span');
+            label.textContent = String(action.label || '');
+            btn.appendChild(label);
+            const keyEl = document.createElement('span');
+            keyEl.className = 'toast-key';
+            const keyLabel = Array.isArray(keys) && typeof keys[i] === 'string' && keys[i] !== ''
+                ? keys[i]
+                : String(locale['notify.action.unbound'] || 'Unbound');
+            keyEl.textContent = keyLabel;
+            btn.appendChild(keyEl);
+            const toastId = String(toast.toastId || '');
+            const actionId = String(action.id || '');
+            // The toast closes when Lua sends toast:clear after it checked the press.
+            btn.addEventListener('click', () => {
+                postCallback('toastAction', { toastId, action: actionId });
+            });
+            row.appendChild(btn);
+        }
+        content.appendChild(row);
+    }
+
     card.appendChild(content);
+
+    const life = document.createElement('div');
+    life.className = 'toast-life';
+    card.appendChild(life);
+}
+
+function setCount(entry, label) {
+    const countEl = entry.node.querySelector('.toast-count');
+    if (countEl) countEl.textContent = typeof label === 'string' ? label : '';
+}
+
+// Shrinks the bar from full to empty over `duration`; called again to restart it.
+function startLifetime(entry) {
+    const bar = entry.node.querySelector('.toast-life');
+    if (!bar) return;
+    if (!entry.lifetime) {
+        bar.classList.add('hidden');
+        return;
+    }
+    bar.classList.remove('hidden');
+    bar.style.transition = 'none';
+    bar.style.transform = 'scaleX(1)';
+    void bar.offsetWidth;
+    bar.style.transition = 'transform ' + entry.duration + 'ms linear';
+    bar.style.transform = 'scaleX(0)';
+}
+
+function restartTimer(entry) {
+    if (entry.timer) clearTimeout(entry.timer);
+    entry.timer = setTimeout(() => removeToastById(entry.id), entry.duration);
+    startLifetime(entry);
 }
 
 function removeToastById(id) {
@@ -177,29 +269,46 @@ function addOrReplaceToast(msg) {
 
     const id = String(toast.id || ('t_' + Date.now()));
     const duration = Math.max(1000, Math.min(15000, Number(toast.duration) || 4000));
+    const lifetime = msg.lifetime !== false;
 
     for (let i = 0; i < activeToasts.length; i++) {
         if (activeToasts[i].id === id) {
             const existing = activeToasts[i];
-            if (existing.timer) clearTimeout(existing.timer);
-            populateToastNode(existing.node, toast);
-            existing.timer = setTimeout(() => removeToastById(id), duration);
+            populateToastNode(existing.node, toast, msg.keys);
+            existing.duration = duration;
+            existing.lifetime = lifetime;
+            setCount(existing, toast.countLabel);
+            restartTimer(existing);
             return;
         }
     }
 
     const card = document.createElement('div');
-    populateToastNode(card, toast);
+    populateToastNode(card, toast, msg.keys);
     toastStack.appendChild(card);
 
-    const timer = setTimeout(() => removeToastById(id), duration);
-    activeToasts.push({ id, node: card, timer });
+    const entry = { id, node: card, timer: null, duration, lifetime };
+    activeToasts.push(entry);
+    setCount(entry, toast.countLabel);
+    restartTimer(entry);
 
     while (activeToasts.length > maxVisibleToasts) {
         const oldest = activeToasts.shift();
         if (oldest.timer) clearTimeout(oldest.timer);
         if (oldest.node && oldest.node.parentNode) {
             oldest.node.parentNode.removeChild(oldest.node);
+        }
+    }
+}
+
+// An identical toast arrived: show the count, keep the place, restart the timer and the bar.
+function mergeToast(msg) {
+    const id = String(msg.id || '');
+    for (let i = 0; i < activeToasts.length; i++) {
+        if (activeToasts[i].id === id) {
+            setCount(activeToasts[i], msg.countLabel);
+            restartTimer(activeToasts[i]);
+            return;
         }
     }
 }
@@ -272,6 +381,86 @@ function showAnnouncement(msg) {
     }, duration);
 }
 
+function hideAnnouncementNow() {
+    if (announceHideTimer) {
+        clearTimeout(announceHideTimer);
+        announceHideTimer = null;
+    }
+    clearChildren(announceLayer);
+    announceLayer.classList.add('hidden');
+}
+
+function formatClock(ms) {
+    const total = Math.ceil(Math.max(0, Number(ms) || 0) / 1000);
+    const mm = Math.floor(total / 60);
+    const ss = total % 60;
+    return String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
+}
+
+function hideCountdown() {
+    if (countdownState) {
+        if (countdownState.interval) clearInterval(countdownState.interval);
+        if (countdownState.hideTimer) clearTimeout(countdownState.hideTimer);
+    }
+    countdownState = null;
+    clearChildren(countdownLayer);
+    countdownLayer.classList.add('hidden');
+}
+
+// Counts down locally from the remainingMs the server sent; the server is the clock that ends it.
+function showCountdown(msg) {
+    const cd = msg.countdown;
+    if (!cd || typeof cd !== 'object') return;
+    if (msg.place !== undefined) {
+        announceLayoutPlace = msg.place;
+    }
+    hideCountdown();
+    hideAnnouncementNow();
+    applyAnnouncePosition();
+
+    const header = document.createElement('div');
+    header.className = 'announce-header';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'announce-title';
+    titleEl.textContent = String(cd.title || locale['notify.countdown.title'] || 'Countdown');
+    header.appendChild(titleEl);
+
+    const clockEl = document.createElement('div');
+    clockEl.className = 'countdown-clock';
+    header.appendChild(clockEl);
+    countdownLayer.appendChild(header);
+
+    if (cd.body) {
+        const bodyEl = document.createElement('div');
+        bodyEl.className = 'announce-body';
+        bodyEl.textContent = String(cd.body);
+        countdownLayer.appendChild(bodyEl);
+    }
+
+    if (cd.by) {
+        const byEl = document.createElement('div');
+        byEl.className = 'announce-by';
+        byEl.textContent = formatByText(cd.by);
+        countdownLayer.appendChild(byEl);
+    }
+
+    const remaining = Math.max(0, Number(cd.remainingMs) || 0);
+    const showMs = Math.max(0, Math.min(remaining, Number(msg.showMs) || remaining));
+    const startedAt = performance.now();
+    const render = () => {
+        const left = remaining - (performance.now() - startedAt);
+        clockEl.textContent = formatClock(left);
+    };
+    render();
+    countdownLayer.classList.remove('hidden');
+    countdownState = {
+        id: String(cd.countdownId || ''),
+        interval: setInterval(render, 250),
+        hideTimer: setTimeout(hideCountdown, showMs),
+    };
+}
+
 function showMotd(motd) {
     if (!motd || typeof motd !== 'object') return;
     clearChildren(motdLayer);
@@ -310,7 +499,6 @@ function showMotd(motd) {
         closeBtn.textContent = '×';
     }
     closeBtn.addEventListener('click', () => {
-        hideMotd();
         postCallback('motdClose', { dismiss: false });
     });
     header.appendChild(closeBtn);
@@ -337,7 +525,6 @@ function showMotd(motd) {
         dismissBtn.className = 'btn btn-secondary';
         dismissBtn.textContent = String(locale['notify.motd.dismiss'] || "Don't show again");
         dismissBtn.addEventListener('click', () => {
-            hideMotd();
             postCallback('motdClose', { dismiss: true });
         });
         actions.appendChild(dismissBtn);
@@ -348,7 +535,6 @@ function showMotd(motd) {
     continueBtn.className = 'btn btn-primary';
     continueBtn.textContent = String(locale['notify.motd.continue'] || 'Continue');
     continueBtn.addEventListener('click', () => {
-        hideMotd();
         postCallback('motdClose', { dismiss: false });
     });
     actions.appendChild(continueBtn);
@@ -370,15 +556,25 @@ window.addEventListener('message', (event) => {
     if (!msg || typeof msg.type !== 'string') return;
 
     if (msg.type === 'aeterna:theme') {
-        applyThemeOverride(msg.href);
+        applyTheme(msg);
     } else if (msg.type === 'locale' && msg.strings && typeof msg.strings === 'object') {
         locale = { ...locale, ...msg.strings };
     } else if (msg.type === 'toast:add') {
         addOrReplaceToast(msg);
+    } else if (msg.type === 'toast:merge') {
+        mergeToast(msg);
     } else if (msg.type === 'toast:clear') {
         clearToasts(msg.id);
     } else if (msg.type === 'announce:show') {
         showAnnouncement(msg);
+    } else if (msg.type === 'countdown:show') {
+        showCountdown(msg);
+    } else if (msg.type === 'countdown:hide') {
+        if (!countdownState || !msg.countdownId || countdownState.id === msg.countdownId) {
+            hideCountdown();
+        }
+    } else if (msg.type === 'settings') {
+        document.documentElement.setAttribute('data-sound', msg.sound === true ? 'on' : 'off');
     } else if (msg.type === 'motd:show' && msg.motd) {
         showMotd(msg.motd);
     } else if (msg.type === 'motd:hide') {
@@ -400,7 +596,6 @@ window.addEventListener('message', (event) => {
 window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && motdVisible) {
         event.preventDefault();
-        hideMotd();
         postCallback('escape', {});
     }
 });

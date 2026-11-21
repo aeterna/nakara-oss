@@ -4,8 +4,8 @@ lua54 'yes'
 
 name 'aeterna_notify'
 author 'AETERNA'
-description 'Toast notifications, server-wide announcement banners, and message of the day (MOTD) for the AETERNA Starter Kit.'
-version '0.1.0'
+description 'Toast notifications with actions, server-wide announcement and countdown banners, notification history, and message of the day (MOTD) for the AETERNA Starter Kit.'
+version '0.2.0'
 repository 'https://github.com/aeterna/nakara-oss'
 
 dependencies {
@@ -18,6 +18,9 @@ shared_scripts {
     'locales/en.lua',
     'locales/th.lua',
     'shared/logic/notify.lua',
+    'shared/logic/actions.lua',
+    'shared/logic/countdown.lua',
+    'shared/logic/history.lua',
 }
 
 client_scripts {
