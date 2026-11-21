@@ -589,6 +589,19 @@ describe('aeterna_radial', function()
             assert.are.equal(1, picks[1].args[1])
             assert.are.same({ owner = 'res_a', id = 'car' }, picks[1].args[2])
 
+            -- A parent's group mark follows its children: re-sent when the first arrives and the last leaves.
+            assert.is_true(api.addSlot({ id = 'kid', label = 'Kid', parent = 'open' }))
+            local marks = natives.emitted('client', 'aeterna_radial:cl:slot')
+            local regroup = marks[#marks - 1].args[1]
+            assert.are.equal('open', regroup.slot.id)
+            assert.is_true(regroup.slot.isGroup)
+            assert.are.equal('kid', marks[#marks].args[1].slot.id)
+            assert.is_true(api.removeSlot('kid'))
+            marks = natives.emitted('client', 'aeterna_radial:cl:slot')
+            assert.are.equal('remove', marks[#marks - 1].args[1].op)
+            assert.are.equal('open', marks[#marks].args[1].slot.id)
+            assert.is_nil(marks[#marks].args[1].slot.isGroup)
+
             local before = #natives.emitted('client', 'aeterna_radial:cl:slot')
             natives.fire('onResourceStop', 'res_a')
             local after = natives.emitted('client', 'aeterna_radial:cl:slot')
