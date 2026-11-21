@@ -5,12 +5,16 @@ local RESOURCE = GetCurrentResourceName()
 local LIMITS = { maxPerOwner = Config.maxPerOwner, maxTotal = Config.maxTotal }
 local MAX_FLAGS = 32
 local LOCALE_KEYS = { 'radial.back', 'radial.close', 'radial.denied', 'radial.empty' }
+local PAUSED_WAIT_MS = 250
+local HELLO_RETRY_MS = 3000
+local DEAD_ZONE = L.checkDeadZone(Config.deadZone, AeternaCore.log.warn)
 
 local clientReg = L.createRegistry(LIMITS)
 local serverReg = L.createRegistry(LIMITS)
 local warnedJobs = {}  -- slot key -> true, so a jobs slot without qbx_core warns once
 local menu = nil       -- { mode, token, session, ring, parent, parentIndex, hover, holding, paused }
 local session = 0
+local slotsReceived = false
 
 local function send(msg)
     SendNUIMessage(msg)
@@ -52,7 +56,7 @@ local function render()
     if menu.parent then
         send({ type = 'ring:child', groupId = menu.parent.id, slots = slots })
     else
-        send({ type = 'ring:open', slots = slots, mode = menu.mode, radius = Config.radius, deadZone = Config.deadZone })
+        send({ type = 'ring:open', slots = slots, mode = menu.mode, radius = Config.radius, deadZone = DEAD_ZONE })
     end
     send({ type = 'ring:hover', index = menu.hover or 0 })
 end
@@ -89,11 +93,17 @@ end
 
 local function close()
     if not menu then return end
-    local token = menu.token
+    local token, paused = menu.token, menu.paused
     menu = nil
     send({ type = 'ring:close' })
     pcall(function() exports.aeterna_uikit:clearKeyHints() end)
-    if token then AeternaCore.releaseFocus(token) end
+    if not token then return end
+    if paused then
+        -- The overlay holder owns the NUI natives now: give the token back without clearing them.
+        pcall(function() exports.aeterna_core:releaseFocus(token) end)
+    else
+        AeternaCore.releaseFocus(token)
+    end
 end
 
 local function denied()
@@ -146,7 +156,7 @@ local function handleInput(input)
     if input.escape then return close() end
     if input.cancel then return back() end
     if not IsUsingKeyboard(0) then
-        local idx = L.stickToSlot(input.x, input.y, Config.deadZone, menu.ring.totalPositions)
+        local idx = L.stickToSlot(input.x, input.y, DEAD_ZONE, menu.ring.totalPositions)
         if idx then setHover(idx, true) end
     end
     if input.left or input.right then
@@ -155,17 +165,27 @@ local function handleInput(input)
     if input.accept and menu.hover and not menu.holding then pick(menu.hover) end
 end
 
+local function canOpen()
+    if Config.whileDead then return true end
+    local ped = PlayerPedId()
+    return not IsEntityDead(ped) and not IsPedRagdoll(ped)
+end
+
 local function frameLoop(s)
     local lastVehicle = nil
     while menu and menu.session == s do
-        if not menu.paused then
+        if menu.paused then
+            Wait(PAUSED_WAIT_MS)
+        elseif not canOpen() then
+            close()
+        else
             I.disableFrame()
             local state = vehicleState(PlayerPedId())
             if lastVehicle and state ~= lastVehicle then refresh() end
             lastVehicle = state
             handleInput(I.read())
+            Wait(0)
         end
-        Wait(0)
     end
 end
 
@@ -175,12 +195,6 @@ local function showHints()
     pcall(function()
         exports.aeterna_uikit:keyHints({ { key = '+aeterna_radial_open', label = AeternaCore.t('radial.hint.pick') } })
     end)
-end
-
-local function canOpen()
-    if Config.whileDead then return true end
-    local ped = PlayerPedId()
-    return not IsEntityDead(ped) and not IsPedRagdoll(ped)
 end
 
 local function open(mode)
@@ -274,11 +288,12 @@ end)
 -- Server slots: the full list on hello, then one add or remove at a time.
 RegisterNetEvent('aeterna_radial:cl:slots', function(payload)
     if type(payload) ~= 'table' or type(payload.slots) ~= 'table' or #payload.slots > Config.maxTotal then return end
+    slotsReceived = true
     serverReg = L.createRegistry(LIMITS)
     for pass = 1, 2 do
         for _, slot in ipairs(payload.slots) do
             if type(slot) == 'table' and type(slot.owner) == 'string' and (slot.parent == nil) == (pass == 1) then
-                local ok, err = serverReg:addSlot(slot.owner, slot, 'server')
+                local ok, err = serverReg:addSlot(slot.owner, slot, 'server', slot.isGroup == true)
                 if not ok then AeternaCore.log.debug('ignored server slot', { owner = slot.owner, err = err }) end
             end
         end
@@ -289,7 +304,7 @@ end)
 RegisterNetEvent('aeterna_radial:cl:slot', function(msg)
     if type(msg) ~= 'table' or type(msg.owner) ~= 'string' then return end
     if msg.op == 'add' and type(msg.slot) == 'table' then
-        local ok, err = serverReg:addSlot(msg.owner, msg.slot, 'server')
+        local ok, err = serverReg:addSlot(msg.owner, msg.slot, 'server', msg.slot.isGroup == true)
         if not ok then
             AeternaCore.log.debug('ignored server slot', { owner = msg.owner, err = err })
             return
@@ -304,7 +319,7 @@ end)
 
 AddEventHandler('onClientResourceStop', function(resource)
     if resource == RESOURCE then
-        pcall(function() exports.aeterna_uikit:clearKeyHints() end)
+        close()
         return
     end
     clientReg:removeByOwner(resource)
@@ -360,6 +375,9 @@ exports('close', function()
     return nil
 end)
 
+-- Ask for the server slots; ask once more if the first answer is lost (sv:hello allows 2 per 5 s).
 CreateThread(function()
     TriggerServerEvent('aeterna_radial:sv:hello')
+    Wait(HELLO_RETRY_MS)
+    if not slotsReceived then TriggerServerEvent('aeterna_radial:sv:hello') end
 end)

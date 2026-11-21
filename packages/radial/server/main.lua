@@ -45,34 +45,55 @@ local function pickContext(src)
     return ctx
 end
 
+-- Sends one stored slot to every client that may see it. `hadAce` says an earlier copy was ACE-limited,
+-- so players who no longer pass drop it.
+local function deliver(owner, stored, hadAce)
+    local msg = { op = 'add', owner = owner, slot = L.publicSlot(stored, registry:isGroup(owner, stored.id, 'server')) }
+    if not hadAce and not (stored.when and stored.when.ace) then
+        sendSlot(-1, msg)
+        return
+    end
+    local gone = { op = 'remove', owner = owner, id = stored.id }
+    for _, id in ipairs(GetPlayers()) do
+        local src = tonumber(id)
+        sendSlot(src, passesAce(src, stored) and msg or gone)
+    end
+end
+
+local function hasAce(stored)
+    return stored ~= nil and stored.when ~= nil and stored.when.ace ~= nil
+end
+
 exports('addSlot', function(slot)
     local owner = invoker()
-    local before = registry:getSlot(owner, type(slot) == 'table' and slot.id or nil, 'server')
-    local hadAce = before ~= nil and before.when ~= nil and before.when.ace ~= nil
+    local id = type(slot) == 'table' and slot.id or nil
+    local parentId = type(slot) == 'table' and slot.parent or nil
+    local hadAce = hasAce(registry:getSlot(owner, id, 'server'))
+    local parentWasGroup = type(parentId) == 'string' and registry:isGroup(owner, parentId, 'server')
     local ok, err = registry:addSlot(owner, slot, 'server')
     if not ok then
         AeternaCore.log.warn('refused server slot', { owner = owner, err = err })
         return false, err
     end
-    local stored = registry:getSlot(owner, slot.id, 'server')
-    local msg = { op = 'add', owner = owner, slot = L.publicSlot(stored) }
-    if not hadAce and not (stored.when and stored.when.ace) then
-        sendSlot(-1, msg)
-    else
-        -- An ACE slot reaches only the players who pass it; the rest drop any copy they had.
-        local gone = { op = 'remove', owner = owner, id = stored.id }
-        for _, id in ipairs(GetPlayers()) do
-            local src = tonumber(id)
-            sendSlot(src, passesAce(src, stored) and msg or gone)
-        end
+    -- A parent that just became a group is sent again with its group mark, before its first child.
+    if parentId ~= nil and not parentWasGroup then
+        local parent = registry:getSlot(owner, parentId, 'server')
+        deliver(owner, parent, hasAce(parent))
     end
+    deliver(owner, registry:getSlot(owner, id, 'server'), hadAce)
     return true
 end)
 
 exports('removeSlot', function(id)
     local owner = invoker()
-    if type(id) ~= 'string' or not registry:removeSlot(owner, id, 'server') then return false end
+    local stored = type(id) == 'string' and registry:getSlot(owner, id, 'server') or nil
+    if not stored or not registry:removeSlot(owner, id, 'server') then return false end
     sendSlot(-1, { op = 'remove', owner = owner, id = id })
+    -- A parent whose last child left is an ordinary slot again.
+    if stored.parent ~= nil and not registry:isGroup(owner, stored.parent, 'server') then
+        local parent = registry:getSlot(owner, stored.parent, 'server')
+        if parent then deliver(owner, parent, hasAce(parent)) end
+    end
     return true
 end)
 

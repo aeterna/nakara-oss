@@ -749,7 +749,7 @@ describe('aeterna_radial', function()
             natives.advance(1)
             assert.is_true(natives.advance(1000) <= 10)
             natives.fire('aeterna_core:focusResumed', 'aeterna_radial', 'tok_1')
-            assert.is_true(natives.advance(100) > 10)
+            assert.is_true(natives.advance(500) > 10)
         end)
 
         it('client: retries sv:hello once when no slots arrive', function()
