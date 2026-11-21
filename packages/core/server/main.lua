@@ -406,9 +406,9 @@ exports('selftestMayWrite', function(runId, name)
     if not run or type(name) ~= 'string' then
         return false
     end
-    local invoker = GetInvokingResource()
-    local item = run.byName[name] or (invoker and run.byName[normalizeTestName(invoker, name)])
-    if not item or (invoker and invoker ~= GetCurrentResourceName() and invoker ~= item.owner) then
+    local invoker = GetInvokingResource() or GetCurrentResourceName()
+    local item = run.byName[name] or run.byName[normalizeTestName(invoker, name)]
+    if not item or (invoker ~= GetCurrentResourceName() and invoker ~= item.owner) then
         return false
     end
     local allowed, failReason = ST.mayWrite(item, run.gateOpen)
