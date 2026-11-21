@@ -14,6 +14,7 @@ end
 
 describe('aeterna_camera server under the harness', function()
     local files, http, tests, tiles, toasts, reports, started, mayWriteCalls
+    local invoker = 'aeterna_core'
 
     local function boot(opts)
         opts = opts or {}
@@ -23,6 +24,8 @@ describe('aeterna_camera server under the harness', function()
         })
         files, http, tests, tiles, toasts, reports, mayWriteCalls = {}, nil, {}, {}, {}, {}, {}
         started = { ['screenshot-basic'] = opts.screenshot ~= false, aeterna_phonekit = true }
+        invoker = 'aeterna_core'
+        natives.stub('GetInvokingResource', function() return invoker end)
         natives.stub('GetResourceState', function(name) return started[name] and 'started' or 'missing' end)
         natives.stub('GetPlayerIdentifierByType', function(src) return 'license:p' .. tostring(src) end)
         natives.stub('IsPlayerAceAllowed', function() return false end)
@@ -245,6 +248,34 @@ describe('aeterna_camera server under the harness', function()
         natives.fire('aeterna_core:selftestEnd', 'r8-other', SHOOT)
         natives.advance(5000)
         assert.is_true(clientShoots(1).ok)
+    end)
+
+    it('ignores self-test events that aeterna_core did not fire', function()
+        boot()
+        invoker = 'some_other_resource'
+        natives.fire('aeterna_core:selftestStarted', 'r9-test', SHOOT, CTX)
+        assert.is_nil(last('aeterna_camera:cl:viewfinder'))
+        natives.fire('aeterna_core:selftest', 'r9-test', 'aeterna_camera.id_and_path_guard', { side = 'server' })
+        assert.is_nil(next(reports))
+        invoker = 'aeterna_core'
+        natives.fire('aeterna_core:selftestStarted', 'r9-test', SHOOT, CTX)
+        assert.is_table(last('aeterna_camera:cl:viewfinder'))
+        invoker = 'some_other_resource'
+        natives.fire('aeterna_core:selftestEnd', 'r9-test', SHOOT)
+        assert.is_true(clientShoots(1).ok)
+        assert.are.equal(1, #mayWriteCalls)
+    end)
+
+    it('forgets shoot_and_view and closes its viewfinder when aeterna_core stops', function()
+        boot()
+        natives.fire('aeterna_core:selftestStarted', 'r9-test', SHOOT, CTX)
+        invoker = nil
+        natives.fire('onResourceStop', 'aeterna_core')
+        natives.fire_net('aeterna_camera:sv:shoot', 1, { mode = 'back' })
+        assert.are.same({ ok = false, reason = 'camera.failed' }, (last('aeterna_camera:cl:shot')))
+        natives.advance(5000)
+        shootAndUpload(1)
+        assert.are.same({}, mayWriteCalls)
     end)
 
     it('exports getPhoto, listPhotos, removePhoto and available', function()

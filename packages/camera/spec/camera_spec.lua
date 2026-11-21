@@ -173,6 +173,15 @@ describe('aeterna_camera', function()
             assert.are_not.equal(first, a())
         end)
 
+        it('every bit of math.random reaches the id', function()
+            local fixed = function() return 0 end
+            local base = stream(4, fixed, fixed, fixed)()
+            for bit = 0, 15 do
+                local flipped = stream(4, function() return 1 << bit end, fixed, fixed)()
+                assert.are_not.equal(base, flipped, 'bit ' .. bit)
+            end
+        end)
+
         it('two streams with different seeds give different ids from the same inputs', function()
             local fixed = function() return 0 end
             local tickets, photos = stream(1, fixed, fixed, fixed), stream(2, fixed, fixed, fixed)
