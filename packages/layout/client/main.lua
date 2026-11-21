@@ -1,8 +1,10 @@
--- aeterna_layout client: local owner protocol, KVP persistence, NUI editor bridge and focus lock coordination.
+-- aeterna_layout client: local owner protocol, KVP persistence, NUI editor bridge and focus lock coordination;
+-- 0.2: clamp on size change, presets, snap prefs, export / import as text and the paused editor.
 
 local L = LayoutLogic
 
 local editorOpen = false
+local editorPaused = false
 local focusToken = nil
 local localeReady = false
 
@@ -21,6 +23,14 @@ local LOCALE_KEYS = {
     'layout.editor.done',
     'layout.editor.doneHint',
     'layout.editor.empty',
+    'layout.editor.preset',
+    'layout.editor.snapOff',
+    'layout.menu.share',
+    'layout.export.title',
+    'layout.export.hint',
+    'layout.import.title',
+    'layout.import.apply',
+    'layout.import.ok',
 }
 
 local function logWarn(msg, fields)
@@ -61,6 +71,25 @@ local function savePlaces(places)
     end
 end
 
+local function loadPrefs()
+    if AeternaCore and AeternaCore.kvp and type(AeternaCore.kvp.get) == 'function' then
+        local stored = AeternaCore.kvp.get('prefs', 1, {})
+        if type(stored) == 'table' then
+            return stored
+        end
+    end
+    return {}
+end
+
+local function savePrefs(prefs)
+    if AeternaCore and AeternaCore.kvp and type(AeternaCore.kvp.set) == 'function' then
+        AeternaCore.kvp.set('prefs', 1, prefs)
+    end
+end
+
+local snapStep = L.resolveSnapPref(loadPrefs(), Config)
+local presets, presetNames = L.validatePresets(Config and Config.presets, Config, logWarn)
+
 local function isResourceStarted(resName)
     if type(GetResourceState) ~= 'function' then
         return true
@@ -77,6 +106,11 @@ local registry = L.createRegistry({
     onApply = function(owner, id, place)
         TriggerEvent('aeterna_layout:apply', owner, id, place)
     end,
+    onClamp = function(owner, id, place)
+        if editorOpen then
+            sendUi({ type = 'editor:clamp', owner = owner, id = id, place = place })
+        end
+    end,
 })
 
 local function syncThemeAndLocale()
@@ -87,11 +121,8 @@ local function syncThemeAndLocale()
             strings[k] = translate(k)
         end
         sendUi({ type = 'locale', strings = strings })
-        local ok, href = pcall(function()
-            return exports.aeterna_core:themeHref()
-        end)
-        if ok then
-            sendUi({ type = 'aeterna:theme', href = href })
+        if AeternaCore and type(AeternaCore.themeMessage) == 'function' then
+            sendUi(AeternaCore.themeMessage())
         end
         localeReady = true
     end
@@ -125,9 +156,25 @@ local function sendEditorOpen()
     sendUi({
         type = 'editor:open',
         elements = registry:listElements(),
-        snap = L.resolveSnap(Config and Config.snap),
+        snap = snapStep,
+        snapSteps = L.resolveSnapSteps(Config),
         scale = L.resolveScaleConfig(Config and Config.scale),
     })
+end
+
+local function sendPresets()
+    local list = {}
+    for i = 1, #presetNames do
+        local name = presetNames[i]
+        local key = 'layout.preset.' .. name
+        local label = translate(key)
+        list[#list + 1] = { name = name, label = label ~= key and label or name }
+    end
+    sendUi({ type = 'editor:presets', list = list })
+end
+
+local function sendExport()
+    sendUi({ type = 'export:show', text = L.encodeExport(registry:getSavedPlaces()) })
 end
 
 local function openEditor()
@@ -137,14 +184,18 @@ local function openEditor()
             return
         end
         editorOpen = true
+        editorPaused = false
         registry:beginSession()
     end
     syncThemeAndLocale()
     sendEditorOpen()
+    sendPresets()
+    return true
 end
 
 local function closeEditor(release)
     editorOpen = false
+    editorPaused = false
     sendUi({ type = 'editor:close' })
     if release ~= false then
         dropFocus()
@@ -200,10 +251,55 @@ AddEventHandler('onResourceStop', function(stoppedRes)
     end
 end)
 
--- Server -> Client Net Event
-RegisterNetEvent('aeterna_layout:cl:open', function()
-    openEditor()
+-- Server -> Client Net Event. Optional payload { mode = 'editor' | 'share' | 'reset' } from the menu panel (0.2).
+local OPEN_MODES = { editor = true, share = true, reset = true }
+
+RegisterNetEvent('aeterna_layout:cl:open', function(payload)
+    local mode = 'editor'
+    if payload ~= nil then
+        local okKeys = type(payload) == 'table'
+        if okKeys then
+            for k in pairs(payload) do
+                if k ~= 'mode' then okKeys = false end
+            end
+        end
+        if not okKeys or not OPEN_MODES[payload.mode] then
+            logWarn('aeterna_layout:cl:open refused', { err = 'mode: enum' })
+            return
+        end
+        mode = payload.mode
+    end
+    if mode == 'reset' then
+        if editorOpen then
+            logWarn('aeterna_layout: reset refused', { err = 'editor: open' })
+            return
+        end
+        registry:resetAllSaved()
+        return
+    end
+    if openEditor() and mode == 'share' then
+        sendExport()
+    end
 end)
+
+-- Focus overlay (core 0.2): the editor stays open with its session and ignores input until focus comes back.
+AddEventHandler('aeterna_core:focusPaused', function(owner, token)
+    if owner ~= (type(GetCurrentResourceName) == 'function' and GetCurrentResourceName() or 'aeterna_layout') then return end
+    if token ~= nil and focusToken ~= nil and token ~= focusToken then return end
+    if editorOpen then
+        editorPaused = true
+    end
+end)
+
+AddEventHandler('aeterna_core:focusResumed', function(owner, token)
+    if owner ~= (type(GetCurrentResourceName) == 'function' and GetCurrentResourceName() or 'aeterna_layout') then return end
+    if token ~= nil and focusToken ~= nil and token ~= focusToken then return end
+    editorPaused = false
+end)
+
+local function acceptsInput()
+    return editorOpen and not editorPaused
+end
 
 -- Focus loss handler from aeterna_core (counts as Cancel)
 AddEventHandler('aeterna_core:focusLost', function(owner, token)
@@ -220,19 +316,19 @@ end)
 -- NUI Callbacks
 RegisterNUICallback('moved', function(data, cb)
     if type(cb) == 'function' then cb({ ok = true }) end
-    if not editorOpen then return end
+    if not acceptsInput() then return end
     registry:move(data)
 end)
 
 RegisterNUICallback('hide', function(data, cb)
     if type(cb) == 'function' then cb({ ok = true }) end
-    if not editorOpen then return end
+    if not acceptsInput() then return end
     registry:hide(data)
 end)
 
 RegisterNUICallback('reset', function(data, cb)
     if type(cb) == 'function' then cb({ ok = true }) end
-    if not editorOpen then return end
+    if not acceptsInput() then return end
     local ok = registry:reset(data)
     if ok and editorOpen then
         sendEditorOpen()
@@ -241,7 +337,7 @@ end)
 
 RegisterNUICallback('done', function(data, cb)
     if type(cb) == 'function' then cb({ ok = true }) end
-    if not editorOpen then return end
+    if not acceptsInput() then return end
     local ok = L.validateEmptyCallback(data, logWarn)
     if not ok then return end
     registry:commitSession()
@@ -250,11 +346,68 @@ end)
 
 RegisterNUICallback('cancel', function(data, cb)
     if type(cb) == 'function' then cb({ ok = true }) end
-    if not editorOpen then return end
+    if not acceptsInput() then return end
     local ok = L.validateEmptyCallback(data, logWarn)
     if not ok then return end
     registry:cancelSession()
     closeEditor(true)
+end)
+
+RegisterNUICallback('preset', function(data, cb)
+    if type(cb) == 'function' then cb({ ok = true }) end
+    if not acceptsInput() then return end
+    local ok, _, clean = L.validatePresetCallback(data, logWarn)
+    if not ok then return end
+    if not presets[clean.name] then
+        logWarn('aeterna_layout: unknown preset', { name = clean.name })
+        return
+    end
+    if registry:applyPreset(presets[clean.name]) then
+        sendEditorOpen()
+    end
+end)
+
+RegisterNUICallback('snap', function(data, cb)
+    if type(cb) == 'function' then cb({ ok = true }) end
+    if not acceptsInput() then return end
+    local ok, _, clean = L.validateSnapCallback(data, Config, logWarn)
+    if not ok then return end
+    snapStep = clean.step
+    savePrefs({ snap = snapStep })
+end)
+
+RegisterNUICallback('import', function(data, cb)
+    if type(cb) == 'function' then cb({ ok = true }) end
+    if not acceptsInput() then return end
+    local okPayload, errPayload, clean = L.validateImportCallback(data)
+    local ok, err, places, kind = false, errPayload, nil, 'invalid'
+    if okPayload then
+        ok, err, places, kind = L.decodeImport(clean.text, Config)
+    end
+    if not ok then
+        local message = kind == 'version' and translate('layout.import.version')
+            or AeternaCore.t('layout.import.invalid', { path = err })
+        sendUi({ type = 'import:result', ok = false, error = message })
+        return
+    end
+    registry:importPlaces(places)
+    sendEditorOpen()
+    sendUi({ type = 'import:result', ok = true })
+end)
+
+RegisterNUICallback('exportOpen', function(data, cb)
+    if type(cb) == 'function' then cb({ ok = true }) end
+    if not acceptsInput() then return end
+    if not L.validateEmptyCallback(data, logWarn) then return end
+    sendExport()
+end)
+
+-- The page reports its size on load and on resize, also outside the editor, so owners stay on screen.
+RegisterNUICallback('screen', function(data, cb)
+    if type(cb) == 'function' then cb({ ok = true }) end
+    local ok, _, clean = L.validateScreen(data, logWarn)
+    if not ok then return end
+    registry:setScreen(clean.w, clean.h)
 end)
 
 -- Commands and key mappings (literal names required by fivem-devkit safety)
