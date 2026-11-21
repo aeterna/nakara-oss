@@ -417,3 +417,205 @@ describe('aeterna_core server: client tests, MISSING and cancel (0.2)', function
         assert.are.equal('timeout', rowOf('aeterna_core.walk').detail)
     end)
 end)
+
+describe('aeterna_core server: client test started and selftestEnd (case 17)', function()
+    before_each(function()
+        load_server()
+        natives.add_player(1, 'A')
+        natives.add_player(2, 'B')
+    end)
+
+    local function rowOf(name)
+        for _, e in ipairs(natives.emitted('local', 'aeterna_core:runProgress')) do
+            if e.args[2].name == name then return e.args[2] end
+        end
+        return nil
+    end
+    local function eventsFor(event, name)
+        local out = {}
+        for _, e in ipairs(natives.emitted('local', event)) do
+            if e.args[2] == name then out[#out + 1] = e end
+        end
+        return out
+    end
+    local function payloadsFor(name)
+        local n = 0
+        for _, e in ipairs(natives.emitted('client', 'aeterna_core:cl:selftest')) do
+            if e.args[1].name == name then n = n + 1 end
+        end
+        return n
+    end
+    local function result(src, runId, name, state, extra)
+        local p = { runId = runId, name = name, state = state }
+        for k, v in pairs(extra or {}) do p[k] = v end
+        return natives.fire_net('aeterna_core:sv:selftestResult', src, p)
+    end
+
+    it('fires selftestStarted once with a and b before a two-player ped test goes out, and selftestEnd after', function()
+        exports.aeterna_core:addSelftest('call', { kind = 'ped', players = 2, timeout = 2000 })
+        exports.aeterna_core:addSelftest('h')
+        local seen = {}
+        AddEventHandler('aeterna_core:selftestStarted', function(runId, name, ctx)
+            seen[#seen + 1] = { runId = runId, name = name, ctx = ctx, sentBefore = payloadsFor(name) }
+        end)
+        AddEventHandler('aeterna_core:selftest', function(runId, name)
+            if name == 'aeterna_core.h' then exports.aeterna_core:reportSelftest(runId, name, true, 'ok') end
+        end)
+        local id = exports.aeterna_core:startRun({ by = 1, b = 2 })
+        natives.advance(0)
+        assert.are.equal(1, #seen)
+        assert.are.same({ id, 'aeterna_core.call', 0 }, { seen[1].runId, seen[1].name, seen[1].sentBefore })
+        assert.are.same({ kind = 'ped', side = 'client', a = 1, b = 2, destructive = false }, seen[1].ctx)
+        assert.are.equal(2, payloadsFor('aeterna_core.call'))
+        assert.are.equal(0, #eventsFor('aeterna_core:selftestEnd', 'aeterna_core.call'))
+
+        result(1, id, 'aeterna_core.call', 'pass')
+        result(2, id, 'aeterna_core.call', 'pass')
+        natives.advance(50)
+        assert.are.equal('PASS', rowOf('aeterna_core.call').state)
+        local ends = eventsFor('aeterna_core:selftestEnd', 'aeterna_core.call')
+        assert.are.equal(1, #ends)
+        assert.are.equal(id, ends[1].args[1])
+        -- A server-side headless test gets no selftestStarted, but its end is announced too.
+        assert.are.equal(0, #eventsFor('aeterna_core:selftestStarted', 'aeterna_core.h'))
+        assert.are.equal(1, #eventsFor('aeterna_core:selftestEnd', 'aeterna_core.h'))
+    end)
+
+    it('fires selftestEnd on the server when a client test times out', function()
+        exports.aeterna_core:addSelftest('walk', { kind = 'ped', timeout = 1000 })
+        exports.aeterna_core:startRun({ by = 1 })
+        natives.advance(1100)
+        assert.are.equal('timeout', rowOf('aeterna_core.walk').detail)
+        assert.are.equal(1, #eventsFor('aeterna_core:selftestEnd', 'aeterna_core.walk'))
+    end)
+
+    it('fires selftestEnd on the server when the owner stops mid-test', function()
+        as('aeterna_demo')
+        exports.aeterna_core:addSelftest('walk', { kind = 'ped', timeout = 5000 })
+        exports.aeterna_core:startRun({ by = 1 })
+        natives.advance(0)
+        natives.fire('onResourceStop', 'aeterna_demo')
+        natives.advance(50)
+        assert.are.equal('owner stopped', rowOf('aeterna_demo.walk').detail)
+        assert.are.equal(1, #eventsFor('aeterna_core:selftestEnd', 'aeterna_demo.walk'))
+    end)
+
+    it('fires selftestEnd on the server when the player leaves mid-test', function()
+        exports.aeterna_core:addSelftest('walk', { kind = 'ped', timeout = 5000 })
+        exports.aeterna_core:startRun({ by = 1 })
+        natives.advance(0)
+        rawset(_G, 'source', 1)
+        natives.fire('playerDropped', 'quit')
+        rawset(_G, 'source', nil)
+        natives.advance(50)
+        assert.are.equal('player left', rowOf('aeterna_core.walk').detail)
+        assert.are.equal(1, #eventsFor('aeterna_core:selftestEnd', 'aeterna_core.walk'))
+    end)
+
+    it('fires neither event for a client test that never started', function()
+        exports.aeterna_core:addSelftest('walk', { kind = 'ped' })
+        exports.aeterna_core:runSelftests()
+        assert.are.equal('needs a person', rowOf('aeterna_core.walk').detail)
+        assert.are.equal(0, #eventsFor('aeterna_core:selftestStarted', 'aeterna_core.walk'))
+        assert.are.equal(0, #eventsFor('aeterna_core:selftestEnd', 'aeterna_core.walk'))
+    end)
+end)
+
+describe('aeterna_core server: write guard (case 18)', function()
+    before_each(function()
+        load_server()
+        natives.add_player(1, 'A')
+    end)
+
+    local function rowOf(name)
+        for _, e in ipairs(natives.emitted('local', 'aeterna_core:runProgress')) do
+            if e.args[2].name == name then return e.args[2] end
+        end
+        return nil
+    end
+    local function openGate()
+        natives.set_convar('aeterna_core_allow_destructive', 'true')
+        natives.set_convar('sv_master1', '')
+    end
+
+    it('returns true for an in-flight destructive test while the gate is open, through the export and import.lua', function()
+        openGate()
+        exports.aeterna_core:addSelftest('wipe', { kind = 'ped', destructive = true, timeout = 2000 })
+        local viaExport, viaImport
+        AddEventHandler('aeterna_core:selftestStarted', function(runId, name)
+            viaExport = exports.aeterna_core:selftestMayWrite(runId, name)
+            viaImport = AeternaCore.selftest.mayWrite(runId, name)
+        end)
+        local id = exports.aeterna_core:startRun({ by = 1 })
+        natives.advance(0)
+        assert.is_true(viaExport)
+        assert.is_true(viaImport)
+        natives.fire_net('aeterna_core:sv:selftestResult', 1, { runId = id, name = 'aeterna_core.wipe', state = 'pass' })
+        natives.advance(50)
+        assert.are.equal('PASS', rowOf('aeterna_core.wipe').state)
+    end)
+
+    it('returns false while the gate is shut: the destructive test never runs and stays SKIP', function()
+        exports.aeterna_core:addSelftest('wipe', { destructive = true })
+        local answer
+        AddEventHandler('aeterna_core:runProgress', function(runId, row)
+            if row.name == 'aeterna_core.wipe' then answer = exports.aeterna_core:selftestMayWrite(runId, row.name) end
+        end)
+        exports.aeterna_core:runSelftests()
+        assert.is_false(answer)
+        assert.are.same({ 'SKIP', 'destructive tests are off' }, { rowOf('aeterna_core.wipe').state, rowOf('aeterna_core.wipe').detail })
+    end)
+
+    it('returns false and fails an in-flight test that is not declared destructive', function()
+        openGate()
+        exports.aeterna_core:addSelftest('plain')
+        local answer, late
+        AddEventHandler('aeterna_core:selftest', function(runId, name)
+            if name ~= 'aeterna_core.plain' then return end
+            answer = AeternaCore.selftest.mayWrite(runId, name)
+            late = exports.aeterna_core:reportSelftest(runId, name, true, 'ok')
+        end)
+        exports.aeterna_core:runSelftests()
+        assert.is_false(answer)
+        assert.is_false(late)
+        assert.are.same({ 'FAIL', 'undeclared destructive' }, { rowOf('aeterna_core.plain').state, rowOf('aeterna_core.plain').detail })
+    end)
+
+    it('fails a client test that calls the guard without being destructive, before its payload goes out', function()
+        openGate()
+        exports.aeterna_core:addSelftest('walk', { kind = 'ped', timeout = 2000 })
+        AddEventHandler('aeterna_core:selftestStarted', function(runId, name)
+            AeternaCore.selftest.mayWrite(runId, name)
+        end)
+        exports.aeterna_core:startRun({ by = 1 })
+        natives.advance(50)
+        assert.are.equal('undeclared destructive', rowOf('aeterna_core.walk').detail)
+        assert.are.equal(0, #natives.emitted('client', 'aeterna_core:cl:selftest'))
+    end)
+
+    it('returns false and changes nothing for an unknown run, a test not in flight, or another resource', function()
+        openGate()
+        exports.aeterna_core:addSelftest('first', { timeout = 2000 })
+        exports.aeterna_core:addSelftest('later', { kind = 'mock', timeout = 2000 })
+        local answers = {}
+        AddEventHandler('aeterna_core:selftest', function(runId, name)
+            if name ~= 'aeterna_core.first' then return end
+            answers.unknownRun = exports.aeterna_core:selftestMayWrite('r0-zzzz', name)
+            answers.notStarted = exports.aeterna_core:selftestMayWrite(runId, 'aeterna_core.later')
+            as('aeterna_other')
+            answers.otherOwner = exports.aeterna_core:selftestMayWrite(runId, name)
+            as(nil)
+        end)
+        AddEventHandler('aeterna_core:runDone', function(runId)
+            answers.ended = exports.aeterna_core:selftestMayWrite(runId, 'aeterna_core.first')
+        end)
+        exports.aeterna_core:startRun({ by = 0 })
+        natives.advance(2000)
+        assert.are.same({ unknownRun = false, notStarted = false, otherOwner = false },
+            { unknownRun = answers.unknownRun, notStarted = answers.notStarted, otherOwner = answers.otherOwner })
+        assert.are.equal('timeout', rowOf('aeterna_core.first').detail)
+        natives.advance(2000)
+        assert.are.equal('timeout, state may not be restored', rowOf('aeterna_core.later').detail)
+        assert.is_false(answers.ended)
+    end)
+end)
