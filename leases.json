@@ -1,17 +1,4 @@
 {
   "version": 1,
-  "leases": [
-    {
-      "id": "kit02-e2a-746fc326",
-      "repo": "nakara-oss",
-      "lane": "kit02-e2a",
-      "host": "mac",
-      "scope": [
-        "packages/core/server/**,packages/core/shared/logic/selftest.lua,packages/core/spec/selftest_spec.lua,packages/core/fxmanifest.lua"
-      ],
-      "plan": "kit02",
-      "acquired": "2026-11-21T06:48:27Z",
-      "expires": "2026-11-21T10:48:27Z"
-    }
-  ]
+  "leases": []
 }
