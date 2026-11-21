@@ -165,13 +165,13 @@ describe('aeterna_testkit self-tests', function()
             assert.are.equal('Markdown does not end with the footer', detail)
         end)
 
-        it('save passes only when both files were saved and read back unchanged', function()
-            local good = { json = { saved = true, wrote = 'a', back = 'a' }, md = { saved = true, wrote = 'b', back = 'b' } }
-            assert.are.same({ true, 'both report files saved and read back' }, { S.save(good) })
-            good.md.saved = false
-            assert.are.same({ false, 'reports/latest.md: SaveResourceFile returned false' }, { S.save(good) })
-            good.md.saved, good.json.back = true, nil
-            assert.are.same({ false, 'reports/latest.json: read back differs' }, { S.save(good) })
+        it('save reads both report files back: a report JSON line and the Markdown header', function()
+            local built = Report.build(S.sampleInput())
+            local json1, md1 = Report.encode(built), Report.markdown(built, FOOTER)
+            assert.are.same({ true, 'both report files read back' }, { S.save(json1, md1, decodeJson) })
+            assert.are.same({ false, 'reports/latest.json: not a report' }, { S.save('{"x":1}', md1, decodeJson) })
+            assert.are.same({ false, 'reports/latest.json: not a report' }, { S.save('{oops', md1, decodeJson) })
+            assert.are.same({ false, 'reports/latest.md: not a report' }, { S.save(json1, 'hello', decodeJson) })
         end)
 
         it('env checks the askEnv reply against the sv:env schema', function()
@@ -245,18 +245,17 @@ describe('aeterna_testkit self-tests', function()
             assert.is_string(added[5][2].expect)
         end)
 
-        it('reports scrub, report_schema and save; save keeps an existing report byte for byte', function()
+        it('reports scrub, report_schema and save; save writes nothing', function()
             boot()
-            files['reports/latest.json'] = '{"old":1}'
-            files['reports/latest.md'] = '# old'
+            local built = TestkitLogic.report.build(TestkitLogic.selftest.sampleInput())
+            files['reports/latest.json'] = TestkitLogic.report.encode(built)
+            files['reports/latest.md'] = TestkitLogic.report.markdown(built, FOOTER)
             natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_testkit.scrub', { kind = 'headless' })
             natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_testkit.report_schema', { kind = 'headless' })
             natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_testkit.save', { kind = 'headless' })
             assert.are.equal(3, #reports)
             for _, r in ipairs(reports) do assert.is_true(r[3], r[2] .. ': ' .. tostring(r[4])) end
-            assert.are.equal('{"old":1}', files['reports/latest.json'])
-            assert.are.equal('# old', files['reports/latest.md'])
-            assert.are.same({ 'reports/latest.json', 'reports/latest.md' }, saved)
+            assert.are.same({}, saved)
         end)
 
         it('save skips with no report yet and writes nothing', function()
@@ -345,6 +344,18 @@ describe('aeterna_testkit self-tests', function()
             natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_testkit.eye_card_b', { kind = 'eye', role = 'B' })
             assert.are.same({ 'r1-abcd', 'aeterna_testkit.eye_card', 'ready' }, { reports[1][1], reports[1][2], reports[1][3] })
             assert.are.same({ 'r1-abcd', 'aeterna_testkit.eye_card_b', 'ready' }, { reports[2][1], reports[2][2], reports[2][3] })
+        end)
+
+        it('ignores eyeAsk, selftest and selftestEnd that aeterna_core did not fire', function()
+            boot()
+            natives.stub('GetInvokingResource', function() return 'other' end)
+            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_testkit.env', { kind = 'headless', side = 'client' })
+            natives.fire('aeterna_core:eyeAsk', 'r1-abcd', 'aeterna_x.a', { ask = 'a', expect = 'b', role = 'A' })
+            natives.fire('aeterna_core:selftest', 'r1-abcd', 'aeterna_x.p', { kind = 'ped', expect = 'Do it' })
+            local nuiTypes = {}
+            for _, c in ipairs(natives.calls('SendNUIMessage')) do nuiTypes[#nuiTypes + 1] = c[1].type end
+            assert.are.equal(0, #reports)
+            assert.are.same({}, nuiTypes)
         end)
 
         it('ignores tests of other resources', function()

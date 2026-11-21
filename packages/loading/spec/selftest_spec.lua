@@ -203,6 +203,13 @@ describe('aeterna_loading self-tests', function()
             assert.is_false(reps[2].args[4])
         end)
 
+        it('ignores a selftest event that aeterna_core did not fire', function()
+            boot()
+            natives.stub('GetInvokingResource', function() return 'other' end)
+            natives.fire('aeterna_core:selftest', 'r2-abcd', 'aeterna_loading.shut_down', { kind = 'ped' })
+            assert.are.equal(0, #natives.emitted('local', 'aeterna_core:selftest:report'))
+        end)
+
         it('marks the page_looked_right card ready so core can show it', function()
             boot()
             natives.fire('aeterna_core:selftest', 'r2-abcd', 'aeterna_loading.page_looked_right', { kind = 'eye' })
