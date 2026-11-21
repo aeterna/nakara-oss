@@ -105,6 +105,24 @@ With `Config.phone.enabled = true` and `aeterna_phonekit` set to `Config.devices
 | `aeterna_phonekit:devicesChanged` `(src)` | invkit | A phone item left, entered or moved in that player's inventory |
 | `aeterna_phonekit:deviceSave` `(src, { id, battery?, fold? })` | phonekit | Writes the fields that arrive into the item with that `phoneId` |
 
+## Self-tests / การทดสอบตัวเอง (0.2)
+
+invkit registers these tests with `aeterna_core` on start (`aeterna_testkit` lists and runs them). A test reports
+SKIP only for the reason in the last column; a ped test with nobody to run it is GAP.
+
+| Test | Kind | Runs | What it checks | SKIP when |
+|---|---|---|---|---|
+| `aeterna_invkit.stash_id` | headless | server | Stash ids for both scopes, with and without qbx; no identifier or an unknown scope gives none | never |
+| `aeterna_invkit.use_state_machine` | headless | server | A private use manager on a fake clock: done too early refused, busy while pending, done once, cancel, owner stop. No item is touched | never |
+| `aeterna_invkit.phone_item_map` | headless | server | `Config.phone.items` validates with nothing skipped and at least one item mapped | `Config.phone.enabled = false` |
+| `aeterna_invkit.stash_open` | ped | presser | Within 50 s: sends the same request as the bound key at the presser's position; at a stash point the stash must open (ox_inventory's `invOpen` state, closed again at once), away from every point the `invkit.stash.far` refusal must come. With `Config.stash.anywhere = true` one opening is enough | ox_inventory not started, or no stash point configured |
+| `aeterna_invkit.phone_device_save` | mock, destructive | server | Gives the presser one test phone item with a fresh `phoneId`, fires `deviceSave` with battery 42 and fold `closed`, checks the item's metadata, then removes that item. Needs a presser; core skips it while its destructive gate is closed | ox_inventory not started, or `Config.phone.enabled = false` |
+
+Not registered in this version: `item_use`, `phone_two_items`, `phone_drop_active` and `phone_no_item` from the
+spec. `item_use` is a client mock, but giving the item and registering the usable are server actions that a client
+test cannot start without a new net event. The three phone rows are ped tests on invkit's client, which has no view
+of phonekit's screen and no channel to invkit's server.
+
 ## Commands and keys / คำสั่งและปุ่มลัด
 
 All key mappings ship with **no default key** (ADR 0004 decision 10) so they never clash with `ox_inventory` (`TAB`, `1`–`5`). Players bind them in **Settings → Key Bindings → FiveM**:

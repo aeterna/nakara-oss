@@ -15,6 +15,7 @@ All notable changes to `aeterna_invkit` are documented here. The format follows
 - Held saves are written at once when the player drops or `aeterna_invkit` stops; a `deviceSave` arriving within 2 s after the player dropped is written at once if the item is still there, otherwise dropped with a `debug` log. No `devicesChanged` fires for a dropped player.
 - `swapItems` and `createItem` hooks on the mapped items fire `aeterna_phonekit:devicesChanged` for each player involved (integer player inventory ids of connected players only, never a stash), on the next tick after ox_inventory applies the change.
 - README section on adding phone items and images to ox_inventory.
+- Self-tests registered with `aeterna_core` on start: `stash_id`, `use_state_machine`, `phone_item_map` (server headless), `stash_open` (ped) and `phone_device_save` (server mock, destructive), with the `stash_open` expect string in en and th. `item_use`, `phone_two_items`, `phone_drop_active` and `phone_no_item` are not registered yet (see README). Agent: Claude Code - Claude Opus 5.5 (agent engineer).
 
 Agent: Claude Code - Claude Opus 5.5 (agent engineer)
 
