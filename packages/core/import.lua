@@ -809,4 +809,11 @@ if not IsDuplicityVersion() then
     end
 end
 
+-- Theme message for a kit page; `preset` only applies when `href` is empty (ADR 0005 decision 9).
+function AeternaCore.themeMessage()
+    local okH, href = pcall(function() return exports.aeterna_core:themeHref() end)
+    local okP, preset = pcall(function() return exports.aeterna_core:themePreset() end)
+    return { type = 'aeterna:theme', href = okH and href or nil, preset = okP and preset or 'asphalt' }
+end
+
 return AeternaCore
