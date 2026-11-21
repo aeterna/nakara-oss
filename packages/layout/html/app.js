@@ -1,5 +1,6 @@
 // aeterna_layout NUI runtime — stand-in boxes, live drag with 100 ms throttle, grid snap,
-// keyboard nudging/scaling, inspector panel and toolbar. Uses textContent only (never innerHTML).
+// keyboard nudging/scaling, inspector panel and toolbar; 0.2: drag grid, snap step and preset selects,
+// export / import box, screen size reports. Uses textContent only (never innerHTML).
 
 const layoutRoot = document.getElementById('layout-root');
 const canvasLayer = document.getElementById('canvas-layer');
@@ -7,8 +8,12 @@ const emptyBanner = document.getElementById('empty-banner');
 const inspectorPanel = document.getElementById('inspector-panel');
 const toolbarPanel = document.getElementById('toolbar-panel');
 const confirmLayer = document.getElementById('confirm-layer');
+const gridLayer = document.getElementById('grid-layer');
+const shareLayer = document.getElementById('share-layer');
 
 const DRAG_THROTTLE_MS = 100;
+const SCREEN_REPORT_MS = 150;
+const MAX_IMPORT_BYTES = 8192;
 
 let locale = {
     'layout.menu.entry': 'Edit HUD layout',
@@ -25,16 +30,27 @@ let locale = {
     'layout.editor.done': 'Done',
     'layout.editor.doneHint': 'Press Enter to confirm',
     'layout.editor.empty': 'No movable HUD elements registered',
+    'layout.editor.preset': 'Preset',
+    'layout.editor.snapOff': 'Off',
+    'layout.menu.share': 'Export / import',
+    'layout.export.title': 'Export layout',
+    'layout.export.hint': 'Press Ctrl+C to copy this text.',
+    'layout.import.title': 'Import layout',
+    'layout.import.apply': 'Import',
+    'layout.import.ok': 'Layout imported. Press Done to keep it.',
 };
 
 let isOpen = false;
 let elements = [];
 let selectedKey = null;
 let snapStep = 8;
-let snapEnabled = true;
+let snapSteps = [8, 16, 32];
+let presetList = [];
 let scaleConfig = { min: 0.5, max: 2.0, step: 0.05 };
 let dragState = null;
 let confirmOpen = false;
+let shareOpen = false;
+let shareStatusEl = null;
 const boxNodes = new Map();
 
 function postCallback(name, payload) {
@@ -51,7 +67,14 @@ function clearChildren(el) {
     }
 }
 
-function applyThemeOverride(href) {
+function applyThemeOverride(href, preset) {
+    const root = document.documentElement;
+    if (typeof href !== 'string' || href === '') {
+        const known = preset === 'paper' || preset === 'night-market' || preset === 'asphalt';
+        root.setAttribute('data-preset', known ? preset : 'asphalt');
+    } else {
+        root.removeAttribute('data-preset');
+    }
     const existing = document.getElementById('aeterna-theme-override');
     if (typeof href === 'string' && href.startsWith('nui://') && href.endsWith('.css')) {
         if (existing) {
@@ -95,6 +118,19 @@ function chooseAnchorAxis(pos, span) {
     if (frac < 1 / 3) return 0;
     if (frac <= 2 / 3) return 0.5;
     return 1;
+}
+
+function utf8Bytes(text) {
+    return new TextEncoder().encode(text).length;
+}
+
+function showGrid(visible) {
+    if (visible && snapStep > 0) {
+        gridLayer.style.backgroundSize = snapStep + 'px ' + snapStep + 'px';
+        gridLayer.classList.remove('hidden');
+    } else {
+        gridLayer.classList.add('hidden');
+    }
 }
 
 function dropToPlace(rawLeft, rawTop, w, h, scale, screenW, screenH, useSnap) {
@@ -310,6 +346,139 @@ function closeResetAllConfirm() {
     confirmLayer.classList.add('hidden');
 }
 
+function createSelect(labelText) {
+    const wrap = document.createElement('label');
+    wrap.className = 'select-group';
+    const lbl = document.createElement('span');
+    lbl.className = 'select-label';
+    lbl.textContent = labelText;
+    wrap.appendChild(lbl);
+    const select = document.createElement('select');
+    select.className = 'select';
+    wrap.appendChild(select);
+    return { wrap, select };
+}
+
+function openShare(text, error) {
+    shareOpen = true;
+    clearChildren(shareLayer);
+
+    const card = document.createElement('div');
+    card.className = 'share-card';
+
+    const head = document.createElement('div');
+    head.className = 'share-head';
+    const title = document.createElement('h2');
+    title.className = 'share-title';
+    title.textContent = String(locale['layout.export.title'] || 'Export layout');
+    head.appendChild(title);
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'btn btn-icon';
+    closeBtn.setAttribute('aria-label', String(locale['layout.editor.cancel'] || 'Cancel'));
+    const xIcon = window.AeternaLayoutIcons.create('x', 14);
+    if (xIcon) closeBtn.appendChild(xIcon);
+    else closeBtn.textContent = 'x';
+    closeBtn.addEventListener('click', () => closeShare());
+    head.appendChild(closeBtn);
+    card.appendChild(head);
+
+    const hint = document.createElement('p');
+    hint.className = 'share-hint';
+    hint.textContent = String(locale['layout.export.hint'] || '');
+    card.appendChild(hint);
+
+    const exportBox = document.createElement('textarea');
+    exportBox.className = 'share-text';
+    exportBox.readOnly = true;
+    exportBox.rows = 3;
+    exportBox.spellcheck = false;
+    exportBox.value = String(text || '');
+    card.appendChild(exportBox);
+
+    const importTitle = document.createElement('h2');
+    importTitle.className = 'share-title';
+    importTitle.textContent = String(locale['layout.import.title'] || 'Import layout');
+    card.appendChild(importTitle);
+
+    const importBox = document.createElement('textarea');
+    importBox.className = 'share-text';
+    importBox.rows = 3;
+    importBox.spellcheck = false;
+    importBox.maxLength = MAX_IMPORT_BYTES;
+    card.appendChild(importBox);
+
+    const foot = document.createElement('div');
+    foot.className = 'share-foot';
+    shareStatusEl = document.createElement('p');
+    shareStatusEl.className = 'share-status';
+    shareStatusEl.setAttribute('role', 'status');
+    foot.appendChild(shareStatusEl);
+    const applyBtn = document.createElement('button');
+    applyBtn.type = 'button';
+    applyBtn.className = 'btn btn-primary';
+    applyBtn.textContent = String(locale['layout.import.apply'] || 'Import');
+    applyBtn.addEventListener('click', () => {
+        const value = importBox.value.trim();
+        if (value === '' || utf8Bytes(value) > MAX_IMPORT_BYTES) return;
+        postCallback('import', { text: value });
+    });
+    foot.appendChild(applyBtn);
+    card.appendChild(foot);
+
+    shareLayer.appendChild(card);
+    shareLayer.classList.remove('hidden');
+    if (typeof error === 'string' && error !== '') {
+        shareStatusEl.classList.add('is-error');
+        shareStatusEl.textContent = error;
+        importBox.focus();
+        return;
+    }
+    exportBox.focus();
+    exportBox.select();
+}
+
+function closeShare() {
+    shareOpen = false;
+    shareStatusEl = null;
+    clearChildren(shareLayer);
+    shareLayer.classList.add('hidden');
+}
+
+function showImportResult(msg) {
+    if (!shareStatusEl) return;
+    shareStatusEl.classList.toggle('is-error', msg.ok !== true);
+    shareStatusEl.textContent = msg.ok === true
+        ? String(locale['layout.import.ok'] || '')
+        : String(msg.error || '');
+}
+
+function applyClamp(msg) {
+    if (!msg.place || typeof msg.place !== 'object') return;
+    const key = String(msg.owner) + '/' + String(msg.id);
+    for (let i = 0; i < elements.length; i++) {
+        const el = elements[i];
+        if (elementKey(el) !== key) continue;
+        if (dragState && dragState.el === el) return;
+        el.x = Number(msg.place.x) || 0;
+        el.y = Number(msg.place.y) || 0;
+        el.ax = Number(msg.place.ax) || 0;
+        el.ay = Number(msg.place.ay) || 0;
+        el.scale = Number(msg.place.scale) || 1;
+        updateBoxNode(el);
+        if (key === selectedKey) renderInspector();
+        return;
+    }
+}
+
+let screenTimer = null;
+function reportScreen() {
+    const w = Math.round(window.innerWidth);
+    const h = Math.round(window.innerHeight);
+    if (w < 1 || h < 1 || w > 16384 || h > 16384) return;
+    postCallback('screen', { w, h });
+}
+
 function renderToolbar() {
     clearChildren(toolbarPanel);
 
@@ -329,16 +498,43 @@ function renderToolbar() {
     const actions = document.createElement('div');
     actions.className = 'toolbar-actions';
 
-    const snapBtn = document.createElement('button');
-    snapBtn.type = 'button';
-    snapBtn.className = 'btn btn-toggle';
-    snapBtn.setAttribute('aria-pressed', snapEnabled && snapStep > 0 ? 'true' : 'false');
-    snapBtn.textContent = String(locale['layout.editor.snap'] || 'Grid snap');
-    snapBtn.addEventListener('click', () => {
-        snapEnabled = !snapEnabled;
-        snapBtn.setAttribute('aria-pressed', snapEnabled && snapStep > 0 ? 'true' : 'false');
+    if (presetList.length > 0) {
+        const presetSelect = createSelect(String(locale['layout.editor.preset'] || 'Preset'));
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = String(locale['layout.editor.preset'] || 'Preset');
+        presetSelect.select.appendChild(placeholder);
+        for (let i = 0; i < presetList.length; i++) {
+            const opt = document.createElement('option');
+            opt.value = presetList[i].name;
+            opt.textContent = presetList[i].label;
+            presetSelect.select.appendChild(opt);
+        }
+        presetSelect.select.value = '';
+        presetSelect.select.addEventListener('change', () => {
+            const name = presetSelect.select.value;
+            presetSelect.select.value = '';
+            if (name) postCallback('preset', { name });
+        });
+        actions.appendChild(presetSelect.wrap);
+    }
+
+    const snapSelect = createSelect(String(locale['layout.editor.snap'] || 'Grid snap'));
+    const steps = [0].concat(snapSteps);
+    for (let i = 0; i < steps.length; i++) {
+        const opt = document.createElement('option');
+        opt.value = String(steps[i]);
+        opt.textContent = steps[i] === 0 ? String(locale['layout.editor.snapOff'] || 'Off') : steps[i] + ' px';
+        snapSelect.select.appendChild(opt);
+    }
+    snapSelect.select.value = String(snapStep);
+    snapSelect.select.addEventListener('change', () => {
+        const step = Number(snapSelect.select.value);
+        if (steps.indexOf(step) === -1) return;
+        snapStep = step;
+        postCallback('snap', { step });
     });
-    actions.appendChild(snapBtn);
+    actions.appendChild(snapSelect.wrap);
 
     const resetAllBtn = document.createElement('button');
     resetAllBtn.type = 'button';
@@ -348,6 +544,15 @@ function renderToolbar() {
         openResetAllConfirm();
     });
     actions.appendChild(resetAllBtn);
+
+    const shareBtn = document.createElement('button');
+    shareBtn.type = 'button';
+    shareBtn.className = 'btn';
+    shareBtn.textContent = String(locale['layout.menu.share'] || 'Export / import');
+    shareBtn.addEventListener('click', () => {
+        postCallback('exportOpen', {});
+    });
+    actions.appendChild(shareBtn);
 
     const cancelBtn = document.createElement('button');
     cancelBtn.type = 'button';
@@ -427,6 +632,7 @@ function renderCanvas() {
                 lastSentAt: 0,
             };
             box.classList.add('dragging');
+            showGrid(!ev.shiftKey);
         });
 
         box.addEventListener('focus', () => {
@@ -450,7 +656,8 @@ window.addEventListener('pointermove', (ev) => {
     const screenH = window.innerHeight || 1080;
     const rawLeft = ev.clientX - dragState.offsetX;
     const rawTop = ev.clientY - dragState.offsetY;
-    const useSnap = snapEnabled && !ev.shiftKey;
+    const useSnap = snapStep > 0 && !ev.shiftKey;
+    showGrid(useSnap);
     const next = dropToPlace(rawLeft, rawTop, el.w, el.h, el.scale, screenW, screenH, useSnap);
 
     el.x = next.x;
@@ -474,7 +681,8 @@ window.addEventListener('pointerup', (ev) => {
     const screenH = window.innerHeight || 1080;
     const rawLeft = ev.clientX - dragState.offsetX;
     const rawTop = ev.clientY - dragState.offsetY;
-    const useSnap = snapEnabled && !ev.shiftKey;
+    const useSnap = snapStep > 0 && !ev.shiftKey;
+    showGrid(false);
     const next = dropToPlace(rawLeft, rawTop, el.w, el.h, el.scale, screenW, screenH, useSnap);
 
     el.x = next.x;
@@ -487,6 +695,11 @@ window.addEventListener('pointerup', (ev) => {
 });
 
 window.addEventListener('resize', () => {
+    if (screenTimer !== null) clearTimeout(screenTimer);
+    screenTimer = setTimeout(() => {
+        screenTimer = null;
+        reportScreen();
+    }, SCREEN_REPORT_MS);
     if (!isOpen) return;
     for (let i = 0; i < elements.length; i++) {
         updateBoxNode(elements[i]);
@@ -502,14 +715,20 @@ window.addEventListener('keydown', (ev) => {
             closeResetAllConfirm();
             return;
         }
+        if (shareOpen) {
+            closeShare();
+            return;
+        }
         postCallback('cancel', {});
         return;
     }
 
-    if (confirmOpen) return;
+    if (confirmOpen || shareOpen) return;
+
+    const focused = document.activeElement;
+    if (focused && focused.tagName === 'SELECT') return;
 
     if (ev.key === 'Enter') {
-        const focused = document.activeElement;
         const toolbarButtonFocused = !!(focused && focused.tagName === 'BUTTON' && toolbarPanel.contains(focused));
         if (!toolbarButtonFocused) {
             ev.preventDefault();
@@ -567,13 +786,18 @@ window.addEventListener('keydown', (ev) => {
 });
 
 function openEditor(msg) {
+    const refresh = isOpen;
     isOpen = true;
     dragState = null;
+    showGrid(false);
     closeResetAllConfirm();
+    if (!refresh) closeShare();
 
+    if (Array.isArray(msg.snapSteps)) {
+        snapSteps = msg.snapSteps.filter((v) => Number.isInteger(v) && v > 0);
+    }
     if (typeof msg.snap === 'number' && msg.snap >= 0) {
         snapStep = msg.snap;
-        snapEnabled = msg.snap > 0;
     }
     if (msg.scale && typeof msg.scale === 'object') {
         scaleConfig = {
@@ -610,7 +834,10 @@ function closeEditor() {
     dragState = null;
     elements = [];
     selectedKey = null;
+    presetList = [];
+    showGrid(false);
     closeResetAllConfirm();
+    closeShare();
     clearChildren(canvasLayer);
     clearChildren(inspectorPanel);
     clearChildren(toolbarPanel);
@@ -623,7 +850,7 @@ window.addEventListener('message', (event) => {
     if (!msg || typeof msg.type !== 'string') return;
 
     if (msg.type === 'aeterna:theme') {
-        applyThemeOverride(msg.href);
+        applyThemeOverride(msg.href, msg.preset);
     } else if (msg.type === 'locale' && msg.strings && typeof msg.strings === 'object') {
         locale = { ...locale, ...msg.strings };
         if (isOpen) {
@@ -634,5 +861,18 @@ window.addEventListener('message', (event) => {
         openEditor(msg);
     } else if (msg.type === 'editor:close') {
         closeEditor();
+    } else if (msg.type === 'editor:clamp') {
+        if (isOpen) applyClamp(msg);
+    } else if (msg.type === 'editor:presets') {
+        presetList = (Array.isArray(msg.list) ? msg.list : [])
+            .filter((p) => p && typeof p.name === 'string')
+            .map((p) => ({ name: p.name, label: String(p.label || p.name) }));
+        if (isOpen) renderToolbar();
+    } else if (msg.type === 'export:show') {
+        if (isOpen) openShare(msg.text, msg.error);
+    } else if (msg.type === 'import:result') {
+        showImportResult(msg);
     }
 });
+
+reportScreen();

@@ -10,7 +10,7 @@ Coordinate-based HUD layout editor and client-side layout persistence for the AE
 
 - **Cross-resource coordinate protocol (โปรโตคอลพิกัดข้ามทรัพยากร):** Every FiveM NUI page runs in its own frame, so resources cannot drag each other's DOM directly. Owner resources describe their movable boxes (`id`, `w`, `h`, default `x`, `y`, `ax`, `ay`); `aeterna_layout` draws dashed stand-in boxes in its own frame while the editor is open and emits `aeterna_layout:apply` with `{ x, y, ax, ay, scale, hidden }` so each owner moves its own NUI or game-drawn element.
 - **Resolution-independent anchoring (การยึดตำแหน่งตามสัดส่วนหน้าจอ):** Positions are stored as screen fractions (`0–1`) relative to an anchor (`0`, `0.5`, `1` chosen from the nearest screen third on drop), clamped so the whole scaled element stays on screen across resolution changes.
-- **Client KVP persistence (บันทึกในเครื่องผู้เล่น):** Saved under `aeterna_layout:places:v1` via `AeternaCore.kvp` on **Done**, and only for elements moved from their default. Places of temporarily stopped resources are preserved.
+- **Client KVP persistence (บันทึกในเครื่องผู้เล่น):** Saved under `aeterna_layout:places:v1` via `AeternaCore.kvp` on **Done**, and only for elements moved from their default. Places of temporarily stopped resources are preserved. The snap step pick is kept in `aeterna_layout:prefs:v1`.
 - **Deliberate limits (ขอบเขตที่จำกัดไว้):** No element rotation, no separate width/height stretching, no server-side database or cross-machine sync, and no moving of base-game HUD components other than those managed by an owner resource (such as the minimap in `aeterna_hudkit`).
 
 ## Install / การติดตั้ง
@@ -37,6 +37,9 @@ Configured in `config.lua` (no convars):
 | `Config.scale.min` / `.max` / `.step` | `0.5` / `2.0` / `0.05` | Allowed scale range and increment in the editor / ช่วงขนาดต่ำสุด สูงสุด และขั้นการปรับขนาด |
 | `Config.maxElements` | `64` | Maximum registered elements before refusing with a `warn` / จำนวนองค์ประกอบสูงสุดที่ลงทะเบียนได้ |
 | `Config.menu` | `true` | Adds the "Edit HUD layout" entry to the `aeterna_uikit` menu / เพิ่มรายการแก้ไขเลย์เอาต์ในเมนู `aeterna_uikit` |
+| `Config.menuPanel` | `true` | The menu entry opens a panel with Edit, Reset all and Export / import; `false` = the 0.1 behaviour (opens the editor) / เปิดแผงเมนู แก้ไข · รีเซ็ตทั้งหมด · ส่งออก/นำเข้า |
+| `Config.snapSteps` | `{ 8, 16, 32 }` | Snap steps offered in the editor; `Config.snap` stays the default until the player picks / ระยะเส้นตารางที่เลือกได้ |
+| `Config.presets` | `default`, `compact`, `centered` | Preset layouts (up to 8): name (≤ 24, `^[%w_%-]+$`) → `{ ["<owner>/<id>"] = { x, y, ax, ay, scale } }`. Unnamed elements go to their default; a preset never sets `hidden`. Label: locale key `layout.preset.<name>` or the name / ชุดจัดวางสำเร็จรูป |
 
 Shared convars read via `aeterna_core`: `aeterna_locale` (`en` or `th`, set with `setr`), `aeterna_theme` (`nui://<resource>/<path>.css`, set with `setr`).
 
@@ -85,6 +88,14 @@ Inside the editor:
 - **Tab / Shift+Tab** cycles between elements; **Arrow keys** nudge by 1 px (**Shift + Arrow** by 10 px); **`+` / `-`** adjusts scale.
 - **Enter** confirms **Done** when no toolbar button has focus.
 - **ESC** or **Cancel** restores all elements to where they were when the editor opened.
+- **Preset** select applies a preset to the session; **Grid snap** select picks Off / 8 / 16 / 32 px (kept on the player's machine); the grid shows while dragging unless snap is off or Shift is held.
+- **Export / import** shows the saved places of the elements registered now as one line of text (`aeterna-layout:1:…`, select it and press Ctrl+C) and takes such a line back; an import moves the stand-ins, **Done** saves and **Cancel** undoes. The text never leaves the player's machine through this resource.
+
+The `aeterna_uikit` menu entry opens a small panel (**Edit**, **Reset all** after a confirm, saved at once, and **Export / import**). Pressing Reset all arms the client with a one-time token; the reset runs only when the confirm sends that token back within 30 s, so a local event or a replayed message cannot clear a layout. The command and the key mapping still open the editor directly.
+
+### Keeping elements on screen (0.2)
+
+The page reports its size; when an element grows (a new `w`/`h`, a bigger scale or a smaller screen) layout moves its anchor point just far enough to keep the whole box on screen and sends `aeterna_layout:apply` with that place. The clamped place is not saved, so the element returns to the saved place when it shrinks again. A box larger than the screen starts at its top-left corner.
 
 ## Support scope / ขอบเขตการรองรับ
 
@@ -104,7 +115,7 @@ What this resource is allowed to do to your server, from [`oss.json`](oss.json).
 | Convars read | none |
 | Convars written | none |
 | Server net events (accepted from clients) | none |
-| Client net events (accepted from the server) | `aeterna_layout:cl:open` |
+| Client net events (accepted from the server) | `aeterna_layout:cl:open` (optional `{ mode = 'editor' \| 'share' }`, or `{ mode = 'arm' \| 'reset', token }` for Reset all from the panel) |
 | NUI | yes |
 | Database tables | none (no DDL) |
 | Files written | none |
@@ -125,7 +136,7 @@ Then read the capability table above (or `oss.json` inside the zip).
 From the repository root:
 
 ```sh
-busted --lpath='./packages/devkit/busted/?.lua;./?.lua;./?/init.lua' --pattern=_spec packages/layout/spec
+busted --config-file=.busted packages/layout/spec
 ```
 
 ## License

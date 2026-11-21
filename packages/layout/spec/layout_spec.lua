@@ -562,6 +562,8 @@ describe('aeterna_layout', function()
 
             assert.are.equal(1, #addedEntries)
             assert.are.equal('Edit HUD layout', addedEntries[1].label)
+            -- 0.1 behaviour (the menu entry opens the editor); 0.2 menu panel is covered in layout_02_spec.lua
+            Config.menuPanel = false
 
             -- Ignore other owners
             natives.fire('aeterna_uikit:menu', 3, { owner = 'other_res', id = addedEntries[1].id })
