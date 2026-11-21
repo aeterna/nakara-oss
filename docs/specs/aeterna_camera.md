@@ -252,7 +252,8 @@ one `warn` when it does not. Nothing in client KVP.
 `camera.app.camera`, `camera.app.gallery`, `camera.key.shutter`, `camera.key.switch`, `camera.hint.shutter`,
 `camera.hint.switch`, `camera.hint.close`, `camera.saved`, `camera.failed`, `camera.full`, `camera.disk_full`,
 `camera.slow`, `camera.unavailable`, `camera.gallery.empty`, `camera.gallery.delete`, `camera.gallery.delete_confirm`, `camera.gallery.cancel`,
-`camera.admin.usage`, `camera.admin.removed`, `camera.admin.unknown`, `camera.selftest.viewfinder`.
+`camera.admin.usage`, `camera.admin.removed`, `camera.admin.unknown`, `camera.selftest.viewfinder`,
+`camera.selftest.shoot_and_view`.
 
 ## `oss.json` capabilities
 
@@ -322,6 +323,10 @@ Smoke (kit-test server):
 | `aeterna_camera.screenshot_detect` | headless | 1 | n | — | — |
 | `aeterna_camera.viewfinder` | eye | 1 | n | The phone closes and the game camera moves to the phone's view; switching shows your character's face; close returns you to the game with the phone put away | — |
 | `aeterna_camera.shoot_and_view` | eye | 1 | y | After the shutter a "Photo saved" toast shows; Gallery lists the new photo first, and it shows the scene without the overlay, HUD or radar | `screenshot-basic` not started |
+
+`shoot_and_view` is registered with `timeout = 15000`: the viewfinder, the capture, the latent upload (about 200 KB/s)
+and the gallery together can pass the 5000 ms default. The camera server opens the viewfinder for A on core's
+`aeterna_core:selftestStarted` and closes it on `selftestEnd`; the photo write goes through `AeternaCore.selftest.mayWrite`.
 
 `http_router` calls the handler's request function with fake request and response objects (the server has no HTTP
 capability to call itself). `store_roundtrip`, `caps` and `saved_hook` write a small JPEG generated at run time under
