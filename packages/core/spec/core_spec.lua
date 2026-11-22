@@ -465,8 +465,11 @@ describe('aeterna_core', function()
             natives.spy('RegisterCommand', function(name, fn)
                 if name == 'aeterna_core_selftest' then cmdHandler = fn end
             end)
+            -- FXServer Enhanced b177 returns the number 1 for an allowed ACE and false otherwise (measured W3
+            -- 2026-11-22 with a probe); the kit must accept 1 as yes.
             natives.spy('IsPlayerAceAllowed', function(src, action)
-                return tonumber(src) == 1 and action == 'aeterna.core.selftest'
+                if tonumber(src) == 1 and action == 'aeterna.core.selftest' then return 1 end
+                return false
             end)
 
             resource.load_resource(DIR, 'server')
@@ -475,6 +478,11 @@ describe('aeterna_core', function()
             assert.is_true(AeternaCore.can(1, 'aeterna.core.selftest'))
             assert.is_false(AeternaCore.can(2, 'aeterna.core.selftest'))
             assert.is_false(AeternaCore.can(0, 'other.perm'))
+            assert.is_true(AeternaCore.yes(1))
+            assert.is_true(AeternaCore.yes(true))
+            assert.is_false(AeternaCore.yes(false))
+            assert.is_false(AeternaCore.yes(nil))
+            assert.is_false(AeternaCore.yes(0))
 
             -- Rate limit + playerDropped cleanup
             for _ = 1, 3 do

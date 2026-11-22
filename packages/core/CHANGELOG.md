@@ -15,6 +15,9 @@ All notable changes to `aeterna_core` are documented here. The format follows
 
 ### Fixed
 
+- `AeternaCore.can` refused every player on FXServer Enhanced: `IsPlayerAceAllowed` returns the number `1` there,
+  and the check compared it with `true` (measured on a live server). New `AeternaCore.yes(v)` accepts `true` or `1`;
+  every kit package now uses it (or the same rule) for BOOL natives.
 - Key mapping labels are English whatever `aeterna_locale` is (new `AeternaCore.keyLabel`): the GTA key settings menu
   has no Thai glyphs, so Thai labels showed as boxes on a live server.
 - `busy().since` and the `busy: <phase> since <n> s` detail now count whole seconds; the server passed milliseconds.

@@ -87,6 +87,7 @@ Prints `[aeterna_<res>] LEVEL msg key=value …`. Values in `fields` are stringi
 ### Rate limit & ACE (server)
 - `AeternaCore.rateLimit(src, key, max, windowMs) -> boolean`: sliding-window rate limit per `(src, key)`. Frees buckets on `playerDropped`.
 - `AeternaCore.can(src, action) -> boolean`: checks `IsPlayerAceAllowed(src, action)` where `action` must start with `aeterna.`. Console (`src == 0`) is always allowed.
+- `AeternaCore.yes(v) -> boolean`: a BOOL native's answer as a Lua boolean (`v == true or v == 1`). FXServer Enhanced returns the number `1` for true, so never compare a native with `true`.
 
 ### Client KVP & Keys (client)
 - `AeternaCore.kvp.get(name, version, default) -> any`: reads `aeterna_<pkg>:<name>:v<version>` as JSON; invalid JSON logs one `warn` and returns `default`.

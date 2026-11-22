@@ -3,6 +3,9 @@
 -- 0.2: the held device and its fold, the battery shown by the server, the screen pulse, the ring card,
 -- notification history pulled from aeterna_notify, contacts hooks and the exit contract's close key.
 
+-- A BOOL native as a Lua boolean: FXServer Enhanced returns 1 for true (measured W3 2026-11-22).
+local function nativeYes(v) return v == true or v == 1 end
+
 local L = PhoneLogic
 local D = DeviceLogic
 local H = HooksLogic
@@ -963,7 +966,7 @@ end
 local function pedReady()
     if type(PlayerPedId) ~= 'function' or type(DoesEntityExist) ~= 'function' then return false end
     local ped = PlayerPedId()
-    return ped ~= nil and ped ~= 0 and DoesEntityExist(ped) == true
+    return ped ~= nil and ped ~= 0 and nativeYes(DoesEntityExist(ped))
 end
 
 -- Opens the phone through the normal path (server gate, focus). `fresh` closes an open phone first so the open
@@ -1108,7 +1111,7 @@ local CLIENT_TESTS = {
         waitFor(function() return PhoneAnim.prop() ~= nil end, animation and 1500 or 300)
         local prop = PhoneAnim.prop()
         local attached = prop ~= nil and type(IsEntityAttachedToEntity) == 'function'
-            and IsEntityAttachedToEntity(prop, PlayerPedId()) == true
+            and nativeYes(IsEntityAttachedToEntity(prop, PlayerPedId()))
         closePhone()
         local gone = waitFor(function()
             return PhoneAnim.prop() == nil and not (prop and DoesEntityExist(prop))

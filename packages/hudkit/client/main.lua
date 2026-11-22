@@ -1,5 +1,8 @@
 -- client/main.lua -- aeterna_hudkit client: layout registration, minimap positioning, tick sampling, settings.
 
+-- A BOOL native as a Lua boolean: FXServer Enhanced returns 1 for true (measured W3 2026-11-22).
+local function nativeYes(v) return v == true or v == 1 end
+
 local H = HudLogic
 local M = MinimapLogic
 local C = CompassLogic
@@ -478,7 +481,7 @@ end
 local function isInVehicle()
     local ped = type(PlayerPedId) == 'function' and PlayerPedId() or 0
     if ped == 0 or type(IsPedInAnyVehicle) ~= 'function' then return false end
-    return IsPedInAnyVehicle(ped, false) == true
+    return nativeYes(IsPedInAnyVehicle(ped, false))
 end
 
 -- Seatbelt icon: true / false / nil (hidden). Sent only when it changes, unless forced.
@@ -923,7 +926,7 @@ CreateThread(function()
 
             if voiceDetector.isActive() and type(NetworkIsPlayerTalking) == 'function' then
                 local ply = type(PlayerId) == 'function' and PlayerId() or 0
-                voiceState.talking = NetworkIsPlayerTalking(ply) == true
+                voiceState.talking = nativeYes(NetworkIsPlayerTalking(ply))
                 sendVoice()
             end
 

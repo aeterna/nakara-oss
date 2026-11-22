@@ -655,6 +655,13 @@ if IsDuplicityVersion() then
     end)
 end
 
+-- A BOOL native's answer as a Lua boolean. FXServer Enhanced b177 returns the number 1 for true and false for false
+-- (measured W3 2026-11-22: IsPlayerAceAllowed, IsPrincipalAceAllowed, DoesEntityExist, SaveResourceFile), so
+-- `native() == true` is always false there. Use this instead of comparing with true.
+function AeternaCore.yes(v)
+    return v == true or v == 1
+end
+
 function AeternaCore.can(src, action)
     if type(action) ~= 'string' or action:sub(1, 8) ~= 'aeterna.' or #action <= 8 then
         return false
@@ -666,7 +673,7 @@ function AeternaCore.can(src, action)
     if numSrc == nil or numSrc < 0 then
         return false
     end
-    return IsPlayerAceAllowed(src, action) == true
+    return AeternaCore.yes(IsPlayerAceAllowed(src, action))
 end
 
 --------------------------------------------------------------------------------

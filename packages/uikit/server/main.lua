@@ -25,7 +25,8 @@ local function checkAce(src, ace)
         return AeternaCore.can(src, ace)
     end
     if type(IsPlayerAceAllowed) == 'function' then
-        return IsPlayerAceAllowed(src, ace) == true
+        local r = IsPlayerAceAllowed(src, ace)
+        return r == true or r == 1 -- Enhanced returns 1 for true
     end
     return false
 end
