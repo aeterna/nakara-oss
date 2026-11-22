@@ -1,3 +1,7 @@
+// Plain top-level requires: fivem-devkit safety must see every http/https destination in this file.
+const http = require('http');
+const https = require('https');
+
 // FXServer resolves a relative require() against the resource root, not against the requiring file.
 function isMissingSpecifier(err, specifier) {
   if (!err || err.code !== 'MODULE_NOT_FOUND') return false;
@@ -32,7 +36,23 @@ const { buildHeaders } = loadSibling(
   './signer.js'
 );
 
+const { sendRequest } = loadSibling(
+  () => require('./http-request.js'),
+  () => require('./server/js/http-request.js'),
+  './http-request.js'
+);
+
 const API = GetConvar('nakara_tickets_api', '');
+const REQUEST_TIMEOUT_MS = 35000;
+
+// Every module-level bridge call goes through sendRequest, never the global fetch: fetch POSTs with a body log an
+// unhandled rejection on FXServer (http-request.js). An https: base uses https.request, anything else http.request.
+function bridgeRequest(pathWithQuery, options) {
+  const start = (requestOptions, onResponse) => (API + pathWithQuery).startsWith('https:')
+    ? https.request(API + pathWithQuery, requestOptions, onResponse)
+    : http.request(API + pathWithQuery, requestOptions, onResponse);
+  return sendRequest(start, options, REQUEST_TIMEOUT_MS);
+}
 
 async function parseJsonResponse(res) {
   try {
@@ -62,13 +82,12 @@ async function pair(code, payload = {}) {
   });
 
   try {
-    const res = await fetch(API + '/bridge/v1/pair', {
+    const res = await bridgeRequest('/bridge/v1/pair', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body,
-      signal: AbortSignal.timeout(35000),
     });
 
     const json = await parseJsonResponse(res);
@@ -102,14 +121,13 @@ async function sendHeartbeat(serverId, secret, payload = {}) {
   const authHeaders = buildHeaders(serverId, secret, 'POST', pathWithQuery, body);
 
   try {
-    const res = await fetch(API + '/bridge/v1/heartbeat', {
+    const res = await bridgeRequest(pathWithQuery, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...authHeaders,
       },
       body,
-      signal: AbortSignal.timeout(35000),
     });
 
     const json = await parseJsonResponse(res);
@@ -131,18 +149,12 @@ async function getActions(serverId, secret, wait = 25) {
   const pathWithQuery = '/bridge/v1/actions?wait=' + waitParam;
 
   const authHeaders = buildHeaders(serverId, secret, 'GET', pathWithQuery, '');
-  const controller = new AbortController();
-  const timer = setTimeout(() => {
-    try { controller.abort(); } catch {}
-  }, 35000);
-
   try {
-    const res = await fetch(API + '/bridge/v1/actions?wait=' + waitParam, {
+    const res = await bridgeRequest(pathWithQuery, {
       method: 'GET',
       headers: {
         ...authHeaders,
       },
-      signal: controller.signal,
     });
 
     const json = await parseJsonResponse(res);
@@ -156,8 +168,6 @@ async function getActions(serverId, secret, wait = 25) {
     };
   } catch (err) {
     return { ok: false, error: 'network_error', message: err.message };
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -168,14 +178,13 @@ async function postActionResult(serverId, secret, actionId, resultPayload) {
   const authHeaders = buildHeaders(serverId, secret, 'POST', pathWithQuery, body);
 
   try {
-    const res = await fetch(API + '/bridge/v1/actions/' + actionId + '/result', {
+    const res = await bridgeRequest(pathWithQuery, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...authHeaders,
       },
       body,
-      signal: AbortSignal.timeout(35000),
     });
 
     const json = await parseJsonResponse(res);

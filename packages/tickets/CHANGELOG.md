@@ -6,6 +6,13 @@ All notable changes to `nakara_tickets` are documented here. The format follows
 
 ## Unreleased
 
+### Fixed
+
+- Bridge calls (pair, heartbeat, action result, actions poll) use Node `https.request` / `http.request` instead of
+  `fetch()`, with a 35 s whole-request timeout and a 1 MiB answer cap. On FXServer every `fetch()` POST with a body logged
+  `Unhandled promise rejection ... Invalid state: Reader released` although it succeeded (26 of 26 POSTs on a test
+  server, 2026-11-22; 0 after the change). Redirects are no longer followed.
+
 ## 0.1.0 - 2026-11-21
 
 ### Added
