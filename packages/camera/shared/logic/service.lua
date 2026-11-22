@@ -1,7 +1,8 @@
 -- service.lua -- aeterna_camera server rules: viewfinder state, the shoot gate, tickets, upload checks, saving,
 -- ownership and removal. Every native comes in through `deps`, so busted drives it with fakes:
 --   store, tickets, newId(), now() ms, clock() s, available(), writePhoto(id, bytes) -> boolean,
---   emit(name, ...), warn(msg, fields), mayWrite(src) -> boolean (optional: the self-test write guard)
+--   emit(name, ...), warn(msg, fields), mayWrite(src) -> boolean (optional: the self-test write guard),
+--   acctOf(src) -> account key or nil (optional: the per-account byte cap)
 -- cfg = { cooldownMs, maxBytes, perCharacter }
 
 CameraLogic = CameraLogic or {}
@@ -47,6 +48,12 @@ function M.new(deps, cfg)
         end
     end
 
+    local function acctOf(src)
+        if not deps.acctOf then return nil end
+        local a = deps.acctOf(src)
+        return type(a) == 'string' and a ~= '' and a or nil
+    end
+
     function svc:openViewfinder(src, who)
         self.open[src] = true
         return { count = deps.store:count(who), cap = cfg.perCharacter }
@@ -67,7 +74,7 @@ function M.new(deps, cfg)
         local now = deps.now()
         local last = self.lastShot[src]
         if last and now - last < cfg.cooldownMs then return false, 'camera.slow' end
-        local ok, reason = deps.store:check(who, 0)
+        local ok, reason = deps.store:check(who, 0, acctOf(src))
         if not ok then
             refuseWarn(reason)
             return false, reason
@@ -78,7 +85,8 @@ function M.new(deps, cfg)
 
     -- Writes the file, then the index, then fires saved. Returns the photo view, or nil and a locale key.
     function svc:save(src, who, mode, bytes)
-        local ok, reason = deps.store:check(who, #bytes)
+        local acct = acctOf(src)
+        local ok, reason = deps.store:check(who, #bytes, acct)
         if not ok then
             refuseWarn(reason)
             return nil, reason
@@ -87,8 +95,8 @@ function M.new(deps, cfg)
             deps.warn('photo refused by the self-test write guard', { src = src })
             return nil, 'camera.failed'
         end
-        local id
-        for _ = 1, MAX_DRAWS do
+        local id = deps.store.takeFree and deps.store:takeFree() or nil
+        for _ = 1, id and 0 or MAX_DRAWS do
             local candidate = deps.newId()
             if not deps.store:has(candidate) then
                 id = candidate
@@ -103,10 +111,11 @@ function M.new(deps, cfg)
             deps.warn('photo file write failed', { id = id })
             return nil, 'camera.failed'
         end
-        local rec = { who = who, ts = deps.clock(), mode = mode, bytes = #bytes }
+        local rec = { who = who, ts = deps.clock(), mode = mode, bytes = #bytes, acct = acct }
         local added, why = deps.store:add(id, rec)
         if not added then
             deps.writePhoto(id, '')
+            if deps.store.giveFree then deps.store:giveFree(id) end
             return nil, why
         end
         local photo = M.view(id, rec)
@@ -134,7 +143,7 @@ function M.new(deps, cfg)
         if not Ids.isId(id) then return false end
         local rec = deps.store:remove(id)
         if not rec then return false end
-        deps.writePhoto(id, '')
+        if deps.writePhoto(id, '') and deps.store.giveFree then deps.store:giveFree(id) end
         if type(reason) ~= 'string' or reason == '' then reason = 'admin' end
         local stop = utf8.offset(reason, REASON_MAX + 1)
         if stop then reason = reason:sub(1, stop - 1) end

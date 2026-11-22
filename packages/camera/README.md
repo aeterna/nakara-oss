@@ -34,7 +34,7 @@ Camera and Gallery apps inside the AETERNA Starter Kit phone. The Camera is the 
 
 **Keep your photos when you upgrade / เก็บรูปไว้เมื่ออัปเกรด:** photos are files under `aeterna_camera/photos/` and their index is in the server's KVP database (FXServer keeps it outside resource folders). Replacing the resource folder deletes the photos: copy `photos/` aside and put it back, and keep the KVP database. / การแทนที่โฟลเดอร์ทั้งหมดจะลบรูป ให้สำรอง `photos/` ไว้ก่อน
 
-**Leftover files / ไฟล์ที่เหลือ:** every deleted photo leaves a zero-byte file under `photos/`, because the safety rules forbid deleting files from Lua. A player can delete at most one photo per `Config.cooldownMs`, so leftovers grow slowly; you may delete zero-byte files there while the server is stopped. / รูปที่ลบแล้วเหลือไฟล์ขนาด 0 ไบต์ทุกครั้ง (ลบได้ครั้งละหนึ่งรูปต่อ `Config.cooldownMs`) ลบไฟล์เหล่านี้ได้ขณะปิดเซิร์ฟเวอร์
+**Leftover files / ไฟล์ที่เหลือ:** a deleted photo leaves a zero-byte file under `photos/`, because the safety rules forbid deleting files from Lua. The next photo reuses that file (up to 5000 waiting files), so taking and deleting photos does not pile files up. You may delete zero-byte files there while the server is stopped. / รูปที่ลบแล้วเหลือไฟล์ขนาด 0 ไบต์ รูปถัดไปจะใช้ไฟล์นั้นซ้ำ (สูงสุด 5000 ไฟล์ที่รออยู่) ลบไฟล์เหล่านี้ได้ขณะปิดเซิร์ฟเวอร์
 
 ## Config / การตั้งค่า
 
@@ -45,6 +45,7 @@ Camera and Gallery apps inside the AETERNA Starter Kit phone. The Camera is the 
 | `Config.perCharacter` | `60` | Photos per character, 1–500; at the cap the shutter refuses / จำนวนรูปต่อตัวละคร |
 | `Config.maxBytes` | `900000` | Largest accepted photo after decoding, 100 000 – 3 000 000 bytes / ขนาดรูปสูงสุด |
 | `Config.maxTotalMB` | `1024` | All photos together; at the cap every shutter refuses and one `warn` is logged per hour / พื้นที่รวมของรูปทั้งหมด |
+| `Config.perAccountMB` | `200` | All photos of one player's characters together (by license); at the cap the shutter refuses with "gallery full" / พื้นที่รวมของรูปทุกตัวละครของผู้เล่นหนึ่งคน |
 | `Config.quality` | `0.8` | JPEG quality passed to `screenshot-basic`, 0.5–0.95 / คุณภาพ JPEG |
 | `Config.cooldownMs` | `3000` | Minimum time between two shots of one player / ระยะห่างขั้นต่ำระหว่างการถ่าย |
 

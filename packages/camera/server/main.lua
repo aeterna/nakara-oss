@@ -60,8 +60,17 @@ local function loadPhoto(id)
     return LoadResourceFile(RES, 'photos/' .. id .. '.jpg')
 end
 
+-- The account behind a player: the license, shared by all characters of that player. Nil for source 0.
+local function acctOf(src)
+    if type(src) ~= 'number' or src <= 0 then return nil end
+    local ok, license = pcall(GetPlayerIdentifierByType, src, 'license')
+    if ok and type(license) == 'string' and license ~= '' then return license end
+    return nil
+end
+
 local function newService(perCharacter, maxTotalBytes)
-    local store = Store.new({ kv = kv, json = json, perCharacter = perCharacter, maxTotalBytes = maxTotalBytes })
+    local store = Store.new({ kv = kv, json = json, perCharacter = perCharacter, maxTotalBytes = maxTotalBytes,
+        perAccountBytes = cfg.perAccountMB * 1024 * 1024 })
     local tickets = Tickets.new({ now = GetGameTimer, newId = ticketId })
     return Service.new({
         store = store,
@@ -71,6 +80,7 @@ local function newService(perCharacter, maxTotalBytes)
         clock = os.time,
         available = screenshotStarted,
         writePhoto = writePhoto,
+        acctOf = acctOf,
         emit = function(name, ...) TriggerEvent(name, ...) end,
         warn = AeternaCore.log.warn,
         -- Only a photo taken inside shoot_and_view asks the self-test write guard.

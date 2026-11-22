@@ -207,7 +207,15 @@ describe('aeterna_camera server under the harness', function()
             assert.are.equal('mock', r.ok, name .. ': ' .. tostring(r.detail))
             assert.are.same({ restored = true }, r.extra)
         end
-        assert.are.same(before, natives.state().kvp)
+        -- the self-tests leave nothing behind except the free list: the empty file of a removed test photo is kept
+        -- for the next photo instead of piling up
+        local after, free = {}, nil
+        for k, v in pairs(natives.state().kvp) do
+            if k == 'aeterna_camera:free:v1' then free = v else after[k] = v end
+        end
+        before['aeterna_camera:free:v1'] = nil
+        assert.are.same(before, after)
+        for _, id in ipairs(free and json.decode(free) or {}) do assert.are.equal('', files['photos/' .. id .. '.jpg']) end
         assert.are.same({}, api.listPhotos('test:camera'))
         -- other resources' names are ignored
         reports = {}

@@ -9,6 +9,7 @@ local RULES = {
     { key = 'perCharacter', default = 60, min = 1, max = 500, integer = true },
     { key = 'maxBytes', default = 900000, min = 100000, max = 3000000, integer = true },
     { key = 'maxTotalMB', default = 1024, min = 1, max = 1048576, integer = true },
+    { key = 'perAccountMB', default = 200, min = 1, max = 1048576, integer = true },
     { key = 'quality', default = 0.8, min = 0.5, max = 0.95 },
     { key = 'cooldownMs', default = 3000, min = 0, max = 600000, integer = true },
 }

@@ -295,7 +295,8 @@ describe('aeterna_camera', function()
         local clock = { ms = 100000, s = 1700000000 }
         local avail = { on = true }
         local store = Store.new({ kv = kv, json = json, perCharacter = cfg.perCharacter or 3,
-            maxTotalBytes = cfg.maxTotalBytes or 100000 })
+            maxTotalBytes = cfg.maxTotalBytes or 100000, perAccountBytes = cfg.perAccountBytes })
+        local accts = cfg.accts or {}
         local newId = Ids.stream({ seed = 99, rand = seqRand(99), now = function() return clock.ms end,
             clock = function() return 0 end })
         local tickets = Tickets.new({ now = function() return clock.ms end, newId = newId })
@@ -307,6 +308,7 @@ describe('aeterna_camera', function()
             clock = function() return clock.s end,
             available = function() return avail.on end,
             writePhoto = function(id, bytes) disk[id] = bytes return true end,
+            acctOf = function(src) return accts[src] or ('license:s' .. tostring(src)) end,
             emit = function(name, ...) events[#events + 1] = { name = name, args = { ... } } end,
             warn = function(msg, fields) warns[#warns + 1] = { msg = msg, fields = fields } end,
         }, { cooldownMs = cfg.cooldownMs or 3000, maxBytes = cfg.maxBytes or 5000, perCharacter = cfg.perCharacter or 3 })
@@ -402,6 +404,71 @@ describe('aeterna_camera', function()
             assert.are.equal(0, e.store:total())
             assert.is_true((e.store:repair()))
             assert.are.equal(100, e.store:total())
+        end)
+    end)
+
+    describe('3b. account cap and file reuse (store.lua)', function()
+        it('caps the bytes of all characters of one account with camera.full; other accounts keep room', function()
+            local e = setup({ perAccountBytes = 250, perCharacter = 10,
+                accts = { [1] = 'license:x', [2] = 'license:x', [3] = 'license:y' } })
+            assert.are.equal('saved', (takePhoto(e, 1, 'cid:A', 200)))
+            e.svc:openViewfinder(2, 'cid:B')
+            assert.are.same({ false, 'camera.full' }, { e.store:check('cid:B', 100, 'license:x') })
+            local ok, ticket = e.svc:shoot(2, 'cid:B', 'back')
+            assert.is_true(ok)
+            e.clock.ms = e.clock.ms + 5000
+            local status, reason = e.svc:upload(2, 'cid:B', { ticket = ticket, data = dataOf(100) })
+            assert.are.same({ 'refused', 'camera.full' }, { status, reason })
+            assert.are.equal('saved', (takePhoto(e, 3, 'cid:C', 200)))
+            assert.are.equal('200', e.kv.data['aeterna_camera:acct:v1:license:x'])
+        end)
+
+        it('a deleted photo gives its bytes back to the account and the account key goes when it is empty', function()
+            local e = setup({ perAccountBytes = 250, perCharacter = 10, accts = { [1] = 'license:x', [2] = 'license:x' } })
+            local p = select(2, takePhoto(e, 1, 'cid:A', 200))
+            assert.is_true(e.svc:delete(1, 'cid:A', p.id))
+            assert.is_nil(e.kv.data['aeterna_camera:acct:v1:license:x'])
+            assert.are.equal('saved', (takePhoto(e, 2, 'cid:B', 200)))
+        end)
+
+        it('reuses the empty file of a deleted photo for the next photo, so a shoot-delete loop adds no files', function()
+            local e = setup({ perCharacter = 10 })
+            local first = select(2, takePhoto(e, 1, 'cid:A', 100))
+            for _ = 1, 5 do
+                assert.is_true(e.svc:delete(1, 'cid:A', e.store:list('cid:A')[1]))
+                e.clock.ms = e.clock.ms + 5000
+                takePhoto(e, 1, 'cid:A', 100)
+            end
+            local files = 0
+            for _ in pairs(e.disk) do files = files + 1 end
+            assert.are.equal(1, files)
+            assert.are.same({ first.id }, e.store:list('cid:A'))
+        end)
+
+        it('a free id that is taken again is never handed out twice', function()
+            local e = setup({ perCharacter = 10 })
+            local p1 = select(2, takePhoto(e, 1, 'cid:A', 100))
+            local p2 = select(2, takePhoto(e, 1, 'cid:A', 100))
+            e.svc:delete(1, 'cid:A', p1.id)
+            e.clock.ms = e.clock.ms + 5000
+            e.svc:delete(1, 'cid:A', p2.id)
+            local a = select(2, takePhoto(e, 1, 'cid:A', 100))
+            local b = select(2, takePhoto(e, 1, 'cid:A', 100))
+            local c = select(2, takePhoto(e, 1, 'cid:A', 100))
+            assert.are_not.equal(a.id, b.id)
+            assert.are_not.equal(b.id, c.id)
+            assert.are_not.equal(a.id, c.id)
+            assert.is_nil(e.kv.data['aeterna_camera:free:v1'])
+        end)
+
+        it('repairs account totals at start', function()
+            local e = setup({ perAccountBytes = 1000, perCharacter = 10, accts = { [1] = 'license:x' } })
+            takePhoto(e, 1, 'cid:A', 100)
+            e.kv.data['aeterna_camera:acct:v1:license:x'] = '777'
+            e.kv.data['aeterna_camera:acct:v1:license:gone'] = '50'
+            assert.is_true((e.store:repair()))
+            assert.are.equal('100', e.kv.data['aeterna_camera:acct:v1:license:x'])
+            assert.is_nil(e.kv.data['aeterna_camera:acct:v1:license:gone'])
         end)
     end)
 
@@ -688,7 +755,8 @@ describe('aeterna_camera', function()
             local warns = {}
             local cfg = Settings.check({ perCharacter = 0, maxBytes = 50, maxTotalMB = 'x', quality = 0.8, cooldownMs = 1000 },
                 function(msg, f) warns[#warns + 1] = f.key end)
-            assert.are.same({ perCharacter = 60, maxBytes = 900000, maxTotalMB = 1024, quality = 0.8, cooldownMs = 1000 }, cfg)
+            assert.are.same({ perCharacter = 60, maxBytes = 900000, maxTotalMB = 1024, perAccountMB = 200, quality = 0.8,
+                cooldownMs = 1000 }, cfg)
             table.sort(warns)
             assert.are.same({ 'maxBytes', 'maxTotalMB', 'perCharacter' }, warns)
             local defaults = Settings.check(nil, function() end)
