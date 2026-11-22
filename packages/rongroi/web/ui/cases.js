@@ -117,6 +117,22 @@
         root.appendChild(actions);
     }
 
+    function num(value) { return typeof value === 'number' && isFinite(value) ? value : 0; }
+
+    // One banner above the list (shown even when no case is left) counts the reports the index lost.
+    function warningBanner(root, data, t) {
+        var warning = member(data, 'storageWarning');
+        if (!isObject(warning)) return;
+        var count = Math.max(num(warning.expected) - num(warning.found), 0);
+        var box = el('div', 'banner storage-warning');
+        box.appendChild(el('p', '', (t.storageWarningText || '{n} stored reports are missing.').replace('{n}', String(count))));
+        var forget = el('button', 'button secondary', t.storageWarningButton || 'Remove the missing entries');
+        forget.type = 'button';
+        forget.addEventListener('click', function () { callShell(root, 'forgetMissing', {}); });
+        box.appendChild(forget);
+        root.appendChild(box);
+    }
+
     function render(root, data, strings) {
         var model = viewModel(data);
         var t = strings || {};
@@ -124,6 +140,7 @@
         root.appendChild(el('h1', '', t.listTitle || 'Cases'));
         openCaseForm(root, t);
         screenLinks(root, t);
+        warningBanner(root, data, t);
         if (model.cases.length === 0) {
             root.appendChild(el('p', 'empty', t.listEmpty || 'No cases yet.'));
             return;

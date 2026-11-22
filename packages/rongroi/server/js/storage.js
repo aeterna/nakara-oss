@@ -50,13 +50,28 @@ function detectEdition(getConvar) {
     return getConvar('gamename', '') === 'gta5enhanced' ? 'enhanced' : 'legacy';
 }
 
-function createStorage(backend) {
+function createStorage(backend, { marker } = {}) {
     if (!backend || typeof backend.read !== 'function' || typeof backend.write !== 'function'
         || typeof backend.writeOnce !== 'function' || typeof backend.remove !== 'function') {
         throw new TypeError('storage needs a backend with read, write, writeOnce and remove');
     }
+    if (marker && (typeof marker.get !== 'function' || typeof marker.set !== 'function')) {
+        throw new TypeError('marker needs get and set functions');
+    }
     const pages = [];
     const damagedPages = new Set();
+    // Entries the marker says were lost at start-up. Kept in the marker so later writes do not erase the warning.
+    let lost = 0;
+
+    // The marker holds the index total after every index write, so a later load can see that entries vanished.
+    function recordTotal() {
+        if (marker) marker.set(pages.reduce((sum, page) => sum + page.length, 0) + lost);
+    }
+    // An index entry is missing its case when the case file reads null (or the entry has no usable caseId).
+    function caseMissing(entry) {
+        if (typeof entry.caseId !== 'string' || entry.caseId.length === 0) return true;
+        return backend.read(caseKey(entry.caseId)) === null;
+    }
 
     function caseKey(caseId) {
         if (typeof caseId !== 'string' || caseId.length === 0) throw new TypeError('caseId must be a non-empty string');
@@ -113,6 +128,7 @@ function createStorage(backend) {
             if (addedPage) pages.pop();
             throw err;
         }
+        recordTotal();
         backend.write(caseKey(caseId), { caseId, ticket, openedAt, ...facts });
     }
 
@@ -154,6 +170,7 @@ function createStorage(backend) {
         found.entry.reportSha256 = reportSha256;
         found.entry.consumedAt = receivedAt;
         backend.write(`index-${found.page}`, pages[found.page]);
+        recordTotal();
     }
 
     function getReport(ticket) {
@@ -172,6 +189,7 @@ function createStorage(backend) {
         backend.remove(caseKey(caseId));
         backend.write(`index-${found.page}`, remaining);
         pages[found.page] = remaining;
+        recordTotal();
         return found.entry.ticket;
     }
 
@@ -220,6 +238,36 @@ function createStorage(backend) {
         return snapshot;
     }
 
+    // Compare the marker with what the index holds now. Call after load().
+    function checkIntegrity() {
+        let missingCaseFiles = 0;
+        for (const page of pages) {
+            for (const entry of page) {
+                if (caseMissing(entry)) missingCaseFiles += 1;
+            }
+        }
+        const found = pages.reduce((sum, page) => sum + page.length, 0);
+        const expected = marker ? marker.get() : null;
+        if (expected !== null) lost = Math.max(expected - found, 0);
+        return { expected, found, missingCaseFiles };
+    }
+
+    // Drop the index entries whose case file is gone. A damaged page is empty in memory, so it is never rewritten.
+    function forgetMissing() {
+        let removed = 0;
+        for (let page = 0; page < pages.length; page += 1) {
+            const kept = pages[page].filter((entry) => !caseMissing(entry));
+            const dropped = pages[page].length - kept.length;
+            if (dropped === 0) continue;
+            backend.write(`index-${page}`, kept);
+            pages[page] = kept;
+            removed += dropped;
+        }
+        lost = 0;
+        recordTotal();
+        return removed;
+    }
+
     function entries() {
         const all = [];
         for (const page of pages) {
@@ -242,6 +290,8 @@ function createStorage(backend) {
         deletePlayerData,
         consumedSnapshot,
         entries,
+        checkIntegrity,
+        forgetMissing,
     };
 }
 

@@ -87,6 +87,8 @@ function createPanel(deps) {
         throw new TypeError('deps.rotateKitKey must be a function');
     }
     const caseFacts = deps.caseFacts;
+    // Set by main.js when the index lost entries at start-up; cleared once staff remove the missing entries.
+    let storageWarning = isObject(deps.storageWarning) ? { ...deps.storageWarning } : null;
 
     const windows = new Map(); // `${kind}:${source}` -> { end, count }
     const playerCases = new Map(); // player source -> { caseId, ticket, expiresAt, ... }
@@ -136,6 +138,10 @@ function createPanel(deps) {
             rows.push(isObject(data) ? { ...entry, ...data } : entry);
         }
         return caseList(rows);
+    }
+
+    function casesReply() {
+        return { screen: 'cases', cases: listRows(), storageWarning };
     }
 
     function safeReport(ticket) {
@@ -282,7 +288,7 @@ function createPanel(deps) {
     }
     function panelOpen(src) {
         if (!isStaff(src) || !rateLimit('staff', src, STAFF_LIMIT)) return false;
-        send(src, PANEL_DATA, { screen: 'cases', cases: listRows() });
+        send(src, PANEL_DATA, casesReply());
         return true;
     }
 
@@ -441,7 +447,7 @@ function createPanel(deps) {
             refuse(src, 'case_not_found');
             return false;
         }
-        send(src, PANEL_DATA, { screen: 'cases', cases: listRows() });
+        send(src, PANEL_DATA, casesReply());
         return true;
     }
 
@@ -460,7 +466,22 @@ function createPanel(deps) {
             refuse(src, 'delete_failed');
             return false;
         }
-        send(src, PANEL_DATA, { screen: 'cases', cases: listRows() });
+        send(src, PANEL_DATA, casesReply());
+        return true;
+    }
+
+    function forgetMissingReports(src) {
+        if (!isStaff(src) || !rateLimit('staff', src, STAFF_LIMIT)) return false;
+        if (storageWarning === null) {
+            send(src, PANEL_DATA, casesReply());
+            return true;
+        }
+        try { storage.forgetMissing(); } catch {
+            refuse(src, 'delete_failed');
+            return false;
+        }
+        storageWarning = null;
+        send(src, PANEL_DATA, casesReply());
         return true;
     }
 
@@ -487,6 +508,7 @@ function createPanel(deps) {
         saveSettings,
         deleteCase,
         deletePlayer,
+        forgetMissingReports,
         rotateKey,
         deleteCaseAndForget,
         deletePlayerDataAndForget,
