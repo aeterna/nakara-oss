@@ -115,8 +115,11 @@ matches (`packages/devkit/src/safety/rules/util.js` `fnMatches`).
 
 ### Keys (client)
 
-`AeternaCore.key(command, description)` calls `RegisterKeyMapping(command, t(description), 'keyboard', '')`. The empty
-default means no key until the player binds one in Settings → Key Bindings → FiveM. The caller registers the command
+`AeternaCore.key(command, description)` calls `RegisterKeyMapping(command, keyLabel(description), 'keyboard', '')`.
+`AeternaCore.keyLabel(description)` returns the English text of the locale key whatever `aeterna_locale` is: the GTA
+key settings menu has no Thai glyphs, so a Thai label shows as boxes (measured on FXServer Enhanced, W3 2026-11-22).
+Every key mapping in the kit uses it, including a mapping a package registers itself (radial's gamepad mapping). The
+empty default means no key until the player binds one in Settings → Key Bindings → FiveM. The caller registers the command
 pair itself with literal names, because the scanner counts only literal `RegisterCommand` names:
 
 ```lua

@@ -232,7 +232,7 @@ RegisterCommand('-aeterna_radial_open', function()
 end, false)
 
 AeternaCore.key('+aeterna_radial_open', 'radial.key.open')
-RegisterKeyMapping('+aeterna_radial_open', AeternaCore.t('radial.key.open'), 'PAD_DIGITALBUTTON', '')
+RegisterKeyMapping('+aeterna_radial_open', AeternaCore.keyLabel('radial.key.open'), 'PAD_DIGITALBUTTON', '')
 
 -- NUI callbacks. Each is validated; an index that does not map to a visible slot is dropped.
 local function indexSchema(min)

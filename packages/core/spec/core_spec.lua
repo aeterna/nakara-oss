@@ -430,7 +430,11 @@ describe('aeterna_core', function()
             assert.are.equal(0, #mapCalls)
             AeternaCore.key('+aeterna_core_test', 'core.month.1')
             assert.are.equal(1, #mapCalls)
-            assert.are.same({ n = 4, '+aeterna_core_test', 'มกราคม', 'keyboard', '' }, mapCalls[1])
+            -- The label is English whatever aeterna_locale says: the GTA key settings menu has no Thai glyphs
+            -- (measured W3 2026-11-22: Thai labels showed as boxes), so key labels never follow the locale.
+            assert.are.same({ n = 4, '+aeterna_core_test', 'January', 'keyboard', '' }, mapCalls[1])
+            assert.are.equal('January', AeternaCore.keyLabel('core.month.1'))
+            assert.are.equal('มกราคม', AeternaCore.t('core.month.1'))
         end)
 
         it('server: runs selftests, checks ACE, rate limits and registers aeterna_core_selftest', function()

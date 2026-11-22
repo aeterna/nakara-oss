@@ -80,7 +80,8 @@ Prints `[aeterna_<res>] LEVEL msg key=value …`. Values in `fields` are stringi
 - `AeternaCore.kvp.get(name, version, default) -> any`: reads `aeterna_<pkg>:<name>:v<version>` as JSON; invalid JSON logs one `warn` and returns `default`.
 - `AeternaCore.kvp.set(name, version, value) -> nil`: writes JSON up to 16 KB.
 - `AeternaCore.kvp.migrate(name, from, to, fn) -> nil`: if `v<from>` exists and `v<to>` does not, converts once with `fn(old)`, writes `v<to>`, and deletes `v<from>`.
-- `AeternaCore.key(command, description) -> nil`: calls `RegisterKeyMapping(command, t(description), 'keyboard', '')` with no default key (`command` must start with `+aeterna_`).
+- `AeternaCore.key(command, description) -> nil`: calls `RegisterKeyMapping(command, keyLabel(description), 'keyboard', '')` with no default key (`command` must start with `+aeterna_`).
+- `AeternaCore.keyLabel(description) -> string`: the English text of a locale key, whatever `aeterna_locale` is. Key labels are always English because the GTA key settings menu has no Thai glyphs (Thai labels show as boxes).
 
 ## Exports (`aeterna_core`)
 

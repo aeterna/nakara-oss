@@ -746,12 +746,22 @@ AeternaCore.kvp = {
     end,
 }
 
+-- Key labels are always English: the GTA key settings menu has no Thai glyphs (Thai showed as boxes on FXServer
+-- Enhanced, W3 2026-11-22), so a label never follows aeterna_locale.
+function AeternaCore.keyLabel(description)
+    if localeMod and localeMod.t then
+        return localeMod.t(Locales, 'en', description)
+    end
+    local keyStr = tostring(description or '')
+    return (Locales.en and Locales.en[keyStr]) or keyStr
+end
+
 function AeternaCore.key(command, description)
     if type(command) ~= 'string' or command:sub(1, 9) ~= '+aeterna_' or #command <= 9 then
         AeternaCore.log.warn('refused key mapping: command must start with +aeterna_', { command = tostring(command) })
         return nil
     end
-    RegisterKeyMapping(command, AeternaCore.t(description), 'keyboard', '')
+    RegisterKeyMapping(command, AeternaCore.keyLabel(description), 'keyboard', '')
     return nil
 end
 
