@@ -82,6 +82,11 @@ describe('aeterna_testkit', function()
             end
         end)
 
+        it('replaces the kit\'s own character and license keys (cid:, lic:)', function()
+            assert.are.equal('owner [id] saved', S.scrub('owner cid:ABC12345 saved', {}, clean))
+            assert.are.equal('owner [id] saved', S.scrub('owner lic:license:0f0f0f saved', {}, clean))
+        end)
+
         it('leaves other word:value text alone', function()
             assert.are.equal('screen:home', S.scrub('screen:home', {}, clean))
         end)

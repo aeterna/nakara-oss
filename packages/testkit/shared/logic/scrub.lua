@@ -4,9 +4,10 @@ TestkitLogic = TestkitLogic or {}
 
 local M = {}
 
--- Identifier types FXServer documents for GetPlayerIdentifiers, as `<prefix>:<value>`.
+-- Identifier types FXServer documents for GetPlayerIdentifiers, as `<prefix>:<value>`, plus the kit's own character
+-- and license keys (`cid:<citizenid>`, `lic:<license>`).
 -- license2 comes before license so the longer prefix is tried first.
-M.PREFIXES = { 'license2', 'license', 'steam', 'fivem', 'discord', 'xbl', 'live', 'ip' }
+M.PREFIXES = { 'license2', 'license', 'steam', 'fivem', 'discord', 'xbl', 'live', 'ip', 'cid', 'lic' }
 -- Shape rule for identifier types not in the list: `<letters>:` followed by at least this many digits.
 M.LONG_ID_DIGITS = 15
 M.MIN_NAME_LEN = 3

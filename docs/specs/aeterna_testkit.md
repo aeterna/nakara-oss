@@ -169,7 +169,7 @@ Every `detail` and `expected` string is scrubbed before it is stored, printed or
    the name is also cut to `A` or `B`. It errs toward hiding.
 2. `<prefix>:<value>` identifiers → `[id]`. The prefixes are a fixed list in `shared/logic/scrub.lua` covering every
    identifier type FXServer documents for `GetPlayerIdentifiers` (`license2`, `license`, `steam`, `fivem`, `discord`,
-   `xbl`, `live`, `ip`); a `<letters>:` followed by 15 or more digits is also `[id]`, which catches a Discord-style
+   `xbl`, `live`, `ip`) plus the kit's own character and license keys (`cid`, `lic`); a `<letters>:` followed by 15 or more digits is also `[id]`, which catches a Discord-style
    id under a prefix not in the list. Other `word:value` text is left alone.
 3. IPv4 (`n.n.n.n`, optional `:port`) and IPv6 forms → `[ip]`.
 4. Absolute paths (`X:\…`, `\\…`, and `/…` with two or more segments) → `[path]`.
