@@ -25,7 +25,7 @@ A radial menu for the AETERNA Starter Kit: a ring of 4–8 slots around the scre
    ensure aeterna_radial
    ```
 
-4. Players bind a key or a gamepad button in **Settings → Key Bindings → FiveM → "Open radial menu"**. There is no default key. / ผู้เล่นตั้งปุ่มเองใน Settings → Key Bindings → FiveM (ไม่มีปุ่มตั้งต้น)
+4. Players bind a key or a gamepad button in **Settings → Key Bindings → FiveM → "Open radial menu"**. The keyboard mapping suggests `F3` by default; the gamepad mapping has no default. The server owner can change or turn off defaults with `setr aeterna_keys` (see the `aeterna_core` README). / ผู้เล่นตั้งปุ่มเองใน Settings → Key Bindings → FiveM (คีย์บอร์ดตั้งต้น `F3` จอยไม่มีปุ่มตั้งต้น)
 
 ## Config / การตั้งค่า
 
@@ -137,7 +137,7 @@ resources that are visible at the time.
 ## Commands and keys / คำสั่งและปุ่มลัด
 
 - `aeterna_radial_open` — chat or F8: opens the menu in `toggle` mode (runs again to close)
-- `+aeterna_radial_open` / `-aeterna_radial_open` — key mapping for keyboard and gamepad, **no default key** (ADR 0004 decision 10)
+- `+aeterna_radial_open` / `-aeterna_radial_open` — key mapping for keyboard (default `F3`) and gamepad (no default key)
 
 ## Support scope / ขอบเขตการรองรับ
 

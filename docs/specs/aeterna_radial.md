@@ -29,8 +29,8 @@ ensure aeterna_uikit
 ensure aeterna_radial
 ```
 
-The player binds a key in Settings → Key Bindings → FiveM → "Radial menu" (keyboard or gamepad). There is no default
-key (ADR 0004 decision 10).
+The player binds a key in Settings → Key Bindings → FiveM → "Radial menu" (keyboard or gamepad). The keyboard mapping suggests `F3` by
+default (ADR 0004 decision 10, amended 2026-11-22); the gamepad mapping has no default key.
 
 ## Configuration
 
@@ -185,7 +185,7 @@ validated; an index that does not map to a visible slot is dropped.
 ## Commands and keys
 
 Permanent names: `aeterna_radial_open` (chat or F8, opens in `toggle` mode), `+aeterna_radial_open`,
-`-aeterna_radial_open` (key mapping, keyboard and gamepad, no default key).
+`-aeterna_radial_open` (key mapping, keyboard default `F3`, gamepad no default key).
 
 ## Storage
 

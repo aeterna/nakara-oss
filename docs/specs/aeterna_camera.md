@@ -72,7 +72,7 @@ when started, else `lic:<license identifier>`, read on the server only.
 - This package's own NUI draws only a thin overlay: shutter hint, switch hint, close hint (uikit `keyHints` style, read
   from the player's bindings), and a counter `12 / 60`.
 - Controls, keyboard and gamepad through the base game's cellphone controls: select = shutter, the selfie control =
-  switch camera, cancel or ESC = close. The bound keys of `+aeterna_camera_shutter` and `+aeterna_camera_switch` (no default) also
+  switch camera, cancel or ESC = close. The bound keys of `+aeterna_camera_shutter` and `+aeterna_camera_switch` (no default key) also
   work.
 - Closing releases focus and returns the player to the game; the phone opens again with the player's own key, so
   phonekit's opening gate (`Config.ask`, devices) always applies.

@@ -52,7 +52,7 @@ Shared convars read through `aeterna_core`: `aeterna_locale` (`en` or `th`), `ae
 
 ## Opening the menu / การเปิดเมนู
 
-- Key mapping `+aeterna_testkit_menu` with **no default key**: Settings → Key Bindings → FiveM. When `Config.menuEntry` is true, it also opens from the `aeterna_uikit` menu.
+- Key mapping `+aeterna_testkit_menu` with default key `F9` (players can rebind it in Settings → Key Bindings → FiveM; the owner can change or turn off defaults with `setr aeterna_keys`, see the `aeterna_core` README). When `Config.menuEntry` is true, it also opens from the `aeterna_uikit` menu.
 - The server checks ACE `aeterna.testkit.run` before it opens the menu. A player without it sees only a small refusal panel.
 - There is no chat command for players.
 
@@ -90,7 +90,7 @@ No export starts a run: runs start from the ACE-checked menu, the console comman
 ## Commands and keys / คำสั่งและปุ่มลัด
 
 - `aeterna_testkit_run` — console only (above).
-- `+aeterna_testkit_menu` / `-aeterna_testkit_menu` — opens the menu; no default key.
+- `+aeterna_testkit_menu` / `-aeterna_testkit_menu` — opens the menu; default key `F9`.
 - `+aeterna_testkit_leave` / `-aeterna_testkit_leave` — player B leaves the role; no default key.
 - ESC on the eye card = Skip.
 

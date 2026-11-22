@@ -118,7 +118,15 @@ matches (`packages/devkit/src/safety/rules/util.js` `fnMatches`).
 `AeternaCore.key(command, description)` calls `RegisterKeyMapping(command, keyLabel(description), 'keyboard', '')`.
 `AeternaCore.keyLabel(description)` returns the English text of the locale key whatever `aeterna_locale` is: the GTA
 key settings menu has no Thai glyphs, so a Thai label shows as boxes (measured on FXServer Enhanced, W3 2026-11-22).
-Every key mapping in the kit uses it, including a mapping a package registers itself (radial's gamepad mapping). The
+Every key mapping in the kit uses it, including a mapping a package registers itself (radial's gamepad mapping).
+
+Default keys (ADR 0004 decision 10, amended 2026-11-22): `AeternaCore.defaultKey(command)` returns the key passed to
+`RegisterKeyMapping`. The owner's `setr aeterna_keys` wins: `off` gives every mapping no default; entries
+`+aeterna_<cmd>=<KEY>` (comma-separated, key name `[A-Z0-9_]`, at most 16 characters, empty to clear) set single
+commands; a malformed entry is ignored. Otherwise the kit's table applies: `+aeterna_uikit_menu` F5,
+`+aeterna_phonekit_open` M, `+aeterna_radial_open` F3, `+aeterna_invkit_open` F2, `+aeterna_testkit_menu` F9,
+`+aeterna_notify_action1`/`2` Y/U, `+aeterna_phonecall_answer`/`hangup` PAGEUP/PAGEDOWN; every other command none.
+A default reaches only players who never bound the command. For a command with no default, the
 empty default means no key until the player binds one in Settings → Key Bindings → FiveM. The caller registers the command
 pair itself with literal names, because the scanner counts only literal `RegisterCommand` names:
 

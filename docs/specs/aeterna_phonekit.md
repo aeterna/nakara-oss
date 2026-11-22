@@ -52,7 +52,7 @@ ensure aeterna_phonekit
 - Home: a grid of app tiles (icon + label), sorted by `order` then `id`. A tile can carry a badge count.
 - Back: the button at the bottom of the frame, Backspace, or right mouse button returns to the previous screen;
   ESC closes the phone from any screen.
-- Open with the key mapping `+aeterna_phonekit_open` or the command `aeterna_phonekit_open` (no default key). The
+- Open with the key mapping `+aeterna_phonekit_open` or the command `aeterna_phonekit_open` (default key `M`). The
   phone takes focus through `aeterna_core` with `keepGameInput = true` so the player can walk while it is open;
   mouse look is disabled while the cursor is over the frame. Losing focus closes the phone.
   0.2 addition: a focus **overlay** (for example the test kit's "did you see it?" card) does not take focus away. While
@@ -136,7 +136,7 @@ NUI → Lua callbacks: `tap {owner, id}`, `action {screenId, action, values}`, `
 ## Commands and keys
 
 `aeterna_phonekit_open` (chat or F8), `+aeterna_phonekit_open` / `-aeterna_phonekit_open` registered with literal
-names and mapped through `AeternaCore.key` with no default key.
+names and mapped through `AeternaCore.key` (`+aeterna_phonekit_open` defaults to `M`, `+aeterna_phonekit_fold` has no default key).
 
 ## Storage
 
@@ -553,7 +553,7 @@ edge from notify to phonekit, ADR 0005 decision 2).
 
 ### Commands and keys (0.2)
 
-New permanent names, registered with literal names and mapped through `AeternaCore.key` with no default key
+New permanent names, registered with literal names and mapped through `AeternaCore.key` (`+aeterna_phonekit_open` defaults to `M`, `+aeterna_phonekit_fold` has no default key)
 (ADR 0004 decision 10):
 
 - `aeterna_phonekit_fold`, `+aeterna_phonekit_fold` / `-aeterna_phonekit_fold`: fold or unfold the held phone while

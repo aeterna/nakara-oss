@@ -51,7 +51,7 @@ ensure aeterna_invkit
 
 - Stash id: `aeterna_stash:c:<citizenid>` or `aeterna_stash:a:<license>` (qbx citizenid when `qbx_core` is started,
   otherwise the `license:` identifier for both scopes). Registered on first open, not at start.
-- Near a point the player sees a key hint (`aeterna_uikit` `keyHints`) for `+aeterna_invkit_open` (no default key).
+- Near a point the player sees a key hint (`aeterna_uikit` `keyHints`) for `+aeterna_invkit_open` (default key `F2`).
   Pressing it sends `aeterna_invkit:sv:open`.
 - The server checks: rate limit, that the player is within `radius` of a configured point (server-side ped
   coordinates, which needs OneSync), then registers and opens the stash.
@@ -107,7 +107,7 @@ Asphalt tokens onto them in the server owner's own override, and why the kit shi
 
 ## Commands and keys
 
-`+aeterna_invkit_open` / `-aeterna_invkit_open` (no default), registered with literal names. `aeterna_stash` when
+`+aeterna_invkit_open` / `-aeterna_invkit_open` (default key `F2`), registered with literal names. `aeterna_stash` when
 `Config.stash.command = true`.
 
 ## Storage

@@ -60,7 +60,7 @@
       <h2 id="v02">Coming in 0.2</h2>
       <p>0.2 is not out yet. Everything in this section comes from specs written before the code, and details can change before release. The seven packages above go to 0.2.0, and five new packages start at 0.1.0, which makes twelve.</p>
       <h3 id="radial">aeterna_radial · radial menu</h3>
-      <p>A ring of 4 to 8 slots in the middle of the screen, where a slot can open a second ring. Other resources add and remove slots by export, with conditions that decide when each one shows. For a slot that affects other players, the server checks the conditions again before acting. The kit ships an empty menu for your server to fill. Mouse or gamepad, no default key.</p>
+      <p>A ring of 4 to 8 slots in the middle of the screen, where a slot can open a second ring. Other resources add and remove slots by export, with conditions that decide when each one shows. For a slot that affects other players, the server checks the conditions again before acting. The kit ships an empty menu for your server to fill. Mouse or gamepad; the keyboard opener defaults to F3.</p>
       <h3 id="loading">aeterna_loading · loading screen</h3>
       <p>Tells players what is really happening while they join: the map loading, scripts starting (as a percentage) and the wait for their character. It shows your server's name, a background image and rotating tips, all from one config file. It loads nothing from other hosts.</p>
       <h3 id="testkit">aeterna_testkit · test the whole kit</h3>
@@ -82,7 +82,7 @@ ensure aeterna_layout
 ensure aeterna_hudkit
 ensure aeterna_phonekit
 ensure aeterna_invkit</code></pre>
-      <p>No package sets a default key. Players bind keys in Settings → Key Bindings → FiveM.</p>
+      <p>A few openers suggest a default key (F5 menu, M phone, F3 radial menu, F2 stash, F9 test menu, Y/U toast actions, PageUp/PageDown calls); every other mapping has none. A player's own binding always wins. Players bind keys in Settings → Key Bindings → FiveM, and the server owner can change or turn off defaults with <code>setr aeterna_keys</code>.</p>
       <h2>Tested with</h2>
       <p>FXServer Enhanced, game build 3788, with qbx_core 1.23.0, ox_lib 3.30.6, oxmysql 2.14.3 and ox_inventory 2.44.0. Other versions are not tested.</p>
       <h2>Your server, your look</h2>

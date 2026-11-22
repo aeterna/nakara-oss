@@ -233,9 +233,9 @@ None. This package has no `ui_page`; every screen is a phonekit panel spec.
 
 Permanent names:
 
-- `+aeterna_phonecall_answer` / `-aeterna_phonecall_answer` — answer a ringing call (key mapping, no default key)
+- `+aeterna_phonecall_answer` / `-aeterna_phonecall_answer` — answer a ringing call (key mapping, default key `PAGEUP`)
 - `+aeterna_phonecall_hangup` / `-aeterna_phonecall_hangup` — decline a ringing call or end the current call (key
-  mapping, no default key)
+  mapping, default key `PAGEDOWN`)
 - `aeterna_phonecall_number <serverId>` — console or ACE `aeterna.phonecall.admin`: prints that player's number
 - `aeterna_phonecall_setnumber <serverId> <number>` — console or ACE `aeterna.phonecall.admin`: sets the number if it
   matches `Config.number.format` and is free; the player's open screens refresh

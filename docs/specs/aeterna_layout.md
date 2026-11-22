@@ -92,7 +92,7 @@ default when there is none. When an owner resource stops, its elements leave the
 ## Editor
 
 Opened from the `aeterna_uikit` menu entry, the command `aeterna_layout`, or the key mapping `+aeterna_layout_edit`
-(no default key, ADR 0004 decision 10). Layout asks `aeterna_core` for focus (`cursor`, `keyboard`).
+(no default key). Layout asks `aeterna_core` for focus (`cursor`, `keyboard`).
 
 - Full-screen transparent layer. Each element gets a dashed stand-in box at its place and size with its label.
 - Drag with the mouse. The owner gets `apply` at most every 100 ms while dragging and once on drop, so the real

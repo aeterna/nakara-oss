@@ -134,7 +134,8 @@ fold screen and "no phone" toast look right is phonekit's own check; invkit cann
 
 ## Commands and keys / คำสั่งและปุ่มลัด
 
-All key mappings ship with **no default key** (ADR 0004 decision 10) so they never clash with `ox_inventory` (`TAB`, `1`–`5`). Players bind them in **Settings → Key Bindings → FiveM**:
+`+aeterna_invkit_open` suggests the default key `F2` (it does not clash with `ox_inventory`'s `TAB` and `1`–`5`); a player's own binding always wins. Players bind or change keys in **Settings → Key Bindings → FiveM**. The server owner can change or turn off the defaults with `setr aeterna_keys` (see the `aeterna_core` README).
+
 
 - `+aeterna_invkit_open` / `-aeterna_invkit_open` — Open personal stash when near a configured point
 - `aeterna_stash` — Open personal stash when `Config.stash.command = true`

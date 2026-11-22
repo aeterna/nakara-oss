@@ -45,7 +45,7 @@ The server picks the backend once at start from the `gamename` convar:
    add_ace group.admin aeterna.phonecall.admin allow
    ```
 
-4. Players bind keys in **Settings → Key Bindings → FiveM → "Answer a phone call"** and **"Decline or end a phone call"**. There is no default key. / ผู้เล่นตั้งปุ่มเอง ไม่มีปุ่มตั้งต้น
+4. Players bind keys in **Settings → Key Bindings → FiveM → "Answer a phone call"** and **"Decline or end a phone call"**. Default keys: `PAGEUP` answers, `PAGEDOWN` declines or ends; a player's own binding wins. The server owner can change or turn off defaults with `setr aeterna_keys` (see the `aeterna_core` README). / ปุ่มตั้งต้น: `PAGEUP` รับสาย `PAGEDOWN` ปฏิเสธหรือวางสาย ผู้เล่นตั้งปุ่มเองได้ เจ้าของเซิร์ฟเปลี่ยนหรือปิดค่าตั้งต้นได้ด้วย `setr aeterna_keys`
 
 ## Config / การตั้งค่า
 
@@ -106,8 +106,8 @@ End reasons: `hangup`, `declined`, `missed`, `busy`, `unavailable`, `dropped`, `
 
 ## Commands and keys / คำสั่งและปุ่มลัด
 
-- `+aeterna_phonecall_answer` / `-aeterna_phonecall_answer` — answer a ringing call (key mapping, **no default key**)
-- `+aeterna_phonecall_hangup` / `-aeterna_phonecall_hangup` — decline a ringing call or end the current call (key mapping, **no default key**)
+- `+aeterna_phonecall_answer` / `-aeterna_phonecall_answer` — answer a ringing call (key mapping, default key `PAGEUP`)
+- `+aeterna_phonecall_hangup` / `-aeterna_phonecall_hangup` — decline a ringing call or end the current call (key mapping, default key `PAGEDOWN`)
 - `aeterna_phonecall_number <serverId>` — console or ACE `aeterna.phonecall.admin`: prints that player's number in the server console
 - `aeterna_phonecall_setnumber <serverId> <number>` — console or ACE `aeterna.phonecall.admin`: sets the number if it matches `Config.number.format` (formatted or digits only) and is free; the old number is freed at once
 

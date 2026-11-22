@@ -207,7 +207,7 @@ with `PlaySoundFrontend(-1, name, set, true)`. The shipped names are **not verif
 
 Toasts still never take focus and never block input (0.1 rule). So an action is pressed in one of two ways:
 
-1. **Key mappings** `+aeterna_notify_action1` and `+aeterna_notify_action2` (no default key, ADR 0004 decision 10)
+1. **Key mappings** `+aeterna_notify_action1` and `+aeterna_notify_action2` (default keys `Y` and `U`, ADR 0004 decision 10 amended 2026-11-22)
    press the first or second action of the newest toast that has actions. The button shows the player's binding
    (`GetControlInstructionalButton`); unbound shows locale `notify.action.unbound`.
 2. **Mouse**, only when the cursor is already free because another resource holds focus.
@@ -340,7 +340,7 @@ NUI → Lua adds `toastAction {toastId, action}`, validated against the toast on
 ### Commands and keys (0.2)
 
 `aeterna_notify_sound`, `aeterna_announce_countdown`, `+aeterna_notify_action1` / `-aeterna_notify_action1`,
-`+aeterna_notify_action2` / `-aeterna_notify_action2`, all registered with literal names, no default key.
+`+aeterna_notify_action2` / `-aeterna_notify_action2`, all registered with literal names, default keys `Y` and `U`.
 
 ### Storage (0.2)
 

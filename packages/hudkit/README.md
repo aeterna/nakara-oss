@@ -134,7 +134,7 @@ Self-test events are accepted only from `aeterna_core` (the invoking resource), 
 ## Commands and keys / คำสั่งและปุ่มลัด
 
 - `aeterna_hudkit_settings` — Open HUD settings panel (chat or F8 console)
-- `+aeterna_hudkit_settings` / `-aeterna_hudkit_settings` — Key mapping (no default key, bind in Settings → Key Bindings → FiveM)
+- `+aeterna_hudkit_settings` / `-aeterna_hudkit_settings` — Key mapping (no default key, bind in Settings → Key Bindings → FiveM; the owner can set one with `setr aeterna_keys`)
 
 Settings (show numbers, speed unit, minimap mode, bar style) persist locally in client KVP under `aeterna_hudkit:settings:v1`. A value saved by 0.1 has no bar style and reads as `Config.barStyle`.
 

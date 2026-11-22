@@ -8,7 +8,7 @@ Camera and Gallery apps inside the AETERNA Starter Kit phone. The Camera is the 
 
 ## What it does / การทำงาน
 
-- **Camera (กล้อง):** the Camera tile closes the phone and opens the viewfinder. Shutter, switch camera and close come from the base game's phone controls (keyboard and gamepad) and from two key mappings with no default key. The overlay shows key hints and a counter `12 / 60`. / แตะไอคอนกล้องแล้วโทรศัพท์ปิดและเปิดช่องมองภาพ
+- **Camera (กล้อง):** the Camera tile closes the phone and opens the viewfinder. Shutter, switch camera and close come from the base game's phone controls (keyboard and gamepad) and from two key mappings with no default key (the owner can set one with `setr aeterna_keys`). The overlay shows key hints and a counter `12 / 60`. / แตะไอคอนกล้องแล้วโทรศัพท์ปิดและเปิดช่องมองภาพ
 - **Photos (รูปถ่าย):** the server decides whether a photo may be taken and hands out a single-use ticket (30 s); the client captures its own screen (overlay, HUD and radar hidden) and sends it back as a latent net event. The server checks the ticket first, then the size, the `data:image/jpeg;base64,` prefix, the base64 and the JPEG start and end bytes, and writes `photos/<id>.jpg`. / เซิร์ฟเวอร์ออกตั๋วใช้ครั้งเดียว ผู้เล่นถ่ายหน้าจอตัวเองแล้วส่งกลับ เซิร์ฟเวอร์ตรวจแล้วจึงบันทึก
 - **Gallery (แกลเลอรี):** the character's photos, newest first; a full view with Delete and a confirm row (Delete / Cancel, Esc = Cancel). / รูปของตัวละคร ใหม่สุดก่อน ดูเต็มจอและลบได้
 - **Without `screenshot-basic` (ไม่มี screenshot-basic):** the viewfinder still works, the shutter shows "Photos are not available on this server", and the gallery still lists saved photos. `screenshot-basic` is detected at run time and is never a dependency. / ช่องมองภาพยังใช้ได้ แต่ถ่ายรูปไม่ได้
@@ -89,7 +89,7 @@ The self-tests `store_roundtrip`, `caps` and `saved_hook` save and remove small 
 
 ## Commands and keys / คำสั่งและปุ่มลัด
 
-- `+aeterna_camera_shutter` / `-aeterna_camera_shutter` — take a photo while the viewfinder is open, **no default key**
+- `+aeterna_camera_shutter` / `-aeterna_camera_shutter` — take a photo while the viewfinder is open, no default key
 - `+aeterna_camera_switch` / `-aeterna_camera_switch` — switch selfie and back camera, **no default key**
 - `aeterna_camera_remove <id>` — console, or players with ACE `aeterna.camera.admin`: removes a photo (reason `admin`)
 

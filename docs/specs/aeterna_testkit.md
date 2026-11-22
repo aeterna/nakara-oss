@@ -47,7 +47,7 @@ Player B needs no ACE; B accepts an invite on screen.
 
 ## Opening the menu
 
-- Key mapping `+aeterna_testkit_menu` with **no default key** (ADR 0004 decision 10): Settings → Key Bindings → FiveM.
+- Key mapping `+aeterna_testkit_menu` with default key `F9` (ADR 0004 decision 10 amended 2026-11-22): Settings → Key Bindings → FiveM.
   When `Config.menuEntry` is true, the same menu also opens from the `aeterna_uikit` menu.
 - The client sends `aeterna_testkit:sv:open`; the server checks ACE `aeterna.testkit.run` and only then opens the menu
   panel with `exports.aeterna_uikit:open`. A player without the ACE gets a small uikit panel (`sm`) with the line
@@ -281,7 +281,7 @@ Lua → NUI: `aeterna:theme` (with `preset`), `locale`, `eye:show {header, ask, 
 ## Commands and keys
 
 `aeterna_testkit_run` (console only), `+aeterna_testkit_menu` / `-aeterna_testkit_menu`, `+aeterna_testkit_leave` /
-`-aeterna_testkit_leave` (each pair registered with literal names in the client) — no default keys. These names
+`-aeterna_testkit_leave` (each pair registered with literal names in the client) — `+aeterna_testkit_menu` defaults to `F9`, `+aeterna_testkit_leave` has no default key. These names
 are permanent once released.
 
 ## Storage

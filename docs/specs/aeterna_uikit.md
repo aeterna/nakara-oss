@@ -89,8 +89,8 @@ If focus is lost (`aeterna_core:focusLost`), the prompt resolves as cancelled.
 | --- | --- | --- |
 | `confirm({ title, body?, confirm?, cancel?, danger? })` | boolean | Labels default to locale `uikit.confirm.ok` / `uikit.confirm.cancel`. |
 | `input({ title, fields = { {id, label, input, min?, max?, maxLen?, value?} } })` | table or nil | ≤ 6 fields; values checked as in panels. |
-| `progress({ label, duration, cancelable?, disable? })` | boolean (client-reported; see README § Payloads) | `duration` 300–60000 ms. `disable = { move, car, combat, mouse }` blocks those controls while it runs. Cancel key = the player's binding for `+aeterna_uikit_cancel` (no default) or ESC when the mouse is free. Returns `true` when it finished. Does not take focus. |
-| `skillCheck({ difficulty = 'easy'|'medium'|'hard', rounds = 1..5 })` | boolean (client-reported) | A moving marker and a target zone. The player presses the key bound to `+aeterna_uikit_skill` (no default), or Space (see the note below). |
+| `progress({ label, duration, cancelable?, disable? })` | boolean (client-reported; see README § Payloads) | `duration` 300–60000 ms. `disable = { move, car, combat, mouse }` blocks those controls while it runs. Cancel key = the player's binding for `+aeterna_uikit_cancel` (no default key) or ESC when the mouse is free. Returns `true` when it finished. Does not take focus. |
+| `skillCheck({ difficulty = 'easy'|'medium'|'hard', rounds = 1..5 })` | boolean (client-reported) | A moving marker and a target zone. The player presses the key bound to `+aeterna_uikit_skill` (no default key), or Space (see the note below). |
 | `keyHints(list)` / `clearKeyHints()` | nil | `list = { {key = 'command name', label = '≤ 30'} }`, ≤ 4 rows. Shows the player's real binding for that command via `GetControlInstructionalButton`; unbound shows locale `uikit.key.unbound`. |
 
 Note on `skillCheck`: while a check runs, Space is read through the jump control and jumping is disabled with
@@ -105,7 +105,7 @@ default input, so ADR 0004 decision 10 lists it as its one exception (with ESC, 
 | `removeMenuEntry(id)` | |
 | `showMenu(src)` | |
 
-The menu opens with the key mapping `+aeterna_uikit_menu` (no default) or the command `aeterna_uikit_menu`. It shows
+The menu opens with the key mapping `+aeterna_uikit_menu` (default key `F5`) or the command `aeterna_uikit_menu`. It shows
 only entries whose `ace` the player has. When the player picks one, the server checks again that the entry still
 exists and that the player has its `ace`, then fires the server-local event `aeterna_uikit:menu` → `(src, { owner, id })`;
 the owner opens its own panel.
@@ -133,8 +133,8 @@ validated with the same schemas before it is forwarded.
 
 ## Commands and keys
 
-`aeterna_uikit_menu` (chat or F8), `+aeterna_uikit_menu`, `+aeterna_uikit_cancel`, `+aeterna_uikit_skill` — all
-without a default key. Each `+`/`-` pair is registered with literal names in uikit's client code.
+`aeterna_uikit_menu` (chat or F8), `+aeterna_uikit_menu`, `+aeterna_uikit_cancel`, `+aeterna_uikit_skill` — only
+`+aeterna_uikit_menu` has a default key (`F5`). Each `+`/`-` pair is registered with literal names in uikit's client code.
 
 ## Icons
 

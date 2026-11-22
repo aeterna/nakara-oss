@@ -65,7 +65,8 @@ Server-local events (filter on `data.owner == GetCurrentResourceName()`):
 
 ## Commands and keys / คำสั่งและปุ่มลัด
 
-All key mappings ship with **no default key** (ADR 0004 decision 10) so they never conflict with existing bindings. Players bind them in **Settings → Key Bindings → FiveM**:
+`+aeterna_uikit_menu` suggests the default key `F5`; `+aeterna_uikit_cancel` and `+aeterna_uikit_skill` have no default key. A player's own binding always wins. Players bind or change keys in **Settings → Key Bindings → FiveM**. The server owner can change or turn off the defaults with `setr aeterna_keys` (see the `aeterna_core` README).
+
 
 - `aeterna_uikit_menu` / `+aeterna_uikit_menu` — Open the shared menu
 - `+aeterna_uikit_cancel` — Cancel an active progress bar

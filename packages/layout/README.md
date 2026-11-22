@@ -78,7 +78,7 @@ local top  = place.y * screenHeight - place.ay * height * place.scale
 
 ## Commands and keys / คำสั่งและปุ่มลัด
 
-All key mappings ship with **no default key** (ADR 0004 decision 10). Players bind them in **Settings → Key Bindings → FiveM**:
+The key mapping ships with **no default key**. Players bind it in **Settings → Key Bindings → FiveM**; the server owner can set a key for it with `setr aeterna_keys` (see the `aeterna_core` README):
 
 - `aeterna_layout` — Open the HUD layout editor (console / chat)
 - `+aeterna_layout_edit` / `-aeterna_layout_edit` — Open the HUD layout editor (key binding)

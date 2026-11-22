@@ -124,7 +124,7 @@ Server-local events (0.2): `aeterna_phonekit:hello`, `:listen`, `:answer`, `:dev
 ## Commands and keys / คำสั่งและปุ่มลัด
 
 - `aeterna_phonekit_open` — Console / chat command to toggle the phone.
-- `+aeterna_phonekit_open` / `-aeterna_phonekit_open` — Key mapping registered via `AeternaCore.key` (no default key bound, bind in Settings -> Key Bindings -> FiveM).
+- `+aeterna_phonekit_open` / `-aeterna_phonekit_open` — Key mapping registered via `AeternaCore.key` (default key `M`; players can rebind it in Settings -> Key Bindings -> FiveM, and the owner can change or turn off defaults with `setr aeterna_keys`, see the `aeterna_core` README).
 - `aeterna_phonekit_fold`, `+aeterna_phonekit_fold` / `-aeterna_phonekit_fold` (0.2) — fold or unfold a `fold` or `book` while it is open (no default key).
 - Backspace or Right Mouse Button (RMB) returns to the previous screen (control centre open: closes it).
 - ESC closes the phone from every screen. The key bound to the open mapping also puts the phone away (an F-key works while typing).
