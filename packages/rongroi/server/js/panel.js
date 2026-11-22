@@ -165,6 +165,10 @@ function createPanel(deps) {
     }
 
     function makePairingCode(serverOrigin, issued, policy) {
+        // main.js passes one code maker for the whole Kit (rr1, or rr2 bound to a Relay; ADR 0001 section 14).
+        if (typeof deps.makeCode === 'function') {
+            return deps.makeCode({ serverOrigin, ticket: issued.ticket, nonce: issued.nonce, expiresAt: issued.expiresAt, policy });
+        }
         return pairingCode({
             serverOrigin,
             ticket: issued.ticket,

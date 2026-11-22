@@ -8,6 +8,7 @@ const {
     createSettings,
     buildPolicy,
     canOpenCase,
+    withServerCfg,
     POSTURE_COLLECTORS,
     STANDARD_COLLECTORS,
 } = require('../server/js/settings.js');
@@ -369,7 +370,73 @@ test('canOpenCase names the missing public origin first, then the missing server
     assert.deepEqual(canOpenCase(settings), { ok: true });
 });
 
+test('withServerCfg: a server.cfg name fills an unset server name, so a fresh install can open a case', () => {
+    const stored = createSettings(memoryKvp());
+    const settings = withServerCfg(stored, { cfgOrigin: 'http://192.0.2.10:30120', cfgServerName: 'Kit Test City' });
+    assert.equal(settings.get().serverName, 'Kit Test City');
+    assert.deepEqual(canOpenCase(settings), { ok: true });
+    assert.equal(buildPolicy(settings).server_name, 'Kit Test City');
+});
+
+test('withServerCfg: a name saved on the Policy screen wins over server.cfg and stays editable', () => {
+    const stored = createSettings(memoryKvp());
+    const settings = withServerCfg(stored, { cfgOrigin: 'http://192.0.2.10:30120', cfgServerName: 'From cfg' });
+    assert.deepEqual(settings.set('serverName', 'Saved In Panel'), { ok: true });
+    assert.equal(settings.get().serverName, 'Saved In Panel');
+    assert.ok(!settings.get().fromServerCfg.includes('serverName'));
+});
+
+test('withServerCfg: an empty, too long or control-character server.cfg name is ignored', () => {
+    for (const bad of ['', '   ', 'a'.repeat(129), 'bad\u0007name', 42, null, undefined]) {
+        const stored = createSettings(memoryKvp());
+        const settings = withServerCfg(stored, { cfgOrigin: 'http://192.0.2.10:30120', cfgServerName: bad });
+        assert.deepEqual(canOpenCase(settings), { ok: false, reason: 'server_name_missing' }, String(bad));
+    }
+    const trimmed = withServerCfg(createSettings(memoryKvp()), { cfgServerName: '  Padded  ' });
+    assert.equal(trimmed.get().serverName, 'Padded');
+});
+
+test('withServerCfg: a Policy save that resends the server.cfg name does not pin it in KVP', () => {
+    const kvp = memoryKvp();
+    const stored = createSettings(kvp);
+    const first = withServerCfg(stored, { cfgServerName: 'From cfg', cfgServerNameFrom: 'sv_projectName' });
+    assert.deepEqual(first.set('serverName', 'From cfg'), { ok: true });
+    assert.equal(stored.get().serverName, null, 'nothing stored');
+    // server.cfg changes before the next start: the new name shows, nothing was frozen.
+    const next = withServerCfg(createSettings(kvp), { cfgServerName: 'Renamed', cfgServerNameFrom: 'sv_projectName' });
+    assert.equal(next.get().serverName, 'Renamed');
+    assert.equal(next.get().serverNameFrom, 'sv_projectName');
+    // A different name typed on the Policy screen is stored and wins from then on.
+    assert.deepEqual(next.set('serverName', 'Typed'), { ok: true });
+    assert.equal(stored.get().serverName === 'Typed' || createSettings(kvp).get().serverName === 'Typed', true);
+    assert.equal(next.get().serverNameFrom, 'policy');
+});
+
+test('withServerCfg: FiveM colour codes are stripped from a server.cfg name', () => {
+    const settings = withServerCfg(createSettings(memoryKvp()), { cfgServerName: '^2Kit ^7Test^0 City', cfgServerNameFrom: 'sv_projectName' });
+    assert.equal(settings.get().serverName, 'Kit Test City');
+    const onlyCodes = withServerCfg(createSettings(memoryKvp()), { cfgServerName: '^1^2', cfgServerNameFrom: 'sv_projectName' });
+    assert.deepEqual(canOpenCase(onlyCodes), { ok: false, reason: 'public_origin_missing' });
+    assert.equal(onlyCodes.get().serverName, null);
+});
+
+test('withServerCfg: the relay origin wins over rongroi_public_origin, and both lock the field', () => {
+    const stored = createSettings(memoryKvp());
+    stored.set('publicOrigin', 'http://198.51.100.1:30120');
+    const relay = { origin: 'https://relay.example.test' };
+    const viaRelay = withServerCfg(stored, { relay, cfgOrigin: 'http://192.0.2.10:30120' }).get();
+    assert.equal(viaRelay.publicOrigin, 'https://relay.example.test');
+    assert.equal(viaRelay.transport, 'relay');
+    assert.deepEqual(viaRelay.fromServerCfg, ['publicOrigin']);
+    const viaCfg = withServerCfg(stored, { cfgOrigin: 'http://192.0.2.10:30120' }).get();
+    assert.equal(viaCfg.publicOrigin, 'http://192.0.2.10:30120');
+    assert.equal(viaCfg.transport, undefined);
+    const neither = withServerCfg(stored, {}).get();
+    assert.equal(neither.publicOrigin, 'http://198.51.100.1:30120');
+    assert.deepEqual(neither.fromServerCfg, []);
+});
+
 test('settings.js source does not read a convar', () => {
-    const sources = [createSettings, buildPolicy, canOpenCase].map((fn) => fn.toString());
+    const sources = [createSettings, buildPolicy, canOpenCase, withServerCfg].map((fn) => fn.toString());
     assert.equal(sources.join('\n').includes('GetConvar'), false);
 });

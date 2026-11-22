@@ -79,7 +79,8 @@ sweep removes one case every 250 ms.
 ## Commands, net events and API
 
 `/rongroi` opens the staff panel for a holder of the `nakara_rongroi.staff` ACE and asks for the player's own
-pairing code otherwise. The checks, the panel logic and its per-kind rate limits live in
+pairing code otherwise. Opening a case needs a public origin and a server name: the name comes from the Policy screen,
+else `rongroi_server_name`, else `sv_projectName` in `server.cfg`. The checks, the panel logic and its per-kind rate limits live in
 `server/js/panel.js`; `server/js/main.js` wires it up and adds a coarse per-source guard.
 
 Client to server net events (ADR 0001 section 10):
