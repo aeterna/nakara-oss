@@ -6,6 +6,11 @@ All notable changes to `aeterna_testkit` are documented here. The format follows
 
 ## Unreleased
 
+### Fixed
+
+- The report showed no FXServer build on Enhanced: the version convar reads `FXServer-early-access b177 linux` there
+  (measured); the build is now read from `b<n>` as well as `v1.0.0.<n>`.
+
 ### Added
 
 - Initial `aeterna_testkit` 0.1.0 package for the AETERNA Starter Kit (ADR 0005 decision 7): the menu and report layer on top of the `aeterna_core` 0.2 self-test runner.

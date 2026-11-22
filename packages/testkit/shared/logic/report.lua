@@ -43,7 +43,8 @@ end
 -- The build number from the server's `version` convar, or nil. Nothing else of the string is kept.
 function M.parseBuild(version)
     if type(version) ~= 'string' then return nil end
-    return version:match('v1%.0%.0%.(%d+)')
+    -- Legacy: "FXServer-master v1.0.0.7290 linux"; Enhanced: "FXServer-early-access b177 linux"
+    return version:match('v1%.0%.0%.(%d+)') or version:match('%sb(%d+)%f[%D]')
 end
 
 -- The worse of two states: FAIL, MISSING, GAP, SKIP, MOCK, PASS.

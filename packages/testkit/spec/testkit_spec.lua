@@ -277,6 +277,8 @@ describe('aeterna_testkit', function()
         it('keeps only the build number', function()
             assert.are.equal('13068', R.parseBuild('FXServer-master SERVER v1.0.0.13068 win32'))
             assert.are.equal('7290', R.parseBuild('FXServer-master v1.0.0.7290 linux'))
+            -- FXServer Enhanced (measured W3 2026-11-22): "FXServer-early-access b177 linux"
+            assert.are.equal('177', R.parseBuild('FXServer-early-access b177 linux'))
         end)
 
         it('returns nil when there is no build', function()
