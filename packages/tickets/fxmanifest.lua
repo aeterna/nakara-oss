@@ -4,7 +4,7 @@ game 'gta5'
 name 'nakara_tickets'
 author 'Nakara City dev team'
 description 'FiveM game bridge for Nakara Tickets: player support, revive, teleport and item actions.'
-version '0.1.0'
+version '0.1.1'
 repository 'https://github.com/aeterna/nakara-oss'
 
 server_scripts {
