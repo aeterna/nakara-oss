@@ -14,6 +14,8 @@ All notable changes to `nakara_rongroi` are documented here. The format follows
 
 ### Fixed
 
+- Relay requests go through Node's `https.request`, not `fetch()`: on FXServer every `fetch()` POST with a body logged
+  `Unhandled promise rejection ... Reader released` although it succeeded (measured on a test server, 2026-11-22).
 - The missing-reports warning counts only lost index entries, not case files that read null. A later write keeps a
   start-up loss in the stored count until staff remove the missing entries.
 
