@@ -4,6 +4,8 @@
 - Amended: 2026-11-02, section 4 after the section 2 probe (owner chose files on Enhanced); Claude Code - Claude Opus 5.5
 - Amended: 2026-11-21, section 14 (easy adoption: four convars, the relay transport, keeping reports across an
   update) after the owner decided aeterna-rongroi ADR 0097's questions; Claude Code - Claude Opus 5.5
+- Amended: 2026-11-22, section 14 item 1 after the live test: a fifth convar `rongroi_server_name`, else
+  `sv_projectName`, for the server name; Claude Code - Claude Opus 5.5
 - Date: 2026-11-01
 - Related: aeterna-rongroi ADR 0089, "Rongroi product line and schema 2" (not merged yet:
   [aeterna/aeterna-rongroi#252](https://github.com/aeterna/aeterna-rongroi/pull/252)); aeterna-rongroi
@@ -256,7 +258,7 @@ anything from a record.
 ### 11. Settings, frameworks and UI
 
 - Settings live in the in-game panel and KVP. The Kit reads only `gamename` and the convars in section 14 (amended
-  2026-11-21).
+  2026-11-21 and 2026-11-22, including `sv_projectName`).
 - Staff permission is the ACE `nakara_rongroi.staff` via `IsPlayerAceAllowed`.
 - External resources the Kit may touch, each only when `GetResourceState` says it is started: `qbx_core`,
   `qb-core`, `es_extended` (names and identifiers), `ox_lib` (callbacks, rate limit), `oxmysql` (storage).
@@ -300,6 +302,13 @@ a second transport, the Rongroi Relay, and an `rr2.` code. This section is what 
    never prints it either. When one is not set, the panel setting applies as before. No other setting moves to a
    convar. For relay codes, `server_origin` is the public `https` origin of `rongroi_relay_url`; an `http:` relay URL is
    refused at start.
+   Amended 2026-11-22 (live test): a fifth convar, `rongroi_server_name`, else `sv_projectName`, fills the server name
+   only while the Policy screen has never saved one, so a fresh install can open a case with no panel step; a saved
+   name wins and the field stays editable; a Policy save that resends the server.cfg name stores nothing, so later
+   server.cfg edits still show. FiveM colour codes (`^0`-`^9`) are stripped. The name is part of the policy, so a changed
+   `sv_projectName` changes the policy hash of tickets issued after the restart; `rongroi doctor` says where the name
+   comes from and suggests `rongroi_server_name` to pin it. The live test found the case gate asking for a server name that only the
+   Policy screen sets, which a new owner could not find from Settings.
 2. **Which code the Kit issues.** `rr1.` while the transport is direct and the resource is named `nakara_rongroi`, so
    Connect 0.1.1 keeps working. `rr2.` (with `base_path` and `transport`) otherwise. ADR 0097 §2 holds the format.
 3. **Relay client.** When `rongroi_relay_url` and `rongroi_relay_key` are set, the Kit registers each ticket with the

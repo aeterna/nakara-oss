@@ -7,7 +7,7 @@
     "commands": [],
     "registeredCommands": ["rongroi"],
     "httpHandlers": ["policy/*", "report", "report/chunk"],
-    "convars": { "read": ["gamename", "rongroi_public_origin", "rongroi_relay_url", "rongroi_relay_id", "rongroi_relay_key"], "write": [] },
+    "convars": { "read": ["gamename", "rongroi_public_origin", "rongroi_relay_url", "rongroi_relay_id", "rongroi_relay_key", "rongroi_server_name", "sv_projectName"], "write": [] },
     "netEvents": {
       "server": [
         "nakara_rongroi:requestCode",

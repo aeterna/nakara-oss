@@ -61,7 +61,7 @@
         () => require('./filestore.js'),
         () => require('./server/js/filestore.js'),
     );
-    const { createSettings } = loadModule(
+    const { createSettings, withServerCfg } = loadModule(
         () => require('./settings.js'),
         () => require('./server/js/settings.js'),
     );
@@ -195,17 +195,13 @@
             })
             : null;
         if (relay) log(`relay on: ${relay.origin} as ${relay.id}`);
-        const fromServerCfg = [];
-        if (relay || cfgOrigin) fromServerCfg.push('publicOrigin');
-        const settings = {
-            ...storedSettings,
-            get() {
-                const values = storedSettings.get();
-                if (relay) return { ...values, publicOrigin: relay.origin, fromServerCfg, transport: 'relay' };
-                if (cfgOrigin) return { ...values, publicOrigin: cfgOrigin, fromServerCfg };
-                return values;
-            },
-        };
+        const CFG_SERVER_NAME = GetConvar('rongroi_server_name', '');
+        const settings = withServerCfg(storedSettings, {
+            relay,
+            cfgOrigin,
+            cfgServerName: CFG_SERVER_NAME || GetConvar('sv_projectName', ''),
+            cfgServerNameFrom: CFG_SERVER_NAME ? 'rongroi_server_name' : 'sv_projectName',
+        });
         const kit = loadOrCreateKitKey(kvp);
         const store = new TicketStore({ now: Date.now, randomBytes: crypto.randomBytes });
         const onReport = (event) => {
@@ -495,7 +491,12 @@
             line(true, `edition ${edition}, storage ${edition === 'enhanced' ? 'files in cache/rongroi-reports' : 'KVP'}`);
             const values = settings.get();
             line(typeof values.publicOrigin === 'string' && values.publicOrigin.length > 0,
-                `public origin ${values.publicOrigin || '(not set)'}${fromServerCfg.length ? ' (from server.cfg)' : ''}`);
+                `public origin ${values.publicOrigin || '(not set)'}${values.fromServerCfg.length ? ' (from server.cfg)' : ''}`);
+            line(typeof values.serverName === 'string' && values.serverName.length > 0,
+                `server name ${!values.serverName ? '(not set: Policy screen, or rongroi_server_name in server.cfg)'
+                    : values.serverNameFrom === 'sv_projectName'
+                        ? 'from sv_projectName (set rongroi_server_name to pin it: the policy hash follows the name)'
+                        : `from ${values.serverNameFrom}`}`);
             if (edition === 'enhanced' && marker) {
                 const check = storage.checkIntegrity();
                 line(!(check.expected > check.found), `stored reports: expected ${check.expected}, found ${check.found}`);

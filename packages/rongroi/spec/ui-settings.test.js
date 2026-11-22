@@ -131,3 +131,10 @@ test('a public origin set in server.cfg is locked in the view model and marks th
     const plain = settingsUi.viewModel({ settings: { publicOrigin: 'http://1.2.3.4:30120' } });
     assert.equal(plain.fields.find((f) => f.name === 'publicOrigin').locked, false);
 });
+
+test('the missing-server-name message says where to set it (Policy screen or server.cfg)', () => {
+    assert.match(settingsStrings.en.reasons.server_name_missing, /Policy/);
+    assert.match(settingsStrings.en.reasons.server_name_missing, /rongroi_server_name/);
+    assert.match(settingsStrings.th.reasons.server_name_missing, /Policy/);
+    assert.match(settingsStrings.th.reasons.server_name_missing, /rongroi_server_name/);
+});

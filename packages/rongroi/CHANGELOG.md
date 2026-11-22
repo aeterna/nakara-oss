@@ -14,6 +14,9 @@ All notable changes to `nakara_rongroi` are documented here. The format follows
 
 ### Fixed
 
+- A fresh install can open a case with no panel step: the server name comes from the Policy screen, else
+  `rongroi_server_name`, else `sv_projectName`. The "set the server name" message now says where (the Policy screen;
+  the Settings screen has no such field), and `rongroi doctor` checks it.
 - Relay requests go through Node's `https.request`, not `fetch()`: on FXServer every `fetch()` POST with a body logged
   `Unhandled promise rejection ... Reader released` although it succeeded (measured on a test server, 2026-11-22).
 - The missing-reports warning counts only lost index entries, not case files that read null. A later write keeps a
