@@ -20,7 +20,9 @@
         return {
             screen: 'settings',
             fields: [
-                { name: 'publicOrigin', type: 'text', value: typeof values.publicOrigin === 'string' ? values.publicOrigin : '' },
+                { name: 'publicOrigin', type: 'text', value: typeof values.publicOrigin === 'string' ? values.publicOrigin : '',
+                    locked: Array.isArray(values.fromServerCfg) && values.fromServerCfg.indexOf('publicOrigin') !== -1,
+                    relay: values.transport === 'relay' },
                 { name: 'retentionDays', type: 'number', value: retention, min: 1, max: 365, step: 1 },
                 { name: 'backendOverride', type: 'select', value: backend, options: BACKENDS.slice() },
                 { name: 'uploadPageEnabled', type: 'toggle', value: values.uploadPageEnabled === true },
@@ -90,6 +92,8 @@
                 control.name = field.name;
                 control.type = field.type === 'number' ? 'number' : 'text';
                 control.value = String(field.value);
+                // Set in server.cfg (ADR 0001 section 14): shown, not editable here.
+                if (field.locked === true) control.readOnly = true;
                 if (field.type === 'number') {
                     control.min = String(field.min);
                     control.max = String(field.max);
@@ -97,6 +101,10 @@
                 }
             }
             wrap.appendChild(control);
+            if (field.locked === true) {
+                var note = field.relay === true ? strings.fromServerCfgRelay : strings.fromServerCfg;
+                wrap.appendChild(el('p', 'field-note', typeof note === 'string' ? note : ''));
+            }
         }
         form.appendChild(wrap);
     }
@@ -104,7 +112,7 @@
         var patch = {};
         model.fields.forEach(function (field) {
             var node = form.elements[field.name];
-            if (!node) return;
+            if (!node || field.locked === true) return;
             if (field.type === 'toggle') {
                 patch[field.name] = node.checked === true;
             } else if (field.type === 'number') {

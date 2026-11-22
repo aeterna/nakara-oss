@@ -137,3 +137,30 @@ test('policyHash is order-independent, and floats and non-objects are refused', 
     // Only the top-level member is removed; a nested policy_hash is part of the digest.
     assert.notEqual(policyHash({ a: { policy_hash: 1 } }), policyHash({ a: {} }));
 });
+
+// rr2 codes (aeterna-rongroi ADR 0097 section 2).
+const { pairingCodeV2 } = require('../server/js/pairing.js');
+const V2_INPUT = {
+    serverOrigin: 'https://relay.example.org', basePath: 'srv1', transport: 'relay', ticket: '7a1c9e3f5b2d8a4c6e0f1b3d5a7c9e2f',
+    nonce: 'n-01', expiresAt: Date.UTC(2026, 10, 21, 12, 0, 0), policyHash: '0123456789abcdef',
+    kitPublicKey: 'ovol0Vile5zOPb8MVWv4hi3YXxnWwdhDWs2VxaLj5yA',
+};
+
+test('rr2: eight members in order, and the binding matches the code', () => {
+    const { code, binding } = pairingCodeV2(V2_INPUT);
+    assert.ok(code.startsWith('rr2.'));
+    const payload = JSON.parse(Buffer.from(code.slice(4), 'base64url').toString('utf8'));
+    assert.deepEqual(Object.keys(payload), ['server_origin', 'base_path', 'transport', 'ticket', 'nonce', 'expires_at',
+        'policy_hash', 'kit_public_key']);
+    assert.equal(payload.expires_at, '2026-11-21T12:00:00Z');
+    assert.deepEqual(binding, { base_path: 'srv1', policy_hash: '0123456789abcdef', server_origin: 'https://relay.example.org',
+        ticket: V2_INPUT.ticket, transport: 'relay' });
+});
+
+test('rr2: refuses a relay over http, an unnormalised origin, a bad or reserved base_path, a bad transport', () => {
+    for (const change of [{ serverOrigin: 'http://relay.example.org' }, { serverOrigin: 'https://Relay.example.org' },
+        { serverOrigin: 'https://relay.example.org:443' }, { basePath: 'v1' }, { basePath: 'Srv' }, { basePath: '' },
+        { transport: 'smoke' }]) {
+        assert.throws(() => pairingCodeV2({ ...V2_INPUT, ...change }), TypeError, JSON.stringify(change));
+    }
+});

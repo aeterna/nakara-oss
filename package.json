@@ -7,7 +7,9 @@
   "workspaces": [
     "packages/devkit",
     "packages/rongroi",
-    "packages/tickets"
+    "packages/tickets",
+    "sdk/rongroi-envelope",
+    "relay"
   ],
   "engines": {
     "node": ">=22"

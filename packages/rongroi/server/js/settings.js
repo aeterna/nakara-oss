@@ -292,6 +292,47 @@ function buildPolicy(settings) {
     };
 }
 
+// The values server.cfg contributes on top of the stored settings. main.js reads the convars (this file reads none):
+// the Relay's origin, else rongroi_public_origin, replaces the public origin and locks that field; a server name from
+// server.cfg (rongroi_server_name, else sv_projectName) only fills a name the Policy screen never saved, so a fresh
+// install can open a case without a click and staff can still change the name there.
+function withServerCfg(stored, { relay = null, cfgOrigin = '', cfgServerName, cfgServerNameFrom = 'rongroi_server_name' } = {}) {
+    const fromServerCfg = [];
+    if (relay || cfgOrigin) fromServerCfg.push('publicOrigin');
+    // sv_projectName often carries FiveM colour codes (^0-^9); players would see them in Connect.
+    const cleaned = typeof cfgServerName === 'string' ? cfgServerName.replace(/\^[0-9]/g, '').trim() : '';
+    const cfgName = cleaned.length >= 1 && cleaned.length <= 128 && !CONTROL_RE.test(cleaned) ? cleaned : null;
+    const storedName = () => {
+        const name = stored.get().serverName;
+        return typeof name === 'string' && name.length > 0 ? name : null;
+    };
+    return {
+        ...stored,
+        get() {
+            const values = stored.get();
+            const out = { ...values, fromServerCfg };
+            if (relay) {
+                out.publicOrigin = relay.origin;
+                out.transport = 'relay';
+            } else if (cfgOrigin) {
+                out.publicOrigin = cfgOrigin;
+            }
+            if (storedName()) out.serverNameFrom = 'policy';
+            else if (cfgName) {
+                out.serverName = cfgName;
+                out.serverNameFrom = cfgServerNameFrom;
+            }
+            return out;
+        },
+        // The Policy form sends every field back, so a save that changed only the profile would otherwise pin the
+        // server.cfg name in KVP and later server.cfg edits would stop showing. Resending that same name stores nothing.
+        set(name, value) {
+            if (name === 'serverName' && cfgName && !storedName() && value === cfgName) return { ok: true };
+            return stored.set(name, value);
+        },
+    };
+}
+
 function canOpenCase(settings) {
     const values = valuesOf(settings);
     if (typeof values.publicOrigin !== 'string' || values.publicOrigin.length === 0) {
@@ -309,6 +350,7 @@ if (typeof module !== 'undefined') {
         createSettings,
         buildPolicy,
         canOpenCase,
+        withServerCfg,
         POSTURE_COLLECTORS,
         STANDARD_COLLECTORS,
     };

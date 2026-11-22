@@ -40,6 +40,9 @@ pub fn outcome_text(o: &Outcome) -> String {
         Outcome::RecordRefused | Outcome::UploadFailed => {
             "ส่งผลตรวจไม่สำเร็จ ขอรหัสใหม่จากทีมงาน".to_string()
         }
+        Outcome::RelayWaiting => {
+            "relay ได้รับผลตรวจแล้ว แต่เซิร์ฟเวอร์ยังไม่ยืนยัน ถ้าทีมงานไม่ได้รับให้แจ้งทีมงาน".to_string()
+        }
         Outcome::Unknown(n) => {
             format!("Connect จบด้วยรหัส {n} ลองอีกครั้ง หรือติดต่อทีมงาน")
         }
@@ -51,7 +54,7 @@ pub fn outcome_text(o: &Outcome) -> String {
 
 pub fn error_text(e: &ConnectError) -> String {
     match e {
-        ConnectError::Code(CodeError::Prefix) => "รหัสไม่ถูกต้อง ต้องขึ้นต้นด้วย rr1.".to_string(),
+        ConnectError::Code(CodeError::Prefix) => "รหัสไม่ถูกต้อง ต้องขึ้นต้นด้วย rr1. หรือ rr2.".to_string(),
         ConnectError::Code(CodeError::TooLong) => "รหัสยาวเกินไป".to_string(),
         ConnectError::Code(CodeError::NotPrintable) => "รหัสมีช่องว่างหรือตัวอักษรที่ใช้ไม่ได้".to_string(),
         ConnectError::Unsupported => "Rongroi Connect ใช้ได้บน Windows เท่านั้น".to_string(),
@@ -243,6 +246,10 @@ mod tests {
             "รหัสนี้ใช้ไม่ได้ ขอรหัสใหม่จากทีมงาน"
         );
         assert_eq!(
+            outcome_text(&Outcome::RelayWaiting),
+            "relay ได้รับผลตรวจแล้ว แต่เซิร์ฟเวอร์ยังไม่ยืนยัน ถ้าทีมงานไม่ได้รับให้แจ้งทีมงาน"
+        );
+        assert_eq!(
             outcome_text(&Outcome::Unknown(77)),
             "Connect จบด้วยรหัส 77 ลองอีกครั้ง หรือติดต่อทีมงาน"
         );
@@ -266,7 +273,7 @@ mod tests {
     fn error_text_maps_every_variant() {
         assert_eq!(
             error_text(&ConnectError::Code(CodeError::Prefix)),
-            "รหัสไม่ถูกต้อง ต้องขึ้นต้นด้วย rr1."
+            "รหัสไม่ถูกต้อง ต้องขึ้นต้นด้วย rr1. หรือ rr2."
         );
         assert_eq!(
             error_text(&ConnectError::Code(CodeError::TooLong)),

@@ -4,7 +4,7 @@
 //!
 //! The launcher creates a named pipe that only the current user can open,
 //! starts Connect with the one argument `--from-launcher=<pipe name>`, and
-//! writes one line to the pipe: an `rr1.` pairing code, at most 4096 bytes,
+//! writes one line to the pipe: an `rr1.` or `rr2.` pairing code, at most 4096 bytes,
 //! ended by `\n`. Connect reads that line and writes nothing back. The
 //! caller learns only the exit code:
 //!
@@ -18,6 +18,7 @@
 //! | 13   | sidecar failed |
 //! | 14   | record refused before upload |
 //! | 15   | upload failed |
+//! | 17   | relay only: the relay holds the report, the server has not confirmed it |
 //!
 //! The handoff runs on Windows only. Elsewhere [`start_connect`] returns
 //! [`ConnectError::Unsupported`] without starting anything.
@@ -50,7 +51,8 @@ pub const MAX_CODE_BYTES: usize = 4096;
 pub const HANDOFF_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// The prefix every pairing code starts with.
-const CODE_PREFIX: &str = "rr1.";
+/// rr1 (direct) and rr2 (aeterna-rongroi ADR 0097, Connect ADR 0003) codes.
+const CODE_PREFIXES: [&str; 2] = ["rr1.", "rr2."];
 
 /// The prefix of every launch pipe name.
 const PIPE_PREFIX: &str = r"\\.\pipe\rongroi-launch-";
@@ -68,7 +70,7 @@ const POLL_INTERVAL: Duration = Duration::from_millis(10);
 /// Why a pairing code was rejected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CodeError {
-    /// The code does not start with `rr1.`.
+    /// The code does not start with `rr1.` or `rr2.`.
     Prefix,
     /// The code is longer than 4096 bytes.
     TooLong,
@@ -80,7 +82,7 @@ pub enum CodeError {
 impl fmt::Display for CodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CodeError::Prefix => write!(f, "code does not start with {CODE_PREFIX}"),
+            CodeError::Prefix => write!(f, "code does not start with rr1. or rr2."),
             CodeError::TooLong => write!(f, "code is longer than {MAX_CODE_BYTES} bytes"),
             CodeError::NotPrintable => write!(f, "code has bytes outside printable ASCII"),
         }
@@ -108,6 +110,9 @@ pub enum Outcome {
     RecordRefused,
     /// Exit 15: upload failed.
     UploadFailed,
+    /// Exit 17 (relay transport only): the relay holds the report, but the
+    /// server has not confirmed it yet. Not counted as sent.
+    RelayWaiting,
     /// An exit code the contract does not name.
     Unknown(i32),
     /// The child died to a signal, so there is no exit code.
@@ -126,6 +131,7 @@ impl Outcome {
             Some(14) => Outcome::RecordRefused,
             Some(15) => Outcome::UploadFailed,
             Some(16) => Outcome::DeclineAccepted,
+            Some(17) => Outcome::RelayWaiting,
             Some(code) => Outcome::Unknown(code),
             None => Outcome::Signal,
         }
@@ -148,6 +154,7 @@ impl Outcome {
             Outcome::Sidecar => Some(13),
             Outcome::RecordRefused => Some(14),
             Outcome::UploadFailed => Some(15),
+            Outcome::RelayWaiting => Some(17),
             Outcome::Unknown(code) => Some(*code),
             Outcome::Signal => None,
         }
@@ -206,11 +213,11 @@ impl std::error::Error for ConnectError {
 }
 
 /// Check a pairing code against the handoff contract: it must start with
-/// `rr1.`, be at most 4096 bytes, and hold printable ASCII only (0x21-0x7E).
+/// `rr1.` or `rr2.`, be at most 4096 bytes, and hold printable ASCII only (0x21-0x7E).
 /// Nothing is trimmed: any space, line break, control character or non-ASCII
 /// byte refuses the code.
 pub fn validate_code(code: &str) -> Result<&str, CodeError> {
-    if !code.starts_with(CODE_PREFIX) {
+    if !CODE_PREFIXES.iter().any(|prefix| code.starts_with(prefix)) {
         return Err(CodeError::Prefix);
     }
     if code.len() > MAX_CODE_BYTES {
@@ -528,29 +535,24 @@ mod tests {
 
     #[test]
     fn accepts_a_code_of_exactly_max_bytes() {
-        let code = format!(
-            "{CODE_PREFIX}{}",
-            "x".repeat(MAX_CODE_BYTES - CODE_PREFIX.len())
-        );
+        let code = format!("rr1.{}", "x".repeat(MAX_CODE_BYTES - "rr1.".len()));
         assert_eq!(code.len(), MAX_CODE_BYTES);
         assert_eq!(validate_code(&code), Ok(code.as_str()));
     }
 
     #[test]
     fn rejects_a_code_over_max_bytes() {
-        let code = format!(
-            "{CODE_PREFIX}{}",
-            "x".repeat(MAX_CODE_BYTES - CODE_PREFIX.len() + 1)
-        );
+        let code = format!("rr1.{}", "x".repeat(MAX_CODE_BYTES - "rr1.".len() + 1));
         assert_eq!(code.len(), MAX_CODE_BYTES + 1);
         assert_eq!(validate_code(&code), Err(CodeError::TooLong));
     }
 
     #[test]
-    fn rejects_codes_without_the_rr1_prefix() {
+    fn rejects_codes_without_an_rr1_or_rr2_prefix() {
         assert_eq!(validate_code(""), Err(CodeError::Prefix));
         assert_eq!(validate_code("rr1"), Err(CodeError::Prefix));
-        assert_eq!(validate_code("rr2.abc"), Err(CodeError::Prefix));
+        assert_eq!(validate_code("rr2.abc"), Ok("rr2.abc"));
+        assert_eq!(validate_code("rr3.abc"), Err(CodeError::Prefix));
         assert_eq!(validate_code("RR1.abc"), Err(CodeError::Prefix));
     }
 
@@ -603,6 +605,7 @@ mod tests {
             (14, Outcome::RecordRefused),
             (15, Outcome::UploadFailed),
             (16, Outcome::DeclineAccepted),
+            (17, Outcome::RelayWaiting),
         ];
         for (code, expected) in cases {
             assert_eq!(
@@ -637,6 +640,7 @@ mod tests {
         assert!(!Outcome::Sidecar.sent_something());
         assert!(!Outcome::RecordRefused.sent_something());
         assert!(!Outcome::UploadFailed.sent_something());
+        assert!(!Outcome::RelayWaiting.sent_something());
         assert!(!Outcome::Unknown(3).sent_something());
         assert!(!Outcome::Signal.sent_something());
     }

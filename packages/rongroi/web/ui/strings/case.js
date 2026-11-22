@@ -80,6 +80,8 @@
             errorTitle: 'Something went wrong',
             errorBack: 'Back',
             errorUnknown: 'The action did not finish.',
+            storageWarningText: '{n} stored reports are missing. The Kit folder was probably replaced without cache/. The reports cannot be recovered from here.',
+            storageWarningButton: 'Remove the missing entries',
         },
         th: {
             title: 'เคส',
@@ -149,6 +151,8 @@
             errorTitle: 'เกิดข้อผิดพลาด',
             errorBack: 'ย้อนกลับ',
             errorUnknown: 'ดำเนินการไม่สำเร็จ',
+            storageWarningText: 'รายงานที่บันทึกไว้หายไป {n} รายการ น่าจะเป็นเพราะแทนโฟลเดอร์ Kit โดยไม่ได้เก็บ cache/ ไว้ กู้คืนจากหน้านี้ไม่ได้',
+            storageWarningButton: 'ลบรายการที่หายไป',
         },
     };
 }));
