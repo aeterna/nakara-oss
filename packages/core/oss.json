@@ -7,7 +7,8 @@
     "commands": [],
     "registeredCommands": ["aeterna_core_selftest"],
     "convars": {
-      "read": ["aeterna_locale", "aeterna_timezone", "aeterna_theme", "aeterna_core_log_level", "aeterna_theme_preset", "aeterna_core_allow_destructive", "sv_master1"],
+      "read": ["aeterna_locale", "aeterna_timezone", "aeterna_theme", "aeterna_core_log_level",
+        "aeterna_keys", "aeterna_theme_preset", "aeterna_core_allow_destructive", "sv_master1"],
       "write": []
     },
     "netEvents": {

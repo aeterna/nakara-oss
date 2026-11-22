@@ -435,6 +435,28 @@ describe('aeterna_core', function()
             assert.are.same({ n = 4, '+aeterna_core_test', 'January', 'keyboard', '' }, mapCalls[1])
             assert.are.equal('January', AeternaCore.keyLabel('core.month.1'))
             assert.are.equal('มกราคม', AeternaCore.t('core.month.1'))
+
+            -- Default keys (ADR 0004 decision 10, amended 2026-11-22): a kit command gets its suggested key,
+            -- a command without one gets none, and the owner's aeterna_keys convar overrides or turns them off.
+            mapCalls = natives.spy('RegisterKeyMapping')
+            AeternaCore.key('+aeterna_phonekit_open', 'core.month.1')
+            AeternaCore.key('+aeterna_testkit_menu', 'core.month.1')
+            AeternaCore.key('+aeterna_core_test', 'core.month.1')
+            assert.are.same({ 'M', 'F9', '' }, { mapCalls[1][4], mapCalls[2][4], mapCalls[3][4] })
+            natives.set_convar('aeterna_keys', '+aeterna_phonekit_open=F1, +aeterna_testkit_menu=, +aeterna_core_test=K')
+            AeternaCore.key('+aeterna_phonekit_open', 'core.month.1')
+            AeternaCore.key('+aeterna_testkit_menu', 'core.month.1')
+            AeternaCore.key('+aeterna_core_test', 'core.month.1')
+            AeternaCore.key('+aeterna_radial_open', 'core.month.1')
+            assert.are.same({ 'F1', '', 'K', 'F3' }, { mapCalls[4][4], mapCalls[5][4], mapCalls[6][4], mapCalls[7][4] })
+            natives.set_convar('aeterna_keys', 'off')
+            AeternaCore.key('+aeterna_phonekit_open', 'core.month.1')
+            assert.are.equal('', mapCalls[8][4])
+            -- a malformed key name is ignored, with the suggested default kept
+            natives.set_convar('aeterna_keys', '+aeterna_phonekit_open=F1;rm, junk')
+            AeternaCore.key('+aeterna_phonekit_open', 'core.month.1')
+            assert.are.equal('M', mapCalls[9][4])
+            assert.are.equal('M', AeternaCore.defaultKey('+aeterna_phonekit_open'))
         end)
 
         it('server: runs selftests, checks ACE, rate limits and registers aeterna_core_selftest', function()

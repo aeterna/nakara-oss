@@ -756,12 +756,46 @@ function AeternaCore.keyLabel(description)
     return (Locales.en and Locales.en[keyStr]) or keyStr
 end
 
+-- Suggested default keys (ADR 0004 decision 10, amended 2026-11-22). Openers only, picked to stay clear of
+-- ox_inventory (TAB, 1-5), qbx_radialmenu (F1), pma-voice (Z), FiveM's push-to-talk (N) and chat (T).
+-- A default reaches only players who never bound the command; their own binding always wins.
+local DEFAULT_KEYS = {
+    ['+aeterna_uikit_menu'] = 'F5',
+    ['+aeterna_phonekit_open'] = 'M',
+    ['+aeterna_radial_open'] = 'F3',
+    ['+aeterna_invkit_open'] = 'F2',
+    ['+aeterna_testkit_menu'] = 'F9',
+    ['+aeterna_notify_action1'] = 'Y',
+    ['+aeterna_notify_action2'] = 'U',
+    ['+aeterna_phonecall_answer'] = 'PAGEUP',
+    ['+aeterna_phonecall_hangup'] = 'PAGEDOWN',
+}
+
+local function validKeyName(k)
+    return type(k) == 'string' and #k <= 16 and k:match('^[%u%d_]*$') ~= nil
+end
+
+-- The key a command is registered with: the owner's `setr aeterna_keys` wins ("off" = no defaults at all;
+-- "+cmd=KEY, +cmd=" sets or clears one), else the suggested default, else none. A malformed entry is ignored.
+function AeternaCore.defaultKey(command)
+    local raw = GetConvar('aeterna_keys', '')
+    if type(raw) == 'string' then
+        local trimmed = raw:match('^%s*(.-)%s*$')
+        if trimmed == 'off' then return '' end
+        for entry in (trimmed .. ','):gmatch('([^,]*),') do
+            local cmd, key = entry:match('^%s*(%+aeterna_[%w_]+)%s*=%s*(.-)%s*$')
+            if cmd == command and validKeyName(key) then return key end
+        end
+    end
+    return DEFAULT_KEYS[command] or ''
+end
+
 function AeternaCore.key(command, description)
     if type(command) ~= 'string' or command:sub(1, 9) ~= '+aeterna_' or #command <= 9 then
         AeternaCore.log.warn('refused key mapping: command must start with +aeterna_', { command = tostring(command) })
         return nil
     end
-    RegisterKeyMapping(command, AeternaCore.keyLabel(description), 'keyboard', '')
+    RegisterKeyMapping(command, AeternaCore.keyLabel(description), 'keyboard', AeternaCore.defaultKey(command))
     return nil
 end
 

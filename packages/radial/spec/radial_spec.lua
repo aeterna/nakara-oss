@@ -640,7 +640,10 @@ describe('aeterna_radial', function()
             natives.stub_export('aeterna_core', 'themePreset', function() return 'asphalt' end)
             local api = resource.load_resource(DIR, 'client', { externals = CORE }).exports
 
-            for i = 1, #mappings do assert.are.equal('', mappings[i][4]) end
+            -- keyboard gets the kit's suggested default (F3, ADR 0004 decision 10 amended); the gamepad mapping none
+            local byMapper = {}
+            for i = 1, #mappings do byMapper[mappings[i][3]] = mappings[i][4] end
+            assert.are.same({ keyboard = 'F3', PAD_DIGITALBUTTON = '' }, byMapper)
             assert.are.equal(2, #mappings)
 
             assert.is_true(api.addSlot({ id = 'hud', label = 'HUD', order = 1 }))

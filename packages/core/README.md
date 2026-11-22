@@ -39,6 +39,18 @@ Shared foundation for the AETERNA Starter Kit (`aeterna_*` packages): structured
 | `aeterna_timezone` | `+00:00` | UTC offset used by `AeternaCore.time`, format `±HH:MM` (for example `+07:00`, `-03:30`) |
 | `aeterna_theme` | empty | Optional `nui://<resource>/<path>.css` stylesheet override; empty uses each package's own `theme.css` |
 | `aeterna_core_log_level` | `info` | Minimum log level: `debug`, `info`, `warn`, or `error` |
+| `aeterna_keys` | empty | Default keys of the kit's key mappings. Empty = the suggested defaults below; `off` = no default keys at all; `+aeterna_phonekit_open=F1, +aeterna_testkit_menu=` sets or clears single commands (key names as in FiveM's `RegisterKeyMapping`: `F1`, `M`, `PAGEUP`, …). Use `setr`: clients read it. A default reaches only players who never bound that command |
+
+Suggested default keys (ADR 0004 decision 10, amended 2026-11-22; picked to stay clear of `ox_inventory` TAB and 1–5, `qbx_radialmenu` F1, `pma-voice` Z, FiveM's push-to-talk N and chat T):
+
+| Command | Key | | Command | Key |
+|---|---|---|---|---|
+| `+aeterna_uikit_menu` | F5 | | `+aeterna_testkit_menu` | F9 |
+| `+aeterna_phonekit_open` | M | | `+aeterna_notify_action1` / `action2` | Y / U |
+| `+aeterna_radial_open` | F3 (keyboard) | | `+aeterna_phonecall_answer` / `hangup` | PAGEUP / PAGEDOWN |
+| `+aeterna_invkit_open` | F2 | | every other kit mapping | none |
+
+Key labels in Settings → Key Bindings → FiveM are always English: the GTA settings menu has no Thai glyphs.
 
 ## API (`@aeterna_core/import.lua`)
 
@@ -80,7 +92,8 @@ Prints `[aeterna_<res>] LEVEL msg key=value …`. Values in `fields` are stringi
 - `AeternaCore.kvp.get(name, version, default) -> any`: reads `aeterna_<pkg>:<name>:v<version>` as JSON; invalid JSON logs one `warn` and returns `default`.
 - `AeternaCore.kvp.set(name, version, value) -> nil`: writes JSON up to 16 KB.
 - `AeternaCore.kvp.migrate(name, from, to, fn) -> nil`: if `v<from>` exists and `v<to>` does not, converts once with `fn(old)`, writes `v<to>`, and deletes `v<from>`.
-- `AeternaCore.key(command, description) -> nil`: calls `RegisterKeyMapping(command, keyLabel(description), 'keyboard', '')` with no default key (`command` must start with `+aeterna_`).
+- `AeternaCore.key(command, description) -> nil`: calls `RegisterKeyMapping(command, keyLabel(description), 'keyboard', defaultKey(command))` (`command` must start with `+aeterna_`).
+- `AeternaCore.defaultKey(command) -> string`: the key a mapping is registered with. The kit suggests a default for its openers (table below); the owner's `setr aeterna_keys` wins. A default reaches only players who never bound the command; their own binding always wins.
 - `AeternaCore.keyLabel(description) -> string`: the English text of a locale key, whatever `aeterna_locale` is. Key labels are always English because the GTA key settings menu has no Thai glyphs (Thai labels show as boxes).
 
 ## Exports (`aeterna_core`)
@@ -161,6 +174,7 @@ end)
 - `aeterna_timezone` (ค่าเริ่มต้น `+00:00`): โซนเวลาในรูปแบบ `±HH:MM` เช่น `+07:00` ตั้งด้วย `setr`
 - `aeterna_theme` (ค่าเริ่มต้น ว่าง): พาธ `nui://<resource>/<path>.css` สำหรับเปลี่ยนธีม ตั้งด้วย `setr`
 - `aeterna_core_log_level` (ค่าเริ่มต้น `info`): ระดับการแสดงล็อก (`debug`, `info`, `warn`, `error`)
+- `aeterna_keys` (ค่าเริ่มต้น ว่าง = ปุ่มที่ชุดแนะนำในตารางด้านบน): `off` = ไม่มีปุ่มตั้งต้นเลย · `+aeterna_phonekit_open=F1, +aeterna_testkit_menu=` เปลี่ยนหรือล้างทีละคำสั่ง ตั้งด้วย `setr` ปุ่มที่ผู้เล่นตั้งเองมาก่อนเสมอ · ชื่อปุ่มในเมนูตั้งค่าเป็นภาษาอังกฤษเสมอ เพราะเมนูของ GTA ไม่มีฟอนต์ไทย
 
 ### กฎการจัดการโฟกัส (NUI Focus)
 - มีเพียงหนึ่งทรัพยากรที่เป็นเจ้าของโฟกัส NUI ในแต่ละขณะ โดยคำขอล่าสุดจะได้รับโฟกัสเสมอ
@@ -179,7 +193,7 @@ with `oss.json`; widening a capability needs maintainer review.
 | HTTP requests | none |
 | `ExecuteCommand` | none |
 | Registered commands | `aeterna_core_selftest` |
-| Convars read | `aeterna_locale`, `aeterna_timezone`, `aeterna_theme`, `aeterna_core_log_level` |
+| Convars read | `aeterna_locale`, `aeterna_timezone`, `aeterna_theme`, `aeterna_core_log_level`, `aeterna_keys` |
 | Convars written | none |
 | Server net events (accepted from clients) | none |
 | Client net events (accepted from the server) | none |

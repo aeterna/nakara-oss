@@ -6,6 +6,13 @@ All notable changes to `aeterna_core` are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- Suggested default keys for the kit's openers (ADR 0004 decision 10, amended 2026-11-22) through
+  `AeternaCore.defaultKey`: menu F5, phone M, radial F3, inventory panel F2, test menu F9, notification actions Y/U,
+  call answer/hang up PAGEUP/PAGEDOWN. New convar `aeterna_keys` (`off`, or `+cmd=KEY` entries) lets the owner change
+  or clear them.
+
 ### Fixed
 
 - Key mapping labels are English whatever `aeterna_locale` is (new `AeternaCore.keyLabel`): the GTA key settings menu
