@@ -54,7 +54,7 @@ pub fn outcome_text(o: &Outcome) -> String {
 
 pub fn error_text(e: &ConnectError) -> String {
     match e {
-        ConnectError::Code(CodeError::Prefix) => "รหัสไม่ถูกต้อง ต้องขึ้นต้นด้วย rr1.".to_string(),
+        ConnectError::Code(CodeError::Prefix) => "รหัสไม่ถูกต้อง ต้องขึ้นต้นด้วย rr1. หรือ rr2.".to_string(),
         ConnectError::Code(CodeError::TooLong) => "รหัสยาวเกินไป".to_string(),
         ConnectError::Code(CodeError::NotPrintable) => "รหัสมีช่องว่างหรือตัวอักษรที่ใช้ไม่ได้".to_string(),
         ConnectError::Unsupported => "Rongroi Connect ใช้ได้บน Windows เท่านั้น".to_string(),
@@ -273,7 +273,7 @@ mod tests {
     fn error_text_maps_every_variant() {
         assert_eq!(
             error_text(&ConnectError::Code(CodeError::Prefix)),
-            "รหัสไม่ถูกต้อง ต้องขึ้นต้นด้วย rr1."
+            "รหัสไม่ถูกต้อง ต้องขึ้นต้นด้วย rr1. หรือ rr2."
         );
         assert_eq!(
             error_text(&ConnectError::Code(CodeError::TooLong)),

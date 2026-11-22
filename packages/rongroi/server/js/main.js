@@ -1,5 +1,8 @@
 (function () {
     'use strict';
+    // Relay calls go through https.request, never fetch() (relay-http.js). Required plainly so fivem-devkit safety
+    // sees every https.request destination in this file.
+    const https = require('https');
 
     // FXServer resolves a relative require() against the resource root, not against the requiring file, so
     // './http.js' only exists on plain Node. Try the file-relative path first and fall back to the
@@ -33,6 +36,10 @@
     const { createRelayClient, parseRelayConfig } = loadModule(
         () => require('./relay.js'),
         () => require('./server/js/relay.js'),
+    );
+    const { sendRequest } = loadModule(
+        () => require('./relay-http.js'),
+        () => require('./server/js/relay-http.js'),
     );
     const { createRelayPump } = loadModule(
         () => require('./relay-pump.js'),
@@ -174,14 +181,16 @@
             key: GetConvar('rongroi_relay_key', ''),
         });
         if (!relayParsed.ok && relayParsed.reason !== 'off') log(`relay off: ${relayParsed.reason}`);
-        const hasFetch = typeof fetch === 'function' && typeof AbortSignal === 'function'
-            && typeof AbortSignal.timeout === 'function';
-        if (relayParsed.ok && !hasFetch) log('relay off: this FXServer has no fetch()');
-        // Every relay call gives up after 10 s, so one hung request cannot stall the pull loop.
-        const relay = relayParsed.ok && hasFetch
+        // Every relay call gives up after 10 s, so one hung request cannot stall the pull loop. https.request, not
+        // fetch(): fetch() POSTs log an unhandled rejection on FXServer (relay-http.js).
+        const relay = relayParsed.ok
             ? createRelayClient({
                 config: relayParsed.config,
-                fetchImpl: (path, init) => fetch(RELAY_URL + path, { ...init, signal: AbortSignal.timeout(RELAY_TIMEOUT_MS) }),
+                fetchImpl: (path, init) => sendRequest(
+                    (options, onResponse) => https.request(RELAY_URL + path, options, onResponse),
+                    init,
+                    RELAY_TIMEOUT_MS,
+                ),
                 log,
             })
             : null;

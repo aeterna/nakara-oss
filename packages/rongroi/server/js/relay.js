@@ -32,7 +32,8 @@ function parseRelayConfig({ url, id, key } = {}) {
     return { ok: true, config: { base: url, origin: parsed.origin, id, key } };
 }
 
-// `fetchImpl(path, init)` sends to rongroi_relay_url + path: main.js builds the URL from the convar itself, so the
+// `fetchImpl(path, init)` sends to rongroi_relay_url + path (main.js: https.request through relay-http.js) and resolves
+// { status, text() }. main.js builds the URL from the convar itself, so the
 // only destination is the one the owner set (fivem-devkit safety folds a convar URL built that way).
 function createRelayClient({ config, fetchImpl, log = () => {} }) {
     if (!config || typeof fetchImpl !== 'function') throw new TypeError('relay client needs a config and fetch');
