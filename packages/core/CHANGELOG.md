@@ -15,6 +15,10 @@ All notable changes to `aeterna_core` are documented here. The format follows
 
 ### Fixed
 
+- An eye test that skipped (with a reason) or failed before `ready` ended as a timeout: the server dropped every
+  owner result for eye tests (seen live: notify `sound_plays`, phonekit `eye_lock` and `ring_cover`). `skip` and
+  `fail` are now accepted before `ready`; `pass`, `mock` and anything after `ready` are still dropped.
+- New `AeternaCore.kvp.del(name, version)`: deletes the same key `get`/`set` use, from `import.lua` alone.
 - `AeternaCore.can` refused every player on FXServer Enhanced: `IsPlayerAceAllowed` returns the number `1` there,
   and the check compared it with `true` (measured on a live server). New `AeternaCore.yes(v)` accepts `true` or `1`;
   every kit package now uses it (or the same rule) for BOOL natives.

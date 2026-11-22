@@ -583,7 +583,7 @@ describe('aeterna_phonekit self-tests under the harness', function()
     end)
 
     describe('client', function()
-        local kvp, nui
+        local kvp, nui, kvpDeleted
         local failContactsSave = false
 
         local toasts
@@ -591,6 +591,7 @@ describe('aeterna_phonekit self-tests under the harness', function()
         local function bootClient(config)
             natives.reset({ resource = OWNER, side = 'client', json = flatJson })
             reports, kvp, nui, warns, toasts, failReport = {}, {}, {}, {}, {}, false
+            kvpDeleted = {}
             natives.spy('SendNUIMessage', function(msg) nui[#nui + 1] = msg end)
             natives.spy('RegisterNUICallback')
             natives.spy('RegisterKeyMapping')
@@ -599,6 +600,10 @@ describe('aeterna_phonekit self-tests under the harness', function()
             stubCore({
                 kvp = {
                     get = function(name, _, default) if kvp[name] == nil then return default end return kvp[name] end,
+                    del = function(name, version)
+                        kvpDeleted[#kvpDeleted + 1] = name .. ':v' .. tostring(version)
+                        kvp[name] = nil
+                    end,
                     set = function(name, _, value)
                         if name == 'contacts' and type(value) == 'table' and failContactsSave then
                             for _, c in ipairs(value) do
@@ -725,16 +730,16 @@ describe('aeterna_phonekit self-tests under the harness', function()
         end)
 
         it('contacts_hooks deletes the contacts key again when the list was empty', function()
+            -- Live (W3): core's logic modules are loaded only into aeterna_core, never into other kit resources, so
+            -- AeternaCoreLogic.kvp is nil here; the delete goes through AeternaCore.kvp.del.
             bootClient()
-            assert(loadfile(DIR .. '/../core/shared/logic/kvp.lua'))()
-            local deleted = {}
-            natives.stub('DeleteResourceKvp', function(k) deleted[#deleted + 1] = k kvp.contacts = nil end)
+            _G.AeternaCoreLogic = nil
             runClient('contacts_hooks', 'mock')
             natives.advance(100)
             local r = reports[#reports]
             assert.are.equal('mock', r.ok, r.detail)
             assert.is_true(r.extra.restored)
-            assert.are.same({ 'aeterna_phonekit:contacts:v1' }, deleted)
+            assert.are.same({ 'contacts:v1' }, kvpDeleted)
             assert.is_nil(kvp.contacts)
         end)
 
@@ -753,16 +758,14 @@ describe('aeterna_phonekit self-tests under the harness', function()
             assert.are.equal(closes + 1, #natives.emitted('server', 'aeterna_phonekit:sv:close'))
         end)
 
-        it('kvpDelete builds the key with aeterna_core\'s keyFor', function()
+        it('kvpDelete never touches DeleteResourceKvp directly: the key belongs to aeterna_core\'s naming', function()
             bootClient()
-            local deleted = {}
-            -- core's kvp module, as import.lua loads it into every kit resource; keyFor answers a marked key
-            assert(loadfile(DIR .. '/../core/shared/logic/kvp.lua'))()
-            _G.AeternaCoreLogic.kvp.keyFor = function(res, name, v) return 'K|' .. res .. '|' .. name .. '|' .. v end
-            natives.stub('DeleteResourceKvp', function(k) deleted[#deleted + 1] = k kvp.contacts = nil end)
+            local direct = 0
+            natives.stub('DeleteResourceKvp', function() direct = direct + 1 end)
             runClient('contacts_hooks', 'mock')
             natives.advance(100)
-            assert.are.same({ 'K|aeterna_phonekit|contacts|1' }, deleted)
+            assert.are.equal(0, direct)
+            assert.are.same({ 'contacts:v1' }, kvpDeleted)
         end)
 
         it('selftestEnd from another resource does not end a test', function()

@@ -425,6 +425,11 @@ describe('aeterna_core', function()
             assert.are.equal(4, #keepCalls)
             assert.are.same({ n = 1, false }, keepCalls[4])
 
+            -- Client KVP: del removes the same key get/set use (aeterna_<pkg>:<name>:v<version>)
+            local deletedKeys = natives.spy('DeleteResourceKvp')
+            AeternaCore.kvp.del('notes', 2)
+            assert.are.same({ n = 1, 'aeterna_core:notes:v2' }, deletedKeys[1])
+
             -- Key mapping requires +aeterna_ prefix
             AeternaCore.key('bad_command', 'core.month.1')
             assert.are.equal(0, #mapCalls)

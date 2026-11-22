@@ -302,6 +302,17 @@ describe('aeterna_hudkit self-tests', function()
             assert.are.equal('pass', (w.verdict()))
         end)
 
+        it('takes the full row name the client passes (aeterna_hudkit.voice_radio) and judges it as radio', function()
+            -- Live (W3): voice_radio failed with "mode label did not change", the indicator's rule
+            local w = ST.newVoiceWatch('aeterna_hudkit.voice_radio')
+            assert.is_true(w.observe(msg({ radio = true, radioActive = true })))
+            assert.are.equal('pass', (w.verdict()))
+            local w2 = ST.newVoiceWatch('aeterna_hudkit.voice_radio')
+            local state, detail = w2.verdict()
+            assert.are.equal('fail', state)
+            assert.is_nil(detail:find('mode label', 1, true))
+        end)
+
         it('radio fails when the presser never transmitted', function()
             local w = ST.newVoiceWatch('voice_radio')
             w.observe(msg({ radio = true }))

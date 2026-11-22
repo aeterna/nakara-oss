@@ -945,8 +945,11 @@ AddEventHandler('aeterna_phonekit:contactsChanged', function()
 end)
 
 -- Deletes the client KVP of an AeternaCore.kvp name, keyed by aeterna_core's own keyFor (import.lua loads it).
+-- Through aeterna_core's import: core's logic modules are not loaded into this resource (W3 2026-11-22).
 local function kvpDelete(name)
-    DeleteResourceKvp(AeternaCoreLogic.kvp.keyFor(selfName(), name, 1))
+    if AeternaCore and AeternaCore.kvp and type(AeternaCore.kvp.del) == 'function' then
+        AeternaCore.kvp.del(name, 1)
+    end
 end
 
 local function reportTest(runId, name, ok, detail, extra)

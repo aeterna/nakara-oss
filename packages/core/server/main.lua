@@ -481,7 +481,11 @@ AddEventHandler('aeterna_core:sv:selftestResult', function(payload)
         item.deadline = GetGameTimer() + 120000
         return
     end
-    if item.kind == 'eye' then return end
+    -- An eye test is judged by the person, so its owner may only end it early with a skip (with a reason) or a fail
+    -- (it could not set up the view), and only before ready. pass and mock come from the person, never the owner.
+    if item.kind == 'eye' and ((item.ready and item.ready[role]) or (p.state ~= 'skip' and p.state ~= 'fail')) then
+        return
+    end
     item.results[role] = judge(item, {
         ok = p.state, detail = p.detail, restored = p.restored, wrote = p.wrote, step = p.step, expected = p.expected,
     })

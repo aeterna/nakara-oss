@@ -63,6 +63,9 @@ Version 0.2.0 (ADR 0005 decisions 1, 2, 3, 5). Written by Claude Code - Claude O
 
 ### Fixed
 
+- Self-test `contacts_hooks` failed with "test error" on a live server when the contact book was empty: it deleted
+  the key through core's logic module, which only `aeterna_core` loads. It now uses `AeternaCore.kvp.del`.
+
 - `postNui` reads the callback's JSON answer, so the notes and contacts lists refresh after a save.
 
 ## [0.1.0] - 2026-11-18

@@ -171,6 +171,8 @@ end
 --- voice_indicator / voice_radio: feed every hud:voice message hudkit sent; observe() returns true once the
 --- row has seen what it needs. verdict() gives the result.
 function HudSelftest.newVoiceWatch(name)
+    -- the client passes the full row name (aeterna_hudkit.voice_radio); the rules key on the short one
+    if type(name) == 'string' then name = name:match('^aeterna_hudkit%.(.+)$') or name end
     local seen = { available = false, talking = false, modes = {}, modeCount = 0, radio = false, radioActive = false }
     local w = {}
 

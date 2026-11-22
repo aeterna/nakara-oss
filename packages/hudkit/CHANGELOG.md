@@ -34,6 +34,9 @@ All notable changes to `aeterna_hudkit` are documented here. The format follows
 
 ### Fixed
 
+- Self-test `voice_radio` was judged by the `voice_indicator` rule ("mode label did not change") because the client
+  passed the full row name; the voice watch now takes either name.
+
 - Extra bar `label` length is counted in UTF-8 characters (`utf8.len`) instead of bytes, so Thai labels up to 24 characters are accepted; invalid UTF-8 is refused (0.1 bug).
 
 ## [0.1.0] - 2026-11-18

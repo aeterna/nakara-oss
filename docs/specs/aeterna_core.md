@@ -392,7 +392,9 @@ before its timeout, and every report passes the judging rules above.
    comes back through client export `answerEye(runId, name, answer)` with `answer = 'pass' | 'mismatch' | 'skip'`,
    sent as `aeterna_core:sv:eyeAnswer`. `pass` → PASS, `mismatch` → FAIL `tester saw something else`, `skip` → GAP
    `skipped by the tester`, no answer in 120 s → GAP `no answer`. Without `aeterna_testkit` nobody listens to
-   `eyeAsk`, so eye tests end as GAP.
+   `eyeAsk`, so eye tests end as GAP. Before `ready`, the owner may end an eye test itself with `'skip'` (with a reason,
+   for example a config that turns the feature off) or `'fail'` (it could not set up the view); `pass` and `mock` from
+   the owner, and anything after `ready`, are dropped: only the person judges what they see.
 5. When a test ends for any reason, server → client `aeterna_core:cl:selftestEnd` and client-local
    `aeterna_core:selftestEnd` → `(runId, name)` let the owner tear down what it opened (close the phone, delete the
    prop). Owners must tear down on this event even when they never reported.

@@ -741,9 +741,21 @@ else
     end
 end
 
+-- The key every kit resource uses for its own client KVP: aeterna_<pkg>:<name>:v<version>. import.lua alone (other
+-- resources do not load core's shared/logic), so delete works the same in every package.
+local function kvpKeyOf(name, version)
+    local res = tostring(GetCurrentResourceName() or 'core')
+    local pkg = res:sub(1, 8) == 'aeterna_' and res:sub(9) or res
+    return 'aeterna_' .. pkg .. ':' .. tostring(name) .. ':v' .. tostring(version)
+end
+
 AeternaCore.kvp = {
     get = function(name, version, default)
         return kvpInstance.get(name, version, default)
+    end,
+    del = function(name, version)
+        DeleteResourceKvp(kvpKeyOf(name, version))
+        return nil
     end,
     set = function(name, version, value)
         return kvpInstance.set(name, version, value)
