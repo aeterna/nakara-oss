@@ -6,6 +6,8 @@ All notable changes to `nakara_tickets` are documented here. The format follows
 
 ## Unreleased
 
+## 0.1.1 - 2026-11-22
+
 ### Fixed
 
 - Bridge calls (pair, heartbeat, action result, actions poll) use Node `https.request` / `http.request` instead of
