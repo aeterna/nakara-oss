@@ -16,7 +16,7 @@ Every resource package declares its capabilities in oss.json (validated against 
   Link: https://github.com/aeterna/nakara-oss/releases?q=launcher-v
   Template for server owners: https://github.com/aeterna/aeterna-launcher-template
 
-- nakara_rongroi (Rongroi Server Kit): Server-side kit for aeterna-rongroi.
+- nakara_rongroi (Rongroi Server Kit): Server-side kit for aeterna-rongroi. Reports come straight to the game port or through a Rongroi Relay the owner hosts (relay/ in this repository).
   Link: https://github.com/aeterna/nakara-oss/releases?q=nakara_rongroi
 
 - Nakara Tickets (nakara_tickets + server image ghcr.io/aeterna/nakara-tickets:0.1.0): self-hosted Discord ticket system with a Thai/English dashboard and staff actions in game over a bridge that opens no port.
