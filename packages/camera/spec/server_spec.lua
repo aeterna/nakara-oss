@@ -33,7 +33,10 @@ describe('aeterna_camera server under the harness', function()
         natives.stub('SaveResourceFile', function(res, path, data, len)
             assert.are.equal('aeterna_camera', res)
             assert.are.equal(#data, len)
+            if opts.saveReturn == false then return false end
             files[path] = data
+            -- FXServer Enhanced b177 returns the number 1 on success and false on failure (measured W3 2026-11-22).
+            if opts.saveReturn ~= nil then return opts.saveReturn end
             return true
         end)
         natives.stub('LoadResourceFile', function(res, path)
@@ -111,6 +114,23 @@ describe('aeterna_camera server under the harness', function()
         assert.are.equal('lic:license:p1', saved[1].args[2].who)
         assert.are.equal(1, #toasts)
         assert.are.equal(1, toasts[1][1])
+    end)
+
+    it('accepts the number 1 that SaveResourceFile returns on FXServer Enhanced as a written file', function()
+        boot({ saveReturn = 1 })
+        open(1)
+        local shot = shootAndUpload(1, 80)
+        assert.is_true(shot.ok)
+        assert.is_not_nil(files['photos/' .. shot.id .. '.jpg'])
+        assert.are.equal(1, #natives.emitted('local', 'aeterna_camera:saved'))
+    end)
+
+    it('refuses the photo when SaveResourceFile returns false', function()
+        boot({ saveReturn = false })
+        open(1)
+        local shot = shootAndUpload(1, 80)
+        assert.is_falsy(shot.ok)
+        assert.are.equal(0, #natives.emitted('local', 'aeterna_camera:saved'))
     end)
 
     it('refuses the shutter with camera.unavailable when screenshot-basic is not started', function()

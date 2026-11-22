@@ -50,7 +50,9 @@ local kv = {
 -- The only file writer. The path comes from an id that passed Ids.isId, inside photos/, which the package ships.
 local function writePhoto(id, bytes)
     if not Ids.isId(id) or type(bytes) ~= 'string' then return false end
-    return SaveResourceFile(GetCurrentResourceName(), 'photos/' .. id .. '.jpg', bytes, #bytes) == true
+    -- FXServer Enhanced b177 returns the number 1 on success and false on failure (measured W3 2026-11-22).
+    local wrote = SaveResourceFile(GetCurrentResourceName(), 'photos/' .. id .. '.jpg', bytes, #bytes)
+    return wrote == true or wrote == 1
 end
 
 local function loadPhoto(id)
