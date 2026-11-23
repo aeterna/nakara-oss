@@ -10,7 +10,7 @@ the owner's plan artifact (Kit 0.2 plan, v16+). ADR: [0005](../adr/0005-starter-
 | W0 | ADR 0005, specs, spikes on kit-test | done, waits owner merge | #92, #95 |
 | W1 | uikit, notify, layout, hudkit, phonekit, invkit 0.2; testkit, radial, loading 0.1.0 | done, waits owner merge | #97 |
 | W2 | self-tests in every package, phonecall + camera 0.1.0, site + README | done, waits owner merge | #99 (draft, stacked on #97 ← #95 ← #92) |
-| W3 | one combined live test on kit-test + fixes | **menu run FAIL 0** (`r5-ibfn`); left: player B, visual pass in 3 presets, one card that got no answer | #99 head `bb721a5a`+, reports below |
+| W3 | one combined live test on kit-test + fixes | **menu run FAIL 0, no GAP but player B** (`r1-kku4`, 120 s); left: player B, visual pass in 3 presets | #99 head `e206ad88`+, reports below |
 | W4 | release (CHANGELOG version sections, core 0.1.0 → 0.2.0, combined zip, notes) | not started | — |
 
 ### W3 runs on kit-test (FXServer Enhanced b177, game build 3788, private, destructive gate on)
@@ -24,7 +24,8 @@ the owner's plan artifact (Kit 0.2 plan, v16+). ADR: [0005](../adr/0005-starter-
 | menu `r2-1zd3` (owner, 2026-11-23) | `07598a57` + coverage config | PASS 83 · FAIL 4 · SKIP 5 · GAP 4 · MOCK 10 | voice rows ran before the tester acted; invkit test phone race |
 | menu `r3-v5p2` | `0837ecef` (rows drive themselves) | PASS 83 · FAIL 4 · SKIP 3 · GAP 5 · MOCK 11 | test phone removal, vector3 stash point, tester dead (pma-voice blocks radio) |
 | menu `r4-35d5` | `05f949f5` | PASS 84 · FAIL 1 · SKIP 3 · GAP 6 · MOCK 12 | voice_radio: tester still dead |
-| menu `r5-ibfn` | `05f949f5` | **PASS 86 · FAIL 0 · SKIP 3 · GAP 5 · MOCK 12** | GAP = 4 player B rows + `notify.motion_reduced` no answer (twice; check the card shows) |
+| menu `r5-ibfn` | `05f949f5` | PASS 86 · FAIL 0 · SKIP 3 · GAP 5 · MOCK 12 | GAP = 4 player B rows + `notify.motion_reduced` no answer |
+| menu `r1-kku4` | `e206ad88` (after a restart) | **PASS 87 · FAIL 0 · SKIP 3 · GAP 4 · MOCK 12**, 120 s | GAP = the 4 player-B rows only; SKIP = items mode, sound off, no gamepad |
 
 ### Fixed in W3 (each with a spec that failed first, all on `feat/kit-02-w2`)
 
@@ -44,18 +45,19 @@ the owner's plan artifact (Kit 0.2 plan, v16+). ADR: [0005](../adr/0005-starter-
   `+radiotalk`) and seats the tester in a test vehicle; invkit's server gives/takes/sets aside phones and moves the
   tester to the stash point; radial drives the ring; phonekit fold rows show the model they need. The tester only
   answers eye cards.
+- `e206ad88` notify and uikit `motion_reduced` force the page's reduced-motion rules for the run (the card asked for a
+  Windows setting nobody had turned on).
 - `05f949f5` invkit removes test phones by slot (ox matches metadata whole); stash point read as vector3; hudkit
   `voice_radio` names a dead tester.
 
 ## Next
 
-1. **`notify.motion_reduced` got no answer twice** (120 s). Ask the owner whether its card showed; if not, it is a bug.
-2. **Player B** for the 4 GAP rows (phonecall sms/call/busy, testkit eye_card_b): a second account joins kit-test and is
+1. **Player B** for the 4 GAP rows (phonecall sms/call/busy, testkit eye_card_b): a second account joins kit-test and is
    invited from the menu by server id.
-3. **Owner's visual pass** in all three theme presets (asphalt, paper, night-market), plan row #17.
-4. Then W4: CHANGELOG version sections, core version 0.2.0, combined zip, release notes. The stack merges clean with
+2. **Owner's visual pass** in all three theme presets (asphalt, paper, night-market), plan row #17.
+3. Then W4: CHANGELOG version sections, core version 0.2.0, combined zip, release notes. The stack merges clean with
    dev after nakara-oss#104 (`git merge-tree`, 2026-11-23).
-5. After W3: take the W3 setup off kit-test (`kw3run`, `aeterna_w3probe`, the `# W3` cfg block, `.w3bak` configs, the
+4. After W3: take the W3 setup off kit-test (`kw3run`, `aeterna_w3probe`, the `# W3` cfg block, `.w3bak` configs, the
    stash point in invkit's config).
 
 Measured on kit-test: pma-voice works on Enhanced b177 (range, radio channel, radio transmit, the
@@ -92,4 +94,4 @@ tester dies of hunger in about an hour, `/revive`). ox_inventory `RemoveItem` ma
 - Headless 106/106 after the camera fix; Q3 round fixed; owner asked for default keys (ADR 0004 d10 amended).
 - Owner menu runs `r2-mpkn` (FAIL 6) and `r2-dcgi` (FAIL 2: hudkit voice only).
 - 2026-11-23: coverage config on; voice probe; owner "too manual, make it auto" → every action row drives itself;
-  runs `r2-1zd3` → `r5-ibfn` (FAIL 4 → 0).
+  runs `r2-1zd3` → `r5-ibfn` (FAIL 4 → 0); motion_reduced fixed → `r1-kku4` FAIL 0, GAP only player B.
