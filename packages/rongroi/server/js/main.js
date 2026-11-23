@@ -1,5 +1,8 @@
 (function () {
     'use strict';
+    // Relay calls go through https.request, never fetch() (relay-http.js). Required plainly so fivem-devkit safety
+    // sees every https.request destination in this file.
+    const https = require('https');
 
     // FXServer resolves a relative require() against the resource root, not against the requiring file, so
     // './http.js' only exists on plain Node. Try the file-relative path first and fall back to the
@@ -30,7 +33,19 @@
         () => require('./tickets.js'),
         () => require('./server/js/tickets.js'),
     );
-    const { pairingCode, policyHash } = loadModule(
+    const { createRelayClient, parseRelayConfig } = loadModule(
+        () => require('./relay.js'),
+        () => require('./server/js/relay.js'),
+    );
+    const { sendRequest } = loadModule(
+        () => require('./relay-http.js'),
+        () => require('./server/js/relay-http.js'),
+    );
+    const { createRelayPump } = loadModule(
+        () => require('./relay-pump.js'),
+        () => require('./server/js/relay-pump.js'),
+    );
+    const { pairingCode, pairingCodeV2, policyHash, checkOrigin } = loadModule(
         () => require('./pairing.js'),
         () => require('./server/js/pairing.js'),
     );
@@ -46,7 +61,7 @@
         () => require('./filestore.js'),
         () => require('./server/js/filestore.js'),
     );
-    const { createSettings } = loadModule(
+    const { createSettings, withServerCfg } = loadModule(
         () => require('./settings.js'),
         () => require('./server/js/settings.js'),
     );
@@ -57,6 +72,9 @@
     const crypto = require('crypto');
 
     const STAFF_ACE = 'nakara_rongroi.staff';
+    const RELAY_GRACE_MS = 10 * 60 * 1000; // pull a relay ticket until 10 minutes past expires_at (ADR 0097 §3)
+    const RELAY_PULL_MS = 3000;
+    const RELAY_TIMEOUT_MS = 10000;
     const NET_WINDOW_MS = 10000;
     const NET_LIMIT = 60;
     const NET_WINDOW_MAX = 256;
@@ -67,6 +85,26 @@
 
     function isObject(value) {
         return value !== null && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    // The Enhanced index total lives in KVP, which survives a folder replace; anything but a non-negative integer reads null.
+    const ENTRIES_KEY = 'rongroi:filestore:entries';
+    function entriesMarker(store) {
+        return {
+            get() {
+                const text = store.get(ENTRIES_KEY);
+                const value = Number(text);
+                return typeof text === 'string' && /^[0-9]+$/.test(text) && Number.isSafeInteger(value) ? value : null;
+            },
+            set(n) { store.set(ENTRIES_KEY, String(n)); },
+        };
+    }
+
+    // Only lost index entries raise the warning: a case file that reads null is a state ADR 0001 section 4 designs on purpose.
+    function integrityWarning(check) {
+        if (check.expected === null || check.expected <= check.found) return null;
+        log(`stored reports missing: expected ${check.expected}, found ${check.found}, case files missing ${check.missingCaseFiles} — was the folder replaced without cache/?`);
+        return { expected: check.expected, found: check.found, missingCaseFiles: check.missingCaseFiles };
     }
 
     // Read the first present member of a net-event payload.
@@ -120,8 +158,50 @@
         };
         const edition = detectEdition((_, fallback) => GetConvar('gamename', fallback));
         const backend = edition === 'enhanced' ? createFileBackend() : createKvpBackend(kvp);
-        const storage = createStorage(backend);
-        const settings = createSettings(kvp);
+        const marker = edition === 'enhanced' ? entriesMarker(kvp) : null;
+        const storage = createStorage(backend, { marker });
+        const storedSettings = createSettings(kvp);
+
+        // Server-only convars (ADR 0001 section 14): set with `set`, never `setr`. When present they win over the
+        // panel; the relay key is never logged or sent to a client.
+        let cfgOrigin = GetConvar('rongroi_public_origin', '');
+        if (cfgOrigin) {
+            try {
+                checkOrigin(cfgOrigin);
+                cfgOrigin = new URL(cfgOrigin).origin;
+            } catch {
+                log('rongroi_public_origin ignored: not http(s)://host[:port]');
+                cfgOrigin = '';
+            }
+        }
+        const RELAY_URL = GetConvar('rongroi_relay_url', '');
+        const relayParsed = parseRelayConfig({
+            url: RELAY_URL,
+            id: GetConvar('rongroi_relay_id', ''),
+            key: GetConvar('rongroi_relay_key', ''),
+        });
+        if (!relayParsed.ok && relayParsed.reason !== 'off') log(`relay off: ${relayParsed.reason}`);
+        // Every relay call gives up after 10 s, so one hung request cannot stall the pull loop. https.request, not
+        // fetch(): fetch() POSTs log an unhandled rejection on FXServer (relay-http.js).
+        const relay = relayParsed.ok
+            ? createRelayClient({
+                config: relayParsed.config,
+                fetchImpl: (path, init) => sendRequest(
+                    (options, onResponse) => https.request(RELAY_URL + path, options, onResponse),
+                    init,
+                    RELAY_TIMEOUT_MS,
+                ),
+                log,
+            })
+            : null;
+        if (relay) log(`relay on: ${relay.origin} as ${relay.id}`);
+        const CFG_SERVER_NAME = GetConvar('rongroi_server_name', '');
+        const settings = withServerCfg(storedSettings, {
+            relay,
+            cfgOrigin,
+            cfgServerName: CFG_SERVER_NAME || GetConvar('sv_projectName', ''),
+            cfgServerNameFrom: CFG_SERVER_NAME ? 'rongroi_server_name' : 'sv_projectName',
+        });
         const kit = loadOrCreateKitKey(kvp);
         const store = new TicketStore({ now: Date.now, randomBytes: crypto.randomBytes });
         const onReport = (event) => {
@@ -130,8 +210,49 @@
         };
         const { damaged } = storage.load();
         if (damaged > 0) log(`index damaged: ${damaged} pages`);
+        // A Kit upgraded from one without the marker starts from the index it already has.
+        let storageWarning = null;
+        if (marker) {
+            if (marker.get() === null) marker.set(storage.entries().length);
+            storageWarning = integrityWarning(storage.checkIntegrity());
+        }
         store.restoreConsumed(storage.consumedSnapshot());
         log(`storage ${edition}`);
+
+        let pump = null;
+        // One place makes every pairing code. Relay tickets get an rr2 code bound to the Relay, registered there
+        // with the exact policy bytes the Relay serves (the same bytes handlePolicy would serve); others keep rr1.
+        function makeCode({ ticket, nonce, expiresAt, policy, serverOrigin }) {
+            const hash = policyHash(policy);
+            if (!relay) {
+                return pairingCode({ serverOrigin, ticket, nonce, expiresAt, policyHash: hash, kitPublicKey: kit.publicKey });
+            }
+            const found = store.lookup(ticket);
+            const made = pairingCodeV2({
+                serverOrigin: relay.origin, basePath: relay.id, transport: 'relay', ticket, nonce, expiresAt,
+                policyHash: hash, kitPublicKey: kit.publicKey,
+            });
+            if (found && !found.binding && found.state === 'issued') {
+                store.setBinding(ticket, made.binding);
+                // The same bytes handlePolicy serves. The pump registers them now and retries until the Relay confirms.
+                pump.issued({ ticket, expiresAt, policyBody: JSON.stringify({ ...policy, policy_hash: hash }) });
+                pump.round().catch(() => log('rongroi relay: round failed'));
+            }
+            return made.code;
+        }
+
+        // Forgetting a relay ticket (case deleted, key rotated) also deletes what the Relay holds for it.
+        if (relay) {
+            const forget = store.forget.bind(store);
+            store.forget = (ticket) => {
+                const found = store.lookup(ticket);
+                if (found && found.binding) {
+                    pump.forget(ticket);
+                    relay.remove(ticket).catch(() => {});
+                }
+                return forget(ticket);
+            };
+        }
 
         function isStaff(src) {
             return nativeBool(IsPlayerAceAllowed(src, STAFF_ACE));
@@ -161,6 +282,8 @@
             send,
             randomBytes: crypto.randomBytes,
             rotateKitKey: () => rotateKitKey(kvp),
+            storageWarning,
+            makeCode,
         });
 
         // One case every 250 ms: a storage write blocks the tick, and Enhanced's writes are the slowest
@@ -203,6 +326,8 @@
         setInterval(runRetention, 3600000);
 
         const handler = createHandler({ store, kit, now: Date.now, onReport, log });
+        // makeCode (above) can run before this line only through api calls, which start after startup.
+        pump = relay ? createRelayPump({ relay, store, ingest: handler.ingestRelay, graceMs: RELAY_GRACE_MS, log }) : null;
 
         function openCase({ caseId, policy, serverOrigin, ttlMs } = {}) {
             if (storage.hasCase(caseId)) throw new TypeError('case id is already open');
@@ -220,13 +345,12 @@
                     ticket: issued.ticket,
                     nonce: issued.nonce,
                     expiresAt: issued.expiresAt,
-                    pairingCode: pairingCode({
+                    pairingCode: makeCode({
                         serverOrigin,
                         ticket: issued.ticket,
                         nonce: issued.nonce,
                         expiresAt: issued.expiresAt,
-                        policyHash: policyHash(policy),
-                        kitPublicKey: kit.publicKey,
+                        policy,
                     }),
                 };
             } catch (err) {
@@ -272,13 +396,12 @@
             const policy = isObject(found.policy) ? found.policy : data.policy;
             if (!isObject(policy)) return null;
             try {
-                return pairingCode({
+                return makeCode({
                     serverOrigin,
                     ticket: data.ticket,
                     nonce: found.nonce,
                     expiresAt: data.expiresAt,
-                    policyHash: policyHash(policy),
-                    kitPublicKey: kit.publicKey,
+                    policy,
                 });
             } catch {
                 return null;
@@ -352,13 +475,49 @@
             if (!rateLimit(src)) return;
             panel.deletePlayer(src, asIdentifier(payload));
         });
+        onNet('nakara_rongroi:panel:forgetMissing', () => {
+            const src = source;
+            if (!rateLimit(src)) return;
+            panel.forgetMissingReports(src);
+        });
 
         on('playerDropped', () => {
             const src = source;
             panel.playerDropped(src);
         });
 
-        RegisterCommand('rongroi', (src) => {
+        async function runDoctor() {
+            const line = (ok, text) => console.log(`nakara_rongroi doctor: ${ok ? 'ok  ' : 'FAIL'} ${text}`);
+            line(true, `edition ${edition}, storage ${edition === 'enhanced' ? 'files in cache/rongroi-reports' : 'KVP'}`);
+            const values = settings.get();
+            line(typeof values.publicOrigin === 'string' && values.publicOrigin.length > 0,
+                `public origin ${values.publicOrigin || '(not set)'}${values.fromServerCfg.length ? ' (from server.cfg)' : ''}`);
+            line(typeof values.serverName === 'string' && values.serverName.length > 0,
+                `server name ${!values.serverName ? '(not set: Policy screen, or rongroi_server_name in server.cfg)'
+                    : values.serverNameFrom === 'sv_projectName'
+                        ? 'from sv_projectName (set rongroi_server_name to pin it: the policy hash follows the name)'
+                        : `from ${values.serverNameFrom}`}`);
+            if (edition === 'enhanced' && marker) {
+                const check = storage.checkIntegrity();
+                line(!(check.expected > check.found), `stored reports: expected ${check.expected}, found ${check.found}`);
+            }
+            if (!relay) {
+                line(relayParsed.reason === 'off', relayParsed.reason === 'off' ? 'relay not configured (direct uploads)' : `relay: ${relayParsed.reason}`);
+                if (relayParsed.reason === 'off') {
+                    console.log('nakara_rongroi doctor: note this server cannot test reachability from outside its own network');
+                }
+                return;
+            }
+            const h = await relay.health();
+            line(h.ok && h.server === relay.id, `relay ${relay.origin} answers ${h.status}${h.server ? `, key is for ${h.server}` : ''}`);
+            console.log('nakara_rongroi doctor: relay key is set (value not shown)');
+        }
+
+        RegisterCommand('rongroi', (src, args) => {
+            if (src === 0 && Array.isArray(args) && args[0] === 'doctor') {
+                runDoctor().catch(() => console.log('nakara_rongroi doctor: FAIL could not finish'));
+                return;
+            }
             if (typeof src !== 'number' || !Number.isInteger(src) || src <= 0) return;
             if (isStaff(src)) {
                 panel.panelOpen(src);
@@ -377,6 +536,10 @@
         } : null));
         SetHttpHandler(handler);
         setInterval(() => handler.sweep(), 10000);
+
+        if (relay) {
+            setInterval(() => { pump.round().catch(() => log('rongroi relay: round failed')); }, RELAY_PULL_MS);
+        }
     } catch {
         console.log('nakara_rongroi: startup failed');
     }

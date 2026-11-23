@@ -1,0 +1,16 @@
+{
+  "name": "@aeterna_game/rongroi-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Rongroi Relay: an HTTPS drop box a server owner runs so Rongroi Connect can deliver encrypted reports without reaching the game server",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "relay.js",
+  "scripts": {
+    "start": "node main.js",
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

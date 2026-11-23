@@ -1,6 +1,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const https = require('https');
+const { EventEmitter } = require('node:events');
 
 const packageRoot = path.resolve(__dirname, '..');
 const serverJs = path.join(packageRoot, 'server', 'js');
@@ -12,7 +14,6 @@ const stubbedGlobals = [
   'DeleteResourceKvp',
   'RegisterCommand',
   'GetCurrentResourceName',
-  'fetch',
 ];
 
 function clearServerCache() {
@@ -26,12 +27,13 @@ function clearServerCache() {
 test('nakara_tickets pair command works when FXServer passes rawCommand as the third argument', async () => {
   const kvpStore = new Map();
   const registeredCommands = new Map();
-  const fetchCalls = [];
+  const requestCalls = [];
+  const originalRequest = https.request;
   const originals = {};
   for (const name of stubbedGlobals) originals[name] = globalThis[name];
 
   globalThis.GetConvar = (name, def) => {
-    if (name === 'nakara_tickets_api') return 'http://tickets.test';
+    if (name === 'nakara_tickets_api') return 'https://tickets.test';
     return def;
   };
   globalThis.GetResourceKvpString = (key) => kvpStore.get(key) ?? null;
@@ -41,16 +43,21 @@ test('nakara_tickets pair command works when FXServer passes rawCommand as the t
     registeredCommands.set(name, handler);
   };
   globalThis.GetCurrentResourceName = () => 'nakara_tickets';
-  globalThis.fetch = async (url, options) => {
-    fetchCalls.push({ url: String(url), options });
-    return new Response(
-      JSON.stringify({
+  https.request = (url, options, onResponse) => {
+    requestCalls.push({ url: String(url), options });
+    const req = new EventEmitter();
+    req.end = () => setImmediate(() => {
+      const res = new EventEmitter();
+      res.statusCode = 200;
+      onResponse(res);
+      res.emit('data', Buffer.from(JSON.stringify({
         serverId: '00000000-0000-4000-8000-000000000042',
         secret: 'dGVzdC1zZWNyZXQtMzItYnl0ZXMtc3RyaW5nLWJhc2U2NA',
         guildName: 'Test Guild',
-      }),
-      { status: 200, headers: { 'content-type': 'application/json' } }
-    );
+      })));
+      res.emit('end');
+    });
+    return req;
   };
 
   try {
@@ -65,10 +72,11 @@ test('nakara_tickets pair command works when FXServer passes rawCommand as the t
     // FXServer invokes the handler as (source, args, rawCommand).
     await handler(0, ['pair', 'ABCDEFGH12'], 'nakara_tickets pair ABCDEFGH12');
 
-    assert.equal(fetchCalls.length, 1, 'pair must make exactly one http request');
-    assert.ok(fetchCalls[0].url.includes('/bridge/v1/pair'), 'pair must call the pair route');
+    assert.equal(requestCalls.length, 1, 'pair must make exactly one http request');
+    assert.ok(requestCalls[0].url.includes('/bridge/v1/pair'), 'pair must call the pair route');
     assert.equal(store.getServerId(), '00000000-0000-4000-8000-000000000042');
   } finally {
+    https.request = originalRequest;
     for (const name of stubbedGlobals) {
       if (originals[name] === undefined) delete globalThis[name];
       else globalThis[name] = originals[name];
