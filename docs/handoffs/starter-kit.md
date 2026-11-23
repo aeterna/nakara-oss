@@ -20,6 +20,8 @@ passed the in-game full test. There is no open work on this release.
 - In-game full test on the published zips: 42 passed, 0 failed, 4 checks by eye (run 1795019605, FXServer Enhanced game
   build 3788, 1920x1080). The owner passed the visual and hand checks on the same code before release.
 - The test menu is not part of the kit. It and the run results stay with the maintainer, outside the repo.
+  Changed for 0.2 (owner, 2026-11-21; ADR 0005 decision 7): the menu becomes the public package `aeterna_testkit`.
+  The maintainer's run scripts for the kit-test server and the run results still stay outside the repo.
 - Releases: `aeterna_core`, `aeterna_uikit`, `aeterna_layout`, `aeterna_notify`, `aeterna_invkit`, `aeterna_hudkit` and
   `aeterna_phonekit`, each `@0.1.0`.
 

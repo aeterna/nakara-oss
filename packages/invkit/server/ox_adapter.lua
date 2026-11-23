@@ -7,6 +7,7 @@ local A = InvkitOxAdapter
 
 local warnedNoOx = false
 local currentHookId = nil
+local phoneHookIds = {}
 
 local function translate(key)
     if AeternaCore and type(AeternaCore.t) == 'function' then
@@ -45,6 +46,7 @@ end
 
 function A.clearHookState()
     currentHookId = nil
+    phoneHookIds = {}
 end
 
 function A.resetWarnState()
@@ -134,7 +136,7 @@ function A.parseUsingItemPayload(payload)
     if type(itemField) ~= 'table' then
         return src, nil, nil
     end
-    return src, itemField.name, tonumber(itemField.slot)
+    return src, itemField.name, tonumber(itemField.slot), itemField.metadata
 end
 
 function A.syncUsingItemHook(onUsingItemFn, itemFilter, filterCount)
@@ -152,11 +154,11 @@ function A.syncUsingItemHook(onUsingItemFn, itemFilter, filterCount)
     end
     local ok, hookId = pcall(function()
         return exports.ox_inventory:registerHook('usingItem', function(payload)
-            local src, itemName, slot = A.parseUsingItemPayload(payload)
+            local src, itemName, slot, metadata = A.parseUsingItemPayload(payload)
             if not src or type(itemName) ~= 'string' then
                 return
             end
-            return onUsingItemFn(src, itemName, slot)
+            return onUsingItemFn(src, itemName, slot, metadata)
         end, { itemFilter = itemFilter })
     end)
     if not ok then
@@ -184,6 +186,122 @@ function A.consumeItem(src, item, count, slot)
         return false
     end
     return true
+end
+
+-- Phone item mode (0.2). Calls verified against ox_inventory v2.44.0 server exports.
+
+--- Every slot of the player holding one of `names`, or nil when ox_inventory is not started or the call
+--- fails. Search(src, 'slots', names) returns the slot list itself for one name, a name -> list map for more.
+function A.searchSlots(src, names)
+    if not A.isOxStarted() or type(names) ~= 'table' or #names == 0 then
+        return nil
+    end
+    local ok, result = pcall(function()
+        return exports.ox_inventory:Search(src, 'slots', names)
+    end)
+    if not ok then
+        logWarn('ox_inventory:Search failed', { src = tostring(src), err = tostring(result) })
+        return nil
+    end
+    return result
+end
+
+--- Replaces the metadata of one slot (SetMetadata replaces the whole table; callers pass a merged copy).
+function A.setMetadata(src, slot, metadata)
+    if not A.isOxStarted() then
+        return false
+    end
+    local ok, err = pcall(function()
+        exports.ox_inventory:SetMetadata(src, slot, metadata)
+    end)
+    if not ok then
+        logWarn('ox_inventory:SetMetadata failed', { src = tostring(src), slot = tostring(slot), err = tostring(err) })
+        return false
+    end
+    return true
+end
+
+--- Self-test only: gives one item with `metadata`. true when ox_inventory added it.
+function A.addItem(src, item, count, metadata)
+    if not A.isOxStarted() then
+        return false
+    end
+    local ok, added = pcall(function()
+        return exports.ox_inventory:AddItem(src, item, count, metadata)
+    end)
+    if not ok or not added then
+        logWarn('ox_inventory:AddItem failed', { src = tostring(src), item = tostring(item) })
+        return false
+    end
+    return true
+end
+
+--- Self-test only: removes `count` of `item` whose metadata matches `metadata` (the test's own tag), so an
+--- item the player already had is never taken.
+function A.removeTagged(src, item, count, metadata)
+    if not A.isOxStarted() then
+        return false
+    end
+    local ok, removed = pcall(function()
+        return exports.ox_inventory:RemoveItem(src, item, count, metadata)
+    end)
+    return ok and removed ~= false
+end
+
+--- Self-test only: removes `count` of `item` from one slot (phone_no_item puts the presser's own phone items aside
+--- and gives them back with the same metadata when the row ends).
+function A.removeSlot(src, item, count, slot)
+    if not A.isOxStarted() then
+        return false
+    end
+    local ok, removed = pcall(function()
+        return exports.ox_inventory:RemoveItem(src, item, count, nil, slot)
+    end)
+    return ok and removed ~= false
+end
+
+--- Self-test only: how many of `item` the player carries, or nil when ox_inventory cannot say.
+function A.itemCount(src, item)
+    if not A.isOxStarted() then
+        return nil
+    end
+    local ok, count = pcall(function()
+        return exports.ox_inventory:GetItemCount(src, item)
+    end)
+    return ok and tonumber(count) or nil
+end
+
+--- (Re)registers the swapItems and createItem hooks for the phone items. `handlers` maps the hook event
+--- name to fn(payload); `itemFilter` is { [name] = true }. An empty filter only removes the old hooks.
+function A.syncPhoneHooks(handlers, itemFilter)
+    if not A.isOxStarted() then
+        return false
+    end
+    for _, id in pairs(phoneHookIds) do
+        pcall(function()
+            exports.ox_inventory:removeHooks(id)
+        end)
+    end
+    phoneHookIds = {}
+    if type(itemFilter) ~= 'table' or next(itemFilter) == nil then
+        return true
+    end
+    local allOk = true
+    for _, event in ipairs({ 'swapItems', 'createItem' }) do
+        local fn = handlers[event]
+        local ok, hookId = pcall(function()
+            return exports.ox_inventory:registerHook(event, function(payload)
+                fn(payload)
+            end, { itemFilter = itemFilter })
+        end)
+        if ok then
+            phoneHookIds[event] = hookId
+        else
+            allOk = false
+            logWarn('ox_inventory:registerHook failed', { event = event, err = tostring(hookId) })
+        end
+    end
+    return allOk
 end
 
 return A

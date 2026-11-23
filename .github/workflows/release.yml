@@ -2,13 +2,14 @@
 # before any job with write permissions starts. Releases are built here from the tagged commit —
 # never uploaded from a laptop — and every asset gets a build-provenance attestation that anyone
 # can check with:  gh attestation verify <zip> --repo aeterna/nakara-oss --signer-workflow aeterna/nakara-oss/.github/workflows/release.yml
+# package=starter-kit builds aeterna-starter-kit-<version>.zip from the kit packages' own releases of this commit.
 name: release
 
 on:
   workflow_dispatch:
     inputs:
       package:
-        description: "package folder under packages/ (e.g. cargen-fix, devkit)"
+        description: "package folder under packages/ (e.g. cargen-fix, devkit), or starter-kit for the combined kit zip (ADR 0005 d10: release every kit package from the same commit first)"
         required: true
         type: string
 
@@ -37,7 +38,13 @@ jobs:
         name: package metadata + bundle
         env:
           PKG: ${{ inputs.package }}
-        run: node .github/scripts/build-release.mjs "$PKG" out
+          GH_TOKEN: ${{ github.token }}   # starter-kit only: reads the packages' own releases (read-only)
+        run: |
+          if [ "$PKG" = "starter-kit" ]; then
+            node .github/scripts/build-kit-zip.mjs out
+          else
+            node .github/scripts/build-release.mjs "$PKG" out
+          fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-out

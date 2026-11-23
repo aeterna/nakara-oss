@@ -6,6 +6,14 @@ local resource = require('helpers.resource')
 local HERE = debug.getinfo(1, 'S').source:match('^@(.*)/[^/]*$') or '.'
 local DIR = HERE .. '/..'
 
+-- Fires one of core's local events as aeterna_core (the handlers drop the same event from anyone else).
+local function fireCore(name, ...)
+    local prev = rawget(_G, 'GetInvokingResource')
+    rawset(_G, 'GetInvokingResource', function() return 'aeterna_core' end)
+    natives.fire(name, ...)
+    rawset(_G, 'GetInvokingResource', prev)
+end
+
 local function load_logic()
     return assert(loadfile(DIR .. '/shared/logic/layout.lua'))()
 end
@@ -562,6 +570,8 @@ describe('aeterna_layout', function()
 
             assert.are.equal(1, #addedEntries)
             assert.are.equal('Edit HUD layout', addedEntries[1].label)
+            -- 0.1 behaviour (the menu entry opens the editor); 0.2 menu panel is covered in layout_02_spec.lua
+            Config.menuPanel = false
 
             -- Ignore other owners
             natives.fire('aeterna_uikit:menu', 3, { owner = 'other_res', id = addedEntries[1].id })
@@ -640,7 +650,7 @@ describe('aeterna_layout', function()
             assert.are.equal(0.6, movedApply.args[3].x)
 
             -- Focus lost acts as Cancel and reverts to 0.05
-            natives.fire('aeterna_core:focusLost', 'aeterna_layout', 'focus_tok_1', 'preempted')
+            fireCore('aeterna_core:focusLost', 'aeterna_layout', 'focus_tok_1', 'preempted')
             local revertApply = natives.last_emitted('local', 'aeterna_layout:apply')
             assert.are.equal('aeterna_hudkit', revertApply.args[1])
             assert.are.equal('status', revertApply.args[2])

@@ -13,8 +13,8 @@ html, body {
     background: transparent;
     font-family: var(--font);
     color: var(--text);
-    font-size: 14px;
-    line-height: 1.45;
+    font-size: var(--fs-3);
+    line-height: var(--lh);
     user-select: none;
     -webkit-font-smoothing: antialiased;
 }
@@ -75,7 +75,7 @@ html, body {
 }
 
 .standin-label {
-    font-size: 13px;
+    font-size: var(--fs-1);
     font-weight: 600;
     color: var(--text);
     text-align: center;
@@ -84,7 +84,7 @@ html, body {
 }
 
 .standin-meta {
-    font-size: 11px;
+    font-size: var(--fs-1);
     color: var(--text-2);
     font-variant-numeric: tabular-nums;
     pointer-events: none;
@@ -100,7 +100,7 @@ html, body {
     border-radius: var(--radius-m);
     padding: 10px var(--pad);
     color: var(--text-2);
-    font-size: 13px;
+    font-size: var(--fs-3);
     pointer-events: none;
 }
 
@@ -121,7 +121,7 @@ html, body {
 }
 
 .inspector-title {
-    font-size: 13px;
+    font-size: var(--fs-3);
     font-weight: 600;
     color: var(--text);
     padding-right: 8px;
@@ -135,14 +135,14 @@ html, body {
 }
 
 .scale-label {
-    font-size: 12px;
+    font-size: var(--fs-3);
     color: var(--text-2);
 }
 
 .scale-value {
     min-width: 44px;
     text-align: center;
-    font-size: 13px;
+    font-size: var(--fs-1);
     font-weight: 600;
     color: var(--text);
     font-variant-numeric: tabular-nums;
@@ -167,7 +167,7 @@ html, body {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 14px;
+    font-size: var(--fs-4);
     font-weight: 600;
     color: var(--text);
     padding-right: 12px;
@@ -192,7 +192,7 @@ html, body {
     border-radius: var(--radius-s);
     padding: 7px 12px;
     font-family: var(--font);
-    font-size: 13px;
+    font-size: var(--fs-3);
     font-weight: 500;
     cursor: pointer;
     display: inline-flex;
@@ -262,7 +262,7 @@ html, body {
 }
 
 .confirm-text {
-    font-size: 14px;
+    font-size: var(--fs-3);
     color: var(--text);
     word-break: break-word;
 }
@@ -274,8 +274,110 @@ html, body {
     gap: 8px;
 }
 
+/* 0.2: grid drawn while dragging, at the current snap step */
+.grid-layer {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.5;
+    background-image:
+        linear-gradient(to right, var(--line) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--line) 1px, transparent 1px);
+}
+
+/* 0.2: preset and snap selects in the toolbar */
+.select-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--fs-3);
+    color: var(--text-2);
+}
+
+.select {
+    appearance: none;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    padding: 6px 10px;
+    font-family: var(--font);
+    font-size: var(--fs-3);
+    line-height: var(--lh);
+    background: var(--raised);
+    color: var(--text);
+    cursor: pointer;
+}
+
+.select:hover {
+    border-color: var(--text-2);
+}
+
+/* 0.2: export / import box */
+.share-card {
+    width: 520px;
+    max-width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-l);
+    padding: var(--pad);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.share-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.share-title {
+    font-size: var(--fs-4);
+    font-weight: 600;
+    color: var(--text);
+}
+
+.share-hint {
+    font-size: var(--fs-3);
+    color: var(--text-2);
+}
+
+.share-text {
+    width: 100%;
+    resize: none;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    padding: 8px 10px;
+    background: var(--raised);
+    color: var(--text);
+    font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    font-size: var(--fs-2);
+    line-height: var(--lh);
+    word-break: break-all;
+    user-select: text;
+}
+
+.share-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.share-status {
+    font-size: var(--fs-3);
+    color: var(--text-2);
+    word-break: break-word;
+}
+
+.share-status.is-error {
+    color: var(--bad);
+}
+
 /* Keyboard accessibility focus ring (ADR 0004 decision 13) */
 button:focus-visible,
+.select:focus-visible,
+.share-text:focus-visible,
 .standin-box:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;

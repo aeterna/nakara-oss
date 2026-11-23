@@ -25,7 +25,8 @@ local function checkAce(src, ace)
         return AeternaCore.can(src, ace)
     end
     if type(IsPlayerAceAllowed) == 'function' then
-        return IsPlayerAceAllowed(src, ace) == true
+        local r = IsPlayerAceAllowed(src, ace)
+        return r == true or r == 1 -- Enhanced returns 1 for true
     end
     return false
 end
@@ -233,4 +234,22 @@ AddEventHandler('playerDropped', function()
     if src then
         panels:removePlayer(src)
     end
+end)
+
+-- Self-tests (0.2): register every row with aeterna_core and answer the server-side headless ones.
+local Selftests = UikitSelftests
+
+pcall(function()
+    Selftests.register(function(name, meta)
+        return exports.aeterna_core:addSelftest(name, meta)
+    end, translate)
+end)
+
+AddEventHandler('aeterna_core:selftest', function(runId, name)
+    if GetInvokingResource() ~= 'aeterna_core' then return end
+    local short = Selftests.shortName(name)
+    if not short then return end
+    local ok, detail = Selftests.run(short, L)
+    if ok == nil then return end
+    exports.aeterna_core:reportSelftest(runId, name, ok, detail)
 end)

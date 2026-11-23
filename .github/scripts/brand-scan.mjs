@@ -6,7 +6,8 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 export const SCAN_PATHS = ['packages/core', 'packages/uikit', 'packages/layout', 'packages/notify', 'packages/invkit',
-  'packages/hudkit', 'packages/phonekit', 'docs/specs', 'docs/guides', 'kits/starter'];
+  'packages/hudkit', 'packages/phonekit', 'packages/radial', 'packages/loading', 'packages/testkit',
+  'packages/phonecall', 'packages/camera', 'docs/specs', 'docs/guides', 'kits/starter'];
 const hash = (s) => createHash('sha256').update(s).digest('hex');
 
 export function loadDeny(text) {

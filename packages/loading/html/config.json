@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "serverName": "My Server",
+  "tagline": "",
+  "lang": "en",
+  "preset": "asphalt",
+  "background": "",
+  "tips": ["Bind your keys in Settings → Key Bindings → FiveM"],
+  "tipSeconds": 8,
+  "audio": { "src": "", "autoplay": false, "volume": 0.3 },
+  "shutdown": { "fallbackSeconds": 30 }
+}

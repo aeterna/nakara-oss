@@ -6,8 +6,11 @@ local currentPanel = nil
 local activePrompt = nil
 local activeProgress = nil
 local focusToken = nil
+local paused = false -- 0.2: another resource holds focus as an overlay; ignore all input until it resumes
 local promptSeq = 0
 local localeReady = false
+local selftest = nil -- 0.2: the client self-test in flight (Self-tests section at the end)
+local SINK_SRC = 0 -- key of the test panel in the self-test's own panel manager
 
 local LOCALE_KEYS = {
     'uikit.menu.title',
@@ -22,6 +25,10 @@ local LOCALE_KEYS = {
     'uikit.key.menu',
     'uikit.key.cancel',
     'uikit.key.skill',
+    'uikit.search.placeholder',
+    'uikit.search.none',
+    'uikit.table.empty',
+    'uikit.tabs.label',
 }
 
 local function logWarn(msg, fields)
@@ -30,20 +37,30 @@ local function logWarn(msg, fields)
     end
 end
 
-local function translate(key)
+local function translate(key, vars)
     if AeternaCore and type(AeternaCore.t) == 'function' then
-        return AeternaCore.t(key)
+        return AeternaCore.t(key, vars)
     end
-    if Locales and Locales.en and Locales.en[key] then
-        return Locales.en[key]
+    local str = (Locales and Locales.en and Locales.en[key]) or key
+    if type(vars) == 'table' then
+        str = str:gsub('{([%w_]+)}', function(k)
+            return vars[k] ~= nil and tostring(vars[k]) or ('{' .. k .. '}')
+        end)
     end
-    return key
+    return str
 end
 
 local function sendUi(msg)
     if type(SendNUIMessage) == 'function' then
         SendNUIMessage(msg)
     end
+end
+
+-- The page learns the pause state too, so its own buttons and keys do nothing while paused.
+local function setPaused(flag)
+    if paused == flag then return end
+    paused = flag
+    sendUi({ type = 'focus:paused', paused = flag })
 end
 
 local function syncThemeAndLocale()
@@ -54,12 +71,11 @@ local function syncThemeAndLocale()
             strings[k] = translate(k)
         end
         sendUi({ type = 'locale', strings = strings })
-        local ok, href = pcall(function()
-            return exports.aeterna_core:themeHref()
-        end)
-        if ok then
-            sendUi({ type = 'aeterna:theme', href = href })
-        end
+        -- the owner stylesheet when set, else the preset (ADR 0005 decision 9; the preset was never sent before
+        -- the live W3 run 2026-11-23)
+        local okH, href = pcall(function() return exports.aeterna_core:themeHref() end)
+        local okP, preset = pcall(function() return exports.aeterna_core:themePreset() end)
+        sendUi({ type = 'aeterna:theme', href = okH and href or nil, preset = okP and preset or 'asphalt' })
         localeReady = true
     end
 end
@@ -68,6 +84,7 @@ local function acquireFocus(opts)
     local ok, tok = pcall(function()
         return AeternaCore.requestFocus(opts)
     end)
+    setPaused(false)
     if ok and type(tok) == 'string' then
         focusToken = tok
         return tok
@@ -80,6 +97,7 @@ local function dropFocus()
     if not focusToken then return end
     local tok = focusToken
     focusToken = nil
+    setPaused(false)
     pcall(function()
         AeternaCore.releaseFocus(tok)
     end)
@@ -88,6 +106,22 @@ end
 local function syncFocusRelease()
     if not currentPanel and not activePrompt then
         dropFocus()
+    end
+end
+
+-- A test panel's actions go to the self-test's own panel manager (the validation the server runs), never to the
+-- server, which does not know that panel.
+local function forwardAction(panel, payload)
+    if not panel.selftest then
+        TriggerServerEvent('aeterna_uikit:sv:action', payload)
+        return
+    end
+    local st = selftest
+    if not st or st.panelId ~= panel.panelId then return end
+    local ok, _, result = st.sink:handleAction(SINK_SRC, payload)
+    st.results[#st.results + 1] = ok and result or false
+    if st.onAction then
+        st.onAction(ok and result or nil)
     end
 end
 
@@ -161,7 +195,7 @@ RegisterNetEvent('aeterna_uikit:cl:open', function(data)
 end)
 
 RegisterNetEvent('aeterna_uikit:cl:update', function(data)
-    if type(data) ~= 'table' or not currentPanel then return end
+    if type(data) ~= 'table' or not currentPanel or currentPanel.selftest then return end
     if data.panelId ~= currentPanel.panelId then return end
     sendUi({
         type = 'panel:update',
@@ -172,7 +206,7 @@ end)
 
 RegisterNetEvent('aeterna_uikit:cl:close', function(data)
     if type(data) ~= 'table' or not currentPanel then return end
-    if data.panelId and data.panelId ~= currentPanel.panelId then return end
+    if data.panelId and (currentPanel.selftest or data.panelId ~= currentPanel.panelId) then return end
     local pId = currentPanel.panelId
     currentPanel = nil
     sendUi({
@@ -183,12 +217,39 @@ RegisterNetEvent('aeterna_uikit:cl:close', function(data)
     syncFocusRelease()
 end)
 
--- Focus loss handler from aeterna_core
-AddEventHandler('aeterna_core:focusLost', function(owner, token, reason)
+local function isOurFocusEvent(owner, token)
     local selfName = type(GetCurrentResourceName) == 'function' and GetCurrentResourceName() or 'aeterna_uikit'
-    if owner ~= nil and owner ~= selfName then return end
-    if token ~= nil and focusToken ~= nil and token ~= focusToken then return end
+    if owner ~= nil and owner ~= selfName then return false end
+    if token ~= nil and focusToken ~= nil and token ~= focusToken then return false end
+    return true
+end
+
+-- Core's local events count only when aeterna_core fired them, so another resource cannot fake one.
+local function fromCore()
+    return GetInvokingResource() == 'aeterna_core'
+end
+
+-- Focus overlay (core 0.2): stay on screen, ignore input, send nothing; a skill check's marker stops.
+AddEventHandler('aeterna_core:focusPaused', function(owner, token)
+    if not fromCore() then return end
+    if not isOurFocusEvent(owner, token) or not focusToken then return end
+    setPaused(true)
+end)
+
+AddEventHandler('aeterna_core:focusResumed', function(owner, token)
+    if not fromCore() then return end
+    if not isOurFocusEvent(owner, token) or not paused then return end
+    setPaused(false)
+    if selftest and selftest.onResumed then
+        selftest.onResumed()
+    end
+end)
+
+-- Focus loss from aeterna_core (a real loss closes even while paused)
+local function handleFocusLost(owner, token, reason)
+    if not isOurFocusEvent(owner, token) then return end
     focusToken = nil
+    setPaused(false)
 
     if activePrompt and not activePrompt.done then
         activePrompt.done = true
@@ -202,24 +263,30 @@ AddEventHandler('aeterna_core:focusLost', function(owner, token, reason)
     end
 
     if currentPanel then
+        local panel = currentPanel
         local pId = currentPanel.panelId
         local isMenu = currentPanel.kind == 'menu'
         currentPanel = nil
         sendUi({ type = 'panel:close', panelId = pId, reason = reason or 'preempted' })
         if not isMenu then
-            TriggerServerEvent('aeterna_uikit:sv:action', {
+            forwardAction(panel, {
                 panelId = pId,
                 action = '__close',
                 values = {},
             })
         end
     end
+end
+
+AddEventHandler('aeterna_core:focusLost', function(owner, token, reason)
+    if not fromCore() then return end
+    handleFocusLost(owner, token, reason)
 end)
 
 -- NUI Callbacks
 RegisterNUICallback('panelAction', function(data, cb)
     if type(cb) == 'function' then cb({ ok = true }) end
-    if type(data) ~= 'table' or not currentPanel then return end
+    if paused or type(data) ~= 'table' or not currentPanel then return end
     if data.panelId ~= currentPanel.panelId then return end
 
     if currentPanel.kind == 'menu' then
@@ -242,6 +309,7 @@ RegisterNUICallback('panelAction', function(data, cb)
         return
     end
     local values = type(data.values) == 'table' and data.values or {}
+    local panel = currentPanel
     local pId = currentPanel.panelId
 
     if action == '__close' then
@@ -250,7 +318,7 @@ RegisterNUICallback('panelAction', function(data, cb)
         syncFocusRelease()
     end
 
-    TriggerServerEvent('aeterna_uikit:sv:action', {
+    forwardAction(panel, {
         panelId = pId,
         action = action,
         values = values,
@@ -259,7 +327,7 @@ end)
 
 RegisterNUICallback('promptResult', function(data, cb)
     if type(cb) == 'function' then cb({ ok = true }) end
-    if type(data) ~= 'table' then return end
+    if paused or type(data) ~= 'table' then return end
 
     if data.kind == 'progress' and activeProgress then
         if data.value == false and activeProgress.cancelable then
@@ -279,6 +347,7 @@ end)
 
 RegisterNUICallback('escape', function(data, cb)
     if type(cb) == 'function' then cb({ ok = true }) end
+    if paused then return end
 
     if activePrompt and not activePrompt.done then
         if activePrompt.kind == 'input' then
@@ -292,13 +361,14 @@ RegisterNUICallback('escape', function(data, cb)
     end
 
     if currentPanel then
+        local panel = currentPanel
         local pId = currentPanel.panelId
         local isMenu = currentPanel.kind == 'menu'
         currentPanel = nil
         sendUi({ type = 'panel:close', panelId = pId, reason = 'escape' })
         syncFocusRelease()
         if not isMenu then
-            TriggerServerEvent('aeterna_uikit:sv:action', {
+            forwardAction(panel, {
                 panelId = pId,
                 action = '__close',
                 values = {},
@@ -417,7 +487,7 @@ exports('progress', function(opts)
             break
         end
         disableControls(clean.disable)
-        if clean.cancelable and not clean.disable.mouse and isEscapePressed() then
+        if clean.cancelable and not paused and not clean.disable.mouse and isEscapePressed() then
             prog.cancelled = true
             break
         end
@@ -461,10 +531,10 @@ exports('skillCheck', function(opts)
         if type(DisableControlAction) == 'function' then
             DisableControlAction(0, 22, true)
         end
-        if type(IsDisabledControlJustPressed) == 'function' and IsDisabledControlJustPressed(0, 22) then
+        if not paused and type(IsDisabledControlJustPressed) == 'function' and IsDisabledControlJustPressed(0, 22) then
             sendUi({ type = 'prompt:skill', action = 'hit' })
         end
-        if isEscapePressed() then
+        if not paused and isEscapePressed() then
             p.result = false
             p.done = true
             break
@@ -524,7 +594,7 @@ end, false)
 RegisterCommand('-aeterna_uikit_menu', function() end, false)
 
 RegisterCommand('+aeterna_uikit_cancel', function()
-    if activeProgress and activeProgress.cancelable then
+    if not paused and activeProgress and activeProgress.cancelable then
         activeProgress.cancelled = true
     end
 end, false)
@@ -532,7 +602,7 @@ end, false)
 RegisterCommand('-aeterna_uikit_cancel', function() end, false)
 
 RegisterCommand('+aeterna_uikit_skill', function()
-    if activePrompt and activePrompt.kind == 'skill' and not activePrompt.done then
+    if not paused and activePrompt and activePrompt.kind == 'skill' and not activePrompt.done then
         sendUi({ type = 'prompt:skill', action = 'hit' })
     end
 end, false)
@@ -544,3 +614,219 @@ if AeternaCore and type(AeternaCore.key) == 'function' then
     AeternaCore.key('+aeterna_uikit_cancel', 'uikit.key.cancel')
     AeternaCore.key('+aeterna_uikit_skill', 'uikit.key.skill')
 end
+
+--------------------------------------------------------------------------------
+-- Self-tests (0.2): the ped and eye rows run here (docs/specs/aeterna_uikit.md § Self-tests (0.2)).
+-- A test panel opens on this client only; what the owner would receive is checked by a client-side panel manager
+-- running the same validation as the server.
+--------------------------------------------------------------------------------
+
+local Selftests = UikitSelftests
+local RENDER_WAIT_MS = 300 -- the page draws the panel before the test drives it
+local DRIVE_WAIT_MS = 3000
+local MOTION_TOGGLE_MS = 2000
+
+local function reportSelftest(runId, name, state, detail)
+    pcall(function()
+        exports.aeterna_core:reportSelftest(runId, name, state, detail)
+    end)
+end
+
+local function closeTestPanel(st)
+    if currentPanel and currentPanel.selftest and currentPanel.panelId == st.panelId then
+        currentPanel = nil
+        sendUi({ type = 'panel:close', panelId = st.panelId, reason = 'closed' })
+        syncFocusRelease()
+    end
+end
+
+local function endSelftest()
+    local st = selftest
+    if not st then return end
+    selftest = nil
+    st.ended = true
+    closeTestPanel(st)
+    if st.forcedMotion then
+        sendUi({ type = 'selftest:motion', reduce = false })
+    end
+end
+
+-- Opens the test panel like the server's open would: an open panel is replaced and its owner gets __close.
+local function beginSelftest(runId, name, short)
+    endSelftest()
+    local sink = L.createPanelManager()
+    local panelId, err = sink:open(SINK_SRC, GetCurrentResourceName(), Selftests.panelSpec(short, translate))
+    if not panelId then
+        reportSelftest(runId, name, 'fail', 'test panel refused: ' .. tostring(err))
+        return nil
+    end
+    if currentPanel then
+        local old = currentPanel
+        currentPanel = nil
+        sendUi({ type = 'panel:close', panelId = old.panelId, reason = 'replaced' })
+        if old.kind ~= 'menu' then
+            forwardAction(old, { panelId = old.panelId, action = '__close', values = {} })
+        end
+    end
+    local clean = sink:getOpen(SINK_SRC).spec
+    selftest = { runId = runId, name = name, sink = sink, panelId = panelId, spec = clean, results = {} }
+    syncThemeAndLocale()
+    currentPanel = { panelId = panelId, title = clean.title, size = clean.size, blocks = clean.blocks, selftest = true }
+    acquireFocus({ cursor = true, keyboard = true, keepGameInput = false })
+    sendUi({ type = 'panel:open', panel = currentPanel })
+    return selftest
+end
+
+local function lastResult(st)
+    return st.results[#st.results] or nil
+end
+
+local function waitFor(st, cond, ms)
+    local deadline = GetGameTimer() + ms
+    while not st.ended and not cond() and GetGameTimer() < deadline do
+        Wait(50)
+    end
+    return not st.ended and cond()
+end
+
+local function finish(st, ok, detail)
+    if st.ended then return end
+    reportSelftest(st.runId, st.name, ok and 'pass' or 'fail', detail)
+    endSelftest()
+end
+
+-- Sends one drive message to the page, waits for its probe and the owner's action, then judges.
+local function drive(st, msg, judge)
+    CreateThread(function()
+        Wait(RENDER_WAIT_MS)
+        if st.ended then return end
+        st.driveOp = msg.op
+        sendUi(msg)
+        waitFor(st, function() return st.probe ~= nil and #st.results > 0 end, DRIVE_WAIT_MS)
+        finish(st, judge(lastResult(st), st.probe))
+    end)
+end
+
+local CLIENT_TESTS = {}
+
+function CLIENT_TESTS.panel_every_block(st)
+    reportSelftest(st.runId, st.name, 'ready', 'panel open')
+end
+
+function CLIENT_TESTS.overlay_pauses(st)
+    local presses = 0
+    st.onAction = function(result)
+        if not result or result.action ~= 'press' then return end
+        presses = presses + 1
+        local ok, _, patch = st.sink:update(SINK_SRC, st.panelId,
+            { blocks = { info = { label = translate('uikit.selftest.pressed', { n = presses }) } } })
+        if ok then
+            sendUi({ type = 'panel:update', panelId = st.panelId, patch = patch })
+        end
+    end
+    -- The person judges the card; this log line records what the panel did when the card let go of focus.
+    st.onResumed = function()
+        local ok, detail = Selftests.judgeResume({
+            paused = paused,
+            panelOpen = currentPanel ~= nil and currentPanel.panelId == st.panelId,
+        })
+        if AeternaCore and AeternaCore.log and type(AeternaCore.log.info) == 'function' then
+            AeternaCore.log.info('overlay_pauses: focus resumed', { result = ok and 'pass' or 'fail', detail = detail })
+        end
+    end
+    reportSelftest(st.runId, st.name, 'ready', 'panel open')
+end
+
+-- The page only: the panel leaves and enters again, so the person sees both animations (or none).
+-- The page takes reduced motion from the OS (prefers-reduced-motion), which no resource can switch: the test forces
+-- the same rules for its run and takes them off at the end (owner 2026-11-23: no manual steps).
+function CLIENT_TESTS.motion_reduced(st)
+    st.forcedMotion = true
+    sendUi({ type = 'selftest:motion', reduce = true })
+    reportSelftest(st.runId, st.name, 'ready', 'panel open')
+    CreateThread(function()
+        local shown = true
+        while true do
+            Wait(MOTION_TOGGLE_MS)
+            if st.ended or not currentPanel or currentPanel.panelId ~= st.panelId then return end
+            shown = not shown
+            if shown then
+                sendUi({ type = 'panel:open', panel = currentPanel })
+            else
+                sendUi({ type = 'panel:close', panelId = st.panelId, reason = 'closed' })
+            end
+        end
+    end)
+end
+
+function CLIENT_TESTS.tabs_switch(st)
+    drive(st, { type = 'selftest:drive', op = 'tab', target = Selftests.TAB_TARGET }, function(result, probe)
+        return Selftests.judgeTabs(st.spec, result, probe)
+    end)
+end
+
+function CLIENT_TESTS.slider_keyboard(st)
+    drive(st, { type = 'selftest:drive', op = 'slider', block = Selftests.SLIDER.id, press = 'act' }, Selftests.judgeSlider)
+end
+
+-- Runs the handler of core's focusLost event as core would when another resource takes focus without the overlay
+-- option, then hands the token back, because core still counts it as held.
+function CLIENT_TESTS.focus_lost_closes(st)
+    CreateThread(function()
+        Wait(RENDER_WAIT_MS)
+        if st.ended then return end
+        local tok = focusToken
+        handleFocusLost(GetCurrentResourceName(), tok, 'preempted')
+        local open = currentPanel ~= nil and currentPanel.panelId == st.panelId
+        local ok, detail = Selftests.judgeFocusLost({ panelOpen = open, close = lastResult(st) })
+        if tok then
+            pcall(function() AeternaCore.releaseFocus(tok) end)
+        end
+        finish(st, ok, detail)
+    end)
+end
+
+AddEventHandler('aeterna_core:selftest', function(runId, name)
+    if not fromCore() then return end
+    local short = Selftests.shortName(name)
+    local run = short and CLIENT_TESTS[short]
+    if not run then return end
+    local st = beginSelftest(runId, name, short)
+    if st then
+        run(st)
+    end
+end)
+
+AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
+    if not fromCore() then return end
+    if selftest and selftest.runId == runId and selftest.name == name then
+        endSelftest()
+    end
+end)
+
+-- Core stopping ends the run: close the test panel.
+AddEventHandler('onResourceStop', function(resName)
+    if resName == 'aeterna_core' then
+        endSelftest()
+    end
+end)
+
+-- The page's report after a drive: { op, visible = { blockId, ... } } or { op, shown }.
+RegisterNUICallback('selftestProbe', function(data, cb)
+    if type(cb) == 'function' then cb({ ok = true }) end
+    local st = selftest
+    if not st or st.probe or type(data) ~= 'table' or data.op ~= st.driveOp then return end
+    local probe = {}
+    if type(data.visible) == 'table' then
+        probe.visible = {}
+        for i = 1, math.min(#data.visible, 40) do
+            if L.isValidId(data.visible[i], 32) then
+                probe.visible[#probe.visible + 1] = data.visible[i]
+            end
+        end
+    end
+    if type(data.shown) == 'string' and #data.shown <= 32 then
+        probe.shown = data.shown
+    end
+    st.probe = probe
+end)

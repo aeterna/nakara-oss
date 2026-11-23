@@ -6,17 +6,26 @@
     "http": [],
     "commands": [],
     "registeredCommands": [
-      "aeterna_announce"
+      "aeterna_announce",
+      "aeterna_announce_countdown",
+      "aeterna_notify_sound",
+      "+aeterna_notify_action1",
+      "-aeterna_notify_action1",
+      "+aeterna_notify_action2",
+      "-aeterna_notify_action2"
     ],
     "convars": {
       "read": [],
       "write": []
     },
     "netEvents": {
-      "server": [],
+      "server": [
+        "aeterna_notify:sv:action"
+      ],
       "client": [
         "aeterna_notify:cl:toast",
         "aeterna_notify:cl:announce",
+        "aeterna_notify:cl:countdown",
         "QBCore:Client:OnPlayerLoaded"
       ]
     },

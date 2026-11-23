@@ -731,12 +731,16 @@ describe('aeterna_phonekit', function()
             local res = resource.load_resource(DIR, 'client')
 
             -- Commands and key mapping registered on load
-            assert.are.equal(3, #cmdCalls)
+            assert.are.equal(6, #cmdCalls)
             assert.are.equal('aeterna_phonekit_open', cmdCalls[1][1])
             assert.are.equal('+aeterna_phonekit_open', cmdCalls[2][1])
             assert.are.equal('-aeterna_phonekit_open', cmdCalls[3][1])
-            assert.are.equal(1, #mapCalls)
+            assert.are.equal('aeterna_phonekit_fold', cmdCalls[4][1])
+            assert.are.equal('+aeterna_phonekit_fold', cmdCalls[5][1])
+            assert.are.equal('-aeterna_phonekit_fold', cmdCalls[6][1])
+            assert.are.equal(2, #mapCalls)
             assert.are.equal('+aeterna_phonekit_open', mapCalls[1][1])
+            assert.are.equal('+aeterna_phonekit_fold', mapCalls[2][1])
 
             -- Layout add event fired on startup
             local layoutAdds = natives.emitted('local', 'aeterna_layout:add')

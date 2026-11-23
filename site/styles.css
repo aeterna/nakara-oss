@@ -113,6 +113,7 @@ section.sec{padding-block:112px 0}
 .dev-row span{color:var(--text2)}
 .chip-dev{font-size:12px;color:var(--muted);border:1px solid var(--line2);border-radius:999px;padding:2px 10px;white-space:nowrap}
 .dev-row a.chip-rel{text-decoration:none}
+.dev-row span.chip-rel{color:var(--muted);border-color:var(--line2)}
 .dev-row .chip-rel{font-size:12px;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:2px 10px;white-space:nowrap}
 
 /* trust */
@@ -238,6 +239,7 @@ footer{margin-top:112px;border-top:1px solid var(--line);padding-block:28px 40px
   .steps,.pk-grid,.limits{grid-template-columns:1fr}
   .dev-row{grid-template-columns:1fr auto}
   .dev-row span{grid-column:1/-1;order:3}
+  .dev-row span.chip-rel{grid-column:auto;order:0}
   .links{display:none}
   .nav-btn{margin-left:auto}
   section.sec{padding-block:80px 0}

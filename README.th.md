@@ -32,17 +32,22 @@ provenance attestation คุณจึงตรวจซ้ำได้เอง
 | [`nakara_cargen_fix`](packages/cargen-fix) | กัน crash `CNetworkCarGenWorldStateData Pool Full` ฝั่ง client และอธิบายว่าทำไมวิธี `GAMECONFIG_FILE` ที่แชร์กันใช้ไม่ได้ ([สิ่งที่ตรวจแล้ว](packages/cargen-fix/README.md#what-we-have-verified)) | [`nakara_cargen_fix@1.0.0`](https://github.com/aeterna/nakara-oss/releases/tag/nakara_cargen_fix%401.0.0) |
 | [`nakara_rongroi`](packages/rongroi) | ฝั่ง server ของ [aeterna-rongroi](https://github.com/aeterna/aeterna-rongroi) | [`nakara_rongroi@0.2.0`](https://github.com/aeterna/nakara-oss/releases/tag/nakara_rongroi%400.2.0) |
 
-### AETERNA Starter Kit · ชุดพื้นฐาน 7 ตัว ([คู่มือ](https://aeterna.github.io/nakara-oss/starter-kit/))
+### AETERNA Starter Kit · ชุดพื้นฐาน 12 ตัว ใหม่ 5 ตัวใน 0.2 ([คู่มือ](https://aeterna.github.io/nakara-oss/starter-kit/) · [ลองธีม](https://aeterna.github.io/nakara-oss/starter-kit/theme/))
 
 | สคริปต์ | ทำอะไร | release ล่าสุด |
 |---|---|---|
-| [`aeterna_core`](packages/core) | ฐานร่วม: log · event bus ในเครื่อง · ตัวช่วยข้อความภาษาไทย · ค้นข้อความตามภาษา | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_core%400.1.0) |
-| [`aeterna_uikit`](packages/uikit) | panel UI ที่ server คุม · prompt (`confirm` `input` `progress` `skillCheck`) · เมนูร่วม | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_uikit%400.1.0) |
-| [`aeterna_notify`](packages/notify) | toast · banner ประกาศทั้งเซิร์ฟ · การ์ดข้อความประจำวัน | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_notify%400.1.0) |
-| [`aeterna_invkit`](packages/invkit) | stash ส่วนตัว · การใช้ไอเทมที่ server ตรวจ บน `ox_inventory` | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_invkit%400.1.0) |
-| [`aeterna_layout`](packages/layout) | ตัวจัดวาง HUD · เก็บ layout ไว้ที่เครื่องผู้เล่น | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_layout%400.1.0) |
-| [`aeterna_phonekit`](packages/phonekit) | โทรศัพท์แบบประกอบแอปได้ มีแอปพื้นฐาน และ API สำหรับเขียนแอปเอง | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_phonekit%400.1.0) |
-| [`aeterna_hudkit`](packages/hudkit) | HUD ผู้เล่น: แถบสถานะ · หน้าปัดรถ · ชื่อถนนและเข็มทิศ · minimap | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_hudkit%400.1.0) |
+| [`aeterna_core`](packages/core) | ฐานร่วม: log · event bus ในเครื่อง · ตัวช่วยข้อความภาษาไทย · ค้นข้อความตามภาษา | [`0.2.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_core%400.2.0) |
+| [`aeterna_uikit`](packages/uikit) | panel UI ที่ server คุม · prompt (`confirm` `input` `progress` `skillCheck`) · เมนูร่วม | [`0.2.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_uikit%400.2.0) |
+| [`aeterna_notify`](packages/notify) | toast · banner ประกาศทั้งเซิร์ฟ · การ์ดข้อความประจำวัน | [`0.2.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_notify%400.2.0) |
+| [`aeterna_invkit`](packages/invkit) | stash ส่วนตัว · การใช้ไอเทมที่ server ตรวจ บน `ox_inventory` | [`0.2.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_invkit%400.2.0) |
+| [`aeterna_layout`](packages/layout) | ตัวจัดวาง HUD · เก็บ layout ไว้ที่เครื่องผู้เล่น | [`0.2.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_layout%400.2.0) |
+| [`aeterna_phonekit`](packages/phonekit) | โทรศัพท์แบบประกอบแอปได้ มีแอปพื้นฐาน และ API สำหรับเขียนแอปเอง | [`0.2.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_phonekit%400.2.0) |
+| [`aeterna_hudkit`](packages/hudkit) | HUD ผู้เล่น: แถบสถานะ · หน้าปัดรถ · ชื่อถนนและเข็มทิศ · minimap | [`0.2.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_hudkit%400.2.0) |
+| [`aeterna_radial`](packages/radial) | เมนูวงกลมที่ resource อื่นเพิ่มช่องได้ · ตัวเลือกที่มีผลกับผู้เล่นอื่น server ตรวจซ้ำ | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_radial%400.1.0) |
+| [`aeterna_loading`](packages/loading) | หน้าโหลดที่บอกขั้นตอนโหลดจริง · ชื่อเซิร์ฟ ภาพพื้นหลัง และเคล็ดลับ | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_loading%400.1.0) |
+| [`aeterna_testkit`](packages/testkit) | ปุ่มเดียวรัน self-test ทุกตัวของชุดบนเซิร์ฟคุณ · ได้รายงานที่แนบ issue ได้ทันที | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_testkit%400.1.0) |
+| [`aeterna_phonecall`](docs/specs/aeterna_phonecall.md) | เบอร์โทร ข้อความ และโทรด้วยเสียง เป็นสองแอปในโทรศัพท์ | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_phonecall%400.1.0) |
+| [`aeterna_camera`](docs/specs/aeterna_camera.md) | แอปกล้องและแกลเลอรีในโทรศัพท์ · รูปเก็บบนเซิร์ฟของคุณเอง | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_camera%400.1.0) |
 
 ### เครื่องมือ
 

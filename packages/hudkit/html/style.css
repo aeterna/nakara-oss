@@ -16,8 +16,8 @@ body {
     background: transparent;
     font-family: var(--font);
     color: var(--text);
-    font-size: 13px;
-    line-height: 1.4;
+    font-size: var(--fs-3);
+    line-height: var(--lh);
 }
 
 #hud-container {
@@ -108,13 +108,89 @@ body {
     width: 32px;
     text-align: right;
     font-variant-numeric: tabular-nums;
-    font-size: 11px;
+    font-size: var(--fs-1);
     color: var(--text-3);
     font-weight: 500;
 }
 
-.bar-value.hidden-numbers {
+.bar-value.hidden-numbers,
+.fuel-value.hidden-numbers {
     display: none;
+}
+
+/* Ring style (0.2): each bar is a circular gauge, icon in the centre, percentage under it. */
+.style-ring .bars-container {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+}
+
+.bar-row.is-ring {
+    flex-direction: column;
+    gap: 2px;
+    height: auto;
+}
+
+.bar-row.is-ring .bar-value {
+    width: auto;
+    text-align: center;
+}
+
+.ring {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+}
+
+.ring-svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.ring-track,
+.ring-fill {
+    fill: none;
+    stroke-width: 3;
+}
+
+.ring-track {
+    stroke: var(--track);
+}
+
+.ring-fill {
+    stroke: var(--text-2);
+    transition: stroke-dashoffset var(--fast) var(--ease), stroke var(--fast) var(--ease);
+}
+
+.ring-icon {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-2);
+}
+
+.bar-row[data-bar="health"] .ring-fill {
+    stroke: var(--accent);
+}
+
+.bar-row[data-bar="health"] .ring-icon {
+    color: var(--accent);
+}
+
+.bar-row.is-low .ring-fill,
+.fuel-cluster.is-low .ring-fill {
+    stroke: var(--bad);
+}
+
+.bar-row.is-low .ring-icon,
+.fuel-cluster.is-low .ring-icon {
+    color: var(--bad);
 }
 
 /* ==========================================================================
@@ -140,7 +216,7 @@ body {
 }
 
 .speed-value {
-    font-size: 32px;
+    font-size: var(--fs-5);
     font-weight: 700;
     line-height: 1;
     color: var(--text);
@@ -148,7 +224,7 @@ body {
 }
 
 .speed-unit {
-    font-size: 11px;
+    font-size: var(--fs-1);
     font-weight: 600;
     color: var(--text-3);
     text-transform: uppercase;
@@ -172,7 +248,7 @@ body {
     background: var(--raised);
     border: 1px solid var(--line);
     border-radius: var(--radius-s);
-    font-size: 12px;
+    font-size: var(--fs-3);
     font-weight: 700;
     color: var(--text-2);
     font-variant-numeric: tabular-nums;
@@ -217,6 +293,45 @@ body {
     transition: width var(--fast) var(--ease), background var(--fast) var(--ease);
 }
 
+/* Fuel figure (shown with "Show numbers") and the fuel ring for the ring style */
+.fuel-value {
+    font-size: var(--fs-3);
+    font-weight: 600;
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+}
+
+.fuel-ring {
+    display: none;
+}
+
+.style-ring .fuel-ring {
+    display: block;
+}
+
+.style-ring .fuel-cluster {
+    width: auto;
+}
+
+.style-ring .fuel-icon,
+.style-ring .fuel-bar-track {
+    display: none;
+}
+
+/* Seatbelt icon: fastened uses --text-2, unfastened --bad */
+.seatbelt-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    color: var(--text-2);
+}
+
+.seatbelt-icon.is-off {
+    color: var(--bad);
+}
+
 /* ==========================================================================
    Street and Compass
    ========================================================================== */
@@ -241,7 +356,7 @@ body {
     background: var(--raised);
     border: 1px solid var(--line);
     border-radius: var(--radius-s);
-    font-size: 13px;
+    font-size: var(--fs-2);
     font-weight: 700;
     color: var(--accent);
     font-variant-numeric: tabular-nums;
@@ -255,15 +370,117 @@ body {
 }
 
 .street-primary {
-    font-size: 13px;
+    font-size: var(--fs-2);
     font-weight: 600;
     color: var(--text);
     white-space: nowrap;
 }
 
 .street-secondary {
-    font-size: 11px;
+    font-size: var(--fs-2);
     color: var(--text-3);
+    white-space: nowrap;
+}
+
+/* ==========================================================================
+   Compass Tape (0.2)
+   The tape follows the camera, so ticks move with no transition (it stays under reduced motion).
+   ========================================================================== */
+
+.compass-panel {
+    position: relative;
+    width: 320px;
+    padding: 6px 0 4px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    overflow: hidden;
+}
+
+.compass-tape {
+    position: relative;
+    height: 22px;
+    margin: 0 12px;
+}
+
+.compass-tick {
+    position: absolute;
+    top: 0;
+    width: 1px;
+    height: 6px;
+    background: var(--text-3);
+    transform: translateX(-50%);
+}
+
+.compass-tick.is-major {
+    height: 9px;
+    background: var(--text-2);
+}
+
+.compass-tick-label {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: var(--fs-1);
+    font-weight: 600;
+    color: var(--text-2);
+    white-space: nowrap;
+}
+
+.compass-centre {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 2px;
+    height: 12px;
+    background: var(--accent);
+    transform: translateX(-50%);
+}
+
+.compass-deg {
+    text-align: center;
+    font-size: var(--fs-2);
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   Voice Indicator (0.2)
+   ========================================================================== */
+
+.voice-panel {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    padding: 6px 10px;
+}
+
+.voice-mic,
+.voice-radio {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-3);
+}
+
+.voice-radio {
+    color: var(--text-2);
+}
+
+.voice-mic.is-talking,
+.voice-radio.is-active {
+    color: var(--accent);
+}
+
+.voice-mode {
+    font-size: var(--fs-1);
+    font-weight: 600;
+    color: var(--text-2);
     white-space: nowrap;
 }
 
@@ -309,7 +526,7 @@ body {
 }
 
 .settings-title {
-    font-size: 15px;
+    font-size: var(--fs-4);
     font-weight: 600;
     color: var(--text);
 }
@@ -347,7 +564,7 @@ body {
 }
 
 .setting-label {
-    font-size: 13px;
+    font-size: var(--fs-3);
     color: var(--text-2);
 }
 
@@ -372,7 +589,7 @@ body {
     border: none;
     border-radius: var(--radius-s);
     padding: 4px 10px;
-    font-size: 11px;
+    font-size: var(--fs-2);
     font-weight: 600;
     color: var(--text-3);
     cursor: pointer;
@@ -406,7 +623,7 @@ body {
     color: var(--on-accent);
     border: none;
     border-radius: var(--radius-m);
-    font-size: 13px;
+    font-size: var(--fs-3);
     font-weight: 600;
     cursor: pointer;
     transition: opacity var(--fast) var(--ease);

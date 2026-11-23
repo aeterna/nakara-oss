@@ -1,0 +1,20 @@
+{
+  "th": {
+    "loading.stage.map": "แผนที่",
+    "loading.stage.scripts": "สคริปต์",
+    "loading.stage.character": "ตัวละคร",
+    "loading.still": "ยังโหลดอยู่",
+    "loading.audio.play": "เปิดเพลง",
+    "loading.audio.mute": "ปิดเสียง",
+    "loading.tip": "เคล็ดลับ"
+  },
+  "en": {
+    "loading.stage.map": "Map",
+    "loading.stage.scripts": "Scripts",
+    "loading.stage.character": "Character",
+    "loading.still": "Still loading",
+    "loading.audio.play": "Play music",
+    "loading.audio.mute": "Mute",
+    "loading.tip": "Tip"
+  }
+}

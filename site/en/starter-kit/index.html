@@ -4,14 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AETERNA Starter Kit: free base resources for a FiveM server | nakara-oss</title>
-  <meta name="description" content="Seven MIT-licensed FiveM resources: UI kit, notifications, draggable HUD, phone and inventory helpers for Qbox servers.">
+  <meta name="description" content="Twelve MIT-licensed FiveM resources: UI kit, notifications, draggable HUD, phone with calls and camera, radial menu, loading screen, inventory helpers and an in-game self-test for Qbox servers.">
   <link rel="canonical" href="https://aeterna.github.io/nakara-oss/en/starter-kit/">
   <link rel="alternate" hreflang="th" href="https://aeterna.github.io/nakara-oss/starter-kit/">
   <link rel="alternate" hreflang="en" href="https://aeterna.github.io/nakara-oss/en/starter-kit/">
   <link rel="alternate" hreflang="x-default" href="https://aeterna.github.io/nakara-oss/en/starter-kit/">
   <meta property="og:type" content="article">
   <meta property="og:title" content="AETERNA Starter Kit: free base resources for a FiveM server | nakara-oss">
-  <meta property="og:description" content="Seven MIT-licensed FiveM resources: UI kit, notifications, draggable HUD, phone and inventory helpers for Qbox servers.">
+  <meta property="og:description" content="Twelve MIT-licensed FiveM resources: UI kit, notifications, draggable HUD, phone with calls and camera, radial menu, loading screen, inventory helpers and an in-game self-test for Qbox servers.">
   <meta property="og:url" content="https://aeterna.github.io/nakara-oss/en/starter-kit/">
   <meta property="og:locale" content="en_US">
   <meta property="og:locale:alternate" content="th_TH">
@@ -21,7 +21,7 @@
   <meta property="og:image:alt" content="AETERNA Starter Kit">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="AETERNA Starter Kit: free base resources for a FiveM server | nakara-oss">
-  <meta name="twitter:description" content="Seven MIT-licensed FiveM resources: UI kit, notifications, draggable HUD, phone and inventory helpers for Qbox servers.">
+  <meta name="twitter:description" content="Twelve MIT-licensed FiveM resources: UI kit, notifications, draggable HUD, phone with calls and camera, radial menu, loading screen, inventory helpers and an in-game self-test for Qbox servers.">
   <meta name="twitter:image" content="https://aeterna.github.io/nakara-oss/og.png">
   <meta name="theme-color" content="#121110">
   <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
@@ -45,7 +45,7 @@
     <nav class="crumbs" aria-label="Breadcrumb"><a href="../">Home</a> <span aria-hidden="true">›</span> <span>AETERNA Starter Kit</span></nav>
     <p class="kicker">MIT · Qbox · ox_lib</p>
     <h1>AETERNA Starter Kit</h1>
-    <p class="lede">Seven base resources for running your own FiveM server. Use one, or all of them.</p>
+    <p class="lede">Twelve base resources for running your own FiveM server. Use one, or all of them. 0.2 adds five more (<a href="#v02">see below</a>).</p>
     <div class="prose">
       <h2>What is in it</h2>
       <ul>
@@ -57,8 +57,22 @@
         <li><strong>aeterna_phonekit:</strong> a phone with four built-in apps and an API for your own.</li>
         <li><strong>aeterna_invkit:</strong> a personal stash and timed item use on top of ox_inventory.</li>
       </ul>
+      <h2 id="v02">New in 0.2</h2>
+      <p>0.2 takes the seven packages above to 0.2.0 and adds five new packages at 0.1.0, twelve in all. Tested with one player on FXServer Enhanced b177 with qbx; the two-player tests (text and call between two players, a busy line) have not been run on a live server yet.</p>
+      <h3 id="radial">aeterna_radial · radial menu</h3>
+      <p>A ring of 4 to 8 slots in the middle of the screen, where a slot can open a second ring. Other resources add and remove slots by export, with conditions that decide when each one shows. For a slot that affects other players, the server checks the conditions again before acting. The kit ships an empty menu for your server to fill. Mouse or gamepad; the keyboard opener defaults to F3.</p>
+      <h3 id="loading">aeterna_loading · loading screen</h3>
+      <p>Tells players what is really happening while they join: the map loading, scripts starting (as a percentage) and the wait for their character. It shows your server's name, a background image and rotating tips, all from one config file. It loads nothing from other hosts.</p>
+      <h3 id="testkit">aeterna_testkit · test the whole kit</h3>
+      <p>One button runs every self-test the packages registered with <code>aeterna_core</code>. It walks the presser through each test that needs a person's eyes, can invite a second player for two-player tests, and writes a JSON and Markdown report you can attach to an issue as it is. The report carries no player names, identifiers or IPs. Needs the ACE <code>aeterna.testkit.run</code>.</p>
+      <h3 id="phonecall">aeterna_phonecall · calls and messages</h3>
+      <p>Phone numbers, text messages and voice calls as two apps inside the <code>aeterna_phonekit</code> phone. Numbers and messages are stored on the server, where players cannot edit them. On FiveM Enhanced calls use FXServer's own voice channels; on Legacy they use <code>pma-voice</code> when it is started. With no way to call, messages still work.</p>
+      <h3 id="camera">aeterna_camera · camera and gallery</h3>
+      <p>A camera app (selfie and back camera, a shutter) and a gallery inside the phone. Photos are taken when <code>screenshot-basic</code> is started and saved on your server's disk, in the resource's own folder. The kit never uploads a photo anywhere. To send photos elsewhere, have your own resource listen to <code>aeterna_camera:saved</code>.</p>
+      <h3 id="presets">Three theme presets</h3>
+      <p>0.2 adds the presets <code>asphalt</code> (default), <code>paper</code> (light) and <code>night-market</code> (dark, orange accent), chosen with <code>setr aeterna_theme_preset</code>. <a href="theme/">Try them in the theme playground</a>.</p>
       <h2>Install</h2>
-      <p>Download the zips, unpack them into <code>resources/[aeterna_kit]/</code>, then add this after your framework:</p>
+      <p>Download <code>aeterna-starter-kit-0.2.0.zip</code> and unpack it into <code>resources/</code>. You get <code>resources/[aeterna_kit]/</code> with all 12 resources and <code>resources.cfg</code>. Then add this after your framework (or copy <code>resources.cfg</code>):</p>
       <pre><code># server.cfg
 setr aeterna_locale "en"
 ensure aeterna_core
@@ -67,13 +81,19 @@ ensure aeterna_notify
 ensure aeterna_layout
 ensure aeterna_hudkit
 ensure aeterna_phonekit
-ensure aeterna_invkit</code></pre>
-      <p>No package sets a default key. Players bind keys in Settings → Key Bindings → FiveM.</p>
+ensure aeterna_invkit
+ensure aeterna_radial
+ensure aeterna_phonecall
+ensure aeterna_camera
+ensure aeterna_loading
+ensure aeterna_testkit</code></pre>
+      <p>Once it is installed, join with an account that has the ACE <code>aeterna.testkit.run</code>, press F9 and choose Run all to check that everything works.</p>
+      <p>A few openers suggest a default key (F5 menu, M phone, F3 radial menu, F2 stash, F9 test menu, Y/U toast actions, PageUp/PageDown calls); every other mapping has none. A player's own binding always wins. Players bind keys in Settings → Key Bindings → FiveM, and the server owner can change or turn off defaults with <code>setr aeterna_keys</code>.</p>
       <h2>Tested with</h2>
       <p>FXServer Enhanced, game build 3788, with qbx_core 1.23.0, ox_lib 3.30.6, oxmysql 2.14.3 and ox_inventory 2.44.0. Other versions are not tested.</p>
       <h2>Your server, your look</h2>
-      <p>The default theme is plain on purpose. Point the <code>aeterna_theme</code> convar at your own stylesheet to change colours, radius and font across every screen. Every release is built in CI and carries a provenance attestation you can verify before installing.</p>
-      <div class="cta"><a class="btn btn-p" href="https://github.com/aeterna/nakara-oss/releases?q=aeterna_">Download</a><a class="btn btn-s" href="https://github.com/aeterna/nakara-oss/blob/main/docs/guides/starter-kit.en.md">Full guide</a></div>
+      <p>The default theme is plain on purpose. Point the <code>aeterna_theme</code> convar at your own stylesheet to change colours, radius and font across every screen. Every release is built in CI and carries a provenance attestation you can verify before installing. You can also pick one of three presets (<a href="theme/">theme playground</a>).</p>
+      <div class="cta"><a class="btn btn-p" href="https://github.com/aeterna/nakara-oss/releases/tag/aeterna-starter-kit%400.2.0">Download</a><a class="btn btn-s" href="https://github.com/aeterna/nakara-oss/blob/main/docs/guides/starter-kit.en.md">Full guide</a></div>
     </div>
   </article>
 

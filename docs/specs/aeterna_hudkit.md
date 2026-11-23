@@ -1,6 +1,7 @@
 # aeterna_hudkit
 
-- Package: `packages/hudkit` · resource `aeterna_hudkit` · wave W3 · status released in 0.1.0
+- Package: `packages/hudkit` · resource `aeterna_hudkit` · wave W3 · status released in 0.1.0 · spec 0.2.0
+  ([0.2 additions](#02-additions) at the end, [ADR 0005](../adr/0005-starter-kit-0-2.md))
 - Depends on: `aeterna_core` (focus, KVP, locale, keys), `aeterna_uikit` (menu entry), `aeterna_layout` (elements)
 - The minimap part is proven by spike S3 (ADR 0004 decision 12, 2026-11-17)
 
@@ -194,3 +195,200 @@ Smoke (kit-test server, driven from a button menu, not typed commands):
 
 All busted cases pass, `fivem-devkit safety` reports 0 errors and 0 over-declared items, the smoke steps pass on the
 kit-test server, and the owner has passed the screenshots.
+
+---
+
+## 0.2 additions
+
+- Version: 0.2.0 ([ADR 0005](../adr/0005-starter-kit-0-2.md) decision 1) · edges: `aeterna_core`, `aeterna_uikit`,
+  `aeterna_layout` (unchanged), + `pma-voice` touched at run time only (ADR 0005 decision 4)
+- Written by: Claude Code - Claude Opus 5.5 (helper)
+
+Everything above stays valid. Already in 0.1, so not new here: the vehicle part's gear, speed and fuel; the street
+part's eight-direction heading text; the four layout elements; extra bars from other resources.
+
+| What | New in 0.2 |
+| --- | --- |
+| Bar style | ring or bar, a player setting |
+| Compass | a tape compass, a new layout element |
+| Voice | a voice indicator, shown only while `pma-voice` is started |
+| Seatbelt | a seatbelt icon in the vehicle part, driven by a local event other resources fire |
+| Round minimap | **not in 0.2**, deferred to 0.3 (ADR 0005 decision 11): it needs a streamed mask texture, which the safety scanner refuses as an opaque file |
+
+The "Not in v0.1" line above that rules out voice indicators is superseded by ADR 0005 decision 4 for `pma-voice`
+only. Seatbelt logic, engine damage, weapon display and cinematic mode stay out of the kit.
+
+### Configuration (0.2)
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `Config.barStyle` | `'bar'` | `bar` or `ring`; the default for players who have not picked one |
+| `Config.compass.enabled` | `true` | Register the `compass` element; `false` = no tape compass for anyone |
+| `Config.compass.span` | `120` | Degrees visible on the tape, 60–180 |
+| `Config.voice.enabled` | `true` | Show the voice indicator when `pma-voice` is started; `false` = never |
+| `Config.seatbelt.enabled` | `true` | Show the seatbelt icon once a resource has set a state; `false` = never |
+
+### Bar style
+
+- `bar` is the 0.1 look. `ring` draws each status bar as a circular gauge (stroke `--track`, fill as in 0.1:
+  `--accent` for health, `--text-2` for the others, `--bad` at or below `Config.low`), icon in the centre, the
+  percentage under it when "Show numbers" is on.
+- Extra bars from other resources follow the same style. The vehicle part's fuel follows it too.
+- The fuel figure (a whole number 0–100, no percent sign) shows beside the fuel gauge only when "Show numbers" is on,
+  in both styles, like the numbers on the status bars. With it off, the gauge shows alone.
+- The `status` element's size changes with the style, so hudkit sends `aeterna_layout:add` again with the new
+  `w`/`h`; layout keeps it on screen (see `aeterna_layout.md`, 0.2 clamp on size change).
+
+### Compass tape
+
+New layout element:
+
+| `id` | Shows | Default place | `hideable` |
+| --- | --- | --- | --- |
+| `compass` | A horizontal tape centred on the camera heading: a tick every 15°, labels at N, NE, E, SE, S, SW, W, NW, and the heading in whole degrees under a centre mark | top-centre | `true` |
+
+- Heading source is the 0.1 one (`GetGameplayCamRot` z), converted so 0° = N and degrees grow clockwise.
+- Sent to NUI only when the whole-degree value changes; the tape moves with no transition (it follows the camera, so
+  it is not decorative motion and stays under reduced motion).
+- The `street` part keeps its heading text; a player who wants only the tape hides one of them in the layout editor.
+- **Changed in 0.2** (the default screen gains an element). Upgrade note: servers that upgrade see a new element at
+  the top centre. `Config.compass.enabled = false` keeps the
+  0.1 screen.
+
+### Voice indicator (`pma-voice`, optional)
+
+New layout element:
+
+| `id` | Shows | Default place | `hideable` |
+| --- | --- | --- | --- |
+| `voice` | A microphone icon: dim when silent, `--accent` while the player talks; the proximity mode label; a radio icon while the player is on a radio channel, highlighted while transmitting | above `status` | `true` |
+
+Runtime detection, never a dependency:
+
+- hudkit never lists `pma-voice` in `dependencies`, never calls `exports['pma-voice']`, and never loads its files.
+- On start, and on `onClientResourceStart` / `onClientResourceStop` for `pma-voice`, it checks
+  `GetResourceState('pma-voice') == 'started'`. Started → it registers the `voice` element and starts reading.
+  Stopped → it sends `aeterna_layout:remove` for `voice` and stops reading.
+  `pma-voice` is also checked once a second, because the resource can still read `starting` when `onClientResourceStart` fires.
+
+What it reads (all on the client):
+
+| Value | Source |
+| --- | --- |
+| Talking | `NetworkIsPlayerTalking(PlayerId())` (a game native; works for any voice resource that uses the game's voice chat) |
+| Proximity mode | state bag `LocalPlayer.state.proximity` = `{ index, distance, mode }`, read with `AddStateBagChangeHandler`. Label = locale `hudkit.voice.mode.<index>` for index 1–3, else `distance` in metres followed by the locale unit `hudkit.unit.m` |
+| On a radio channel | state bag `LocalPlayer.state.radioChannel` (number; `0` or `nil` = none) |
+| Transmitting on radio | the client-local event `pma-voice:radioActive` → `(boolean)` |
+
+These state bag keys and the event name were checked against the `pma-voice` v7.0.2-rc3 source in the W0 spike
+(2026-11-21): `proximity` is set as `{ index, distance, mode }`, `radioChannel` by the server, and
+`pma-voice:radioActive` fired with `true` / `false`. A key that is absent leaves its part of the indicator hidden,
+never an error. FiveM Enhanced has no Mumble (ADR 0005 decision 4), so whether the proximity mode and radio there
+still mean anything is **not verified**; the W3 smoke checks it, and if they do not, hudkit hides those two parts
+on Enhanced (talking still shows: it comes from a game native).
+
+Reading another resource's state bag keys and listening to its local event needs no `oss.json` capability
+(no `RegisterNetEvent`, no export).
+
+### Extra bar `label` length
+
+**Changed in 0.2 (fixes a 0.1 bug).** The `label` limit of 24 in `aeterna_hudkit:bar` was counted in bytes in 0.1, so a
+Thai label was refused after 8 characters (3 bytes each). 0.2 counts UTF-8 characters (`utf8.len`): up to 24 characters
+of any script are accepted, and a label that is not valid UTF-8 is refused (one `warn`, the bar is not added). Reason:
+the limit was meant as characters, and Thai is the kit's main language. Upgrade note: no action; a label that passed
+in 0.1 still passes, and labels that 0.1 wrongly refused now pass.
+
+### Seatbelt state (local event)
+
+The kit has no seatbelt system. hudkit only shows a state that another resource sets:
+
+| Event | Payload | Meaning |
+| --- | --- | --- |
+| `aeterna_hudkit:seatbelt` (client-local) | `{ on = boolean }` or `nil` | `true` / `false` shows the icon fastened or unfastened (`--bad`); `nil` hides it |
+
+- The icon appears in the `vehicle` part only while the player is in a vehicle and only after some resource has
+  fired the event. A seatbelt resource fires it when the state changes and when the player enters a vehicle.
+- The last resource that fired it owns the state; when that resource stops, the icon is hidden. The owner is the
+  invoking resource only (`GetInvokingResource()`); a name inside the payload is not trusted, and an event with no
+  invoking resource is refused with one `warn`. A `nil` payload hides the icon only when it comes from the owner; from
+  any other resource it is refused. A payload that is not `{ on = boolean }` or `nil` is refused.
+- hudkit does not fire this event itself, never blocks leaving the vehicle and never adds ejection.
+
+### Settings (0.2)
+
+While another resource holds `aeterna_core`'s focus overlay (core 0.2, [aeterna_core.md](aeterna_core.md) § Focus), the
+settings card stays open and ignores input; a real focus loss closes it as in 0.1.
+
+The settings card gains: **Bar style** (Bar · Ring). Voice, compass and seatbelt have no switch here; they are
+hidden in the layout editor (`hideable`), which stays the one place for hiding.
+
+### Storage (0.2)
+
+KVP `aeterna_hudkit:settings:v1` gains the field `barStyle`. A saved 0.1 value has no `barStyle` and reads as
+`Config.barStyle`, so the key keeps its name.
+
+### NUI messages (0.2)
+
+Lua → NUI adds `hud:compass {deg}`, `hud:voice {available, talking, mode, radio, radioActive}`,
+`hud:seatbelt {state}` (`true`, `false` or `null`); `settings:open` and `settings:apply` carry `barStyle` and `span`
+(the compass span from `Config.compass.span`, clamped to 60–180) next to `settings` and `low`.
+NUI → Lua: `settings {key = 'barStyle', value}`; `ready` reports sizes for `compass` and `voice` too; sizes for ids that are not hudkit's own parts are ignored.
+
+### Type tokens
+
+0.1 sets pixel sizes in `style.css`. 0.2 uses the theme type tokens (ADR 0005 decision 9; `--fs-1` smallest …
+`--fs-5` largest, line height `--lh`):
+
+| Text | Token |
+| --- | --- |
+| Bar percentages, compass tick labels, speed unit, voice mode label | `--fs-1` |
+| Street and zone name, compass degrees | `--fs-2` |
+| Gear, fuel figure | `--fs-3` |
+| Settings card title | `--fs-4` |
+| Speed figure | `--fs-5` |
+
+### Locale keys (0.2)
+
+`hudkit.settings.barStyle`, `hudkit.settings.barStyle.bar`, `hudkit.settings.barStyle.ring`, `hudkit.part.compass`,
+`hudkit.part.voice`, `hudkit.voice.mode.1`, `hudkit.voice.mode.2`, `hudkit.voice.mode.3`, `hudkit.voice.radio`,
+`hudkit.vehicle.seatbelt.on`, `hudkit.vehicle.seatbelt.off`, `hudkit.unit.m` (the metre unit after a voice distance: `m` in English, `ม.` in Thai).
+
+### `oss.json` (0.2)
+
+No change: no new net event, command, convar or file.
+
+### Tests (0.2, busted)
+
+1. Compass: heading → tape offset for 0°, 359°, 360° and the wrap; labels at the eight directions; `span` outside
+   60–180 clamps.
+2. Ring geometry: value 0, 50, 100 and out-of-range values map to the right arc; `--bad` at `Config.low`.
+3. Voice detection: `started` registers `voice`, `stopped` removes it, and with `Config.voice.enabled = false`
+   nothing is registered either way.
+4. Voice mode label: index 1–3 → locale key; index 4 → metres from `distance`; missing state → hidden.
+5. Seatbelt: `true`, `false`, `nil`; hidden outside a vehicle; the owner stopping hides it.
+6. Settings: `barStyle` accepts only `bar` and `ring`; a 0.1 KVP value without it reads as the config default.
+
+### Self-tests (0.2)
+
+Registered as `aeterna_hudkit.<name>`. "Skip when" is the only reason the test may report SKIP; a ped or eye test
+with no person to run it reports GAP (ADR 0005 decision 7). A headless test needs no player and is listed as 1.
+
+Kind `headless (client)` / `mock (client)` = `side = 'client'`: the test runs on the presser's client and is GAP
+when there is no presser (ADR 0005 decision 7, W0 fix D3). Plain `headless` / `mock` run on the server.
+
+| Name | Kind | Players | Destructive | Expect (what a person should see) | Skip when |
+| --- | --- | --- | --- | --- | --- |
+| `values_mapping` | headless | 1 | n | — | never |
+| `compass_math` | headless | 1 | n | — | never |
+| `bar_style` | eye | 1 | n | Switching Bar → Ring redraws every status bar as a ring; the status part stays on screen and its layout stand-in matches the new size | — |
+| `compass_tape` | ped | 1 | n | Turning the camera a full circle moves the tape smoothly; N is at the centre mark when facing north | `Config.compass.enabled = false` |
+| `voice_indicator` | ped | 1 | n | The test presses pma-voice's `cycleproximity` once round (the range ends where it started) and passes on the mode label changing; the microphone light is reported, not required (`microphone lit while talking` or `microphone not checked (nobody talked)`). Locale: "The test changes your voice range by itself; talk into your microphone if you like" | `pma-voice` not started, or `Config.voice.enabled = false` |
+| `voice_radio` | ped | 1 | n | The test joins pma-voice channel 987 with the `setRadioChannel` export, transmits with `+radiotalk` / `-radiotalk`, then returns to the presser's channel: the radio icon shows and is highlighted while transmitting. Locale: "The test joins a radio channel and transmits for a moment by itself" | `pma-voice` not started, or `Config.voice.enabled = false` |
+| `seatbelt_event` | mock (client) | 1 | n | The test seats you in a vehicle for a moment, then puts you back (a presser on foot is seated in a local test vehicle, `blista`, waiting up to 5000 ms for the model; it is deleted and the presser put back after; if it cannot be placed the row FAILS `could not seat the presser in a test vehicle`; timeout 30000; then fires `true`, `false` and `nil` on the presser's client in a vehicle, checks the NUI state, then fires `nil` to restore) | `Config.seatbelt.enabled = false` |
+| `minimap_follows` | ped | 1 | n | The radar stays under its stand-in after dragging it to the top-right and back | — |
+
+### Done when (0.2)
+
+The 0.1 conditions, plus: the busted cases above pass, the `pma-voice` table above is verified and corrected, every
+self-test above is registered and passes on the kit-test server (SKIP only for its listed reason), and the owner has
+passed screenshots of bar and ring styles, the compass and the voice indicator in all three theme presets.

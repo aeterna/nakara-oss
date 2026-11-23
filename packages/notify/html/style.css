@@ -13,8 +13,8 @@ html, body {
     background: transparent;
     font-family: var(--font);
     color: var(--text);
-    font-size: 14px;
-    line-height: 1.45;
+    font-size: var(--fs-3);
+    line-height: var(--lh);
     user-select: none;
     -webkit-font-smoothing: antialiased;
 }
@@ -79,6 +79,8 @@ html, body {
     display: flex;
     align-items: flex-start;
     gap: 10px;
+    position: relative;
+    overflow: hidden;
     pointer-events: none;
     transition: opacity var(--enter) var(--ease), transform var(--enter) var(--ease);
 }
@@ -134,17 +136,79 @@ html, body {
     flex: 1;
 }
 
+.toast-title-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+
 .toast-title {
-    font-size: 14px;
+    font-size: var(--fs-3);
     font-weight: 600;
     color: var(--text);
     word-break: break-word;
+    min-width: 0;
+}
+
+.toast-count {
+    font-size: var(--fs-1);
+    font-weight: 600;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+.toast-count:empty {
+    display: none;
 }
 
 .toast-description {
-    font-size: 13px;
+    font-size: var(--fs-2);
     color: var(--text-2);
     word-break: break-word;
+}
+
+/* 0.2 action buttons: pressed by key mapping, or by mouse when another resource already freed the cursor. */
+.toast-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.btn.toast-action {
+    font-size: var(--fs-3);
+    padding: 4px 10px;
+    pointer-events: auto;
+}
+
+.toast-key {
+    font-size: var(--fs-1);
+    font-weight: 500;
+    padding: 0 4px;
+    border: 1px solid currentColor;
+    border-radius: var(--radius-s);
+    opacity: 0.75;
+}
+
+/* 0.2 lifetime bar: 2 px, shrinks from full to empty over the toast's duration. */
+.toast-life {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: var(--text-3);
+    transform-origin: left center;
+    pointer-events: none;
+}
+
+.toast-card.toast-warning .toast-life {
+    background: var(--warn);
+}
+
+.toast-card.toast-error .toast-life {
+    background: var(--bad);
 }
 
 /* Announcement banner (top centre by default, 480px wide) */
@@ -178,22 +242,31 @@ html, body {
 }
 
 .announce-title {
-    font-size: 15px;
+    font-size: var(--fs-4);
     font-weight: 600;
     color: var(--text);
     word-break: break-word;
 }
 
 .announce-by {
-    font-size: 12px;
+    font-size: var(--fs-1);
     color: var(--text-3);
     flex-shrink: 0;
 }
 
 .announce-body {
-    font-size: 14px;
+    font-size: var(--fs-2);
     color: var(--text-2);
     word-break: break-word;
+}
+
+/* 0.2 countdown banner: same place as the announcement banner, goes ahead of its queue */
+.countdown-clock {
+    font-size: var(--fs-4);
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
 }
 
 /* MOTD modal card (always centred) */
@@ -239,14 +312,14 @@ html, body {
 }
 
 .motd-eyebrow {
-    font-size: 12px;
+    font-size: var(--fs-1);
     font-weight: 500;
     color: var(--text-3);
     word-break: break-word;
 }
 
 .motd-title {
-    font-size: 16px;
+    font-size: var(--fs-5);
     font-weight: 600;
     color: var(--text);
     word-break: break-word;
@@ -280,7 +353,7 @@ html, body {
 }
 
 .motd-line {
-    font-size: 14px;
+    font-size: var(--fs-2);
     color: var(--text-2);
     word-break: break-word;
 }
@@ -299,7 +372,7 @@ html, body {
     border-radius: var(--radius-s);
     padding: 8px 14px;
     font-family: var(--font);
-    font-size: 14px;
+    font-size: var(--fs-3);
     font-weight: 500;
     cursor: pointer;
     display: inline-flex;
@@ -324,4 +397,32 @@ html, body {
 button:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
+}
+
+/* Reduced motion: nothing moves; elements appear and disappear, and there is no lifetime bar. */
+@media (prefers-reduced-motion: reduce) {
+    .toast-card,
+    .announce-box,
+    .motd-card,
+    .btn,
+    .close-btn {
+        transition: none;
+    }
+
+    .toast-life {
+        display: none !important;
+    }
+}
+
+/* The same rules, forced by the motion_reduced self-test for its run (the OS setting cannot be switched). */
+:root.reduce-motion .toast-card,
+:root.reduce-motion .announce-box,
+:root.reduce-motion .motd-card,
+:root.reduce-motion .btn,
+:root.reduce-motion .close-btn {
+    transition: none;
+}
+
+:root.reduce-motion .toast-life {
+    display: none !important;
 }

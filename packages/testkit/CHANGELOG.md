@@ -1,0 +1,28 @@
+# Changelog
+
+All notable changes to `aeterna_testkit` are documented here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
+[Semantic Versioning](https://semver.org/).
+
+## Unreleased
+
+## [0.1.0] - 2026-11-23
+
+### Fixed
+
+- The report showed no FXServer build on Enhanced: the version convar reads `FXServer-early-access b177 linux` there
+  (measured); the build is now read from `b<n>` as well as `v1.0.0.<n>`.
+
+### Added
+
+- Initial `aeterna_testkit` 0.1.0 package for the AETERNA Starter Kit (ADR 0005 decision 7): the menu and report layer on top of the `aeterna_core` 0.2 self-test runner.
+- ACE-checked menu (`aeterna.testkit.run`) as an `aeterna_uikit` panel, opened by the key mapping `+aeterna_testkit_menu` (no default key) or the `aeterna_uikit` menu entry (`Config.menuEntry`), with kit versions, progress throttled to 4 updates a second, counts, suite rows, a suite detail panel and the busy line of another run.
+- Eye-check card (own NUI, lower left, 360 px) on the `aeterna_core` focus overlay: Pass, Doesn't match, Skip; ESC = Skip; closes on `selftestEnd` and `focusLost` and releases its token once.
+- Player B invite by server id (server-opened uikit panel) with consent, `Config.inviteSeconds` expiry, and the leave key mapping `+aeterna_testkit_leave` (no default key).
+- Report `aeterna_testkit.report/1` (JSON, `schema/report-1.schema.json`) and Markdown, scrubbed of names (whole words, 3 characters or more), identifiers (closed prefix list, including the kit's own `cid:` and `lic:` keys, plus `<letters>:` with 15 or more digits), IPs and paths (also after `(`, `=`, `@` and in stack frames), printed to the console (`Config.printReport`) and saved to `reports/latest.json` and `reports/latest.md`; server export `lastReport()`, client export `isOpen()`.
+- Console command `aeterna_testkit_run [--json] [--only <name or prefix>]`, registered restricted and source 0 only.
+- A run is cleared, player B released and roles reset when `aeterna_core` stops mid-run.
+- Thai and English locales, capability manifest (`oss.json`), bundled IBM Plex Sans Thai (OFL-1.1, `NOTICE`), and busted specs (`spec/testkit_spec.lua`).
+- Own self-tests (spec § Self-tests): `scrub`, `report_schema` and `save` on the server, `env` on player A's client, and the `eye_card` and `eye_card_b` eye cards, registered with `aeterna_core:addSelftest` on start. Pure rules in `shared/logic/selftest.lua`, busted cases in `spec/selftest_spec.lua`.
+- Now-testing strip: while a client test that is not `eye` (ped, client-side mock or headless) with `ctx.expect` runs on this client, a one-line strip in the eye card's spot shows the test name and `testkit.now_doing` ("Do this now:") with `expect`; it takes no focus or cursor and hides on the client-local `aeterna_core:selftestEnd`. Pure rules in `TestkitLogic.menu.createNowStrip`.
+- `aeterna_core` events (`runProgress`, `runDone`, `selftest`, `selftestEnd`, `eyeAsk`, `focusLost`) count only when `aeterna_core` fired them; an event with no invoking resource is ignored. When `aeterna_core` stops, the eye card and the now-testing strip close (no `selftestEnd` follows).

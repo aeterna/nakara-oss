@@ -1,18 +1,23 @@
 # Starter Kit specs
 
-Contracts for the `aeterna_*` Starter Kit packages ([ADR 0004](../adr/0004-aeterna-starter-kit.md)). A spec says what a
+Contracts for the `aeterna_*` Starter Kit packages ([ADR 0004](../adr/0004-aeterna-starter-kit.md), 0.2: [ADR 0005](../adr/0005-starter-kit-0-2.md)). A spec says what a
 server owner, a player and another resource can see and call. It is written before the code; the code and its tests
 follow it. A change to a released contract is a new major version of that package.
 
 | Spec | Package | Wave | Status |
 | --- | --- | --- | --- |
-| [aeterna_core](aeterna_core.md) | `packages/core` | W1 | released 0.1.0 |
-| [aeterna_uikit](aeterna_uikit.md) | `packages/uikit` | W1 | released 0.1.0 |
-| [aeterna_notify](aeterna_notify.md) | `packages/notify` | W2 | released 0.1.0 |
-| [aeterna_invkit](aeterna_invkit.md) | `packages/invkit` | W2 | released 0.1.0 |
-| [aeterna_layout](aeterna_layout.md) | `packages/layout` | W2 | released 0.1.0 |
-| [aeterna_hudkit](aeterna_hudkit.md) | `packages/hudkit` | W3 | released 0.1.0 |
-| [aeterna_phonekit](aeterna_phonekit.md) | `packages/phonekit` | W3 | released 0.1.0 |
+| [aeterna_core](aeterna_core.md) | `packages/core` | W1 | released 0.1.0 · spec 0.2.0 |
+| [aeterna_uikit](aeterna_uikit.md) | `packages/uikit` | W1 | released 0.1.0 · spec 0.2.0 |
+| [aeterna_notify](aeterna_notify.md) | `packages/notify` | W2 | released 0.1.0 · spec 0.2.0 |
+| [aeterna_invkit](aeterna_invkit.md) | `packages/invkit` | W2 | released 0.1.0 · spec 0.2.0 |
+| [aeterna_layout](aeterna_layout.md) | `packages/layout` | W2 | released 0.1.0 · spec 0.2.0 |
+| [aeterna_hudkit](aeterna_hudkit.md) | `packages/hudkit` | W3 | released 0.1.0 · spec 0.2.0 |
+| [aeterna_phonekit](aeterna_phonekit.md) | `packages/phonekit` | W3 | released 0.1.0 · spec 0.2.0 |
+| [aeterna_testkit](aeterna_testkit.md) | `packages/testkit` | 0.2 W1 | spec 0.1.0 |
+| [aeterna_radial](aeterna_radial.md) | `packages/radial` | 0.2 W1 | spec 0.1.0 |
+| [aeterna_loading](aeterna_loading.md) | `packages/loading` | 0.2 W1 | spec 0.1.0 |
+| [aeterna_phonecall](aeterna_phonecall.md) | `packages/phonecall` | 0.2 W2 | spec 0.1.0 |
+| [aeterna_camera](aeterna_camera.md) | `packages/camera` | 0.2 W2 | spec 0.1.0 |
 
 ## Conventions every spec follows
 
@@ -29,13 +34,15 @@ These hold for every package unless its spec says otherwise.
   `owner == GetCurrentResourceName()`. A restarted resource therefore never leaves a stale callback behind.
 - Commands: `aeterna_<pkg>_<name>` or `aeterna_<name>` for console and chat commands; key mappings use
   `+aeterna_<pkg>_<name>` / `-aeterna_<pkg>_<name>`. Each package calls `RegisterCommand` for its own `+`/`-` pair with
-  literal names (the scanner only counts literal names), then `AeternaCore.key` maps them with no default key. Command
+  literal names (the scanner only counts literal names), then `AeternaCore.key` maps them; a few openers carry a suggested default key (ADR 0004 decision 10 amended 2026-11-22), the rest have none. Command
   names never change after release (players' bindings stick to them).
 - ACE permissions: `aeterna.<pkg>.<action>` (for example `aeterna.notify.announce`). The kit never grants ACE; the
   server owner adds `add_ace group.admin aeterna.notify.announce allow` in `server.cfg`.
 - Convars: `aeterna_<pkg>_<name>`, plus the shared `aeterna_locale`, `aeterna_timezone`, `aeterna_theme` and
-  `aeterna_core_log_level` read through `aeterna_core`. A convar the client reads must be set with `setr` (replicated);
+  `aeterna_core_log_level` read through `aeterna_core`; 0.2 adds the shared `aeterna_theme_preset` (`setr`). A convar the client reads must be set with `setr` (replicated);
   `set` leaves the client on the default.
+- Server resource KVP keys (0.2, ADR 0005 decision 3): `aeterna_<pkg>:<name>:v<n>:<who>`, where `<who>` is
+  `cid:<character id>` when `qbx_core` is started and `lic:<license identifier>` otherwise.
 - Client KVP keys: `aeterna_<pkg>:<name>:v<n>`. A new shape gets a new `v<n>`; the old key is read once, converted,
   then deleted.
 

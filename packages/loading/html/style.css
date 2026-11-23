@@ -1,0 +1,212 @@
+/* aeterna_loading page. Colours, type and motion come from theme.css tokens; owners override them in custom.css. */
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: var(--fs-3);
+    line-height: var(--lh);
+    user-select: none;
+}
+
+[hidden] { display: none !important; }
+
+/* Background: the preset's surface with a soft gradient, or the owner's image. */
+.backdrop {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(120% 90% at 85% 0%, var(--raised) 0%, var(--surface) 70%);
+}
+
+.backdrop img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* The panel carries its own surface so the text stays readable on any image. */
+.panel {
+    position: fixed;
+    left: 64px;
+    bottom: 64px;
+    width: 440px;
+    max-width: calc(100vw - 128px);
+    padding: 24px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-l);
+}
+
+.name {
+    margin: 0;
+    font-size: calc(var(--fs-5) * 1.6);
+    font-weight: 600;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.tagline {
+    margin: 6px 0 0;
+    color: var(--text-2);
+    font-size: var(--fs-4);
+    overflow-wrap: anywhere;
+}
+
+/* Stages: done = check mark, current = ring with its percentage as text, pending = dim. Readable without colour. */
+.stages {
+    list-style: none;
+    margin: 24px 0 12px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.stage {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-3);
+    font-size: var(--fs-4);
+}
+
+.mark {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--track);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mark svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: var(--on-accent);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    visibility: hidden;
+}
+
+.stage.is-current { color: var(--text); font-weight: 500; }
+.stage.is-current .mark { border-color: var(--accent); }
+
+.stage.is-done { color: var(--text-2); }
+.stage.is-done .mark { border-color: var(--accent); background: var(--accent); }
+.stage.is-done .mark svg { visibility: visible; }
+
+.pct {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Bar: a real fraction, or an indeterminate sweep for the Character stage. */
+.bar {
+    position: relative;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--track);
+    overflow: hidden;
+}
+
+.fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    border-radius: 3px;
+    background: var(--accent);
+    transition: width var(--enter) var(--ease);
+}
+
+.bar.is-indeterminate .fill {
+    width: 30%;
+    animation: sweep 1.6s var(--ease) infinite;
+}
+
+@keyframes sweep {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(340%); }
+}
+
+.still {
+    margin: 10px 0 0;
+    color: var(--warn);
+    font-size: var(--fs-3);
+}
+
+.tip {
+    margin: 18px 0 0;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+    color: var(--text-2);
+    font-size: var(--fs-3);
+    min-height: calc(var(--fs-3) * var(--lh) * 2 + 15px);
+    transition: opacity var(--enter) var(--ease);
+}
+
+.tip.is-fading { opacity: 0; }
+
+.tip-label {
+    color: var(--text);
+    font-weight: 500;
+    margin-right: 6px;
+}
+
+.audio {
+    position: fixed;
+    top: 32px;
+    right: 32px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    font: inherit;
+    font-size: var(--fs-3);
+    cursor: pointer;
+    transition: background var(--fast) var(--ease);
+}
+
+.audio:hover { background: var(--raised); }
+.audio:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.audio svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.audio .icon-on { display: none; }
+.audio.is-on .icon-on { display: block; }
+.audio.is-on .icon-off { display: none; }
+
+@media (max-width: 1400px) {
+    .panel { left: 40px; bottom: 40px; }
+}
+
+/* Reduced motion: no tip cross-fade, no bar animation. Audio is not affected. */
+@media (prefers-reduced-motion: reduce) {
+    .fill, .tip, .audio { transition: none; }
+    .bar.is-indeterminate .fill { animation: none; width: 100%; opacity: .45; }
+}

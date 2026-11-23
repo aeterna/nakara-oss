@@ -12,7 +12,12 @@
     "packages/notify/spec",
     "packages/invkit/spec",
     "packages/hudkit/spec",
-    "packages/phonekit/spec"
+    "packages/phonekit/spec",
+    "packages/radial/spec",
+    "packages/loading/spec",
+    "packages/testkit/spec",
+    "packages/phonecall/spec",
+    "packages/camera/spec"
   ],
   "ignorePaths": [
     "node_modules",

@@ -8,6 +8,7 @@
         numbers: false,
         speedUnit: 'kmh',
         minimapMode: 'always',
+        barStyle: 'bar',
     };
     let localeStrings = {};
     let lowThreshold = 20;
@@ -17,16 +18,34 @@
     const partStatus = document.getElementById('part-status');
     const partVehicle = document.getElementById('part-vehicle');
     const partStreet = document.getElementById('part-street');
+    const partCompass = document.getElementById('part-compass');
+    const partVoice = document.getElementById('part-voice');
     const settingsCard = document.getElementById('settings-card');
+
+    const PARTS = {
+        status: partStatus,
+        vehicle: partVehicle,
+        street: partStreet,
+        compass: partCompass,
+        voice: partVoice,
+    };
 
     const speedValueEl = document.getElementById('speed-value');
     const speedUnitEl = document.getElementById('speed-unit');
     const gearIndicatorEl = document.getElementById('gear-indicator');
     const fuelClusterEl = document.querySelector('.fuel-cluster');
     const fuelBarFillEl = document.getElementById('fuel-bar-fill');
+    const fuelRingEl = document.getElementById('fuel-ring');
+    const fuelValueEl = document.getElementById('fuel-value');
+    const seatbeltEl = document.getElementById('seatbelt-icon');
     const compassBadgeEl = document.getElementById('compass-badge');
     const streetNameEl = document.getElementById('street-name');
     const zoneNameEl = document.getElementById('zone-name');
+    const compassTicksEl = document.getElementById('compass-ticks');
+    const compassDegEl = document.getElementById('compass-deg');
+    const voiceMicEl = document.getElementById('voice-mic');
+    const voiceModeEl = document.getElementById('voice-mode');
+    const voiceRadioEl = document.getElementById('voice-radio');
 
     // Settings Controls
     const optNumbers = document.getElementById('opt-numbers');
@@ -35,16 +54,36 @@
     const modeAlwaysBtn = document.getElementById('mode-always');
     const modeVehicleBtn = document.getElementById('mode-vehicle');
     const modeNeverBtn = document.getElementById('mode-never');
+    const styleBarBtn = document.getElementById('style-bar');
+    const styleRingBtn = document.getElementById('style-ring');
     const btnEditLayout = document.getElementById('btn-edit-layout');
     const btnSettingsClose = document.getElementById('btn-settings-close');
 
-    // Bar state registry
+    // Bar state: barState keeps the last value of every shown bar so a style switch can rebuild them.
     const builtInBars = ['health', 'armour', 'hunger', 'thirst', 'stress'];
-    const barElements = {}; // barId -> { row, fill, value, icon }
+    const barState = {}; // barId -> { value, icon }
+    const barElements = {}; // barId -> { row, value, setValue }
     let extraBarsList = [];
-    let vehicleVisible = false;
-    let vehiclePlacedHidden = false;
+    let lastFuel = 100;
+    let fuelRing = null;
     let lastReportedSizes = null;
+
+    // Runtime visibility of parts that are not always on screen; layout's `hidden` is kept apart.
+    let vehicleVisible = false;
+    let compassReceived = false;
+    let voiceAvailable = false;
+    const placedHidden = {};
+
+    // Compass tape
+    const DIR_KEYS = {
+        0: 'hudkit.dir.n', 45: 'hudkit.dir.ne', 90: 'hudkit.dir.e', 135: 'hudkit.dir.se',
+        180: 'hudkit.dir.s', 225: 'hudkit.dir.sw', 270: 'hudkit.dir.w', 315: 'hudkit.dir.nw',
+    };
+    const DIR_FALLBACK = { 0: 'N', 45: 'NE', 90: 'E', 135: 'SE', 180: 'S', 225: 'SW', 270: 'W', 315: 'NW' };
+    const TICK_STEP = 15;
+    let compassSpan = 120;
+    let compassDeg = null;
+    const tickPool = [];
 
     function post(endpoint, data) {
         return fetch(`https://${RESOURCE_NAME}/${endpoint}`, {
@@ -61,10 +100,82 @@
         return fallback || key;
     }
 
+    function clampPct(v) {
+        return Math.max(0, Math.min(100, Math.round(v)));
+    }
+
+    // Ring gauge. r = 15.9155 makes the circumference 100, so the dash equals the percentage
+    // (same as HudLogic.ringDash(value, 100) in shared/logic/hud.lua).
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const RING_R = '15.9155';
+
+    function ringDashOffset(pct) {
+        const f = Math.max(0, Math.min(100, pct)) / 100;
+        return 100 * (1 - f);
+    }
+
+    function createRing(iconName, iconSize) {
+        const root = document.createElement('div');
+        root.className = 'ring';
+
+        const svg = document.createElementNS(SVG_NS, 'svg');
+        svg.setAttribute('viewBox', '0 0 36 36');
+        svg.setAttribute('class', 'ring-svg');
+        svg.setAttribute('aria-hidden', 'true');
+
+        const track = document.createElementNS(SVG_NS, 'circle');
+        track.setAttribute('class', 'ring-track');
+        track.setAttribute('cx', '18');
+        track.setAttribute('cy', '18');
+        track.setAttribute('r', RING_R);
+
+        const fill = document.createElementNS(SVG_NS, 'circle');
+        fill.setAttribute('class', 'ring-fill');
+        fill.setAttribute('cx', '18');
+        fill.setAttribute('cy', '18');
+        fill.setAttribute('r', RING_R);
+        fill.setAttribute('stroke-dasharray', '100 100');
+        fill.setAttribute('stroke-dashoffset', '0');
+
+        svg.appendChild(track);
+        svg.appendChild(fill);
+        root.appendChild(svg);
+
+        const iconWrap = document.createElement('span');
+        iconWrap.className = 'ring-icon';
+        const iconNode = window.HudIcons.create(iconName || 'activity', iconSize || 14);
+        if (iconNode) iconWrap.appendChild(iconNode);
+        root.appendChild(iconWrap);
+
+        return {
+            root,
+            setValue: (pct) => fill.setAttribute('stroke-dashoffset', String(ringDashOffset(pct))),
+        };
+    }
+
+    function createValueLabel() {
+        const val = document.createElement('span');
+        val.className = 'bar-value';
+        if (!currentSettings.numbers) {
+            val.classList.add('hidden-numbers');
+        }
+        val.textContent = '100';
+        return val;
+    }
+
     function createBarRow(id, iconName) {
         const row = document.createElement('div');
         row.className = 'bar-row';
         row.dataset.bar = id;
+
+        if (currentSettings.barStyle === 'ring') {
+            row.classList.add('is-ring');
+            const ring = createRing(iconName, 14);
+            const val = createValueLabel();
+            row.appendChild(ring.root);
+            row.appendChild(val);
+            return { row, value: val, setValue: ring.setValue };
+        }
 
         const iconWrap = document.createElement('span');
         iconWrap.className = 'bar-icon';
@@ -81,24 +192,18 @@
         fill.style.width = '100%';
         track.appendChild(fill);
 
-        const val = document.createElement('span');
-        val.className = 'bar-value';
-        if (!currentSettings.numbers) {
-            val.classList.add('hidden-numbers');
-        }
-        val.textContent = '100';
+        const val = createValueLabel();
 
         row.appendChild(iconWrap);
         row.appendChild(track);
         row.appendChild(val);
 
-        return { row, fill, value: val, iconWrap };
+        return { row, value: val, setValue: (pct) => { fill.style.width = pct + '%'; } };
     }
 
     function reorderBars() {
-        const builtInOrder = ['health', 'armour', 'hunger', 'thirst', 'stress'];
-        for (let i = 0; i < builtInOrder.length; i++) {
-            const id = builtInOrder[i];
+        for (let i = 0; i < builtInBars.length; i++) {
+            const id = builtInBars[i];
             if (barElements[id] && barElements[id].row.parentNode === statusContainer) {
                 statusContainer.appendChild(barElements[id].row);
             }
@@ -137,46 +242,38 @@
     }
 
     function reportSizes() {
-        const sizes = {
-            status: measurePart(partStatus),
-            vehicle: measurePart(partVehicle),
-            street: measurePart(partStreet),
-        };
-
-        if (
-            !lastReportedSizes ||
-            lastReportedSizes.status.w !== sizes.status.w ||
-            lastReportedSizes.status.h !== sizes.status.h ||
-            lastReportedSizes.vehicle.w !== sizes.vehicle.w ||
-            lastReportedSizes.vehicle.h !== sizes.vehicle.h ||
-            lastReportedSizes.street.w !== sizes.street.w ||
-            lastReportedSizes.street.h !== sizes.street.h
-        ) {
+        const sizes = {};
+        let changed = !lastReportedSizes;
+        for (const id of Object.keys(PARTS)) {
+            sizes[id] = measurePart(PARTS[id]);
+            if (lastReportedSizes && (lastReportedSizes[id].w !== sizes[id].w || lastReportedSizes[id].h !== sizes[id].h)) {
+                changed = true;
+            }
+        }
+        if (changed) {
             lastReportedSizes = sizes;
             post('ready', { sizes });
         }
     }
 
+    function applyTone(id, row, value) {
+        if (id === 'health') return;
+        row.classList.toggle('is-low', value <= lowThreshold);
+    }
+
+    function setFuel(value) {
+        lastFuel = clampPct(value);
+        fuelBarFillEl.style.width = lastFuel + '%';
+        if (fuelRing) fuelRing.setValue(lastFuel);
+        fuelValueEl.textContent = String(lastFuel);
+        fuelClusterEl.classList.toggle('is-low', lastFuel <= lowThreshold);
+    }
+
     function updateAllLowStatus() {
         for (const id in barElements) {
-            if (id !== 'health') {
-                const bar = barElements[id];
-                const currentVal = parseFloat(bar.value.textContent);
-                if (!isNaN(currentVal)) {
-                    if (currentVal <= lowThreshold) {
-                        bar.row.classList.add('is-low');
-                    } else {
-                        bar.row.classList.remove('is-low');
-                    }
-                }
-            }
+            if (barState[id]) applyTone(id, barElements[id].row, clampPct(barState[id].value));
         }
-        const currentFuel = parseFloat(fuelBarFillEl.style.width) || 0;
-        if (currentFuel <= lowThreshold) {
-            fuelClusterEl.classList.add('is-low');
-        } else {
-            fuelClusterEl.classList.remove('is-low');
-        }
+        setFuel(lastFuel);
     }
 
     function ensureBar(id, iconName) {
@@ -189,45 +286,58 @@
         return barObj;
     }
 
+    function removeBar(id) {
+        delete barState[id];
+        if (!barElements[id]) return false;
+        if (barElements[id].row.parentNode) {
+            barElements[id].row.parentNode.removeChild(barElements[id].row);
+        }
+        delete barElements[id];
+        return true;
+    }
+
     function updateBarValue(id, val, iconName) {
         if (val === null || val === undefined) {
-            if (barElements[id]) {
-                if (barElements[id].row.parentNode) {
-                    barElements[id].row.parentNode.removeChild(barElements[id].row);
-                }
-                delete barElements[id];
+            if (removeBar(id)) {
                 reorderBars();
                 reportSizes();
             }
             return;
         }
+        const clamped = clampPct(val);
+        barState[id] = { value: clamped, icon: iconName };
         const bar = ensureBar(id, iconName);
         bar.row.classList.remove('hud-hidden');
-
-        const clamped = Math.max(0, Math.min(100, Math.round(val)));
-        bar.fill.style.width = clamped + '%';
+        bar.setValue(clamped);
         bar.value.textContent = String(clamped);
-
-        if (id !== 'health') {
-            if (clamped <= lowThreshold) {
-                bar.row.classList.add('is-low');
-            } else {
-                bar.row.classList.remove('is-low');
-            }
-        }
+        applyTone(id, bar.row, clamped);
         reorderBars();
     }
 
+    // Style switch: rebuild every shown bar in the new style from its last value.
+    function rebuildBars() {
+        const saved = Object.assign({}, barState);
+        for (const id of Object.keys(barElements)) {
+            if (barElements[id].row.parentNode) {
+                barElements[id].row.parentNode.removeChild(barElements[id].row);
+            }
+            delete barElements[id];
+        }
+        for (const id of Object.keys(saved)) {
+            updateBarValue(id, saved[id].value, saved[id].icon);
+        }
+        const ring = currentSettings.barStyle === 'ring';
+        partStatus.classList.toggle('style-ring', ring);
+        partVehicle.classList.toggle('style-ring', ring);
+        reportSizes();
+    }
+
     function renderExtraBars() {
-        // Remove old extra bars not in list
         const activeIds = new Set(extraBarsList.map(b => b.id));
         let changed = false;
         for (const id in barElements) {
             if (!builtInBars.includes(id) && !activeIds.has(id)) {
-                if (barElements[id].row.parentNode) {
-                    barElements[id].row.parentNode.removeChild(barElements[id].row);
-                }
-                delete barElements[id];
+                removeBar(id);
                 changed = true;
             }
         }
@@ -235,13 +345,7 @@
         for (let i = 0; i < extraBarsList.length; i++) {
             const def = extraBarsList[i];
             if (def.value === null || def.value === undefined) {
-                if (barElements[def.id]) {
-                    if (barElements[def.id].row.parentNode) {
-                        barElements[def.id].row.parentNode.removeChild(barElements[def.id].row);
-                    }
-                    delete barElements[def.id];
-                    changed = true;
-                }
+                if (removeBar(def.id)) changed = true;
             } else {
                 updateBarValue(def.id, def.value, def.icon);
                 changed = true;
@@ -253,12 +357,21 @@
         }
     }
 
-    function applyPlace(id, place) {
-        let el = null;
-        if (id === 'status') el = partStatus;
-        else if (id === 'vehicle') el = partVehicle;
-        else if (id === 'street') el = partStreet;
+    function runtimeVisible(id) {
+        if (id === 'vehicle') return vehicleVisible;
+        if (id === 'compass') return compassReceived;
+        if (id === 'voice') return voiceAvailable;
+        return true;
+    }
 
+    function refreshPart(id) {
+        const el = PARTS[id];
+        if (!el) return;
+        el.classList.toggle('hud-hidden', !!placedHidden[id] || !runtimeVisible(id));
+    }
+
+    function applyPlace(id, place) {
+        const el = PARTS[id];
         if (!el || !place) return;
 
         const scale = typeof place.scale === 'number' ? place.scale : 1.0;
@@ -273,51 +386,118 @@
         el.style.transform = `scale(${scale})`;
         el.style.transformOrigin = '0 0';
 
-        if (id === 'vehicle') {
-            vehiclePlacedHidden = !!place.hidden;
-            if (vehiclePlacedHidden || !vehicleVisible) {
-                el.classList.add('hud-hidden');
-            } else {
-                el.classList.remove('hud-hidden');
+        placedHidden[id] = !!place.hidden;
+        refreshPart(id);
+    }
+
+    // Mirror of CompassLogic.visibleTicks (shared/logic/compass.lua).
+    function compassTicks(heading, span) {
+        const list = [];
+        const first = Math.ceil((heading - span / 2) / TICK_STEP) * TICK_STEP;
+        for (let t = first; t <= heading + span / 2; t += TICK_STEP) {
+            const deg = ((t % 360) + 360) % 360;
+            list.push({ deg, offset: (t - heading) / span, label: Object.hasOwn(DIR_KEYS, deg) });
+        }
+        return list;
+    }
+
+    function renderCompass() {
+        if (compassDeg === null) return;
+        const ticks = compassTicks(compassDeg, compassSpan);
+        while (tickPool.length < ticks.length) {
+            const root = document.createElement('div');
+            root.className = 'compass-tick';
+            const label = document.createElement('span');
+            label.className = 'compass-tick-label';
+            root.appendChild(label);
+            compassTicksEl.appendChild(root);
+            tickPool.push({ root, label });
+        }
+        for (let i = 0; i < tickPool.length; i++) {
+            const el = tickPool[i];
+            const t = ticks[i];
+            if (!t) {
+                el.root.style.display = 'none';
+                continue;
             }
+            el.root.style.display = '';
+            el.root.style.left = (50 + t.offset * 100) + '%';
+            el.root.classList.toggle('is-major', t.label);
+            el.label.textContent = t.label ? translate(DIR_KEYS[t.deg], DIR_FALLBACK[t.deg]) : '';
+        }
+        compassDegEl.textContent = String(compassDeg) + '°';
+    }
+
+    function setVoice(item) {
+        voiceAvailable = item.available === true;
+        voiceMicEl.classList.toggle('is-talking', voiceAvailable && item.talking === true);
+        const hasMode = typeof item.mode === 'string' && item.mode !== '';
+        voiceModeEl.textContent = hasMode ? item.mode : '';
+        voiceModeEl.classList.toggle('hud-hidden', !hasMode);
+        voiceRadioEl.classList.toggle('hud-hidden', item.radio !== true);
+        voiceRadioEl.classList.toggle('is-active', item.radio === true && item.radioActive === true);
+        refreshPart('voice');
+    }
+
+    function setSeatbelt(state) {
+        if (state === true || state === false) {
+            seatbeltEl.classList.remove('hud-hidden');
+            seatbeltEl.classList.toggle('is-off', state === false);
+            const label = state
+                ? translate('hudkit.vehicle.seatbelt.on', 'Seatbelt on')
+                : translate('hudkit.vehicle.seatbelt.off', 'Seatbelt off');
+            seatbeltEl.setAttribute('aria-label', label);
+            seatbeltEl.setAttribute('title', label);
         } else {
-            if (place.hidden) {
-                el.classList.add('hud-hidden');
-            } else {
-                el.classList.remove('hud-hidden');
-            }
+            seatbeltEl.classList.add('hud-hidden');
         }
     }
 
     function setSettingsState(s) {
         if (!s) return;
+        const prevStyle = currentSettings.barStyle;
         currentSettings = Object.assign({}, currentSettings, s);
+        if (currentSettings.barStyle !== 'ring') currentSettings.barStyle = 'bar';
 
         // Update numbers display
         optNumbers.checked = !!currentSettings.numbers;
         for (const id in barElements) {
-            if (currentSettings.numbers) {
-                barElements[id].value.classList.remove('hidden-numbers');
-            } else {
-                barElements[id].value.classList.add('hidden-numbers');
-            }
+            barElements[id].value.classList.toggle('hidden-numbers', !currentSettings.numbers);
         }
+        fuelValueEl.classList.toggle('hidden-numbers', !currentSettings.numbers);
 
         // Update speed unit buttons
         if (currentSettings.speedUnit === 'mph') {
             unitMphBtn.classList.add('active');
             unitKmhBtn.classList.remove('active');
-            speedUnitEl.textContent = 'mph';
+            speedUnitEl.textContent = translate('hudkit.unit.mph', 'mph');
         } else {
             unitKmhBtn.classList.add('active');
             unitMphBtn.classList.remove('active');
-            speedUnitEl.textContent = 'km/h';
+            speedUnitEl.textContent = translate('hudkit.unit.kmh', 'km/h');
         }
 
         // Update minimap mode buttons
         modeAlwaysBtn.classList.toggle('active', currentSettings.minimapMode === 'always');
         modeVehicleBtn.classList.toggle('active', currentSettings.minimapMode === 'vehicle');
         modeNeverBtn.classList.toggle('active', currentSettings.minimapMode === 'never');
+
+        // Update bar style buttons; a change redraws the bars and reports the new sizes to layout
+        styleBarBtn.classList.toggle('active', currentSettings.barStyle === 'bar');
+        styleRingBtn.classList.toggle('active', currentSettings.barStyle === 'ring');
+        if (currentSettings.barStyle !== prevStyle) {
+            rebuildBars();
+        }
+    }
+
+    function applyConfig(item) {
+        if (typeof item.low === 'number') {
+            lowThreshold = item.low;
+        }
+        if (typeof item.span === 'number') {
+            compassSpan = item.span;
+            renderCompass();
+        }
     }
 
     function updateLocaleTexts() {
@@ -325,13 +505,20 @@
         document.getElementById('lbl-numbers').textContent = translate('hudkit.settings.numbers', 'Show numbers on bars');
         document.getElementById('lbl-speed-unit').textContent = translate('hudkit.settings.speedUnit', 'Speed unit');
         document.getElementById('lbl-minimap-mode').textContent = translate('hudkit.settings.minimap', 'Minimap');
+        document.getElementById('lbl-bar-style').textContent = translate('hudkit.settings.barStyle', 'Bar style');
         document.getElementById('txt-edit-layout').textContent = translate('hudkit.settings.layout', 'Edit layout');
+        btnSettingsClose.setAttribute('aria-label', translate('hudkit.settings.close', 'Close'));
 
         unitKmhBtn.textContent = translate('hudkit.unit.kmh', 'km/h');
         unitMphBtn.textContent = translate('hudkit.unit.mph', 'mph');
         modeAlwaysBtn.textContent = translate('hudkit.settings.minimap.always', 'Always');
         modeVehicleBtn.textContent = translate('hudkit.settings.minimap.vehicle', 'In vehicle');
         modeNeverBtn.textContent = translate('hudkit.settings.minimap.never', 'Never');
+        styleBarBtn.textContent = translate('hudkit.settings.barStyle.bar', 'Bar');
+        styleRingBtn.textContent = translate('hudkit.settings.barStyle.ring', 'Ring');
+        voiceRadioEl.setAttribute('aria-label', translate('hudkit.voice.radio', 'Radio'));
+        voiceRadioEl.setAttribute('title', translate('hudkit.voice.radio', 'Radio'));
+        renderCompass();
     }
 
     // Message handler from Lua
@@ -340,6 +527,13 @@
         if (!item || typeof item !== 'object') return;
 
         if (item.type === 'aeterna:theme') {
+            // an owner stylesheet wins; otherwise the preset selects tokens in theme.css (ADR 0005 decision 9)
+            const presets = ['asphalt', 'paper', 'night-market'];
+            if (item.href) {
+                document.documentElement.removeAttribute('data-preset');
+            } else {
+                document.documentElement.setAttribute('data-preset', presets.includes(item.preset) ? item.preset : 'asphalt');
+            }
             let link = document.getElementById('theme-override');
             if (item.href) {
                 if (!link) {
@@ -369,15 +563,7 @@
                 if (item.vehicle.speed !== undefined) speedValueEl.textContent = String(Math.round(item.vehicle.speed));
                 if (item.vehicle.unit !== undefined) speedUnitEl.textContent = item.vehicle.unit;
                 if (item.vehicle.gear !== undefined) gearIndicatorEl.textContent = item.vehicle.gear;
-                if (typeof item.vehicle.fuel === 'number') {
-                    const fuelClamped = Math.max(0, Math.min(100, Math.round(item.vehicle.fuel)));
-                    fuelBarFillEl.style.width = fuelClamped + '%';
-                    if (fuelClamped <= lowThreshold) {
-                        fuelClusterEl.classList.add('is-low');
-                    } else {
-                        fuelClusterEl.classList.remove('is-low');
-                    }
-                }
+                if (typeof item.vehicle.fuel === 'number') setFuel(item.vehicle.fuel);
             }
             if (item.street) {
                 if (item.street.heading !== undefined) compassBadgeEl.textContent = translate(item.street.heading, item.street.heading);
@@ -394,22 +580,25 @@
         } else if (item.type === 'hud:visible') {
             if (item.id === 'vehicle') {
                 vehicleVisible = !!item.visible;
-                if (vehicleVisible && !vehiclePlacedHidden) {
-                    partVehicle.classList.remove('hud-hidden');
-                } else {
-                    partVehicle.classList.add('hud-hidden');
-                }
+                refreshPart('vehicle');
             }
+        } else if (item.type === 'hud:compass') {
+            if (typeof item.deg === 'number') {
+                compassDeg = ((Math.round(item.deg) % 360) + 360) % 360;
+                compassReceived = true;
+                renderCompass();
+                refreshPart('compass');
+            }
+        } else if (item.type === 'hud:voice') {
+            setVoice(item);
+        } else if (item.type === 'hud:seatbelt') {
+            setSeatbelt(item.state);
         } else if (item.type === 'settings:apply') {
-            if (typeof item.low === 'number') {
-                lowThreshold = item.low;
-            }
+            applyConfig(item);
             setSettingsState(item.settings);
             updateAllLowStatus();
         } else if (item.type === 'settings:open') {
-            if (typeof item.low === 'number') {
-                lowThreshold = item.low;
-            }
+            applyConfig(item);
             setSettingsState(item.settings);
             updateAllLowStatus();
             settingsCard.classList.remove('hud-hidden');
@@ -419,12 +608,19 @@
     });
 
     // Setup initial built-in bars
-    ensureBar('health', 'heart');
-    ensureBar('armour', 'shield');
+    updateBarValue('health', 100, 'heart');
+    updateBarValue('armour', 100, 'shield');
 
     // Attach static icons
     const fuelIconContainer = document.getElementById('fuel-icon');
     if (fuelIconContainer) fuelIconContainer.appendChild(window.HudIcons.create('fuel', 12));
+
+    fuelRing = createRing('fuel', 12);
+    fuelRingEl.appendChild(fuelRing.root);
+
+    seatbeltEl.appendChild(window.HudIcons.create('link', 14));
+    voiceMicEl.appendChild(window.HudIcons.create('mic', 16));
+    voiceRadioEl.appendChild(window.HudIcons.create('radio', 16));
 
     const settingsHeaderIcon = document.getElementById('settings-icon');
     if (settingsHeaderIcon) settingsHeaderIcon.appendChild(window.HudIcons.create('settings', 18));
@@ -465,6 +661,16 @@
     modeNeverBtn.addEventListener('click', () => {
         setSettingsState({ minimapMode: 'never' });
         post('settings', { key: 'minimapMode', value: 'never' });
+    });
+
+    styleBarBtn.addEventListener('click', () => {
+        setSettingsState({ barStyle: 'bar' });
+        post('settings', { key: 'barStyle', value: 'bar' });
+    });
+
+    styleRingBtn.addEventListener('click', () => {
+        setSettingsState({ barStyle: 'ring' });
+        post('settings', { key: 'barStyle', value: 'ring' });
     });
 
     btnEditLayout.addEventListener('click', () => {

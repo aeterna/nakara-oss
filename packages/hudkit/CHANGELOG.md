@@ -6,6 +6,49 @@ All notable changes to `aeterna_hudkit` are documented here. The format follows
 
 ## Unreleased
 
+## [0.2.0] - 2026-11-23
+
+- The page gets the theme preset (`aeterna_theme_preset`: asphalt, paper, night-market) and sets `data-preset`, as ADR 0005 decision 9 says; it used to get only the owner stylesheet, so `paper` and `night-market` never reached it (found while preparing the owner's 3-preset check). Agent: Claude Code - Claude Opus 5.5.
+
+- `voice_radio` says when the presser is dead: pma-voice refuses radio then (found on a live run). Agent: Claude Code - Claude Opus 5.5.
+
+- Self-tests run with no manual steps (owner 2026-11-23): `voice_indicator` presses pma-voice's `cycleproximity` once round and judges the mode label (the microphone light is reported, not required); `voice_radio` joins channel 987 through pma-voice's `setRadioChannel` export, transmits with `+radiotalk`/`-radiotalk`, then goes back to the presser's channel; `seatbelt_event` seats an on-foot presser in a local test vehicle and puts them back. `oss.json` declares the three commands. Agent: Claude Code - Claude Opus 5.5.
+
+- The `voice_indicator` and `voice_radio` instructions name pma-voice's default keys (F11 range, Left Alt radio talk); a live run failed because the tester did not know the range key. Agent: Claude Code - Claude Opus 5.5.
+
+### Added
+
+- Version 0.2.0 (ADR 0005). Agent: Claude Code - Claude Opus 5.5 (agent engineer).
+- Bar style setting (`bar` or `ring`, default `Config.barStyle`): status bars, extra bars and the fuel figure draw as circular gauges in ring style; the `status` element is re-registered with its new size.
+- Compass tape layout element `compass` (top-centre): a tick every 15°, the eight direction labels and the heading in whole degrees; `Config.compass.enabled` and `Config.compass.span` (60–180).
+- Voice indicator layout element `voice`, shown only while `pma-voice` is started (runtime `GetResourceState` check, never a dependency, no export calls): talking from `NetworkIsPlayerTalking`, proximity mode from the `proximity` state bag, radio from the `radioChannel` state bag and the `pma-voice:radioActive` local event; `Config.voice.enabled`.
+- Seatbelt icon in the vehicle part, driven by the client-local event `aeterna_hudkit:seatbelt` (`{ on = boolean }` or `nil`); the owning resource stopping hides it; `Config.seatbelt.enabled`.
+- NUI messages `hud:compass`, `hud:voice`, `hud:seatbelt`; `settings:open` / `settings:apply` carry `barStyle` and the compass span; `ready` reports `compass` and `voice` sizes.
+- Locale keys for bar style, compass, voice and seatbelt (en, th).
+- Self-tests registered with `aeterna_core` on start: `values_mapping`, `compass_math` (server), `bar_style` (eye), `compass_tape`, `voice_indicator`, `voice_radio`, `minimap_follows` (ped) and `seatbelt_event` (client mock; needs the presser in a vehicle and reads what the real handler sent), with their expect strings in en and th; `SeatbeltLogic` gains `snapshot`, `restore` and `same` so the mock puts the previous state back. Agent: Claude Code - Claude Opus 5.5 (agent engineer).
+- `seatbelt_event` waits up to 20 s for a vehicle and then skips with `presser is not in a vehicle`; focus event handlers accept only `aeterna_core` as the invoking resource. Agent: Claude Code - Claude Opus 5.5 (agent engineer).
+- Self-test event handlers accept only `aeterna_core` as the invoking resource. Agent: Claude Code - Claude Opus 5.5 (agent engineer).
+- Self-test instructions as `expect` for `voice_indicator`, `voice_radio`, `seatbelt_event`, `compass_tape` and `minimap_follows` (en, th). Agent: Claude Code - Claude Opus 5.5 (agent engineer).
+
+### Changed
+
+- The default screen gains the `compass` element. Upgrade note: `Config.compass.enabled = false` keeps the 0.1 screen.
+- Settings KVP `aeterna_hudkit:settings:v1` gains `barStyle`; a 0.1 value without it reads as `Config.barStyle`.
+- While another resource holds `aeterna_core`'s focus overlay, the settings card stays open and ignores input.
+- Font sizes use the theme type tokens (`--fs-1` … `--fs-5`, `--lh`) instead of pixel values.
+- `ready` accepts sizes only for hudkit's own parts.
+- The compass tape has its own ~50 ms thread (camera heading only, sent on whole-degree change, idle while the element is hidden) instead of the 200 ms value tick.
+- `pma-voice` is also checked every second, so a resource still reading `starting` at `onClientResourceStart` is picked up.
+- The voice distance label uses the locale key `hudkit.unit.m` (en `m`, th `ม.`).
+- `aeterna_hudkit:seatbelt` takes its owner from the invoking resource only; a `nil` payload is honoured only from the owner, and an event with no invoking resource is refused.
+
+### Fixed
+
+- Self-test `voice_radio` was judged by the `voice_indicator` rule ("mode label did not change") because the client
+  passed the full row name; the voice watch now takes either name.
+
+- Extra bar `label` length is counted in UTF-8 characters (`utf8.len`) instead of bytes, so Thai labels up to 24 characters are accepted; invalid UTF-8 is refused (0.1 bug).
+
 ## [0.1.0] - 2026-11-18
 
 - Bundle the IBM Plex Sans Thai font (OFL-1.1).

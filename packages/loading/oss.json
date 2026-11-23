@@ -1,0 +1,26 @@
+{
+  "$schema": "../../oss.schema.json",
+  "name": "loading",
+  "resource": "aeterna_loading",
+  "capabilities": {
+    "http": [],
+    "commands": [],
+    "registeredCommands": [],
+    "convars": {
+      "read": [],
+      "write": []
+    },
+    "netEvents": {
+      "server": [],
+      "client": []
+    },
+    "nui": true,
+    "db": {
+      "tables": [],
+      "ddl": false
+    },
+    "files": {
+      "write": []
+    }
+  }
+}

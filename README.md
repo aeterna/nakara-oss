@@ -32,17 +32,22 @@ release asset with a provenance attestation.
 | [`nakara_cargen_fix`](packages/cargen-fix) | Guards against the `CNetworkCarGenWorldStateData Pool Full` client crash, and explains why the popular `GAMECONFIG_FILE` fix does nothing ([what is verified](packages/cargen-fix/README.md#what-we-have-verified)) | [`nakara_cargen_fix@1.0.0`](https://github.com/aeterna/nakara-oss/releases/tag/nakara_cargen_fix%401.0.0) |
 | [`nakara_rongroi`](packages/rongroi) | Server side of [aeterna-rongroi](https://github.com/aeterna/aeterna-rongroi) | [`nakara_rongroi@0.2.0`](https://github.com/aeterna/nakara-oss/releases/tag/nakara_rongroi%400.2.0) |
 
-### AETERNA Starter Kit · seven base resources ([guide](https://aeterna.github.io/nakara-oss/en/starter-kit/))
+### AETERNA Starter Kit · twelve base resources, five of them new in 0.2 ([guide](https://aeterna.github.io/nakara-oss/en/starter-kit/) · [theme playground](https://aeterna.github.io/nakara-oss/en/starter-kit/theme/))
 
 | Script | What it does | Latest release |
 |---|---|---|
-| [`aeterna_core`](packages/core) | Shared foundation: logging, a local event bus, Thai-aware text helpers, locale lookup | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_core%400.1.0) |
-| [`aeterna_uikit`](packages/uikit) | Server-owned UI panels, prompts (`confirm`, `input`, `progress`, `skillCheck`) and a shared menu | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_uikit%400.1.0) |
-| [`aeterna_notify`](packages/notify) | Toasts, server-wide announcement banners, and a message-of-the-day card | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_notify%400.1.0) |
-| [`aeterna_invkit`](packages/invkit) | Personal stashes and server-validated item use around `ox_inventory` | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_invkit%400.1.0) |
-| [`aeterna_layout`](packages/layout) | HUD layout editor with layouts saved on the client | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_layout%400.1.0) |
-| [`aeterna_phonekit`](packages/phonekit) | A modular phone shell with utility apps and an app API | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_phonekit%400.1.0) |
-| [`aeterna_hudkit`](packages/hudkit) | Player HUD: status bars, vehicle cluster, street and compass, minimap | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_hudkit%400.1.0) |
+| [`aeterna_core`](packages/core) | Shared foundation: logging, a local event bus, Thai-aware text helpers, locale lookup | [`0.2.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_core%400.2.0) |
+| [`aeterna_uikit`](packages/uikit) | Server-owned UI panels, prompts (`confirm`, `input`, `progress`, `skillCheck`) and a shared menu | [`0.2.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_uikit%400.2.0) |
+| [`aeterna_notify`](packages/notify) | Toasts, server-wide announcement banners, and a message-of-the-day card | [`0.2.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_notify%400.2.0) |
+| [`aeterna_invkit`](packages/invkit) | Personal stashes and server-validated item use around `ox_inventory` | [`0.2.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_invkit%400.2.0) |
+| [`aeterna_layout`](packages/layout) | HUD layout editor with layouts saved on the client | [`0.2.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_layout%400.2.0) |
+| [`aeterna_phonekit`](packages/phonekit) | A modular phone shell with utility apps and an app API | [`0.2.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_phonekit%400.2.0) |
+| [`aeterna_hudkit`](packages/hudkit) | Player HUD: status bars, vehicle cluster, street and compass, minimap | [`0.2.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_hudkit%400.2.0) |
+| [`aeterna_radial`](packages/radial) | A radial menu other resources add slots to; picks that affect other players are re-checked on the server | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_radial%400.1.0) |
+| [`aeterna_loading`](packages/loading) | A loading screen that shows the real loading stages, with your server's name, background and tips | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_loading%400.1.0) |
+| [`aeterna_testkit`](packages/testkit) | One button that runs every kit self-test on your server and writes a report you can attach to an issue | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_testkit%400.1.0) |
+| [`aeterna_phonecall`](docs/specs/aeterna_phonecall.md) | Phone numbers, text messages and voice calls as two apps inside the phone | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_phonecall%400.1.0) |
+| [`aeterna_camera`](docs/specs/aeterna_camera.md) | Camera and gallery apps inside the phone; photos stay on your own server | [`0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/aeterna_camera%400.1.0) |
 
 ### Tools
 
