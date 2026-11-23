@@ -57,7 +57,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build (release)
         run: |
-          cargo build --locked --release -p launcher-ui
+          cargo build --locked --release -p launcher-ui -p launcher-sign
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       # Connect ships next to the launcher (decision 8). Before anything is unpacked, the zip must match Connect's
       # SHA256SUMS and carry a build-provenance attestation from Connect's own repository (the sums alone come from
@@ -109,6 +109,9 @@ jobs:
           Copy-Item ../LICENSE "$root/LICENSE-launcher.txt"
           Compress-Archive -Path $root -DestinationPath "out/$name.zip"
           Copy-Item target/release/aeterna-launcher.exe out/aeterna-launcher.exe
+          # Server owners who build their own launcher from the template make their update key with this tool
+          # (template README, "Signed updates"); shipping it saves them installing Rust.
+          Copy-Item target/release/launcher-sign.exe out/launcher-sign-windows-x64.exe
           Remove-Item -Recurse $root
           # Hash first, then write: SHA256SUMS must not list itself.
           $sums = @(Get-ChildItem out -File | ForEach-Object { "{0}  {1}" -f (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower(), $_.Name })

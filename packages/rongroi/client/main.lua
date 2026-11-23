@@ -70,6 +70,7 @@ local FORWARDS = {
     { 'rotateKey', 'nakara_rongroi:settings:rotateKey' },
     { 'deleteCase', 'nakara_rongroi:case:delete' },
     { 'deletePlayer', 'nakara_rongroi:player:delete' },
+    { 'forgetMissing', 'nakara_rongroi:panel:forgetMissing' },
     { 'back', 'nakara_rongroi:panel:open' },
 }
 

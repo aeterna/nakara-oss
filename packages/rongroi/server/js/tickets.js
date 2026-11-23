@@ -105,17 +105,21 @@ class TicketStore {
     //   { ok: true,  status: 200, uploadId }    a new open upload; the ticket is now uploading
     //   { ok: true,  status: 200, repeat }      consumed ticket repeating the accepted envelope
     //   { ok: false, status: 404|410|409|429 }  unknown, expired, consumed by another envelope, capped
-    beginUpload(ticket, reportSha256) {
+    // `receivedAt` (relay transport only, ADR 0097 section 3) is when the Relay received the envelope; an
+    // upload received before expires_at is in time even when the Kit pulls it later. It never exceeds now.
+    beginUpload(ticket, reportSha256, { receivedAt } = {}) {
         checkTicket(ticket);
         checkReportSha256(reportSha256);
+        const at = typeof receivedAt === 'number' && Number.isFinite(receivedAt)
+            ? Math.min(receivedAt, this.now()) : this.now();
         const record = this.tickets.get(ticket);
         if (!record) return { ok: false, status: 404 };
         if (record.state === 'consumed') {
             if (record.reportSha256 === reportSha256) return { ok: true, status: 200, repeat: true };
             return { ok: false, status: 409 };
         }
-        if (record.state === 'expired') return { ok: false, status: 410 };
-        if (this.now() >= record.expiresAt) {
+        if (record.state === 'expired' && !(at < record.expiresAt)) return { ok: false, status: 410 };
+        if (at >= record.expiresAt) {
             record.state = 'expired';
             return { ok: false, status: 410 };
         }
@@ -137,7 +141,39 @@ class TicketStore {
         if (record.state === 'issued' && this.now() >= record.expiresAt) {
             record.state = 'expired';
         }
-        return { state: record.state, caseId: record.caseId, nonce: record.nonce, policy: record.policy };
+        return {
+            state: record.state,
+            caseId: record.caseId,
+            nonce: record.nonce,
+            policy: record.policy,
+            expiresAt: record.expiresAt,
+            accept: record.binding ? 2 : 1,
+            binding: record.binding ? { ...record.binding } : null,
+        };
+    }
+
+    // Bind an issued ticket to an rr2 code (ADR 0097): uploads for it must then be envelope v2 with exactly this
+    // binding. Set once, right after issue(), before the code is shown.
+    setBinding(ticket, binding) {
+        checkTicket(ticket);
+        const record = this.tickets.get(ticket);
+        if (!record || record.state !== 'issued') throw new TypeError('setBinding needs an issued ticket');
+        if (record.binding) throw new TypeError('ticket already has a binding');
+        if (binding === null || typeof binding !== 'object' || binding.ticket !== ticket) {
+            throw new TypeError('binding.ticket must equal ticket');
+        }
+        record.binding = { ...binding };
+    }
+
+    // Relay tickets the Kit still pulls for: bound, not consumed, and no more than `graceMs` past expires_at.
+    relayTickets(graceMs) {
+        const due = [];
+        const at = this.now();
+        for (const [ticket, record] of this.tickets) {
+            if (!record.binding || record.binding.transport !== 'relay' || record.state === 'consumed') continue;
+            if (at < record.expiresAt + graceMs) due.push(ticket);
+        }
+        return due;
     }
 
     openForTicket(ticket) {

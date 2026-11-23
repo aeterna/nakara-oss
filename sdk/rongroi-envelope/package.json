@@ -1,0 +1,16 @@
+{
+  "name": "@aeterna_game/rongroi-envelope",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Rongroi report envelope v1 and v2 (X25519 + HKDF-SHA256 + AES-256-GCM) for servers that receive Rongroi Connect reports",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "index.js",
+  "files": ["index.js", "test-vectors/", "README.md", "CHANGELOG.md"],
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

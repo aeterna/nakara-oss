@@ -1,0 +1,33 @@
+# Rongroi Relay with Caddy in front for HTTPS. Edit the domain in Caddyfile and the two RELAY_ values, then
+# `docker compose up -d`. Caddy gets a certificate for the domain by itself (ports 80 and 443 must reach it).
+services:
+  relay:
+    build: .
+    restart: unless-stopped
+    environment:
+      # One entry per game server; make each with: docker compose run --rm relay node main.js keygen <server-id>
+      RELAY_SERVERS: '[{"id":"my-server","keySha256":"<64 hex from keygen>"}]'
+      # Caddy's address on this network, so the player's address from X-Forwarded-For is believed.
+      RELAY_TRUSTED_PROXIES: "172.30.0.10"
+    networks:
+      relaynet:
+        ipv4_address: 172.30.0.11
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    networks:
+      relaynet:
+        ipv4_address: 172.30.0.10
+networks:
+  relaynet:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+volumes:
+  caddy_data:
