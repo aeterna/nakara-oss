@@ -1,5 +1,6 @@
 const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
+const { EventEmitter } = require('node:events');
 
 globalThis.GetResourceKvpString = () => null;
 globalThis.SetResourceKvp = () => {};
@@ -107,25 +108,29 @@ describe('tickets minors (W3b L6b)', () => {
     assert.equal(pedCalled, false);
   });
 
-  it('item 6: api getActions clears abort timer and completes cleanly', async () => {
-    const api = require('../server/js/api.js');
-    const origFetch = globalThis.fetch;
+  it('item 6: api getActions completes cleanly without destroying its request', async () => {
+    const https = require('https');
+    const apiPath = require.resolve('../server/js/api.js');
+    const origRequest = https.request;
+    const origGetConvar = globalThis.GetConvar;
     try {
-      let passedSignal = null;
-      globalThis.fetch = async (url, opts) => {
-        passedSignal = opts.signal;
-        return {
-          ok: true,
-          status: 200,
-          text: async () => JSON.stringify({ action: null }),
-        };
+      let req = null;
+      globalThis.GetConvar = (name, fallback) => (name === 'nakara_tickets_api' ? 'https://tickets.example.com' : fallback ?? '');
+      delete require.cache[apiPath];
+      const api = require('../server/js/api.js');
+      https.request = (url, options, onResponse) => {
+        req = Object.assign(new EventEmitter(), { destroyed: false, destroy() { this.destroyed = true; } });
+        req.end = () => setImmediate(() => { const res = Object.assign(new EventEmitter(), { statusCode: 200 }); onResponse(res); res.emit('data', Buffer.from('{"action":null}')); res.emit('end'); });
+        return req;
       };
       const res = await api.getActions('srv1', 'sec1', 25);
       assert.equal(res.ok, true);
       assert.equal(res.action, null);
-      assert.equal(passedSignal.aborted, false);
+      assert.equal(req.destroyed, false, 'the fake request was not destroyed');
     } finally {
-      globalThis.fetch = origFetch;
+      https.request = origRequest;
+      globalThis.GetConvar = origGetConvar;
+      delete require.cache[apiPath];
     }
   });
 });

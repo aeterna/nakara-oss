@@ -265,6 +265,9 @@ test('lookup returns the state, case id, nonce and policy, or null for an unknow
         caseId: 'case-7',
         nonce: issued.nonce,
         policy: { name: 'Nakara' },
+        expiresAt: issued.expiresAt,
+        accept: 1,
+        binding: null,
     });
     assert.equal(store.lookup('e'.repeat(32)), null);
     assert.equal(store.lookup('nothex'), null);
@@ -368,4 +371,52 @@ test('malformed arguments throw a TypeError, like the envelope module', () => {
     assert.throws(() => store.consume('a'.repeat(32), SHA_B.toUpperCase()), TypeError);
     assert.throws(() => new TicketStore({ now: () => 0 }), TypeError);
     assert.throws(() => new TicketStore(), TypeError);
+});
+
+// Relay transport (aeterna-rongroi ADR 0097 section 3).
+function relayBinding(ticket) {
+    return { base_path: 'srv1', policy_hash: '0123456789abcdef', server_origin: 'https://relay.example.org', ticket, transport: 'relay' };
+}
+
+test('setBinding makes lookup accept v2 with that binding, once, on an issued ticket only', () => {
+    const { store } = makeStore();
+    const issued = issue(store);
+    store.setBinding(issued.ticket, relayBinding(issued.ticket));
+    const found = store.lookup(issued.ticket);
+    assert.equal(found.accept, 2);
+    assert.deepEqual(found.binding, relayBinding(issued.ticket));
+    assert.throws(() => store.setBinding(issued.ticket, relayBinding(issued.ticket)), TypeError);
+    assert.throws(() => store.setBinding(issue(store).ticket, relayBinding('e'.repeat(32))), TypeError);
+    assert.throws(() => store.setBinding('e'.repeat(32), relayBinding('e'.repeat(32))), TypeError);
+});
+
+test('a relay upload received before expires_at is in time even when pulled after it', () => {
+    const { store, advance } = makeStore();
+    const issued = issue(store);
+    advance(TTL + 5000);
+    assert.equal(store.beginUpload(issued.ticket, SHA_A, { receivedAt: issued.expiresAt + 1 }).status, 410);
+    const late = issue(store);
+    advance(TTL + 5000);
+    const begun = store.beginUpload(late.ticket, SHA_A, { receivedAt: late.expiresAt - 1000 });
+    assert.equal(begun.ok, true);
+    assert.equal(store.stateOf(late.ticket), 'uploading');
+});
+
+test('receivedAt never moves past now', () => {
+    const { store } = makeStore();
+    const issued = issue(store);
+    assert.equal(store.beginUpload(issued.ticket, SHA_A, { receivedAt: issued.expiresAt + 999999 }).ok, true);
+});
+
+test('relayTickets lists bound relay tickets until expires_at plus the grace, never consumed ones', () => {
+    const { store, advance } = makeStore();
+    const direct = issue(store);
+    const relay = issue(store);
+    store.setBinding(relay.ticket, relayBinding(relay.ticket));
+    assert.deepEqual(store.relayTickets(600000), [relay.ticket]);
+    advance(TTL + 599000);
+    assert.deepEqual(store.relayTickets(600000), [relay.ticket]);
+    advance(2000);
+    assert.deepEqual(store.relayTickets(600000), []);
+    assert.equal(direct.ticket.length, 32);
 });

@@ -1,0 +1,7 @@
+# Replace relay.example.org with your relay's domain (an A/AAAA record pointing at this machine).
+relay.example.org {
+	request_body {
+		max_size 3MB
+	}
+	reverse_proxy relay:8080
+}

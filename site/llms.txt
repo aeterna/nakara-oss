@@ -16,11 +16,11 @@ Every resource package declares its capabilities in oss.json (validated against 
   Link: https://github.com/aeterna/nakara-oss/releases?q=launcher-v
   Template for server owners: https://github.com/aeterna/aeterna-launcher-template
 
-- nakara_rongroi (Rongroi Server Kit): Server-side kit for aeterna-rongroi.
+- nakara_rongroi (Rongroi Server Kit): Server-side kit for aeterna-rongroi. Reports come straight to the game port or through a Rongroi Relay the owner hosts (relay/ in this repository).
   Link: https://github.com/aeterna/nakara-oss/releases?q=nakara_rongroi
 
-- Nakara Tickets (nakara_tickets + server image ghcr.io/aeterna/nakara-tickets:0.1.0): self-hosted Discord ticket system with a Thai/English dashboard and staff actions in game over a bridge that opens no port.
-  Link: https://github.com/aeterna/nakara-oss/releases/tag/nakara-tickets%400.1.0
+- Nakara Tickets (nakara_tickets + server image ghcr.io/aeterna/nakara-tickets:0.1.1): self-hosted Discord ticket system with a Thai/English dashboard and staff actions in game over a bridge that opens no port.
+  Link: https://github.com/aeterna/nakara-oss/releases/tag/nakara-tickets%400.1.1
 
 - AETERNA Starter Kit (aeterna_core, aeterna_uikit, aeterna_notify, aeterna_layout, aeterna_hudkit, aeterna_phonekit, aeterna_invkit): MIT base resources for Qbox servers. Version 0.2 is not released yet; it adds aeterna_radial, aeterna_loading, aeterna_testkit, aeterna_phonecall and aeterna_camera, and three theme presets (asphalt, paper, night-market).
   Link: https://aeterna.github.io/nakara-oss/en/starter-kit/

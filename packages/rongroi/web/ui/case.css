@@ -67,6 +67,7 @@
 .case-row-id { font-family: var(--mono); font-size: 14px; overflow-wrap: anywhere; }
 .case-row-state { color: var(--text-3); font-size: 12px; }
 .case-row-meta { display: block; margin-top: 8px; color: var(--text-3); font-size: 12px; line-height: 1.5; }
+.storage-warning { margin: 0 0 16px; padding: 12px 16px; border: 1px solid var(--line-strong); border-radius: var(--r-control); }
 
 @media (max-width: 520px) {
     .case-hash { padding: 16px; }

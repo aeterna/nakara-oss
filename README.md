@@ -28,9 +28,9 @@ release asset with a provenance attestation.
 
 | Script | What it does | Latest release |
 |---|---|---|
-| [`nakara_tickets`](packages/tickets) + [server](tickets/deploy/README.md) | Self-hosted Discord ticket system: private-thread tickets, a Thai/English web dashboard, and staff actions in game (player info, teleport, revive, give item) over a bridge that opens no port | [`nakara-tickets@0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/nakara-tickets%400.1.0) · image `ghcr.io/aeterna/nakara-tickets:0.1.0` |
+| [`nakara_tickets`](packages/tickets) + [server](tickets/deploy/README.md) | Self-hosted Discord ticket system: private-thread tickets, a Thai/English web dashboard, and staff actions in game (player info, teleport, revive, give item) over a bridge that opens no port | [`nakara-tickets@0.1.1`](https://github.com/aeterna/nakara-oss/releases/tag/nakara-tickets%400.1.1) · image `ghcr.io/aeterna/nakara-tickets:0.1.1` |
 | [`nakara_cargen_fix`](packages/cargen-fix) | Guards against the `CNetworkCarGenWorldStateData Pool Full` client crash, and explains why the popular `GAMECONFIG_FILE` fix does nothing ([what is verified](packages/cargen-fix/README.md#what-we-have-verified)) | [`nakara_cargen_fix@1.0.0`](https://github.com/aeterna/nakara-oss/releases/tag/nakara_cargen_fix%401.0.0) |
-| [`nakara_rongroi`](packages/rongroi) | Server side of [aeterna-rongroi](https://github.com/aeterna/aeterna-rongroi) | [`nakara_rongroi@0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/nakara_rongroi%400.1.0) |
+| [`nakara_rongroi`](packages/rongroi) | Server side of [aeterna-rongroi](https://github.com/aeterna/aeterna-rongroi) | [`nakara_rongroi@0.2.0`](https://github.com/aeterna/nakara-oss/releases/tag/nakara_rongroi%400.2.0) |
 
 ### AETERNA Starter Kit · twelve base resources, five of them new in 0.2 ([guide](https://aeterna.github.io/nakara-oss/en/starter-kit/) · [theme playground](https://aeterna.github.io/nakara-oss/en/starter-kit/theme/))
 
@@ -54,7 +54,7 @@ release asset with a provenance attestation.
 | Tool | What it does | Latest release |
 |---|---|---|
 | [`fivem-devkit`](packages/devkit) · npm `@aeterna_game/fivem-devkit` | Finds dangerous code and silent bugs in anyone's FiveM Lua/JS, plus a busted test harness | [npm](https://www.npmjs.com/package/@aeterna_game/fivem-devkit) · `npx @aeterna_game/fivem-devkit check` |
-| [AETERNA Game Launcher](docs/adr/0002-aeterna-game-launcher.md) | Your server's own game launcher, written in Rust · [install](launcher/docs/install.md) · [for server owners](launcher/docs/server-owners.md) | [`launcher-v0.1.0`](https://github.com/aeterna/nakara-oss/releases/tag/launcher-v0.1.0) |
+| [AETERNA Game Launcher](docs/adr/0002-aeterna-game-launcher.md) | Your server's own game launcher, written in Rust · [install](launcher/docs/install.md) · [for server owners](launcher/docs/server-owners.md) | [`launcher-v0.2.0`](https://github.com/aeterna/nakara-oss/releases/tag/launcher-v0.2.0) |
 
 Download a **release asset**, not the repository ZIP: the repo contains tests and tooling you do not
 need on a server. All releases: [Releases](https://github.com/aeterna/nakara-oss/releases).
