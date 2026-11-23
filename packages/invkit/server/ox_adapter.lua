@@ -248,6 +248,18 @@ function A.removeTagged(src, item, count, metadata)
     return ok and removed ~= false
 end
 
+--- Self-test only: removes `count` of `item` from one slot (phone_no_item puts the presser's own phone items aside
+--- and gives them back with the same metadata when the row ends).
+function A.removeSlot(src, item, count, slot)
+    if not A.isOxStarted() then
+        return false
+    end
+    local ok, removed = pcall(function()
+        return exports.ox_inventory:RemoveItem(src, item, count, nil, slot)
+    end)
+    return ok and removed ~= false
+end
+
 --- Self-test only: how many of `item` the player carries, or nil when ox_inventory cannot say.
 function A.itemCount(src, item)
     if not A.isOxStarted() then

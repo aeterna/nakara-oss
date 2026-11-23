@@ -1,6 +1,6 @@
 -- client/selftest.lua -- runs the aeterna_radial client self-tests on the presser's client. Eye tests add
--- temporary slots under the owner aeterna_radial, open the ring, wait for the person to use it, then ask for the
--- eye card (the card takes focus, so the person acts first). server_recheck sends a forged pick for the
+-- temporary slots under the owner aeterna_radial, open the ring, drive it themselves (hover, pick, back), then ask
+-- for the eye card; gamepad waits for pad input and skips without it. server_recheck sends a forged pick for the
 -- vehicle-only server slot the server prepared for this run. Decisions live in shared/logic/selftest.lua.
 
 local ST = RadialSelftest
@@ -36,6 +36,12 @@ local function run(test)
         report(test.runId, test.name, 'fail', 'the radial menu did not open')
         return
     end
+    for _, step in ipairs(ST.drivePlan(test.short)) do
+        Wait(ST.DRIVE_STEP_MS)
+        if current ~= test then return end
+        hooks.drive(step)
+        test.watch.observe(hooks.state(), 0)
+    end
     local waited = 0
     while current == test and waited < ST.EYE_WATCH_MS do
         if test.picked or test.watch.observe(hooks.state(), waited) then break end
@@ -43,6 +49,11 @@ local function run(test)
         waited = waited + 100
     end
     if current ~= test then return end
+    if test.short == 'gamepad' and not test.watch.sawPad() then
+        if hooks.state().open then hooks.close() end
+        report(test.runId, test.name, 'skip', 'no gamepad input')
+        return
+    end
     report(test.runId, test.name, 'ready')
 end
 

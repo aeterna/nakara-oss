@@ -1125,6 +1125,7 @@ local CLIENT_TESTS = {
     fold_keeps_screen = function(t)
         local ok, reason = openForTest(t)
         if not ok then return PS.foldKept({ opened = false, reason = reason }) end
+        showModel(t, PS.testModel('fold_keeps_screen', device.model, Cfg.cover ~= false), nil)
         showScreen(t, 'selftest_a', textScreen())
         local before = probe(t, 'state')
         local start = device.fold
@@ -1138,6 +1139,7 @@ local CLIENT_TESTS = {
     clamp_on_unfold = function(t)
         local ok, reason = openForTest(t)
         if not ok then return PS.clampInside({ opened = false, reason = reason }) end
+        showModel(t, PS.testModel('clamp_on_unfold', device.model, Cfg.cover ~= false), nil)
         if device.fold ~= 'closed' then pageFold(t, 'closed') end
         pageFold(t, 'open')
         local r = probe(t, 'state')
@@ -1209,6 +1211,7 @@ local CLIENT_TESTS = {
     ring_cover = function(t)
         local ok, reason = openForTest(t)
         if not ok then return notOpened(reason) end
+        showModel(t, PS.testModel('ring_cover', device.model, Cfg.cover ~= false), nil)
         if device.fold ~= 'closed' then pageFold(t, 'closed') end
         t.ring = true
         sendUi({ type = 'ring', ringId = PS.RING_ID, id = PS.APP_ID, title = translate('phonekit.selftest.ring.title'),

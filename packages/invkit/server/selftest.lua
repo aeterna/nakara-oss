@@ -162,12 +162,78 @@ local function prepareItemUse(runId, name, src)
     end)
 end
 
+-- The phone ped rows (owner 2026-11-23: no manual steps): the server gives the presser tagged test phones, takes
+-- one back (phone_drop_active) or puts the presser's own phone items aside (phone_no_item); the client watches its
+-- own inventory and reports. Everything comes back on selftestEnd. key = runId .. '|' .. name.
+local phonePrepared = {}
+
+local function preparePhone(runId, name, short, src)
+    if not mayWrite(runId, name) then return end
+    local map = P.validateItemMap(phoneConfig().items)
+    local names = P.itemNames(map)
+    local taken = {}
+    local _, slots = findTestPhone(src, map, names, nil)
+    for _, slot in ipairs(slots) do
+        if type(slot.metadata) == 'table' and slot.metadata.phoneId then taken[slot.metadata.phoneId] = true end
+    end
+    local plan, err = ST.phonePlan(short, map, runId, function()
+        local id = P.newPhoneId(taken)
+        if id then taken[id] = true end
+        return id
+    end)
+    if not plan then
+        AeternaCore.log.warn('phone self-test not prepared', { test = name, reason = err })
+        return
+    end
+    local key = runId .. '|' .. name
+    local prep = { src = src, given = {}, aside = {} }
+    phonePrepared[key] = prep
+    if plan.takeAway then
+        for _, slot in ipairs(slots) do
+            local count = tonumber(slot.count) or 1
+            if A.removeSlot(src, slot.name, count, tonumber(slot.slot)) then
+                prep.aside[#prep.aside + 1] = { item = slot.name, count = count, metadata = slot.metadata }
+            end
+        end
+    end
+    for i, g in ipairs(plan.give) do
+        if A.addItem(src, g.item, 1, g.metadata) then prep.given[i] = g end
+    end
+    if plan.drop and prep.given[plan.drop] then
+        SetTimeout(ST.PHONE_DROP_DELAY_MS, function()
+            local g = prep.given[plan.drop]
+            if phonePrepared[key] ~= prep or not g or not mayWrite(runId, name) then return end
+            if A.removeTagged(src, g.item, 1, { phoneId = g.metadata.phoneId }) then prep.given[plan.drop] = nil end
+        end)
+    end
+end
+
+local function tearDownPhone(key)
+    local prep = phonePrepared[key]
+    if not prep then return end
+    phonePrepared[key] = nil
+    for _, g in pairs(prep.given) do
+        A.removeTagged(prep.src, g.item, 1, { phoneId = g.metadata.phoneId })
+    end
+    for _, a in ipairs(prep.aside) do
+        if not A.addItem(prep.src, a.item, a.count, a.metadata) then
+            AeternaCore.log.warn('phone self-test could not give an item back', { src = prep.src, item = a.item })
+        end
+    end
+end
+
+local PHONE_ROWS = { phone_two_items = true, phone_drop_active = true, phone_no_item = true }
+
 AddEventHandler('aeterna_core:selftestStarted', function(runId, name, ctx)
     if GetInvokingResource() ~= 'aeterna_core' then return end -- only core runs tests
-    if ST.shortName(name) ~= 'item_use' then return end
+    local short = ST.shortName(name)
     local src = type(ctx) == 'table' and tonumber(ctx.a) or nil
     if not src or not A.isOxStarted() then return end
-    prepareItemUse(runId, name, src)
+    if short == 'item_use' then
+        prepareItemUse(runId, name, src)
+    elseif PHONE_ROWS[short] and not ST.skipReason(short, Config, { oxStarted = true }) then
+        preparePhone(runId, name, short, src)
+    end
 end)
 
 -- The used event for the test item: drop the registration at once, so the use runs exactly once.
@@ -195,10 +261,12 @@ end
 AddEventHandler('aeterna_core:selftestEnd', function(runId, name)
     if GetInvokingResource() ~= 'aeterna_core' then return end -- only core runs tests
     tearDown(tostring(runId) .. '|' .. tostring(name))
+    tearDownPhone(tostring(runId) .. '|' .. tostring(name))
 end)
 
 -- aeterna_core or invkit itself stopped mid-test: no selftestEnd will come, so undo every preparation now.
 AddEventHandler('onResourceStop', function(res)
     if res ~= 'aeterna_core' and res ~= RESOURCE then return end
     for key in pairs(prepared) do tearDown(key) end
+    for key in pairs(phonePrepared) do tearDownPhone(key) end
 end)

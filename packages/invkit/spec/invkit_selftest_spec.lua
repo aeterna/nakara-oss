@@ -58,9 +58,10 @@ describe('aeterna_invkit self-tests', function()
                 phone_item_map = { 'headless', 'server', false },
                 stash_open = { 'ped', 'client', false },
                 item_use = { 'mock', 'client', true },
-                phone_two_items = { 'ped', 'client', false },
-                phone_drop_active = { 'ped', 'client', false },
-                phone_no_item = { 'ped', 'client', false },
+                -- owner 2026-11-23: no manual steps; the server gives and takes the phone items itself
+                phone_two_items = { 'ped', 'client', true },
+                phone_drop_active = { 'ped', 'client', true },
+                phone_no_item = { 'ped', 'client', true },
                 phone_device_save = { 'mock', 'server', true },
             }
             local m = by_name(ST.definitions())
@@ -94,9 +95,9 @@ describe('aeterna_invkit self-tests', function()
             end
             local items = { my_fold = 'fold', big_slab = 'slab', phone = 'slab' }
             local m = by_name(ST.definitions(t, { phone = { items = items } }))
-            assert.are.equal('Carry a my_fold and a big_slab item', m.phone_two_items.expect)
+            assert.are.equal('The test gives you a my_fold and a big_slab item for a moment', m.phone_two_items.expect)
             local shipped = by_name(ST.definitions(t, { phone = { items = SHIPPED_ITEMS } }))
-            assert.are.equal('Carry a phone_fold and a phone_slab item', shipped.phone_two_items.expect)
+            assert.are.equal('The test gives you a phone_fold and a phone_slab item for a moment', shipped.phone_two_items.expect)
         end)
 
         it('has the expect string in en and th within core limits', function()
@@ -123,10 +124,10 @@ describe('aeterna_invkit self-tests', function()
             end
             local cfg = { phone = { items = SHIPPED_ITEMS } }
             local en = by_name(ST.definitions(t('en'), cfg))
-            assert.are.equal('Stand at a stash point, then walk away from it', en.stash_open.expect)
-            assert.are.equal('Carry a phone_fold and a phone_slab item', en.phone_two_items.expect)
-            assert.are.equal('Carry two phone items, then drop one of them', en.phone_drop_active.expect)
-            assert.are.equal('Drop or store every phone item you carry', en.phone_no_item.expect)
+            assert.are.equal('The test moves you to a stash point and away from it, then back where you stood', en.stash_open.expect)
+            assert.are.equal('The test gives you a phone_fold and a phone_slab item for a moment', en.phone_two_items.expect)
+            assert.are.equal('The test gives you two phone items, then takes one back', en.phone_drop_active.expect)
+            assert.are.equal('The test puts your phone items aside for a moment, then gives them back', en.phone_no_item.expect)
             local th = by_name(ST.definitions(t('th'), cfg))
             for _, name in ipairs({ 'stash_open', 'phone_two_items', 'phone_drop_active', 'phone_no_item' }) do
                 assert.is_true(utf8.len(th[name].expect) > 0 and utf8.len(th[name].expect) <= 240, name)
@@ -330,6 +331,57 @@ describe('aeterna_invkit self-tests', function()
             local state, detail = w.verdict()
             assert.are.equal('fail', state)
             assert.truthy(detail:find('away', 1, true))
+        end)
+    end)
+
+    describe('phone rows driven by the server (owner 2026-11-23: no manual steps)', function()
+        local function ids()
+            local n = 0
+            return function() n = n + 1 return ('0000000%d'):format(n) end
+        end
+        local map = { phone = 'slab', phone_slab = 'slab', phone_fold = 'fold' }
+
+        it('phone_two_items gives a fold and a slab item, tagged, each with its own id and a battery', function()
+            local plan = assert(ST.phonePlan('phone_two_items', map, 'r1-abcd', ids()))
+            assert.are.equal(2, #plan.give)
+            assert.are.equal('phone_fold', plan.give[1].item)
+            assert.are.equal('phone_slab', plan.give[2].item)
+            for _, g in ipairs(plan.give) do
+                assert.are.equal('r1-abcd', g.metadata.aeterna_selftest)
+                assert.is_number(g.metadata.battery)
+            end
+            assert.are_not.equal(plan.give[1].metadata.phoneId, plan.give[2].metadata.phoneId)
+            assert.is_nil(plan.drop)
+            assert.is_false(plan.takeAway)
+        end)
+
+        it('phone_drop_active gives two and takes the second back after a pause', function()
+            local plan = assert(ST.phonePlan('phone_drop_active', map, 'r1-abcd', ids()))
+            assert.are.equal(2, #plan.give)
+            assert.are.equal(2, plan.drop)
+            assert.is_true(ST.PHONE_DROP_DELAY_MS >= 1000 and ST.PHONE_DROP_DELAY_MS < ST.PHONE_WATCH_MS)
+        end)
+
+        it('phone_no_item gives nothing and puts the presser\'s own phone items aside', function()
+            local plan = assert(ST.phonePlan('phone_no_item', map, 'r1-abcd', ids()))
+            assert.are.equal(0, #plan.give)
+            assert.is_true(plan.takeAway)
+        end)
+
+        it('refuses a plan when no item maps to a model it needs', function()
+            local plan, err = ST.phonePlan('phone_two_items', { phone = 'slab' }, 'r1-abcd', ids())
+            assert.is_nil(plan)
+            assert.are.equal('no phone item maps to fold', err)
+        end)
+
+        it('stash_open stops at the first point, then away from every point', function()
+            local points = { { coords = { x = 10.0, y = 0.0, z = 5.0 }, radius = 2.0 } }
+            local stops = ST.stashStops(points)
+            assert.are.equal(2, #stops)
+            assert.are.same({ x = 10.0, y = 0.0, z = 5.0 }, stops[1])
+            local dx = stops[2].x - 10.0
+            assert.is_true(math.abs(dx) > 2.0 + 5.0)
+            assert.is_nil(ST.stashStops({}))
         end)
     end)
 
@@ -698,6 +750,46 @@ describe('aeterna_invkit self-tests', function()
             assert.are.same({}, env.ox.added)
         end)
 
+        it('phone_drop_active: gives two tagged phones, takes one back, and selftestEnd takes the other', function()
+            local env = boot()
+            fireAsCore('aeterna_core:selftestStarted', 'r9-abcd', 'aeterna_invkit.phone_drop_active',
+                { kind = 'ped', a = 5, destructive = true })
+            natives.advance(0)
+            assert.are.equal(2, #env.ox.added)
+            local kept = 0
+            for _, it in pairs(env.inv[5]) do if it.metadata.aeterna_selftest == 'r9-abcd' then kept = kept + 1 end end
+            assert.are.equal(2, kept)
+            natives.advance(ST.PHONE_DROP_DELAY_MS + 10)
+            kept = 0
+            for _ in pairs(env.inv[5]) do kept = kept + 1 end
+            assert.are.equal(1, kept)
+            fireAsCore('aeterna_core:selftestEnd', 'r9-abcd', 'aeterna_invkit.phone_drop_active')
+            natives.advance(0)
+            assert.is_nil(next(env.inv[5]))
+            assert.are.equal(0, #env.reports) -- the client reports
+        end)
+
+        it('phone_no_item: puts the presser\'s own phones aside and gives them back with their metadata', function()
+            local env = boot({ carried = { { name = 'phone', slot = 1, count = 1, metadata = { phoneId = 'aaaa0001', battery = 77 } } } })
+            fireAsCore('aeterna_core:selftestStarted', 'r9-abcd', 'aeterna_invkit.phone_no_item',
+                { kind = 'ped', a = 5, destructive = true })
+            natives.advance(0)
+            assert.is_nil(next(env.inv[5]))
+            fireAsCore('aeterna_core:selftestEnd', 'r9-abcd', 'aeterna_invkit.phone_no_item')
+            natives.advance(0)
+            local _, back = next(env.inv[5])
+            assert.are.equal('phone', back.name)
+            assert.are.same({ phoneId = 'aaaa0001', battery = 77 }, back.metadata)
+        end)
+
+        it('phone rows give nothing when the write guard refuses', function()
+            local env = boot({ mayWrite = false })
+            fireAsCore('aeterna_core:selftestStarted', 'r9-abcd', 'aeterna_invkit.phone_two_items',
+                { kind = 'ped', a = 5, destructive = true })
+            natives.advance(0)
+            assert.are.same({}, env.ox.added)
+        end)
+
         it('item_use: on selftestStarted gives one tagged test item, registers it and starts the use', function()
             local env = boot()
             fireAsCore('aeterna_core:selftestStarted', 'r7-abcd', 'aeterna_invkit.item_use',
@@ -894,22 +986,30 @@ describe('aeterna_invkit self-tests', function()
             return #natives.emitted('server', 'aeterna_invkit:sv:open')
         end
 
-        it('checks away from the point, then at it, and passes', function()
+        it('moves the presser to the point, then away, then back where they stood, and passes', function()
             local env = boot_client({ { coords = vector3(10.0, 10.0, 10.0), radius = 2.0 } })
+            local moves = {}
+            natives.stub('SetEntityCoords', function(h, x, y, z)
+                moves[#moves + 1] = { x, y, z }
+                natives.set_entity_coords(h, vector3(x, y, z))
+            end)
+            natives.stub('GetEntityHeading', function() return 45.0 end)
+            natives.stub('SetEntityHeading', function() end)
             natives.set_entity_coords(1, vector3(50.0, 50.0, 10.0))
             fireAsCore('aeterna_core:selftest', 'r5-abcd', 'aeterna_invkit.stash_open', { kind = 'ped', role = 'A' })
-            natives.advance(0)
-            assert.are.equal(1, opens())
-            natives.fire_net('aeterna_invkit:cl:refused', 1, { item = 'stash', reason = 'invkit.stash.far' })
-            natives.advance(2000)
-            natives.set_entity_coords(1, vector3(10.5, 10.0, 10.0))
-            natives.advance(1000)
-            assert.are.equal(2, opens())
+            natives.advance(600)
+            assert.are.equal(1, opens()) -- at the point
             env.bag.invOpen = true
-            natives.advance(3000)
+            natives.advance(200)
+            env.bag.invOpen = false
+            natives.advance(600)
+            assert.are.equal(2, opens()) -- away from it
+            natives.fire_net('aeterna_invkit:cl:refused', 1, { item = 'stash', reason = 'invkit.stash.far' })
+            natives.advance(1000)
             assert.are.equal(1, #env.reports)
-            assert.are.equal('pass', env.reports[1].ok)
+            assert.are.equal('pass', env.reports[1].ok, env.reports[1].detail)
             assert.are.equal(1, env.closed())
+            assert.are.same({ 50.0, 50.0, 10.0 }, moves[#moves]) -- back where they stood
         end)
 
         it('item_use: sees the tagged item, one use, the item gone, and reports mock with restored', function()

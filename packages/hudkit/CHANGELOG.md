@@ -6,6 +6,8 @@ All notable changes to `aeterna_hudkit` are documented here. The format follows
 
 ## Unreleased
 
+- Self-tests run with no manual steps (owner 2026-11-23): `voice_indicator` presses pma-voice's `cycleproximity` once round and judges the mode label (the microphone light is reported, not required); `voice_radio` joins channel 987 through pma-voice's `setRadioChannel` export, transmits with `+radiotalk`/`-radiotalk`, then goes back to the presser's channel; `seatbelt_event` seats an on-foot presser in a local test vehicle and puts them back. `oss.json` declares the three commands. Agent: Claude Code - Claude Opus 5.5.
+
 - The `voice_indicator` and `voice_radio` instructions name pma-voice's default keys (F11 range, Left Alt radio talk); a live run failed because the tester did not know the range key. Agent: Claude Code - Claude Opus 5.5.
 
 ### Added

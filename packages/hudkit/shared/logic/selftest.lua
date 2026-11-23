@@ -9,7 +9,12 @@ local PREFIX = 'aeterna_hudkit.'
 -- The voice rows wait this long for the presser to act, then report what they saw before core's timeout.
 HudSelftest.VOICE_WATCH_MS = 25000
 -- seatbelt_event waits this long for the presser to sit in a vehicle before it skips.
-HudSelftest.SEATBELT_WAIT_MS = 20000
+-- seatbelt_event seats the presser in a local test vehicle of this model (owner 2026-11-23: no manual steps) and
+-- waits this long for the model to load.
+HudSelftest.SEATBELT_VEHICLE = 'blista'
+HudSelftest.SEATBELT_WAIT_MS = 5000
+-- voice_radio joins this pma-voice channel for a moment, then goes back to the presser's own.
+HudSelftest.RADIO_TEST_CHANNEL = 987
 
 local ROWS = {
     { name = 'values_mapping', kind = 'headless' },
@@ -168,6 +173,13 @@ function HudSelftest.compassSamples(C, samples, span)
     return 'pass', ('the tape followed the camera through %d headings'):format(#samples)
 end
 
+--- voice_indicator: presses of pma-voice's cycleproximity that walk the range once round and back to where it
+--- started (modes = the proximity indexes pma-voice cycles through; 3 when unknown).
+function HudSelftest.cyclePresses(modes, _start)
+    local n = type(modes) == 'table' and #modes or 0
+    return n > 0 and n or 3
+end
+
 --- voice_indicator / voice_radio: feed every hud:voice message hudkit sent; observe() returns true once the
 --- row has seen what it needs. verdict() gives the result.
 function HudSelftest.newVoiceWatch(name)
@@ -179,7 +191,7 @@ function HudSelftest.newVoiceWatch(name)
     local function done()
         if not seen.available then return false end
         if name == 'voice_radio' then return seen.radio and seen.radioActive end
-        return seen.talking and seen.modeCount >= 2
+        return seen.modeCount >= 2
     end
 
     function w.observe(msg)
@@ -202,14 +214,14 @@ function HudSelftest.newVoiceWatch(name)
         end
         if done() then
             if name == 'voice_radio' then return 'pass', 'radio icon showed and lit while transmitting' end
-            return 'pass', ('microphone lit while talking; %d mode labels seen'):format(seen.modeCount)
+            return 'pass', ('%d mode labels seen; microphone %s'):format(seen.modeCount,
+                seen.talking and 'lit while talking' or 'not checked (nobody talked)')
         end
         local missing = {}
         if name == 'voice_radio' then
             if not seen.radio then missing[#missing + 1] = 'no radio channel joined' end
             if not seen.radioActive then missing[#missing + 1] = 'no transmit seen' end
         else
-            if not seen.talking then missing[#missing + 1] = 'no talking seen' end
             if seen.modeCount < 2 then missing[#missing + 1] = 'mode label did not change' end
         end
         return 'fail', table.concat(missing, '; ')
@@ -231,7 +243,7 @@ end
 --- back; inVehicle = false: the presser never sat in a vehicle within SEATBELT_WAIT_MS, so nothing was fired.
 function HudSelftest.seatbeltVerdict(observed, restored, inVehicle)
     if inVehicle == false then
-        return 'skip', 'presser is not in a vehicle'
+        return 'fail', 'could not seat the presser in a test vehicle'
     end
     local extra = { restored = restored == true }
     for i, step in ipairs(HudSelftest.seatbeltSteps()) do

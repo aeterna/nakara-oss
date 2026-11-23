@@ -47,29 +47,100 @@ local function compassTape(runId, name)
     report(runId, name, ST.compassSamples(CompassLogic, samples, hooks.compassSpan()))
 end
 
-local function voiceWatch(runId, name)
-    local watch = ST.newVoiceWatch(name)
+local function nativeYes(v) return v == true or v == 1 end
+
+local function watchFor(watch, ms, until_)
     local waited = 0
-    while waited < ST.VOICE_WATCH_MS and stillRunning(runId, name) do
-        if watch.observe(hooks.voiceMessage()) then break end
+    while waited < ms do
+        watch.observe(hooks.voiceMessage())
+        if until_ and until_() then return true end
         Wait(100)
         waited = waited + 100
+    end
+    watch.observe(hooks.voiceMessage())
+    return until_ and until_() or false
+end
+
+-- The test drives pma-voice itself (owner 2026-11-23: no manual steps): voice_indicator presses its
+-- cycleproximity command once round, so the range ends where it started; voice_radio joins a channel of its own,
+-- transmits for a moment through +radiotalk / -radiotalk, then goes back to the presser's own channel.
+local function voiceDrive(runId, name)
+    local short = ST.shortName(name)
+    local watch = ST.newVoiceWatch(name)
+    watch.observe(hooks.voiceMessage())
+    if short == 'voice_indicator' then
+        for _ = 1, ST.cyclePresses(nil) do
+            if not stillRunning(runId, name) then return end
+            ExecuteCommand('cycleproximity')
+            watchFor(watch, 700)
+        end
+    else
+        local before = tonumber((LocalPlayer and LocalPlayer.state or {}).radioChannel) or 0
+        pcall(function() exports['pma-voice']:setRadioChannel(ST.RADIO_TEST_CHANNEL) end)
+        local joined = watchFor(watch, 3000, function()
+            local m = hooks.voiceMessage()
+            return m ~= nil and m.radio == true
+        end)
+        if joined and stillRunning(runId, name) then
+            ExecuteCommand('+radiotalk')
+            watchFor(watch, 2000, function()
+                local m = hooks.voiceMessage()
+                return m ~= nil and m.radioActive == true
+            end)
+            ExecuteCommand('-radiotalk')
+            watchFor(watch, 300)
+        end
+        pcall(function() exports['pma-voice']:setRadioChannel(before) end)
     end
     if not stillRunning(runId, name) then return end
     report(runId, name, watch.verdict())
 end
 
--- Waits up to SEATBELT_WAIT_MS for the presser to sit in a vehicle (the row's instruction), then fires the three
--- payloads through hudkit's own event handler and reads
--- the icon state that handler sent to the page; then puts the previous state and owner back.
-local function seatbeltEvent(runId, name)
+-- seatbelt_event: a local test vehicle at the presser, seated as driver; nil when the presser already sits in one.
+-- Returns ok, placed (what to undo).
+local function seatInTestVehicle()
+    if hooks.isInVehicle() then return true, nil end
+    local ped = PlayerPedId()
+    local model = GetHashKey(ST.SEATBELT_VEHICLE)
+    RequestModel(model)
     local waited = 0
-    while not hooks.isInVehicle() and waited < ST.SEATBELT_WAIT_MS and stillRunning(runId, name) do
-        Wait(250)
-        waited = waited + 250
+    while not nativeYes(HasModelLoaded(model)) and waited < ST.SEATBELT_WAIT_MS do
+        Wait(100)
+        waited = waited + 100
     end
-    if not stillRunning(runId, name) then return end
-    if not hooks.isInVehicle() then
+    if not nativeYes(HasModelLoaded(model)) then return false, nil end
+    local c = GetEntityCoords(ped)
+    local placed = { x = c.x, y = c.y, z = c.z, h = GetEntityHeading(ped) }
+    placed.veh = CreateVehicle(model, c.x, c.y, c.z, placed.h, false, false)
+    SetModelAsNoLongerNeeded(model)
+    if not placed.veh or placed.veh == 0 then return false, nil end
+    SetPedIntoVehicle(ped, placed.veh, -1)
+    for _ = 1, 10 do
+        if hooks.isInVehicle() then break end
+        Wait(100)
+    end
+    return hooks.isInVehicle(), placed
+end
+
+local function leaveTestVehicle(placed)
+    if not placed then return end
+    local ped = PlayerPedId()
+    SetEntityCoords(ped, placed.x, placed.y, placed.z, false, false, false, false)
+    SetEntityHeading(ped, placed.h)
+    if placed.veh and nativeYes(DoesEntityExist(placed.veh)) then DeleteEntity(placed.veh) end
+end
+
+-- Seats the presser in a test vehicle when on foot (owner 2026-11-23: no manual steps), fires the three payloads
+-- through hudkit's own event handler and reads the icon state that handler sent to the page; then puts the
+-- previous state and owner back, and the presser where they stood.
+local function seatbeltEvent(runId, name)
+    local seated, placed = seatInTestVehicle()
+    if not stillRunning(runId, name) then
+        leaveTestVehicle(placed)
+        return
+    end
+    if not seated then
+        leaveTestVehicle(placed)
         report(runId, name, ST.seatbeltVerdict(nil, true, false))
         return
     end
@@ -80,6 +151,7 @@ local function seatbeltEvent(runId, name)
         observed[i] = hooks.lastSeatbelt()
     end
     hooks.seatbelt.restore(before)
+    leaveTestVehicle(placed)
     local inVeh = hooks.isInVehicle()
     hooks.sendSeatbelt(inVeh)
     local restored = hooks.seatbelt.same(before) and hooks.lastSeatbelt() == hooks.seatbelt.display(inVeh)
@@ -109,8 +181,8 @@ end
 local CLIENT_TESTS = {
     bar_style = barStyle,
     compass_tape = compassTape,
-    voice_indicator = voiceWatch,
-    voice_radio = voiceWatch,
+    voice_indicator = voiceDrive,
+    voice_radio = voiceDrive,
     seatbelt_event = seatbeltEvent,
     minimap_follows = minimapFollows,
 }

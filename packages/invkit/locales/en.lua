@@ -8,9 +8,9 @@ Locales.en['invkit.use.busy'] = 'Already using an item'
 Locales.en['invkit.use.cancelled'] = 'Item use cancelled'
 Locales.en['invkit.key.open'] = 'Open personal stash'
 Locales.en['invkit.noox'] = 'ox_inventory is not started; aeterna_invkit is inactive'
-Locales.en['invkit.selftest.stash_open.expect'] = 'Stand at a stash point, then walk away from it'
-Locales.en['invkit.selftest.phone_two_items.expect'] = 'Carry a {fold} and a {slab} item'
-Locales.en['invkit.selftest.phone_drop_active.expect'] = 'Carry two phone items, then drop one of them'
-Locales.en['invkit.selftest.phone_no_item.expect'] = 'Drop or store every phone item you carry'
+Locales.en['invkit.selftest.stash_open.expect'] = 'The test moves you to a stash point and away from it, then back where you stood'
+Locales.en['invkit.selftest.phone_two_items.expect'] = 'The test gives you a {fold} and a {slab} item for a moment'
+Locales.en['invkit.selftest.phone_drop_active.expect'] = 'The test gives you two phone items, then takes one back'
+Locales.en['invkit.selftest.phone_no_item.expect'] = 'The test puts your phone items aside for a moment, then gives them back'
 
 return Locales.en

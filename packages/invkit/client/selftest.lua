@@ -1,5 +1,5 @@
--- client/selftest.lua -- runs the aeterna_invkit client self-tests on the presser's client: stash_open (sends
--- the same request as the bound key at the presser's position), item_use (watches the item the server gave for
+-- client/selftest.lua -- runs the aeterna_invkit client self-tests on the presser's client: stash_open (moves the
+-- presser to a stash point and away, sending the same request as the bound key at each stop), item_use (watches the item the server gave for
 -- this run go through one use) and the three phone ped rows (read the presser's own ox_inventory and build the
 -- device list invkit answers phonekit with). Decisions live in shared/logic/selftest.lua.
 
@@ -45,22 +45,27 @@ local function tryOpen()
     return 'none'
 end
 
+-- The test moves the presser itself (owner 2026-11-23: no manual steps): to the first stash point, then away from
+-- every point, sends the bound key's open request at each stop, then puts the presser back where they stood.
 local function stashOpen(runId, name)
     local cfg = Config.stash
     local watch = ST.newStashWatch(cfg.anywhere == true)
-    local waited = 0
-    while waited < ST.STASH_WATCH_MS and running[name] == runId do
-        local canOpen = (L.canOpenAt(GetEntityCoords(PlayerPedId()), cfg))
+    local stops = ST.stashStops(cfg.points) or {}
+    local ped = PlayerPedId()
+    local origin = GetEntityCoords(ped)
+    local heading = GetEntityHeading(ped)
+    for _, stop in ipairs(stops) do
+        if running[name] ~= runId then break end
+        SetEntityCoords(ped, stop.x, stop.y, stop.z, false, false, false, false)
+        Wait(500)
+        local canOpen = (L.canOpenAt(GetEntityCoords(ped), cfg))
         if watch.needs(canOpen) then
             local outcome, reason = tryOpen()
             if watch.record(canOpen, outcome, reason) then break end
-            Wait(1000)
-            waited = waited + 2500
-        else
-            Wait(500)
-            waited = waited + 500
         end
     end
+    SetEntityCoords(ped, origin.x, origin.y, origin.z, false, false, false, false)
+    SetEntityHeading(ped, heading)
     if running[name] ~= runId then return end
     report(runId, name, watch.verdict())
 end

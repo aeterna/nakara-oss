@@ -399,6 +399,18 @@ RadialSelftestHooks = {
         return { type = 'state', open = true, parentId = menu.parent and menu.parent.id or nil,
             hoverId = hovered and hovered.id or nil, pad = pad }
     end,
+    -- self-test drive (owner 2026-11-23): the same paths as the page's hover / pick / back callbacks
+    drive = function(step)
+        if not menu or menu.paused or type(step) ~= 'table' then return false end
+        if step.op == 'back' then back() return true end
+        for i, s in ipairs(menu.ring.slots) do
+            if s.owner == RESOURCE and s.id == step.id then
+                if step.op == 'hover' then setHover(i, true) else pick(i) end
+                return true
+            end
+        end
+        return false
+    end,
     hasServerSlot = function(owner, id) return serverReg:getSlot(owner, id, 'server') ~= nil end,
     inVehicle = function() return vehicleState(PlayerPedId()) ~= 'out' end,
 }

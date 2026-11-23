@@ -115,15 +115,26 @@ describe('aeterna_phonekit self-tests', function()
             assert.is_nil(P.skipReason('open_close_prop', env))
             env.ped = false
             assert.are.equal('presser not spawned', P.skipReason('open_close_prop', env))
-            assert.are.equal('held model does not fold', P.skipReason('fold_keeps_screen', env))
-            assert.are.equal('held model is not book', P.skipReason('clamp_on_unfold', env))
-            assert.are.equal('held model is not fold', P.skipReason('ring_cover', env))
+            -- owner 2026-11-23: no manual steps; the test shows the model it needs instead of skipping
+            assert.is_nil(P.skipReason('fold_keeps_screen', env))
+            assert.is_nil(P.skipReason('clamp_on_unfold', env))
+            assert.is_nil(P.skipReason('ring_cover', env))
             env.lockScreen = false
             assert.are.equal('Config.lockScreen is false', P.skipReason('eye_lock', env))
             for _, n in ipairs({ 'rules_loaded', 'models_have_apps', 'exit_contract', 'eye_model_pad', 'eye_book_two_pane',
                 'eye_fold_cover', 'eye_control_centre', 'contacts_hooks' }) do
                 assert.is_nil(P.skipReason(n, env), n)
             end
+        end)
+
+        it('picks the model each fold test shows: the held one when it folds, else book; fold for the ring', function()
+            assert.are.equal('book', P.testModel('clamp_on_unfold', 'slab', true))
+            assert.are.equal('book', P.testModel('clamp_on_unfold', 'fold', true))
+            assert.are.equal('fold', P.testModel('fold_keeps_screen', 'fold', true))
+            assert.are.equal('book', P.testModel('fold_keeps_screen', 'fold', false))
+            assert.are.equal('book', P.testModel('fold_keeps_screen', 'slab', true))
+            assert.are.equal('fold', P.testModel('ring_cover', 'slab', true))
+            assert.is_nil(P.testModel('exit_contract', 'slab', true))
         end)
 
         it('fold and book fold; a fold with Config.cover = false does not', function()
@@ -135,7 +146,7 @@ describe('aeterna_phonekit self-tests', function()
             assert.is_nil(P.skipReason('fold_keeps_screen', env))
             assert.is_nil(P.skipReason('ring_cover', env))
             env.cover = false
-            assert.are.equal('held model does not fold', P.skipReason('fold_keeps_screen', env))
+            assert.is_nil(P.skipReason('fold_keeps_screen', env)) -- shows a book instead
             assert.are.equal('Config.cover is false', P.skipReason('ring_cover', env))
             assert.are.equal('cover is off', P.skipReason('eye_fold_cover', env))
         end)
@@ -652,14 +663,11 @@ describe('aeterna_phonekit self-tests under the harness', function()
             assert.are.equal(2, changes) -- the add, then the restore
         end)
 
-        it('ped and eye rows that do not fit the held phone skip with the reason', function()
+        it('rows whose config is off skip with the reason (a fold test shows the model it needs instead)', function()
             bootClient()
-            runClient('clamp_on_unfold', 'ped')
-            natives.advance(10)
-            assert.are.same({ 'skip', 'held model is not book' }, { reports[1].ok, reports[1].detail })
             runClient('eye_lock')
             natives.advance(10)
-            assert.are.same({ 'skip', 'Config.lockScreen is false' }, { reports[2].ok, reports[2].detail })
+            assert.are.same({ 'skip', 'Config.lockScreen is false' }, { reports[1].ok, reports[1].detail })
         end)
 
         it('eye_model_pad opens the phone, shows the pad frame and marks the card ready; the end closes it', function()
@@ -783,7 +791,7 @@ describe('aeterna_phonekit self-tests under the harness', function()
         it('a failed client reportSelftest is logged at warn', function()
             bootClient()
             failReport = true
-            runClient('clamp_on_unfold', 'ped')
+            runClient('eye_lock')
             assert.are.equal('reportSelftest failed', warns[#warns].msg)
         end)
 

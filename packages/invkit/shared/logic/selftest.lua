@@ -8,8 +8,8 @@ InvkitSelftest = InvkitSelftest or {}
 
 local PREFIX = 'aeterna_invkit.'
 
--- stash_open waits this long for the presser to stand at, then away from, a stash point.
-InvkitSelftest.STASH_WATCH_MS = 50000
+-- stash_open moves the presser to each stop and waits this long there for the open request's answer.
+InvkitSelftest.STASH_WATCH_MS = 8000
 -- phone_device_save waits this long for its save to land (invkit holds saves up to one 5000 ms window).
 InvkitSelftest.SAVE_WAIT_MS = 7000
 -- item_use: the client waits this long for the tagged test item, then this long for the use to finish.
@@ -17,8 +17,11 @@ InvkitSelftest.ITEM_WAIT_MS = 6000
 InvkitSelftest.USE_WAIT_MS = 8000
 -- item_use: the server starts the use this long after giving the item, once the client listens.
 InvkitSelftest.USE_START_DELAY_MS = 1500
--- The phone ped rows wait this long for the presser's inventory to match.
-InvkitSelftest.PHONE_WATCH_MS = 50000
+-- The phone ped rows wait this long for the presser's inventory to match. The server gives and takes the items
+-- itself (owner 2026-11-23: no manual steps); phone_drop_active takes one back after PHONE_DROP_DELAY_MS.
+InvkitSelftest.PHONE_WATCH_MS = 15000
+InvkitSelftest.PHONE_DROP_DELAY_MS = 4000
+InvkitSelftest.PHONE_BATTERY = 100
 
 -- item_use gives one of these ox_inventory default items, the first that no resource has registered.
 InvkitSelftest.USE_ITEMS = { 'water', 'burger', 'sandwich' }
@@ -31,11 +34,11 @@ local ROWS = {
     { name = 'stash_id', kind = 'headless' },
     { name = 'use_state_machine', kind = 'headless' },
     { name = 'phone_item_map', kind = 'headless' },
-    { name = 'stash_open', kind = 'ped', expect = true, timeout = 60000, needs = OX },
+    { name = 'stash_open', kind = 'ped', expect = true, timeout = 30000, needs = OX },
     { name = 'item_use', kind = 'mock', side = 'client', destructive = true, timeout = 20000, needs = OX },
-    { name = 'phone_two_items', kind = 'ped', expect = true, timeout = 60000, needs = OX_PHONEKIT },
-    { name = 'phone_drop_active', kind = 'ped', expect = true, timeout = 60000, needs = OX_PHONEKIT },
-    { name = 'phone_no_item', kind = 'ped', expect = true, timeout = 60000, needs = OX_PHONEKIT },
+    { name = 'phone_two_items', kind = 'ped', destructive = true, expect = true, timeout = 25000, needs = OX_PHONEKIT },
+    { name = 'phone_drop_active', kind = 'ped', destructive = true, expect = true, timeout = 25000, needs = OX_PHONEKIT },
+    { name = 'phone_no_item', kind = 'ped', destructive = true, expect = true, timeout = 25000, needs = OX_PHONEKIT },
     { name = 'phone_device_save', kind = 'mock', destructive = true, timeout = 15000, needs = OX },
 }
 
@@ -266,6 +269,56 @@ function InvkitSelftest.testPhoneItem(map)
 end
 
 InvkitSelftest.SAVE = { battery = 42, fold = 'closed' }
+
+-- The item `map` (validated name -> model) maps to `model`, preferring one named '_<model>'; nil when none.
+local function mappedItem(map, model)
+    local named, other = {}, {}
+    for name, m in pairs(map or {}) do
+        if m == model then
+            local list = name:sub(-(#model + 1)) == '_' .. model and named or other
+            list[#list + 1] = name
+        end
+    end
+    table.sort(named)
+    table.sort(other)
+    return named[1] or other[1]
+end
+
+--- The phone ped rows, driven by the server: { give = { { item, metadata }, … }, drop = index of the give to take
+--- back after PHONE_DROP_DELAY_MS or nil, takeAway = put the presser's own phone items aside until the row ends }.
+--- `newId()` returns a fresh phoneId. nil, reason when an item the row needs is not mapped.
+function InvkitSelftest.phonePlan(short, map, runId, newId)
+    local function give(model)
+        local item = mappedItem(map, model)
+        if not item then return nil, 'no phone item maps to ' .. model end
+        return { item = item, metadata = { phoneId = newId(), battery = InvkitSelftest.PHONE_BATTERY,
+            aeterna_selftest = runId } }
+    end
+    if short == 'phone_no_item' then
+        return { give = {}, takeAway = true }
+    end
+    local models = short == 'phone_two_items' and { 'fold', 'slab' } or { 'slab', 'slab' }
+    local plan = { give = {}, takeAway = false, drop = short == 'phone_drop_active' and 2 or nil }
+    for i, model in ipairs(models) do
+        local g, err = give(model)
+        if not g then return nil, err end
+        plan.give[i] = g
+    end
+    return plan
+end
+
+--- stash_open: where the client moves the presser — the first point, then a spot away from it — or nil when no
+--- point is configured. The presser goes back where they stood afterwards.
+function InvkitSelftest.stashStops(points)
+    local pt = type(points) == 'table' and points[1] or nil
+    local c = type(pt) == 'table' and pt.coords or nil
+    if type(c) ~= 'table' and type(c) ~= 'userdata' then return nil end
+    local radius = tonumber(pt.radius) or 2.0
+    return {
+        { x = c.x, y = c.y, z = c.z },
+        { x = c.x + radius + 25.0, y = c.y, z = c.z },
+    }
+end
 
 --- phone_device_save: metadata of the phone it gives. The battery is set so aeterna_phonekit does not write its
 --- start battery for a new phone, a write that can land after the test's own save.

@@ -8,9 +8,9 @@ Locales.th['invkit.use.busy'] = 'กำลังใช้งานไอเท�
 Locales.th['invkit.use.cancelled'] = 'ยกเลิกการใช้ไอเทมแล้ว'
 Locales.th['invkit.key.open'] = 'เปิดตู้เก็บของส่วนตัว'
 Locales.th['invkit.noox'] = 'ไม่ได้เปิดใช้งาน ox_inventory ระบบ aeterna_invkit จึงไม่ทำงาน'
-Locales.th['invkit.selftest.stash_open.expect'] = 'ยืนที่จุดตู้เก็บของ แล้วเดินออกห่างจากจุดนั้น'
-Locales.th['invkit.selftest.phone_two_items.expect'] = 'พกไอเทม {fold} และ {slab}'
-Locales.th['invkit.selftest.phone_drop_active.expect'] = 'พกไอเทมโทรศัพท์สองเครื่อง แล้วทิ้งหนึ่งเครื่อง'
-Locales.th['invkit.selftest.phone_no_item.expect'] = 'ทิ้งหรือเก็บไอเทมโทรศัพท์ทุกเครื่องที่พกอยู่'
+Locales.th['invkit.selftest.stash_open.expect'] = 'เทสต์จะพาไปที่จุดตู้เก็บของและออกห่าง แล้วพากลับที่เดิม'
+Locales.th['invkit.selftest.phone_two_items.expect'] = 'เทสต์จะให้ไอเทม {fold} และ {slab} สักครู่'
+Locales.th['invkit.selftest.phone_drop_active.expect'] = 'เทสต์จะให้โทรศัพท์สองเครื่อง แล้วเอาคืนหนึ่งเครื่อง'
+Locales.th['invkit.selftest.phone_no_item.expect'] = 'เทสต์จะพักโทรศัพท์ของคุณไว้สักครู่ แล้วคืนให้'
 
 return Locales.th

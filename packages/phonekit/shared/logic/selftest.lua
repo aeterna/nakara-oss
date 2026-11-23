@@ -61,6 +61,18 @@ function P.shortName(owner, name)
     return name:sub(#owner + 2)
 end
 
+--- The model a fold test shows for its run (owner 2026-11-23: no manual steps; the held model goes back after):
+--- clamp_on_unfold a book; fold_keeps_screen the held model when it folds, else a book; ring_cover a fold.
+function P.testModel(short, held, cover)
+    if short == 'clamp_on_unfold' then return 'book' end
+    if short == 'ring_cover' then return 'fold' end
+    if short == 'fold_keeps_screen' then
+        local folds = held == 'book' or (held == 'fold' and cover ~= false)
+        return folds and held or 'book'
+    end
+    return nil
+end
+
 -- env = { battery, mode, lockScreen, cover, model (held), ped }. Returns the SKIP reason or nil.
 function P.skipReason(short, env)
     if not env.battery and (short == 'battery_drain_tick' or short == 'battery_zero_closes_all'
@@ -70,17 +82,10 @@ function P.skipReason(short, env)
     if short == 'battery_kvp_roundtrip' and env.mode == 'items' then return "Config.devices is 'items'" end
     if short == 'gate_items_silence_denies' and env.mode == 'single' then return "Config.devices is 'single'" end
     if short == 'open_close_prop' and not env.ped then return 'presser not spawned' end
-    if short == 'fold_keeps_screen' then
-        local folds = env.model == 'book' or (env.model == 'fold' and env.cover ~= false)
-        if not folds then return 'held model does not fold' end
-    end
-    if short == 'clamp_on_unfold' and env.model ~= 'book' then return 'held model is not book' end
+
     if short == 'eye_lock' and env.lockScreen ~= true then return 'Config.lockScreen is false' end
     if short == 'eye_fold_cover' and env.cover == false then return 'cover is off' end
-    if short == 'ring_cover' then
-        if env.model ~= 'fold' then return 'held model is not fold' end
-        if env.cover == false then return 'Config.cover is false' end
-    end
+    if short == 'ring_cover' and env.cover == false then return 'Config.cover is false' end
     return nil
 end
 

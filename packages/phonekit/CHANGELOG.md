@@ -6,6 +6,8 @@ All notable changes to `aeterna_phonekit` are documented here. The format follow
 
 ## Unreleased
 
+- `fold_keeps_screen`, `clamp_on_unfold` and `ring_cover` show the model they need for the run (`testModel`) instead of skipping on the held model (owner 2026-11-23: no manual steps). Agent: Claude Code - Claude Opus 5.5.
+
 Version 0.2.0 (ADR 0005 decisions 1, 2, 3, 5). Written by Claude Code - Claude Opus 5.5 (agent engineer).
 
 ### Added

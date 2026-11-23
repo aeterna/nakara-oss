@@ -10,8 +10,11 @@ local PREFIX = 'aeterna_radial.'
 
 -- An eye test opens the ring and waits this long for the person to act before it asks for the card.
 RadialSelftest.EYE_WATCH_MS = 50000
--- gamepad: with no pad input at all for this long, ask for the card (the person can press Skip).
-RadialSelftest.PAD_IDLE_MS = 8000
+-- gamepad: with no pad input at all for this long, the row skips (a stick cannot be driven).
+RadialSelftest.PAD_IDLE_MS = 3000
+-- open_pick / child_ring: the test drives the ring itself (owner 2026-11-23: no manual steps), one step per
+-- DRIVE_STEP_MS, slow enough for the person to see each highlight before the card asks.
+RadialSelftest.DRIVE_STEP_MS = 400
 -- server_recheck: how long the client waits for the test slot, then for the server's answer to the pick.
 RadialSelftest.SLOT_WAIT_MS = 2000
 RadialSelftest.DROP_WAIT_MS = 1500
@@ -147,6 +150,22 @@ function RadialSelftest.testSlots(name, t)
     return slots
 end
 
+--- The steps the test takes on the open ring: { op = 'hover' | 'pick', id } or { op = 'back' }.
+function RadialSelftest.drivePlan(name)
+    local plan = {}
+    if name == 'open_pick' then
+        for i = 1, 6 do plan[#plan + 1] = { op = 'hover', id = 'selftest_' .. i } end
+        plan[#plan + 1] = { op = 'hover', id = 'selftest_3' }
+        plan[#plan + 1] = { op = 'pick', id = 'selftest_3' }
+    elseif name == 'child_ring' then
+        plan[#plan + 1] = { op = 'hover', id = 'selftest_group' }
+        plan[#plan + 1] = { op = 'pick', id = 'selftest_group' }
+        for i = 1, 3 do plan[#plan + 1] = { op = 'hover', id = 'selftest_child_' .. i } end
+        plan[#plan + 1] = { op = 'back' }
+    end
+    return plan
+end
+
 --- The line shown after a test slot is picked.
 function RadialSelftest.pickedLine(t, label)
     return t('radial.selftest.picked', { label = label })
@@ -158,6 +177,8 @@ end
 function RadialSelftest.newEyeWatch(name)
     local sawOpen, sawChild, sawPad = false, false, false
     local w = {}
+
+    function w.sawPad() return sawPad end
 
     function w.observe(ev, elapsedMs)
         if type(ev) ~= 'table' then return false end
