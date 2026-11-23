@@ -10,7 +10,7 @@ the owner's plan artifact (Kit 0.2 plan, v16+). ADR: [0005](../adr/0005-starter-
 | W0 | ADR 0005, specs, spikes on kit-test | done, waits owner merge | #92, #95 |
 | W1 | uikit, notify, layout, hudkit, phonekit, invkit 0.2; testkit, radial, loading 0.1.0 | done, waits owner merge | #97 |
 | W2 | self-tests in every package, phonecall + camera 0.1.0, site + README | done, waits owner merge | #99 (draft, stacked on #97 ← #95 ← #92) |
-| W3 | one combined live test on kit-test + fixes | **menu run FAIL 0, no GAP but player B** (`r1-kku4`, 120 s); left: player B, visual pass in 3 presets | #99 head `e206ad88`+, reports below |
+| W3 | one combined live test on kit-test + fixes | **menu run FAIL 0, no GAP but player B** (`r1-kku4`, 120 s); 3-preset visual pass done (owner, 2026-11-23); left: player B | #99 head `e206ad88`+, reports below |
 | W4 | release (CHANGELOG version sections, core 0.1.0 → 0.2.0, combined zip, notes) | not started | — |
 
 ### W3 runs on kit-test (FXServer Enhanced b177, game build 3788, private, destructive gate on)
@@ -47,6 +47,8 @@ the owner's plan artifact (Kit 0.2 plan, v16+). ADR: [0005](../adr/0005-starter-
   answers eye cards.
 - `e206ad88` notify and uikit `motion_reduced` force the page's reduced-motion rules for the run (the card asked for a
   Windows setting nobody had turned on).
+- `e4dd6bd4` uikit, hudkit and phonekit pages apply the theme preset; they got only the owner stylesheet, so paper and
+  night-market never reached the menu, inventory panel, HUD or phone.
 - `05f949f5` invkit removes test phones by slot (ox matches metadata whole); stash point read as vector3; hudkit
   `voice_radio` names a dead tester.
 
@@ -54,10 +56,9 @@ the owner's plan artifact (Kit 0.2 plan, v16+). ADR: [0005](../adr/0005-starter-
 
 1. **Player B** for the 4 GAP rows (phonecall sms/call/busy, testkit eye_card_b): a second account joins kit-test and is
    invited from the menu by server id.
-2. **Owner's visual pass** in all three theme presets (asphalt, paper, night-market), plan row #17.
-3. Then W4: CHANGELOG version sections, core version 0.2.0, combined zip, release notes. The stack merges clean with
+2. Then W4: CHANGELOG version sections, core version 0.2.0, combined zip, release notes. The stack merges clean with
    dev after nakara-oss#104 (`git merge-tree`, 2026-11-23).
-4. After W3: take the W3 setup off kit-test (`kw3run`, `aeterna_w3probe`, the `# W3` cfg block, `.w3bak` configs, the
+3. After W3: take the W3 setup off kit-test (`kw3run`, `aeterna_w3probe`, the `# W3` cfg block, `.w3bak` configs, the
    stash point in invkit's config).
 
 Measured on kit-test: pma-voice works on Enhanced b177 (range, radio channel, radio transmit, the
@@ -80,7 +81,6 @@ tester dies of hunger in about an hour, `/revive`). ox_inventory `RemoveItem` ma
 ## Owner's pending decisions
 
 - Merge order #92 → #95 → #97 → #99 (each retargets the next to dev).
-- Visual pass in the three presets (plan #17).
 
 ## Way back
 
@@ -94,4 +94,5 @@ tester dies of hunger in about an hour, `/revive`). ox_inventory `RemoveItem` ma
 - Headless 106/106 after the camera fix; Q3 round fixed; owner asked for default keys (ADR 0004 d10 amended).
 - Owner menu runs `r2-mpkn` (FAIL 6) and `r2-dcgi` (FAIL 2: hudkit voice only).
 - 2026-11-23: coverage config on; voice probe; owner "too manual, make it auto" → every action row drives itself;
-  runs `r2-1zd3` → `r5-ibfn` (FAIL 4 → 0); motion_reduced fixed → `r1-kku4` FAIL 0, GAP only player B.
+  runs `r2-1zd3` → `r5-ibfn` (FAIL 4 → 0); motion_reduced fixed → `r1-kku4` FAIL 0, GAP only player B. Owner passed asphalt (in game) and paper +
+  night-market (local preview of the real NUI pages with the self-tests' messages) after the preset fix `e4dd6bd4`.
