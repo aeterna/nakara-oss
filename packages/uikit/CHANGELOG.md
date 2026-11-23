@@ -6,6 +6,8 @@ All notable changes to `aeterna_uikit` are documented here. The format follows
 
 ## Unreleased
 
+- The page gets the theme preset (`aeterna_theme_preset`: asphalt, paper, night-market) and sets `data-preset`, as ADR 0005 decision 9 says; it used to get only the owner stylesheet, so `paper` and `night-market` never reached it (found while preparing the owner's 3-preset check). Agent: Claude Code - Claude Opus 5.5.
+
 - `motion_reduced` forces the page's reduced-motion rules for its run (`selftest:motion`, `:root.reduce-motion`) instead of asking the tester to turn the Windows setting on (owner 2026-11-23: no manual steps). Agent: Claude Code - Claude Opus 5.5.
 
 ### Added

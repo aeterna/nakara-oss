@@ -474,6 +474,8 @@ describe('aeterna_hudkit', function()
                 callbacks[name] = fn
             end)
             local uiMessages = natives.spy('SendNUIMessage')
+            natives.stub_export('aeterna_core', 'themeHref', function() return nil end)
+            natives.stub_export('aeterna_core', 'themePreset', function() return 'night-market' end)
             resClient = resource.load_resource(DIR, 'client')
             assert.is_function(callbacks['ready'])
 
@@ -484,6 +486,14 @@ describe('aeterna_hudkit', function()
                     street = { w = 240, h = 48 },
                 },
             }, function() end)
+
+            -- live W3 2026-11-23: the theme preset never reached the HUD page
+            local theme
+            for _, call in ipairs(uiMessages) do
+                if type(call[1]) == 'table' and call[1].type == 'aeterna:theme' then theme = call[1] end
+            end
+            assert.is_truthy(theme, 'expected aeterna:theme to be sent on ready')
+            assert.are.equal('night-market', theme.preset)
 
             local foundSettingsApply = false
             local foundBars = false

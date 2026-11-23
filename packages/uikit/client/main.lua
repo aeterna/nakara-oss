@@ -71,12 +71,11 @@ local function syncThemeAndLocale()
             strings[k] = translate(k)
         end
         sendUi({ type = 'locale', strings = strings })
-        local ok, href = pcall(function()
-            return exports.aeterna_core:themeHref()
-        end)
-        if ok then
-            sendUi({ type = 'aeterna:theme', href = href })
-        end
+        -- the owner stylesheet when set, else the preset (ADR 0005 decision 9; the preset was never sent before
+        -- the live W3 run 2026-11-23)
+        local okH, href = pcall(function() return exports.aeterna_core:themeHref() end)
+        local okP, preset = pcall(function() return exports.aeterna_core:themePreset() end)
+        sendUi({ type = 'aeterna:theme', href = okH and href or nil, preset = okP and preset or 'asphalt' })
         localeReady = true
     end
 end

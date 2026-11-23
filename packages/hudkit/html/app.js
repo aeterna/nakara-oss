@@ -527,6 +527,13 @@
         if (!item || typeof item !== 'object') return;
 
         if (item.type === 'aeterna:theme') {
+            // an owner stylesheet wins; otherwise the preset selects tokens in theme.css (ADR 0005 decision 9)
+            const presets = ['asphalt', 'paper', 'night-market'];
+            if (item.href) {
+                document.documentElement.removeAttribute('data-preset');
+            } else {
+                document.documentElement.setAttribute('data-preset', presets.includes(item.preset) ? item.preset : 'asphalt');
+            }
             let link = document.getElementById('theme-override');
             if (item.href) {
                 if (!link) {

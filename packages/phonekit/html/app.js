@@ -1981,15 +1981,23 @@
         const data = event.data;
         if (!data || !data.type) return;
 
-        if (data.type === 'aeterna:theme' && data.href) {
+        if (data.type === 'aeterna:theme') {
+            // an owner stylesheet wins; otherwise the preset selects tokens in theme.css (ADR 0005 decision 9)
+            const presets = ['asphalt', 'paper', 'night-market'];
             let link = document.querySelector('link[data-aeterna-theme]');
-            if (!link) {
-                link = document.createElement('link');
-                link.rel = 'stylesheet';
-                link.setAttribute('data-aeterna-theme', 'true');
-                document.head.appendChild(link);
+            if (data.href) {
+                document.documentElement.removeAttribute('data-preset');
+                if (!link) {
+                    link = document.createElement('link');
+                    link.rel = 'stylesheet';
+                    link.setAttribute('data-aeterna-theme', 'true');
+                    document.head.appendChild(link);
+                }
+                link.href = data.href;
+            } else {
+                if (link) link.remove();
+                document.documentElement.setAttribute('data-preset', presets.includes(data.preset) ? data.preset : 'asphalt');
             }
-            link.href = data.href;
         } else if (data.type === 'locale' && data.strings) {
             locales = Object.assign(locales, data.strings);
             buildKeys();

@@ -6,6 +6,8 @@ All notable changes to `aeterna_hudkit` are documented here. The format follows
 
 ## Unreleased
 
+- The page gets the theme preset (`aeterna_theme_preset`: asphalt, paper, night-market) and sets `data-preset`, as ADR 0005 decision 9 says; it used to get only the owner stylesheet, so `paper` and `night-market` never reached it (found while preparing the owner's 3-preset check). Agent: Claude Code - Claude Opus 5.5.
+
 - `voice_radio` says when the presser is dead: pma-voice refuses radio then (found on a live run). Agent: Claude Code - Claude Opus 5.5.
 
 - Self-tests run with no manual steps (owner 2026-11-23): `voice_indicator` presses pma-voice's `cycleproximity` once round and judges the mode label (the microphone light is reported, not required); `voice_radio` joins channel 987 through pma-voice's `setRadioChannel` export, transmits with `+radiotalk`/`-radiotalk`, then goes back to the presser's channel; `seatbelt_event` seats an on-foot presser in a local test vehicle and puts them back. `oss.json` declares the three commands. Agent: Claude Code - Claude Opus 5.5.

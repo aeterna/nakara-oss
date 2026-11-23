@@ -803,10 +803,18 @@ describe('aeterna_phonekit 0.2 client under the harness', function()
             releaseFocus = function() return true end,
         })
         natives.stub_export('aeterna_core', 'themeHref', function() return nil end)
+        natives.stub_export('aeterna_core', 'themePreset', function() return 'paper' end)
         natives.stub_export('aeterna_notify', 'history', function() return {} end)
         resource.load_resource(DIR, 'client')
         local before = #natives.emitted('server', 'aeterna_phonekit:sv:close')
         natives.fire('aeterna_phonekit:cl:open', { apps = {} })
         assert.are.equal(before + 1, #natives.emitted('server', 'aeterna_phonekit:sv:close'))
+        -- live W3 2026-11-23: the theme preset never reached the phone page
+        local theme
+        for _, call in ipairs(natives.calls('SendNUIMessage')) do
+            if type(call[1]) == 'table' and call[1].type == 'aeterna:theme' then theme = call[1] end
+        end
+        assert.is_truthy(theme, 'expected aeterna:theme on open')
+        assert.are.equal('paper', theme.preset)
     end)
 end)

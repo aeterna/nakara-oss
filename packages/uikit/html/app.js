@@ -118,9 +118,17 @@ function hideLayer(layer, animate) {
     }, ms));
 }
 
-function applyThemeOverride(href) {
+// Theme: an owner stylesheet (aeterna_theme) wins; otherwise the preset selects tokens in theme.css (ADR 0005 d9).
+const THEME_PRESETS = ['asphalt', 'paper', 'night-market'];
+function applyThemeOverride(href, preset) {
     const existing = document.getElementById('aeterna-theme-override');
-    if (typeof href === 'string' && href.startsWith('nui://') && href.endsWith('.css')) {
+    const hasHref = typeof href === 'string' && href.startsWith('nui://') && href.endsWith('.css');
+    if (hasHref) {
+        document.documentElement.removeAttribute('data-preset');
+    } else {
+        document.documentElement.setAttribute('data-preset', THEME_PRESETS.includes(preset) ? preset : 'asphalt');
+    }
+    if (hasHref) {
         if (existing) {
             existing.setAttribute('href', href);
         } else {
@@ -1314,7 +1322,7 @@ window.addEventListener('message', (event) => {
     if (!msg || typeof msg.type !== 'string') return;
 
     if (msg.type === 'aeterna:theme') {
-        applyThemeOverride(msg.href);
+        applyThemeOverride(msg.href, msg.preset);
     } else if (msg.type === 'selftest:motion') {
         // the self-test forces the reduced-motion rules for its run (style.css / theme.css .reduce-motion)
         document.documentElement.classList.toggle('reduce-motion', msg.reduce === true);

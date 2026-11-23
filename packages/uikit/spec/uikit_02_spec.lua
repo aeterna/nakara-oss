@@ -459,8 +459,18 @@ describe('aeterna_uikit 0.2', function()
                 releaseFocus = function() return true end,
             })
             natives.stub_export('aeterna_core', 'themeHref', function() return nil end)
+            natives.stub_export('aeterna_core', 'themePreset', function() return 'paper' end)
             api = resource.load_resource(DIR, 'client').exports
             natives.fire_net('aeterna_uikit:cl:open', 1, { panelId = 'p1', title = 'Test', size = 'md', blocks = {} })
+        end)
+
+        it('sends the theme preset to the page (live W3 2026-11-23: paper never reached the menu)', function()
+            local theme
+            for _, call in ipairs(nuiMessages) do
+                if type(call[1]) == 'table' and call[1].type == 'aeterna:theme' then theme = call[1] end
+            end
+            assert.is_truthy(theme)
+            assert.are.equal('paper', theme.preset)
         end)
 
         it('drops a panelAction while paused and passes it after resume', function()
