@@ -184,8 +184,8 @@ Registered with `aeterna_core` on start; `aeterna_testkit` runs them from its me
 | `stale_pulse_is_off` | headless | n | A screen pulse older than `pulseTtlSec` drains like the screen off | `Config.battery = false` |
 | `gate_items_silence_denies` | mock | n | A made-up check built with the live gate's items options, which nobody answers, is denied with `phonekit.refused.nodevice` (the live gate is untouched) | `Config.devices = 'single'` |
 | `open_close_prop` | ped | n | Opening attaches the prop to the ped (none with `Config.animation = false`); closing removes it | presser not spawned |
-| `fold_keeps_screen` | ped | n | An app screen stays on top after fold and unfold | held model does not fold |
-| `clamp_on_unfold` | ped | n | The opened book frame stays inside the viewport | held model is not `book` |
+| `fold_keeps_screen` | ped | n | An app screen stays on top after fold and unfold (shows the held model if it folds, else a book, for the run) | never |
+| `clamp_on_unfold` | ped | n | The opened book frame stays inside the viewport (shows a book for the run) | never |
 | `exit_contract` | ped | n | ESC closes, an open within 300 ms of the close is ignored, the bound open key closes | never |
 | `eye_model_<id>` (8) | eye | n | The person checks each model's frame, status bar and home | never |
 | `eye_book_two_pane` | eye | n | Book opened wide: list left, detail right | never |
@@ -193,7 +193,7 @@ Registered with `aeterna_core` on start; `aeterna_testkit` runs them from its me
 | `eye_lock` | eye | n | The lock screen with one test card | `Config.lockScreen = false` |
 | `eye_control_centre` | eye | n | The control centre (opened by the test) | never |
 | `eye_battery_dead` | eye | y | The server sets the presser's battery to 0 (saved) before the card: the phone closes, the open is refused with the battery dead toast; the old value comes back when the test ends | `Config.battery = false` |
-| `ring_cover` | eye | n | Fold closed: a test call card with Answer and Decline on the cover | held model is not `fold`, or `Config.cover = false` |
+| `ring_cover` | eye | n | Fold closed: a test call card with Answer and Decline on the cover | `Config.cover = false` (shows a fold for the run) |
 | `contacts_hooks` | mock, client | n | `addContact` adds, `getContacts` lists it, `contactsChanged` fires once; the list is put back | no presser (GAP) |
 
 How the client rows work: they open the phone the normal way (open gate, focus), so a phone that cannot open (no phone item, a dead battery) fails the row with the refusal. To show another model or a fold they change the page only: nothing is sent to the server and nothing is saved, and the held phone comes back when `aeterna_core` ends the test. The test screens and the test call card exist only on the page; answering the test call card stops it locally. The eye cards are look-only: the card holds the cursor, so the test opens the control centre and unfolds the book itself.

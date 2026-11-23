@@ -244,9 +244,9 @@ Registered with `aeterna_core`'s self-test registry; `aeterna_testkit` only list
 | `aeterna_radial.registry` | headless | 1 | n | — | — |
 | `aeterna_radial.conditions` | headless | 1 | n | — | — |
 | `aeterna_radial.server_recheck` | ped | 1 | n | — | presser is in a vehicle (the test needs on foot; it asks to step out) |
-| `aeterna_radial.open_pick` | eye | 1 | n | A ring of 6 slots opens around the centre; hovering one highlights it and shows its label in the centre; picking "Test 3" closes the ring and a line "picked Test 3" appears | — |
-| `aeterna_radial.child_ring` | eye | 1 | n | Picking the group opens a second ring of 3; right click returns to the first ring with the group still highlighted | — |
-| `aeterna_radial.gamepad` | eye | 1 | n | Moving the left stick moves the highlight around the ring; accept picks; cancel closes | — (a presser with no gamepad presses "Skip": GAP) |
+| `aeterna_radial.open_pick` | eye | 1 | n | The test opens a ring of 6 slots and moves the highlight round (each label shows in the centre), then picks "Test 3": the ring closes and a line "picked Test 3" appears (hovers each test slot at 400 ms per step) | — |
+| `aeterna_radial.child_ring` | eye | 1 | n | The test picks the group: a second ring of 3 opens, then it goes back to the first ring with the group still highlighted (400 ms per step) | — |
+| `aeterna_radial.gamepad` | eye | 1 | n | With a gamepad: moving the left stick moves the highlight around the ring; accept picks; cancel closes (skipped without one) | no gamepad input after 3000 ms (`no gamepad input`) |
 
 `server_recheck` registers a temporary server slot with `when.vehicle = 'in'`, sends a pick while on foot and expects
 a drop, then removes the slot. Focus handover between resources is tested by `aeterna_core` itself. The eye tests register temporary slots under the owner `aeterna_radial` and remove them after.

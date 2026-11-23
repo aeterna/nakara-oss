@@ -675,8 +675,8 @@ is on; otherwise they SKIP. Eye tests rely on the focus overlay: the phone stays
 | `aeterna_phonekit.stale_pulse_is_off` | headless | 1 | n | — | `Config.battery = false` |
 | `aeterna_phonekit.gate_items_silence_denies` | mock | 1 | n | — | `Config.devices = 'single'` |
 | `aeterna_phonekit.open_close_prop` | ped | 1 | n | — | no ped (presser not spawned) |
-| `aeterna_phonekit.fold_keeps_screen` | ped | 1 | n | — | held model does not fold |
-| `aeterna_phonekit.clamp_on_unfold` | ped | 1 | n | — | held model is not `book` |
+| `aeterna_phonekit.fold_keeps_screen` | ped | 1 | n | — (shows the held model if it folds, else a book, for the run) | never |
+| `aeterna_phonekit.clamp_on_unfold` | ped | 1 | n | — (shows a book for the run) | never |
 | `aeterna_phonekit.exit_contract` | ped | 1 | n | — | never |
 | `aeterna_phonekit.eye_model_<id>` (one per model, 8) | eye | 1 | n | That model's frame at the bottom right: its size and shape, status bar with time and battery, home in its form (tiles or numbered list), no clipped edge | never |
 | `aeterna_phonekit.eye_book_two_pane` | eye | 1 | n | Book opened wide: list on the left, detail on the right, and the screen that was open before is still open | never |
@@ -684,7 +684,7 @@ is on; otherwise they SKIP. Eye tests rely on the focus overlay: the phone stays
 | `aeterna_phonekit.eye_lock` | eye | 1 | n | Lock screen with one card for a test badge; swipe up reaches home | `Config.lockScreen = false` |
 | `aeterna_phonekit.eye_control_centre` | eye | 1 | n | Pulling down from the status bar shows text size, 24-hour clock and the notification history, and no signal or brightness tiles | never |
 | `aeterna_phonekit.eye_battery_dead` | eye | 1 | y (saves 0, then restores) | After the test sets 0 %: the phone and any app on it close at once and a "battery dead" toast shows; opening is refused until the test restores the value | `Config.battery = false` |
-| `aeterna_phonekit.ring_cover` | eye | 1 | n | Fold closed: an incoming test card with Answer and Decline on the cover; Answer reports back without opening the phone | held model is not `fold`, or `Config.cover = false` |
+| `aeterna_phonekit.ring_cover` | eye | 1 | n | Fold closed: an incoming test card with Answer and Decline on the cover; Answer reports back without opening the phone | `Config.cover = false` (shows a fold for the run) |
 | `aeterna_phonekit.contacts_hooks` | mock, `side = 'client'` (contacts are the presser's client KVP; restored after) | 1 | n | — | no presser |
 
 `mock` tests change a value (battery, gate state) and restore it before they report. `ped` and `eye` tests run on the

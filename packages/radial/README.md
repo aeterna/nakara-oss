@@ -126,9 +126,9 @@ Self-test events are accepted only from `aeterna_core` (the invoking resource), 
 | `aeterna_radial.registry` | headless | server | A private registry: add, replace, `maxPerOwner`, `maxTotal`, a child of a child and a cross-owner parent refused, owner stop removes only its slots and flags |
 | `aeterna_radial.conditions` | headless | server | `vehicle` in/out/driver, `jobs` + `grade`, `jobs` false without `qbx_core`, `flags` all-true |
 | `aeterna_radial.server_recheck` | ped | presser | On core's `aeterna_core:selftestStarted` the server registers a server slot with `when.vehicle = 'in'` and sends it to the presser alone. The client, on foot, sends a pick for it straight to the server; the server must drop it. An accepted pick makes the server take the slot back, which the client sees as FAIL. The slot is removed on core's server-side `aeterna_core:selftestEnd`. SKIP while the presser is in a vehicle |
-| `aeterna_radial.open_pick` | eye | presser | Adds six slots "Test 1" … "Test 6" and opens the ring; after the person picks one (a feed line says "picked Test N") or after 50 s, the card asks for the look |
-| `aeterna_radial.child_ring` | eye | presser | Adds a group with three children and opens the ring; after the person opens the group and goes back, the card asks for the look |
-| `aeterna_radial.gamepad` | eye | presser | Adds six slots and opens the ring; after the person closes it with the pad (pick or cancel), the card asks. A close with mouse or keyboard does not count. With no pad input at all for 8 s, the card asks at once, and a presser without a gamepad presses Skip (GAP) |
+| `aeterna_radial.open_pick` | eye | presser | Adds six slots "Test 1" … "Test 6" and opens the ring, hovers each test slot (400 ms per step) and picks "Test 3" (a feed line says "picked Test 3"); then the card asks for the look |
+| `aeterna_radial.child_ring` | eye | presser | Adds a group with three children and opens the ring; the test picks the group, hovers the children (400 ms per step) and goes back; then the card asks for the look |
+| `aeterna_radial.gamepad` | eye | presser | Adds six slots and opens the ring; after the person closes it with the pad (pick or cancel), the card asks. A close with mouse or keyboard does not count. With no pad input after 3000 ms the row SKIPs with `no gamepad input` |
 
 The eye tests act before the card because the card takes focus and pauses the ring. Their slots belong to
 `aeterna_radial` and are removed, and the ring closed, when the test ends. The ring also shows the root slots of other

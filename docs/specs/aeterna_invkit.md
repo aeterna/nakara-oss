@@ -310,20 +310,21 @@ Kind `mock (client)` = `side = 'client'`: the test runs on the presser's client 
 | `stash_id` | headless | 1 | n | — | never |
 | `use_state_machine` | headless | 1 | n | — | never |
 | `phone_item_map` | headless | 1 | n | — | `Config.phone.enabled = false` |
-| `stash_open` | ped | 1 | n | Pressing the bound key at a stash point opens the personal stash; away from it, the refusal shows | ox_inventory not started, or no stash point configured |
+| `stash_open` | ped | 1 | n | The test moves you to a stash point and away from it, then back where you stood (the presser is moved to the first configured stash point, then 25 m + radius away, the bound key's open request is sent at each stop, then the presser is put back; timeout 30000 ms) | ox_inventory not started, or no stash point configured (`no stash point configured`) |
 | `item_use` | mock (client) | 1 | y | — (a test `registerUsable` on a test item gives the presser one, runs the progress bar, checks one is removed and `used` fires once, then removes the registration) | ox_inventory not started |
-| `phone_two_items` | ped | 1 | n | With a `phone_fold` and a `phone_slab` item carried, the control centre lists both; switching to the Fold shows the Fold with that item's battery | ox_inventory or `aeterna_phonekit` not started, or `Config.phone.enabled = false` |
-| `phone_drop_active` | ped | 1 | n | Dropping the active phone item puts the phone away at once; the other phone can then be opened | ox_inventory or `aeterna_phonekit` not started, or `Config.phone.enabled = false` |
-| `phone_no_item` | ped | 1 | n | With no phone item, opening the phone is refused with phonekit's "no phone" toast | ox_inventory or `aeterna_phonekit` not started, or `Config.phone.enabled = false` |
-| `phone_device_save` | mock | 1 | y | — (gives the presser a test phone item, fires `deviceSave` with battery 42 and fold `closed`, checks the item's metadata, then removes the item) | ox_inventory not started, or `Config.phone.enabled = false` |
+| `phone_two_items` | ped | 1 | y | The test gives you a `phone_fold` and a `phone_slab` item for a moment (tagged test phones, battery 100, own `phoneId`, tag `aeterna_selftest` = run id: one fold-mapped and one slab-mapped item) | ox_inventory or `aeterna_phonekit` not started, or `Config.phone.enabled = false` |
+| `phone_drop_active` | ped | 1 | y | The test gives you two phone items, then takes one back (two tagged slab test phones; the second is taken back after 4000 ms) | ox_inventory or `aeterna_phonekit` not started, or `Config.phone.enabled = false` |
+| `phone_no_item` | ped | 1 | y | The test puts your phone items aside for a moment, then gives them back (the presser's own phone items are set aside and given back with the same metadata on `selftestEnd`) | ox_inventory or `aeterna_phonekit` not started, or `Config.phone.enabled = false` |
+| `phone_device_save` | mock | 1 | y | — (gives the presser a test phone item with battery 100, so phonekit does not write its start battery after the test's save, fires `deviceSave` with battery 42 and fold `closed`, checks the item's metadata, then removes the item) | ox_inventory not started, or `Config.phone.enabled = false` |
 
 The three phone rows check invkit's half only: the presser's own inventory as invkit reads it (which phones it would
-offer, and that the dropped or missing item is gone). phonekit's control centre, Fold screen and "no phone" toast stay
-phonekit's own self-tests. Each carries an `expect` instruction telling the presser what to carry or drop.
+offer, and that the taken-back or set-aside item is gone). phonekit's control centre, Fold screen and "no phone" toast stay
+phonekit's own self-tests. The tester has nothing to carry or drop: the test does the act itself, and every item it gave
+is removed on `selftestEnd` (watch time 15000 ms, row timeout 25000 ms for the phone rows).
 `item_use` intercepts a use only for the presser's item tagged with the run id (`aeterna_selftest`); every other use,
 by anyone, goes to ox_inventory untouched.
 
-`item_use` and `phone_device_save` are destructive (ADR 0005 decision 7, W0 fix D4): they give a real player items
+`item_use`, `phone_device_save` and the three phone rows (`phone_two_items`, `phone_drop_active`, `phone_no_item`) are destructive (ADR 0005 decision 7, W0 fix D4): they give a real player items
 and write item metadata. They SKIP while core's destructive gate is closed, and they add and remove only the items
 they create, so the presser's own inventory ends as it began when they pass.
 
