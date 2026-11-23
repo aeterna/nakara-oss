@@ -400,7 +400,7 @@ when there is no presser (ADR 0005 decision 7, W0 fix D3). Plain `headless` / `m
 | `sound_plays` | eye | 1 | n | Each toast type plays its sound once; with the player's setting off, none plays | `Config.sound.enabled = false` |
 | `countdown_banner` | eye | 1 | n | A 30-second countdown banner counts down in `mm:ss` and disappears at zero | — |
 | `history_pull` | headless (client) | 1 | n | — | `Config.history.max = 0` |
-| `motion_reduced` | eye | 1 | n | With reduced motion on, toasts appear and disappear with no slide and no lifetime bar | — |
+| `motion_reduced` | eye | 1 | n | The test turns reduced motion on for itself (it forces the page's reduced-motion rules for the run, since the Windows setting cannot be switched): toasts appear and disappear with no slide and no lifetime bar | — |
 
 ### Done when (0.2)
 

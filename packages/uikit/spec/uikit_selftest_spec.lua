@@ -334,6 +334,18 @@ describe('aeterna_uikit self-tests: wrappers', function()
             assert.are.equal(0, #natives.emitted('server', 'aeterna_uikit:sv:action'))
         end)
 
+        it('motion_reduced forces reduced motion on the page for its run and takes it off at the end', function()
+            -- owner 2026-11-23: no manual steps; the card used to ask for the Windows setting
+            loadClient()
+            fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.motion_reduced', { kind = 'eye', side = 'client' })
+            natives.advance(100)
+            local on = lastUi('selftest:motion')
+            assert.is_truthy(on)
+            assert.is_true(on.reduce)
+            fireCore('aeterna_core:selftestEnd', 'r1-abcd', 'aeterna_uikit.motion_reduced')
+            assert.is_false(lastUi('selftest:motion').reduce)
+        end)
+
         it('tabs_switch: the page click reaches the owner with the tab id', function()
             loadClient()
             fireCore('aeterna_core:selftest', 'r1-abcd', 'aeterna_uikit.tabs_switch', { kind = 'ped', side = 'client' })

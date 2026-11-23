@@ -139,3 +139,5 @@
 @media (prefers-reduced-motion: reduce) {
     :root { --fast: 0ms; --enter: 0ms; }
 }
+
+:root.reduce-motion { --fast: 0ms; --enter: 0ms; }

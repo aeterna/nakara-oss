@@ -177,7 +177,7 @@ where client tests are GAP). Spec: `docs/specs/aeterna_notify.md` § Self-tests 
 | `sound_plays` | eye | Each type with the player's setting treated as on, then as off (the stored setting is not changed). SKIP when `Config.sound.enabled = false` |
 | `countdown_banner` | eye | A 30-second banner on this client only, shown again at the marks and hidden at zero; no server countdown starts |
 | `history_pull` | headless (client) | The history logic on a fresh instance and the shape of what the export returns. SKIP when `Config.history.max = 0` |
-| `motion_reduced` | eye | A short toast every 3.5 s |
+| `motion_reduced` | eye | Forces the page's reduced-motion rules for the run, then a short toast every 3.5 s |
 
 Test toasts and the test banner never enter the history and are removed when the test ends.
 

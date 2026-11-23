@@ -1315,6 +1315,9 @@ window.addEventListener('message', (event) => {
 
     if (msg.type === 'aeterna:theme') {
         applyThemeOverride(msg.href);
+    } else if (msg.type === 'selftest:motion') {
+        // the self-test forces the reduced-motion rules for its run (style.css / theme.css .reduce-motion)
+        document.documentElement.classList.toggle('reduce-motion', msg.reduce === true);
     } else if (msg.type === 'focus:paused') {
         setPaused(msg.paused === true);
     } else if (msg.type === 'locale' && msg.strings && typeof msg.strings === 'object') {

@@ -807,6 +807,9 @@ local function endSelftest()
         end
     end
     endCountdownView(COUNTDOWN_ID)
+    if st.forcedMotion then
+        sendUi({ type = 'selftest:motion', reduce = false })
+    end
 end
 
 -- A test toast: owned by notify, out of the history, silent unless `soundAllowedFlag` says otherwise.
@@ -842,7 +845,11 @@ function CLIENT_TESTS.stack_merge(st)
     ready(st)
 end
 
+-- The page takes reduced motion from the OS (prefers-reduced-motion), which no resource can switch. The test forces
+-- the same rules on the page for its run and takes them off at the end (owner 2026-11-23: no manual steps).
 function CLIENT_TESTS.motion_reduced(st)
+    st.forcedMotion = true
+    sendUi({ type = 'selftest:motion', reduce = true })
     ready(st)
     CreateThread(function()
         while not st.ended do

@@ -647,6 +647,9 @@ local function endSelftest()
     selftest = nil
     st.ended = true
     closeTestPanel(st)
+    if st.forcedMotion then
+        sendUi({ type = 'selftest:motion', reduce = false })
+    end
 end
 
 -- Opens the test panel like the server's open would: an open panel is replaced and its owner gets __close.
@@ -736,7 +739,11 @@ function CLIENT_TESTS.overlay_pauses(st)
 end
 
 -- The page only: the panel leaves and enters again, so the person sees both animations (or none).
+-- The page takes reduced motion from the OS (prefers-reduced-motion), which no resource can switch: the test forces
+-- the same rules for its run and takes them off at the end (owner 2026-11-23: no manual steps).
 function CLIENT_TESTS.motion_reduced(st)
+    st.forcedMotion = true
+    sendUi({ type = 'selftest:motion', reduce = true })
     reportSelftest(st.runId, st.name, 'ready', 'panel open')
     CreateThread(function()
         local shown = true

@@ -442,6 +442,24 @@ describe('aeterna_notify self-tests: wrappers', function()
             assert.are.equal(0, #exports.aeterna_notify:history())
         end)
 
+        it('motion_reduced turns reduced motion on for the page itself and back off at the end', function()
+            -- live W3 r4/r5: nobody could answer, the card asked for an OS setting the tester never turned on
+            -- (owner 2026-11-23: no manual steps)
+            loadClient()
+            fire('motion_reduced', 'eye')
+            natives.advance(100)
+            local on
+            for _, m in ipairs(ui) do if m.type == 'selftest:motion' then on = m end end
+            assert.is_truthy(on)
+            assert.is_true(on.reduce)
+            assert.are.equal('ready', reports[1].ok)
+            assert.is_true(count('toast:add') >= 1)
+            fireCore('aeterna_core:selftestEnd', 'r1-abcd', 'aeterna_notify.motion_reduced')
+            local last
+            for _, m in ipairs(ui) do if m.type == 'selftest:motion' then last = m end end
+            assert.is_false(last.reduce)
+        end)
+
         it('stack_merge sends one toast and five merges', function()
             loadClient()
             fire('stack_merge', 'eye')

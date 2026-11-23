@@ -6,6 +6,8 @@ All notable changes to `aeterna_uikit` are documented here. The format follows
 
 ## Unreleased
 
+- `motion_reduced` forces the page's reduced-motion rules for its run (`selftest:motion`, `:root.reduce-motion`) instead of asking the tester to turn the Windows setting on (owner 2026-11-23: no manual steps). Agent: Claude Code - Claude Opus 5.5.
+
 ### Added
 
 - Self-tests (0.2) registered with `aeterna_core`: `spec_limits`, `values_recheck`, `forged_action` (server), `panel_every_block`, `motion_reduced`, `overlay_pauses` (eye) and `tabs_switch`, `slider_keyboard`, `focus_lost_closes` (ped). Client tests open a test panel on the presser's client only; its actions never reach the server. Written by Claude Code - Claude Opus 5.5 (agent engineer).

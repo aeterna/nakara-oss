@@ -413,3 +413,16 @@ button:focus-visible {
         display: none !important;
     }
 }
+
+/* The same rules, forced by the motion_reduced self-test for its run (the OS setting cannot be switched). */
+:root.reduce-motion .toast-card,
+:root.reduce-motion .announce-box,
+:root.reduce-motion .motd-card,
+:root.reduce-motion .btn,
+:root.reduce-motion .close-btn {
+    transition: none;
+}
+
+:root.reduce-motion .toast-life {
+    display: none !important;
+}

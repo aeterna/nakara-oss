@@ -355,7 +355,7 @@ test may report SKIP; a ped or eye test with no person to run it reports GAP, no
 | `panel_every_block` | eye | 1 | n | An `md` panel with tabs, a searchable list, a slider, a table and an empty state, in the active theme preset; text sizes follow the theme | — |
 | `tabs_switch` | ped | 1 | n | Switching tabs changes the blocks below without a flicker; the server receives the tab id when `report = true` | — |
 | `slider_keyboard` | ped | 1 | n | Arrow keys move the slider one step; the value shown next to it matches what the server receives | — |
-| `motion_reduced` | eye | 1 | n | With reduced motion on in Windows, the panel appears and disappears with no fade or rise | — |
+| `motion_reduced` | eye | 1 | n | The test turns reduced motion on for itself (it forces the page's reduced-motion rules for the run, since the Windows setting cannot be switched): the panel appears and disappears with no fade or rise | — |
 | `focus_lost_closes` | ped | 1 | n | A second resource takes focus without the overlay option; the panel closes and the owner receives `__close` | — |
 | `overlay_pauses` | eye | 1 | n | While this eye card (an overlay) is up, the test panel behind it stays open and ignores clicks; after answering, the panel works again | — |
 

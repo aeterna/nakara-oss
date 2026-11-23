@@ -573,6 +573,9 @@ window.addEventListener('message', (event) => {
         if (!countdownState || !msg.countdownId || countdownState.id === msg.countdownId) {
             hideCountdown();
         }
+    } else if (msg.type === 'selftest:motion') {
+        // the self-test forces the reduced-motion rules for its run (style.css / theme.css .reduce-motion)
+        document.documentElement.classList.toggle('reduce-motion', msg.reduce === true);
     } else if (msg.type === 'settings') {
         document.documentElement.setAttribute('data-sound', msg.sound === true ? 'on' : 'off');
     } else if (msg.type === 'motd:show' && msg.motd) {

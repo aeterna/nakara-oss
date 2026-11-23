@@ -661,6 +661,9 @@ html, body {
     .motion-enter { transform: none; }
 }
 
+/* The same rule, forced by the motion_reduced self-test for its run (the OS setting cannot be switched). */
+:root.reduce-motion .motion-enter { transform: none; }
+
 /* 0.2 paused by a focus overlay: the screen stays, nothing under it takes the pointer. */
 .uikit-paused .layer,
 .uikit-paused .card,
