@@ -383,6 +383,14 @@ describe('aeterna_invkit self-tests', function()
             assert.is_true(math.abs(dx) > 2.0 + 5.0)
             assert.is_nil(ST.stashStops({}))
         end)
+
+        it('stash_open reads a vector3 point the way invkit does (live W3 r3-v5p2: "not checked at a stash point")', function()
+            local vec = setmetatable({ x = 195.0, y = -933.0, z = 30.7 }, {})
+            local asked = 0
+            local stops = ST.stashStops({ { coords = vec, radius = 2.0 } }, function() asked = asked + 1 return 'vector3' end)
+            assert.is_true(asked > 0) -- type() of a game vector3 is 'vector3', not 'table'
+            assert.are.same({ x = 195.0, y = -933.0, z = 30.7 }, stops[1])
+        end)
     end)
 
     describe('phone_device_save', function()
@@ -614,8 +622,11 @@ describe('aeterna_invkit self-tests', function()
                 for k, it in pairs(items) do
                     local md = it.metadata or {}
                     local match = it.name == item and (slot == nil or slot == k)
-                    for mk, mv in pairs(metadata or {}) do
-                        if md[mk] ~= mv then match = false end
+                    -- ox_inventory matches metadata as a whole (live W3 r3-v5p2: a { phoneId } remove missed a
+                    -- phone whose metadata also carried battery)
+                    if metadata then
+                        for mk, mv in pairs(metadata) do if md[mk] ~= mv then match = false end end
+                        for mk, mv in pairs(md) do if metadata[mk] ~= mv then match = false end end
                     end
                     if match then items[k] = nil; return true end
                 end
@@ -714,8 +725,7 @@ describe('aeterna_invkit self-tests', function()
             natives.advance(10000)
             assert.are.equal(1, #env.ox.removeCalls)
             local call = env.ox.removeCalls[1]
-            assert.is_string(call.metadata.phoneId)
-            assert.are_not.equal('own00001', call.metadata.phoneId)
+            assert.are.equal(2, call.slot) -- the slot of the phone it gave, found by that phone's phoneId
             assert.are.equal('own00001', env.inv[5][1].metadata.phoneId)
             assert.are.equal('mock', env.reports[1].ok)
         end)

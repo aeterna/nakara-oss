@@ -208,7 +208,8 @@ function HudSelftest.newVoiceWatch(name)
         return done()
     end
 
-    function w.verdict()
+    --- env = { dead = the presser is dead (pma-voice refuses radio then) } (optional).
+    function w.verdict(env)
         if not seen.available then
             return 'fail', 'the voice indicator was not shown while pma-voice is started'
         end
@@ -220,7 +221,12 @@ function HudSelftest.newVoiceWatch(name)
         local missing = {}
         if name == 'voice_radio' then
             if not seen.radio then missing[#missing + 1] = 'no radio channel joined' end
-            if not seen.radioActive then missing[#missing + 1] = 'no transmit seen' end
+            if not seen.radioActive then
+                missing[#missing + 1] = 'no transmit seen'
+                if type(env) == 'table' and env.dead then
+                    missing[#missing + 1] = 'the presser is dead (pma-voice refuses radio while dead)'
+                end
+            end
         else
             if seen.modeCount < 2 then missing[#missing + 1] = 'mode label did not change' end
         end

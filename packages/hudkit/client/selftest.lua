@@ -93,7 +93,9 @@ local function voiceDrive(runId, name)
         pcall(function() exports['pma-voice']:setRadioChannel(before) end)
     end
     if not stillRunning(runId, name) then return end
-    report(runId, name, watch.verdict())
+    local state = LocalPlayer and LocalPlayer.state or {}
+    local dead = state.isDead == true or (type(IsPlayerDead) == 'function' and nativeYes(IsPlayerDead(PlayerId())))
+    report(runId, name, watch.verdict({ dead = dead }))
 end
 
 -- seatbelt_event: a local test vehicle at the presser, seated as driver; nil when the presser already sits in one.

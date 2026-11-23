@@ -36,6 +36,19 @@ local function findTestPhone(src, map, names, id)
     return P.findById(slots, map, id), slots
 end
 
+-- Removes the test phone with `id` through its slot: ox_inventory matches metadata as a whole, and phonekit may
+-- have written battery or fold into it since (live W3 r3-v5p2). true when it was there and is gone.
+-- When the inventory cannot be read, it falls back to removing `item` by each whole metadata in `known`.
+local function removePhoneById(src, id, item, known)
+    local map = P.validateItemMap(phoneConfig().items)
+    local slot = findTestPhone(src, map, P.itemNames(map), id)
+    if slot then return A.removeSlot(src, slot.name, 1, tonumber(slot.slot)) end
+    for _, md in ipairs(known or {}) do
+        if A.removeTagged(src, item, 1, md) then return true end
+    end
+    return false
+end
+
 -- Gives the presser one phone item with a fresh serial, fires deviceSave for it as phonekit would, reads the
 -- item's metadata back, then removes that item by its serial. Only the item it created is written or removed.
 local function phoneDeviceSave(runId, name, src)
@@ -70,7 +83,10 @@ local function phoneDeviceSave(runId, name, src)
     end
 
     local metadata = slot and slot.metadata or nil
-    A.removeTagged(src, item, 1, { phoneId = id })
+    local given = ST.testPhoneMetadata(id)
+    local saved = ST.testPhoneMetadata(id)
+    saved.battery, saved.fold = ST.SAVE.battery, ST.SAVE.fold
+    removePhoneById(src, id, item, { given, saved })
     local gone = A.itemCount(src, item) == countBefore
     return ST.deviceSaveVerdict({ given = true, item = item, id = id, metadata = metadata, gone = gone })
 end
@@ -203,7 +219,7 @@ local function preparePhone(runId, name, short, src)
         SetTimeout(ST.PHONE_DROP_DELAY_MS, function()
             local g = prep.given[plan.drop]
             if phonePrepared[key] ~= prep or not g or not mayWrite(runId, name) then return end
-            if A.removeTagged(src, g.item, 1, { phoneId = g.metadata.phoneId }) then prep.given[plan.drop] = nil end
+            if removePhoneById(src, g.metadata.phoneId, g.item, { g.metadata }) then prep.given[plan.drop] = nil end
         end)
     end
 end
@@ -213,7 +229,7 @@ local function tearDownPhone(key)
     if not prep then return end
     phonePrepared[key] = nil
     for _, g in pairs(prep.given) do
-        A.removeTagged(prep.src, g.item, 1, { phoneId = g.metadata.phoneId })
+        removePhoneById(prep.src, g.metadata.phoneId, g.item, { g.metadata })
     end
     for _, a in ipairs(prep.aside) do
         if not A.addItem(prep.src, a.item, a.count, a.metadata) then

@@ -308,11 +308,12 @@ function InvkitSelftest.phonePlan(short, map, runId, newId)
 end
 
 --- stash_open: where the client moves the presser — the first point, then a spot away from it — or nil when no
---- point is configured. The presser goes back where they stood afterwards.
-function InvkitSelftest.stashStops(points)
+--- point is configured. The presser goes back where they stood afterwards. `typeFn` is type() for specs.
+function InvkitSelftest.stashStops(points, typeFn)
     local pt = type(points) == 'table' and points[1] or nil
-    local c = type(pt) == 'table' and pt.coords or nil
-    if type(c) ~= 'table' and type(c) ~= 'userdata' then return nil end
+    -- a game vector3's type() is 'vector3': read it the way invkit reads its points
+    local c = type(pt) == 'table' and InvkitLogic.readVec3(pt.coords, typeFn) or nil
+    if not c then return nil end
     local radius = tonumber(pt.radius) or 2.0
     return {
         { x = c.x, y = c.y, z = c.z },
