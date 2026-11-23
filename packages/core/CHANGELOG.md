@@ -6,6 +6,24 @@ All notable changes to `aeterna_core` are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- Self-test fields `kind`, `side`, `players`, `destructive`, `expect`, `ask`, `timeout`, `skipWhen`, and the result
+  states SKIP, GAP, MOCK and MISSING ([spec 0.2](../../docs/specs/aeterna_core.md#02-additions), ADR 0005).
+- Runs: `startRun`, `runStatus`, `cancelRun`, `busy`, `listSelftests`, `declareNoSelftests`; one run at a time; phases;
+  per-test timeouts; `runProgress` / `runDone` events.
+- Client-side and two-player tests (`aeterna_core:cl:selftest`, `:sv:selftestResult`, `:sv:eyeAnswer`), eye checks
+  answered through `answerEye`.
+- Destructive gate (`aeterna_core_allow_destructive`, refused on a server listed publicly).
+- Server-local and client-local registration events for resources with an optional edge, and `aeterna_core:hello`.
+- Focus overlay: `requestFocus({ overlay = true })`, `focusPaused` / `focusResumed`, `focusPausedOwner()`.
+- Theme presets: `themePreset()` (`aeterna_theme_preset`) and `AeternaCore.themeMessage()`.
+
+### Changed
+
+- `aeterna_core_selftest` runs only from the server console (source 0). Upgrade: run it from the console or txAdmin;
+  the `aeterna.core.selftest` ACE is no longer read.
+
 ## [0.1.0] - 2026-11-18
 
 ### Added

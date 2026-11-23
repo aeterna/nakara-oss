@@ -17,6 +17,7 @@ shared_scripts {
     'shared/logic/time.lua',
     'shared/logic/locale.lua',
     'shared/logic/focus.lua',
+    'shared/logic/selftest.lua',
     'shared/logic/kvp.lua',
     'import.lua',
 }
