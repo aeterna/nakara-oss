@@ -5,7 +5,7 @@ lua54 'yes'
 name 'aeterna_phonekit'
 author 'AETERNA'
 description 'Phone shell with built-in calculator, notes, contacts, settings, and an app API for other resources.'
-version '0.1.0'
+version '0.2.0'
 repository 'https://github.com/aeterna/nakara-oss'
 
 dependencies {
@@ -21,6 +21,12 @@ shared_scripts {
     'locales/th.lua',
     'shared/logic/calc.lua',
     'shared/logic/phone.lua',
+    'shared/logic/device.lua',
+    'shared/logic/battery.lua',
+    'shared/logic/exitkeys.lua',
+    'shared/logic/shell.lua',
+    'shared/logic/hooks.lua',
+    'shared/logic/selftest.lua',
 }
 
 client_scripts {
@@ -41,5 +47,6 @@ files {
     'html/fonts/OFL.txt',
     'html/style.css',
     'html/icons.js',
+    'html/devicelayout.js',
     'html/app.js',
 }

@@ -49,6 +49,7 @@ when they upgrade.
 | `Config.perCharacter` | `60` | Photos per character, 1–500; at the cap the shutter refuses with `camera.full` |
 | `Config.maxBytes` | `900000` | Largest accepted photo after decoding, 100 000 – 3 000 000 bytes |
 | `Config.maxTotalMB` | `1024` | All photos together; at the cap every shutter refuses with `camera.disk_full` and one `warn` per hour |
+| `Config.perAccountMB` | `200` | All photos of one player's characters together (by license, 1–1048576); at the cap the shutter and the upload refuse with `camera.full`, so one player with many characters cannot fill `maxTotalMB` for everyone |
 | `Config.quality` | `0.8` | JPEG quality passed to `screenshot-basic`, 0.5–0.95 |
 | `Config.cooldownMs` | `3000` | Minimum time between two shots of one player |
 
@@ -71,7 +72,7 @@ when started, else `lic:<license identifier>`, read on the server only.
 - This package's own NUI draws only a thin overlay: shutter hint, switch hint, close hint (uikit `keyHints` style, read
   from the player's bindings), and a counter `12 / 60`.
 - Controls, keyboard and gamepad through the base game's cellphone controls: select = shutter, the selfie control =
-  switch camera, cancel or ESC = close. The bound keys of `+aeterna_camera_shutter` and `+aeterna_camera_switch` (no default) also
+  switch camera, cancel or ESC = close. The bound keys of `+aeterna_camera_shutter` and `+aeterna_camera_switch` (no default key) also
   work.
 - Closing releases focus and returns the player to the game; the phone opens again with the player's own key, so
   phonekit's opening gate (`Config.ask`, devices) always applies.
@@ -167,7 +168,10 @@ included (`Content-Type: text/plain`). Busted case 2 checks it.
 The server checks that the id belongs to the player's current character, then overwrites `photos/<id>.jpg` with an
 empty file (`SaveResourceFile` with length 0: the safety rules forbid `os.remove`), removes the id from the index,
 frees its bytes from the total, and fires `aeterna_camera:removed`. The handler answers 404 at once. Empty files stay
-on disk; the README tells owners they can delete zero-byte files under `photos/` while the server is stopped.
+on disk, and the id goes on the free list (`free:v1`): the next photo reuses that file instead of creating a new one, so
+a shoot-and-delete loop does not add files. Only past 5000 free ids does a delete leave an unused empty file; the README
+tells owners they can delete zero-byte files under `photos/` while the server is stopped (then also delete the
+`free:v1` key, or the ids are reused anyway).
 
 ## Hook — forwarding photos elsewhere
 
@@ -206,7 +210,7 @@ reason `owner` (the player deleted it), `admin`, or the `removePhoto` reason.
 | `aeterna_camera:sv:upload` | client → server (latent) | `{ ticket: string = 32, pattern ^[0-9a-f]+$; data: string ≤ ceil(Config.maxBytes × 4 / 3) + 32 }` | 1 / 1000 ms |
 | `aeterna_camera:cl:viewfinder` | server → client | `{ count, cap }` | — |
 | `aeterna_camera:cl:capture` | server → client | `{ ticket: string = 32 }` | — |
-| `aeterna_camera:cl:shot` | server → client | `{ ok: boolean, id?: string, reason?: string ≤ 32 }` | — |
+| `aeterna_camera:cl:shot` | server → client | `{ ok: boolean, id?: string, reason?: string ≤ 32 }`; `reason` is a locale key, or the token `power_off` when the phone loses power, which closes the viewfinder and the gallery | — |
 | `aeterna_camera:cl:gallery` | server → client | `{ items: array ≤ 500 }` | — |
 | `aeterna_camera:saved` | server-local | see § Hook | — |
 | `aeterna_camera:removed` | server-local | `(id, reason)` | — |
@@ -237,22 +241,25 @@ Server-side resource KVP of `aeterna_camera`, values in JSON:
 
 | Key | Value |
 | --- | --- |
-| `aeterna_camera:photo:v1:<id>` | `{ who, ts, mode, bytes }` (keyed by photo id, not by player) |
+| `aeterna_camera:photo:v1:<id>` | `{ who, ts, mode, bytes, acct? }` (keyed by photo id, not by player; `acct` is the player's license, absent for source 0 or a player without one) |
 | `aeterna_camera:photos:v1:<who>` | array of ids, newest first, ≤ `Config.perCharacter` |
 | `aeterna_camera:total:v1` | integer bytes of all photos |
+| `aeterna_camera:acct:v1:<license>` | integer bytes of all photos of one account (every character of that player); no key at 0 |
+| `aeterna_camera:free:v1` | array of ids whose file is empty (a deleted photo), at most 5000; the next photo reuses one instead of drawing a new id |
 
 `<who>` is the character key: `cid:<character id>` or `lic:<license identifier>` (specs README § Names, server
 resource KVP keys).
 
-At start the server checks that `total` matches the sum over `photo:v1:*` (via `StartFindKvp`) and corrects it with
-one `warn` when it does not. Nothing in client KVP.
+At start the server checks that `total` and every `acct:v1:*` match the sums over `photo:v1:*` (via `StartFindKvp`)
+and corrects them with one `warn` when they do not. Nothing in client KVP.
 
 ## Locale keys
 
 `camera.app.camera`, `camera.app.gallery`, `camera.key.shutter`, `camera.key.switch`, `camera.hint.shutter`,
 `camera.hint.switch`, `camera.hint.close`, `camera.saved`, `camera.failed`, `camera.full`, `camera.disk_full`,
-`camera.slow`, `camera.unavailable`, `camera.gallery.empty`, `camera.gallery.delete`, `camera.gallery.delete_confirm`,
-`camera.admin.usage`, `camera.admin.removed`, `camera.admin.unknown`.
+`camera.slow`, `camera.unavailable`, `camera.gallery.empty`, `camera.gallery.delete`, `camera.gallery.delete_confirm`, `camera.gallery.cancel`,
+`camera.admin.usage`, `camera.admin.removed`, `camera.admin.unknown`, `camera.selftest.viewfinder`,
+`camera.selftest.shoot_and_view`.
 
 ## `oss.json` capabilities
 
@@ -322,6 +329,10 @@ Smoke (kit-test server):
 | `aeterna_camera.screenshot_detect` | headless | 1 | n | — | — |
 | `aeterna_camera.viewfinder` | eye | 1 | n | The phone closes and the game camera moves to the phone's view; switching shows your character's face; close returns you to the game with the phone put away | — |
 | `aeterna_camera.shoot_and_view` | eye | 1 | y | After the shutter a "Photo saved" toast shows; Gallery lists the new photo first, and it shows the scene without the overlay, HUD or radar | `screenshot-basic` not started |
+
+`shoot_and_view` is registered with `timeout = 15000`: the viewfinder, the capture, the latent upload (about 200 KB/s)
+and the gallery together can pass the 5000 ms default. The camera server opens the viewfinder for A on core's
+`aeterna_core:selftestStarted` and closes it on `selftestEnd`; the photo write goes through `AeternaCore.selftest.mayWrite`.
 
 `http_router` calls the handler's request function with fake request and response objects (the server has no HTTP
 capability to call itself). `store_roundtrip`, `caps` and `saved_hook` write a small JPEG generated at run time under

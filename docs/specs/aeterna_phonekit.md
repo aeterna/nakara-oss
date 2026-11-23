@@ -52,7 +52,7 @@ ensure aeterna_phonekit
 - Home: a grid of app tiles (icon + label), sorted by `order` then `id`. A tile can carry a badge count.
 - Back: the button at the bottom of the frame, Backspace, or right mouse button returns to the previous screen;
   ESC closes the phone from any screen.
-- Open with the key mapping `+aeterna_phonekit_open` or the command `aeterna_phonekit_open` (no default key). The
+- Open with the key mapping `+aeterna_phonekit_open` or the command `aeterna_phonekit_open` (default key `M`). The
   phone takes focus through `aeterna_core` with `keepGameInput = true` so the player can walk while it is open;
   mouse look is disabled while the cursor is over the frame. Losing focus closes the phone.
   0.2 addition: a focus **overlay** (for example the test kit's "did you see it?" card) does not take focus away. While
@@ -136,7 +136,7 @@ NUI → Lua callbacks: `tap {owner, id}`, `action {screenId, action, values}`, `
 ## Commands and keys
 
 `aeterna_phonekit_open` (chat or F8), `+aeterna_phonekit_open` / `-aeterna_phonekit_open` registered with literal
-names and mapped through `AeternaCore.key` with no default key.
+names and mapped through `AeternaCore.key` (`+aeterna_phonekit_open` defaults to `M`, `+aeterna_phonekit_fold` has no default key).
 
 ## Storage
 
@@ -251,7 +251,8 @@ is started (character id for the server KVP key, [Storage](#storage-02-additions
 
 Eight models. Sizes are design px at scale 1; the shell scales the whole frame by
 `fit = min(1, (vh − 0.048 × vh) / h, (vw − 0.048 × vh) / w)` (`vw`, `vh` = NUI viewport), so a frame never clips on a
-short or narrow screen, and then by the layout scale.
+short or narrow screen. The drawn scale is `min(layout scale, fit)` (§ Layout in 0.2), where `fit` here is computed
+without the `min(1, …)` cap, so a layout scale above 1 still works when the screen has room.
 
 | Model id | Neutral name | Frame (w × h) | Folds | Home | Calls | Battery × | Rank |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -466,8 +467,10 @@ the picked row.
   lump (a power bank item), capped at 100, and works on a dead phone.
 - Shown value = ceil(pct), so 0 % appears only when the phone is dead.
 - Saved when the shown value crosses a multiple of `saveStep`, at 0, at 100, on unload, on drop and on resource stop.
-- Warnings at each `warnAt` value going down, once each, never at 0: a phonekit banner while the phone is open, an
-  `aeterna_notify` toast while it is closed.
+- Warnings at each `warnAt` value going down, never at 0: a phonekit banner while the phone is open, an
+  `aeterna_notify` toast while it is closed. Each value fires once per crossing (after a recharge above it, the next
+  drain past it warns again); when one step crosses several values at once (`setBattery` 50 → 3), only the lowest
+  crossed value is sent.
 - **At 0:** the server sends `aeterna_phonekit:cl:power { on = false }`; the client closes every phonekit surface
   (shell, cover, app screens: the app on screen gets `__close`), fires the server-local
   `aeterna_phonekit:power` → `(src, { on = false })` so add-ons end calls and viewfinders, and refuses to open with
@@ -541,7 +544,8 @@ edge from notify to phonekit, ADR 0005 decision 2).
   Folding back therefore returns the phone to where the player put it. Phonekit applies every `apply` as in 0.1.
 - Without layout (or with layout 0.1), phonekit clamps its own frame on every size change and NUI resize: from
   `Config.position` (or the last applied place), it shifts the frame inside the viewport, never saving anything.
-- In every case the drawn scale is `min(place scale, fit)`, so a frame never clips.
+- In every case the drawn scale is `min(place scale, fit)`, with `fit` uncapped at 1 here (§ Models and frames), so a
+  frame never clips and a scale above 1 still applies when it fits.
 - **Upgrade note (0.1 saved scales).** A scale a player saved in 0.1 was chosen for a 320 × 640 frame. After the
   upgrade the same scale applies to the larger 0.2 frame (a `slab` is 1.27 × taller), capped by `fit` so it stays on
   screen. Players who want the 0.1 size set the phone's scale again in the layout editor (about 0.8 of the old value).
@@ -549,7 +553,7 @@ edge from notify to phonekit, ADR 0005 decision 2).
 
 ### Commands and keys (0.2)
 
-New permanent names, registered with literal names and mapped through `AeternaCore.key` with no default key
+New permanent names, registered with literal names and mapped through `AeternaCore.key` (`+aeterna_phonekit_open` defaults to `M`, `+aeterna_phonekit_fold` has no default key)
 (ADR 0004 decision 10):
 
 - `aeterna_phonekit_fold`, `+aeterna_phonekit_fold` / `-aeterna_phonekit_fold`: fold or unfold the held phone while
@@ -671,16 +675,16 @@ is on; otherwise they SKIP. Eye tests rely on the focus overlay: the phone stays
 | `aeterna_phonekit.stale_pulse_is_off` | headless | 1 | n | — | `Config.battery = false` |
 | `aeterna_phonekit.gate_items_silence_denies` | mock | 1 | n | — | `Config.devices = 'single'` |
 | `aeterna_phonekit.open_close_prop` | ped | 1 | n | — | no ped (presser not spawned) |
-| `aeterna_phonekit.fold_keeps_screen` | ped | 1 | n | — | held model does not fold |
-| `aeterna_phonekit.clamp_on_unfold` | ped | 1 | n | — | held model is not `book` |
+| `aeterna_phonekit.fold_keeps_screen` | ped | 1 | n | — (shows the held model if it folds, else a book, for the run) | never |
+| `aeterna_phonekit.clamp_on_unfold` | ped | 1 | n | — (shows a book for the run) | never |
 | `aeterna_phonekit.exit_contract` | ped | 1 | n | — | never |
 | `aeterna_phonekit.eye_model_<id>` (one per model, 8) | eye | 1 | n | That model's frame at the bottom right: its size and shape, status bar with time and battery, home in its form (tiles or numbered list), no clipped edge | never |
 | `aeterna_phonekit.eye_book_two_pane` | eye | 1 | n | Book opened wide: list on the left, detail on the right, and the screen that was open before is still open | never |
-| `aeterna_phonekit.eye_fold_cover` | eye | 1 | n | Fold closed: a small cover screen with time, battery and the waiting count; opening it shows the same screen as before | never |
+| `aeterna_phonekit.eye_fold_cover` | eye | 1 | n | Fold closed: a small cover screen with time, battery and the waiting count; opening it shows the same screen as before | `Config.cover = false` (reason `cover is off`) |
 | `aeterna_phonekit.eye_lock` | eye | 1 | n | Lock screen with one card for a test badge; swipe up reaches home | `Config.lockScreen = false` |
 | `aeterna_phonekit.eye_control_centre` | eye | 1 | n | Pulling down from the status bar shows text size, 24-hour clock and the notification history, and no signal or brightness tiles | never |
 | `aeterna_phonekit.eye_battery_dead` | eye | 1 | y (saves 0, then restores) | After the test sets 0 %: the phone and any app on it close at once and a "battery dead" toast shows; opening is refused until the test restores the value | `Config.battery = false` |
-| `aeterna_phonekit.ring_cover` | eye | 1 | n | Fold closed: an incoming test card with Answer and Decline on the cover; Answer reports back without opening the phone | held model is not `fold`, or `Config.cover = false` |
+| `aeterna_phonekit.ring_cover` | eye | 1 | n | Fold closed: an incoming test card with Answer and Decline on the cover; Answer reports back without opening the phone | `Config.cover = false` (shows a fold for the run) |
 | `aeterna_phonekit.contacts_hooks` | mock, `side = 'client'` (contacts are the presser's client KVP; restored after) | 1 | n | — | no presser |
 
 `mock` tests change a value (battery, gate state) and restore it before they report. `ped` and `eye` tests run on the

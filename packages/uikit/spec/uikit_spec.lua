@@ -6,6 +6,14 @@ local resource = require('helpers.resource')
 local HERE = debug.getinfo(1, 'S').source:match('^@(.*)/[^/]*$') or '.'
 local DIR = HERE .. '/..'
 
+-- Fires one of core's local events as aeterna_core (the handlers drop the same event from anyone else).
+local function fireCore(name, ...)
+    local prev = rawget(_G, 'GetInvokingResource')
+    rawset(_G, 'GetInvokingResource', function() return 'aeterna_core' end)
+    natives.fire(name, ...)
+    rawset(_G, 'GetInvokingResource', prev)
+end
+
 local function validFullSpec()
     return {
         title = 'Vehicle Shop',
@@ -478,6 +486,101 @@ describe('aeterna_uikit', function()
         end)
     end)
 
+    describe('7. slider (0.2, shared/logic/uikit.lua)', function()
+        local L
+        before_each(function()
+            natives.reset()
+            L = assert(loadfile(DIR .. '/shared/logic/uikit.lua'))()
+        end)
+
+        local function sliderSpec(overrides)
+            local b = { id = 'vol', type = 'slider', label = 'Volume', min = 0, max = 100, step = 5, value = 50, unit = '%' }
+            for k, v in pairs(overrides or {}) do
+                b[k] = v
+            end
+            return { title = 'Mixer', size = 'sm', blocks = { b } }
+        end
+
+        it('passes a slider with its range, step, value and unit', function()
+            local ok, err, clean = L.validateSpec(sliderSpec())
+            assert.is_true(ok)
+            assert.is_nil(err)
+            local b = clean.blocks[1]
+            assert.are.equal('slider', b.type)
+            assert.are.equal(0, b.min)
+            assert.are.equal(100, b.max)
+            assert.are.equal(5, b.step)
+            assert.are.equal(50, b.value)
+            assert.are.equal('%', b.unit)
+        end)
+
+        it('defaults the slider value to min when value is absent', function()
+            local s = { title = 'Mixer', size = 'sm', blocks = { { id = 'vol', type = 'slider', label = 'Volume', min = 10, max = 20, step = 1 } } }
+            local ok, _, clean = L.validateSpec(s)
+            assert.is_true(ok)
+            assert.are.equal(10, clean.blocks[1].value)
+        end)
+
+        it('fails when min is not below max, with blocks[1].min path', function()
+            local ok, err = L.validateSpec(sliderSpec({ min = 10, max = 10 }))
+            assert.is_false(ok)
+            assert.is_truthy(err and err:match('^blocks%[1%]%.min:'))
+        end)
+
+        it('fails when step is not positive, with blocks[1].step path', function()
+            local ok, err = L.validateSpec(sliderSpec({ step = 0 }))
+            assert.is_false(ok)
+            assert.is_truthy(err and err:match('^blocks%[1%]%.step:'))
+        end)
+
+        it('fails above 1000 steps and passes at exactly 1000', function()
+            local over, errOver = L.validateSpec(sliderSpec({ min = 0, max = 1001, step = 1 }))
+            assert.is_false(over)
+            assert.is_truthy(errOver and errOver:match('^blocks%[1%]%.step:'))
+            assert.is_true((L.validateSpec(sliderSpec({ min = 0, max = 1000, step = 1 }))))
+        end)
+
+        it('fails when the spec value is outside the range, with blocks[1].value path', function()
+            local ok, err = L.validateSpec(sliderSpec({ value = 150 }))
+            assert.is_false(ok)
+            assert.is_truthy(err and err:match('^blocks%[1%]%.value:'))
+        end)
+
+        local function sliderValues(v)
+            local _, _, spec = L.validateSpec(sliderSpec())
+            return L.validateValues(spec, { vol = v })
+        end
+
+        it('returns an on-grid, in-range slider value as a number', function()
+            local ok, err, clean = sliderValues(45)
+            assert.is_true(ok)
+            assert.is_nil(err)
+            assert.are.equal(45, clean.vol)
+        end)
+
+        it('drops a slider value off the step grid', function()
+            local ok, err = sliderValues(47)
+            assert.is_false(ok)
+            assert.is_truthy(err and err:match('^values%.vol:'))
+        end)
+
+        it('drops a slider value outside the range', function()
+            assert.is_false((sliderValues(105)))
+            assert.is_false((sliderValues(-5)))
+        end)
+
+        it('drops a slider value that is not a number', function()
+            assert.is_false((sliderValues('50')))
+        end)
+
+        it('accepts a float grid value within the float tolerance', function()
+            local _, _, spec = L.validateSpec(sliderSpec({ min = 0, max = 1, step = 0.1, value = 0.3 }))
+            local ok, _, clean = L.validateValues(spec, { vol = 0.3 })
+            assert.is_true(ok)
+            assert.are.equal(0.3, clean.vol)
+        end)
+    end)
+
     describe('6. resource scripts under harness', function()
         it('runs server exports, rate limits net events, and fires local action/menu events', function()
             natives.reset({ resource = 'aeterna_uikit', side = 'server', invoker = 'shop_res' })
@@ -613,7 +716,7 @@ describe('aeterna_uikit', function()
                 size = 'md',
                 blocks = {},
             })
-            natives.fire('aeterna_core:focusLost', 'aeterna_uikit', 'tok_1', 'preempted')
+            fireCore('aeterna_core:focusLost', 'aeterna_uikit', 'tok_1', 'preempted')
             local closeAction = natives.last_emitted('server', 'aeterna_uikit:sv:action')
             assert.is_truthy(closeAction)
             assert.are.equal('p1', closeAction.args[1].panelId)

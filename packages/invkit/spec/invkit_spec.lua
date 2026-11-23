@@ -445,6 +445,8 @@ describe('aeterna_invkit', function()
             })
 
             natives.spy('RegisterCommand')
+            -- 0.2: server/selftest.lua registers the self-tests with aeterna_core on start.
+            natives.stub_export('aeterna_core', 'addSelftest', function() return true end)
 
             local res = resource.load_resource(DIR, 'server')
             assert.are.equal(1, #warns)
@@ -522,6 +524,8 @@ describe('aeterna_invkit', function()
                 return true
             end)
 
+            -- 0.2: server/selftest.lua registers the self-tests with aeterna_core on start.
+            natives.stub_export('aeterna_core', 'addSelftest', function() return true end)
             local res = resource.load_resource(DIR, 'server', {
                 externals = { ['@aeterna_core/import.lua'] = DIR .. '/../core/import.lua' },
             })

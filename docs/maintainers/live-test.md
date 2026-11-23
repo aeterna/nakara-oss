@@ -66,6 +66,15 @@ facts, never values that identify a person:
 | A command handler is called as `(source, args, rawCommand)` | never give the handler a third parameter with another meaning; wrap it |
 | Every `fetch` that sends a request body logs `Uncaught TypeError: Invalid state: Reader released` (string, `Buffer`, `Uint8Array`, `Blob`, stream with `duplex: 'half'`, `new Request()`, `keepalive` all do; `GET` and a `POST` with no body do not). Measured 2026-11-21 on Node v26.3.0 inside FXServer | the response still arrives, but the line counts as an unhandled rejection in your resource. Send requests with a body through Node `https.request` / `http.request` instead (0 lines in the same test, 2026-11-22): `packages/rongroi/server/js/relay-http.js`, `packages/tickets/server/js/http-request.js`. Keep `require('https')` a plain top-level require so `safety` sees the destination |
 
+## FXServer Lua: facts measured on Enhanced b177 (Starter Kit 0.2 W3, 2026-11-22)
+
+| Fact | Consequence |
+|---|---|
+| Server BOOL natives return the **number `1`** for true and `false` for false: `IsPlayerAceAllowed`, `IsPrincipalAceAllowed`, `DoesEntityExist`, `SaveResourceFile` (measured with a throwaway probe printing `type(v)`) | `native() == true` is always false, so an ACE check refused an admin and every photo write looked failed. Use `AeternaCore.yes(v)` (`v == true or v == 1`) or a plain `if native() then`; never compare with `true`. Client natives were not measured; treat them the same way |
+| The GTA key settings menu (Settings → Key Bindings → FiveM) has no Thai glyphs | a Thai `RegisterKeyMapping` label shows as boxes; key labels stay English (`AeternaCore.keyLabel`) |
+| A server.cfg line runs before resources start, and a resource added after boot is unknown until `refresh` | a throwaway runner resource that reads a trigger file can run `refresh`, `stop`/`start` and console commands without rcon (kit-test `kw3run`, outside git) |
+
+
 ## Before you call the resource tested
 
 - every step the tester ran has a result line with its time, and the failing ones have a cause and a fix

@@ -92,7 +92,7 @@ default when there is none. When an owner resource stops, its elements leave the
 ## Editor
 
 Opened from the `aeterna_uikit` menu entry, the command `aeterna_layout`, or the key mapping `+aeterna_layout_edit`
-(no default key, ADR 0004 decision 10). Layout asks `aeterna_core` for focus (`cursor`, `keyboard`).
+(no default key). Layout asks `aeterna_core` for focus (`cursor`, `keyboard`).
 
 - Full-screen transparent layer. Each element gets a dashed stand-in box at its place and size with its label.
 - Drag with the mouse. The owner gets `apply` at most every 100 ms while dragging and once on drop, so the real
@@ -108,7 +108,7 @@ Opened from the `aeterna_uikit` menu entry, the command `aeterna_layout`, or the
 
 | Event | Direction | Schema | Rate limit |
 | --- | --- | --- | --- |
-| `aeterna_layout:cl:open` | server → client | none | — |
+| `aeterna_layout:cl:open` | server → client | none in 0.1; **0.2:** optional `{ mode, token? }` (see Reset outside the editor) | — |
 
 The server's only job is the menu entry: on `aeterna_uikit:menu` with `owner == 'aeterna_layout'` it sends
 `aeterna_layout:cl:open` to that player. There is no client → server event; layouts never leave the player's machine.
@@ -279,6 +279,26 @@ who cannot see an element can still recover without dragging. Upgrade note: `Con
 behaviour (the menu entry opens the editor directly); Reset all and Export / import are then reached only from the
 editor toolbar.
 
+How Reset all from the panel is guarded. `aeterna_layout:cl:open` now takes a payload `{ mode }`, where `mode` is
+`editor` or `share` (open the editor, `share` also shows the export text), or `arm` or `reset`, which carry a `token`
+(16 hex characters). Any other mode, extra key or bad token is refused with one `warn`.
+
+1. The player presses **Reset all**. The server makes a one-time token, keeps it for that player for 30 s, shows the
+   confirm row and sends `{ mode = 'arm', token }`. The client remembers it for 30 s.
+2. The player presses the confirm button. Only if the server's record is still within its 30 s, the server closes the
+   panel and sends `{ mode = 'reset', token }`.
+3. The client resets only when the token equals the armed one and is within 30 s, and only when the editor is not
+   open; the token works once. The reset clears every saved place (including those of resources that are not running),
+   moves every registered element to its default and saves at once.
+
+Back, close, any other panel action, a timeout or the player leaving clears the server's record, so a confirm after
+that does nothing.
+
+**Limit.** The client does not check where `aeterna_layout:cl:open` came from. The token stops a lone `reset` message
+or a replayed one, but another resource's client script on the same server can fire `arm` with a token of its own and then
+`reset` as local events, and so clear that player's saved layout. Layouts live only on that machine, so this is the same trust level as
+the owner-detection gap in the package README: a resource the server owner installed is trusted.
+
 ### Editor while paused
 
 When another resource takes focus through `aeterna_core`'s focus overlay (core 0.2, [aeterna_core.md](aeterna_core.md) §
@@ -304,7 +324,11 @@ Format: the prefix `aeterna-layout:1:` followed by JSON:
 | Place | same checks as the NUI `moved` callback; `hidden` boolean, default `false` |
 | Extra fields | anywhere: refused (no silent extras) |
 
-- Export writes every saved place (the KVP content), not defaults, so a short text means "mostly defaults".
+- Export writes the saved places of **registered elements only** (not defaults, not places kept for a resource that is
+  off), at most `Config.maxElements`, so a short text means "mostly defaults". Places beyond the cap are left out.
+- **Too long:** when the finished text would be longer than 8192 bytes, export is refused instead of
+  producing text that import would refuse. The client logs `export refused` and the page shows locale
+  `layout.export.tooLong` where the text would be (message `export:show { error }`).
 - Import runs in the editor session: a valid text replaces the session's places, the stand-ins move, Done saves,
   Cancel undoes. A text with any error is refused as a whole and shows the first error path (for example
   `places["aeterna_hudkit/status"].scale: out of range`); nothing changes.
@@ -317,7 +341,7 @@ Format: the prefix `aeterna-layout:1:` followed by JSON:
 
 ### NUI messages (0.2)
 
-Lua → NUI adds `editor:clamp {owner, id, place}`, `editor:presets {list}`, `export:show {text}`,
+Lua → NUI adds `editor:clamp {owner, id, place}`, `editor:presets {list}`, `export:show {text}` or `export:show {error}` (text too long to export),
 `import:result {ok, error?}`.
 NUI → Lua adds `preset {name}`, `snap {step}`, `import {text}` (≤ 8192 bytes, checked before parsing),
 `exportOpen {}`, `screen {w, h}` (positive integers ≤ 16384).
@@ -325,6 +349,8 @@ NUI → Lua adds `preset {name}`, `snap {step}`, `import {text}` (≤ 8192 bytes
 ### Commands and keys (0.2)
 
 No new command. The panel above opens from the existing menu entry.
+
+Locale key added for the refusal above: `layout.export.tooLong`.
 
 ### Storage (0.2)
 

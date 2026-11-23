@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>aeterna_camera</title>
+    <link rel="stylesheet" href="theme.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="vf" class="vf hidden" aria-hidden="true">
+        <div id="vf-counter" class="vf-counter"></div>
+        <div id="vf-hints" class="vf-hints"></div>
+    </div>
+
+    <section id="gallery" class="gallery hidden" role="dialog" aria-modal="true" aria-labelledby="gallery-title">
+        <header class="gallery-head">
+            <button id="gallery-back" class="icon-btn hidden" type="button"></button>
+            <h1 id="gallery-title" class="gallery-title"></h1>
+            <button id="gallery-close" class="icon-btn" type="button"></button>
+        </header>
+        <div id="gallery-grid" class="gallery-grid"></div>
+        <div id="gallery-empty" class="gallery-empty hidden">
+            <span id="gallery-empty-icon" class="gallery-empty-icon"></span>
+            <span id="gallery-empty-label"></span>
+        </div>
+        <div id="gallery-view" class="gallery-view hidden">
+            <img id="gallery-photo" class="gallery-photo" alt="">
+            <div id="gallery-actions" class="gallery-actions">
+                <button id="gallery-delete" class="btn btn-danger" type="button"></button>
+            </div>
+            <div id="gallery-confirm" class="gallery-confirm hidden" role="alertdialog" aria-labelledby="gallery-confirm-text">
+                <span id="gallery-confirm-text" class="gallery-confirm-text"></span>
+                <div class="gallery-confirm-buttons">
+                    <button id="gallery-confirm-cancel" class="btn" type="button"></button>
+                    <button id="gallery-confirm-delete" class="btn btn-danger" type="button"></button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script src="icons.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

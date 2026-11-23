@@ -164,7 +164,7 @@ describe('aeterna_notify', function()
             assert.are.equal('Saved', clean.title)
             assert.is_nil(clean.iconColor)
             assert.is_nil(clean.position)
-            assert.is_nil(clean.sound)
+            assert.is_true(clean.sound) -- 0.2: `sound` is our boolean; a non-boolean value keeps the default
             assert.is_nil(clean.onClose)
         end)
 
@@ -449,6 +449,7 @@ describe('aeterna_notify', function()
 
         it('runs client toasts, MOTD KVP persistence, and aeterna_layout protocol', function()
             natives.reset({ resource = 'aeterna_notify', side = 'client' })
+            natives.spy('RegisterCommand')
             natives.spy('SetNuiFocus')
             natives.spy('SetNuiFocusKeepInput')
             local nuiCallbacks = {}
@@ -527,7 +528,7 @@ describe('aeterna_notify', function()
             })
 
             -- Toast export and clear export
-            assert.is_true(api.notify({ id = 'job', title = 'Shift started', type = 'info' }))
+            assert.are.equal('job', api.notify({ id = 'job', title = 'Shift started', type = 'info' }))
             api.clear('job')
 
             -- MOTD shown on playerSpawned when seen ~= version
@@ -552,6 +553,7 @@ describe('aeterna_notify', function()
 
         it('does not open the MOTD when aeterna_core refuses focus', function()
             natives.reset({ resource = 'aeterna_notify', side = 'client' })
+            natives.spy('RegisterCommand')
             natives.spy('SetNuiFocus')
             natives.spy('SetNuiFocusKeepInput')
             local nuiMessages = natives.spy('SendNUIMessage')

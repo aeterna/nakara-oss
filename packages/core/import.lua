@@ -655,6 +655,13 @@ if IsDuplicityVersion() then
     end)
 end
 
+-- A BOOL native's answer as a Lua boolean. FXServer Enhanced b177 returns the number 1 for true and false for false
+-- (measured W3 2026-11-22: IsPlayerAceAllowed, IsPrincipalAceAllowed, DoesEntityExist, SaveResourceFile), so
+-- `native() == true` is always false there. Use this instead of comparing with true.
+function AeternaCore.yes(v)
+    return v == true or v == 1
+end
+
 function AeternaCore.can(src, action)
     if type(action) ~= 'string' or action:sub(1, 8) ~= 'aeterna.' or #action <= 8 then
         return false
@@ -666,7 +673,7 @@ function AeternaCore.can(src, action)
     if numSrc == nil or numSrc < 0 then
         return false
     end
-    return IsPlayerAceAllowed(src, action) == true
+    return AeternaCore.yes(IsPlayerAceAllowed(src, action))
 end
 
 --------------------------------------------------------------------------------
@@ -734,9 +741,21 @@ else
     end
 end
 
+-- The key every kit resource uses for its own client KVP: aeterna_<pkg>:<name>:v<version>. import.lua alone (other
+-- resources do not load core's shared/logic), so delete works the same in every package.
+local function kvpKeyOf(name, version)
+    local res = tostring(GetCurrentResourceName() or 'core')
+    local pkg = res:sub(1, 8) == 'aeterna_' and res:sub(9) or res
+    return 'aeterna_' .. pkg .. ':' .. tostring(name) .. ':v' .. tostring(version)
+end
+
 AeternaCore.kvp = {
     get = function(name, version, default)
         return kvpInstance.get(name, version, default)
+    end,
+    del = function(name, version)
+        DeleteResourceKvp(kvpKeyOf(name, version))
+        return nil
     end,
     set = function(name, version, value)
         return kvpInstance.set(name, version, value)
@@ -746,12 +765,56 @@ AeternaCore.kvp = {
     end,
 }
 
+-- Key labels are always English: the GTA key settings menu has no Thai glyphs (Thai showed as boxes on FXServer
+-- Enhanced, W3 2026-11-22), so a label never follows aeterna_locale.
+function AeternaCore.keyLabel(description)
+    if localeMod and localeMod.t then
+        return localeMod.t(Locales, 'en', description)
+    end
+    local keyStr = tostring(description or '')
+    return (Locales.en and Locales.en[keyStr]) or keyStr
+end
+
+-- Suggested default keys (ADR 0004 decision 10, amended 2026-11-22). Openers only, picked to stay clear of
+-- ox_inventory (TAB, 1-5), qbx_radialmenu (F1), pma-voice (Z), FiveM's push-to-talk (N) and chat (T).
+-- A default reaches only players who never bound the command; their own binding always wins.
+local DEFAULT_KEYS = {
+    ['+aeterna_uikit_menu'] = 'F5',
+    ['+aeterna_phonekit_open'] = 'M',
+    ['+aeterna_radial_open'] = 'F3',
+    ['+aeterna_invkit_open'] = 'F2',
+    ['+aeterna_testkit_menu'] = 'F9',
+    ['+aeterna_notify_action1'] = 'Y',
+    ['+aeterna_notify_action2'] = 'U',
+    ['+aeterna_phonecall_answer'] = 'PAGEUP',
+    ['+aeterna_phonecall_hangup'] = 'PAGEDOWN',
+}
+
+local function validKeyName(k)
+    return type(k) == 'string' and #k <= 16 and k:match('^[%u%d_]*$') ~= nil
+end
+
+-- The key a command is registered with: the owner's `setr aeterna_keys` wins ("off" = no defaults at all;
+-- "+cmd=KEY, +cmd=" sets or clears one), else the suggested default, else none. A malformed entry is ignored.
+function AeternaCore.defaultKey(command)
+    local raw = GetConvar('aeterna_keys', '')
+    if type(raw) == 'string' then
+        local trimmed = raw:match('^%s*(.-)%s*$')
+        if trimmed == 'off' then return '' end
+        for entry in (trimmed .. ','):gmatch('([^,]*),') do
+            local cmd, key = entry:match('^%s*(%+aeterna_[%w_]+)%s*=%s*(.-)%s*$')
+            if cmd == command and validKeyName(key) then return key end
+        end
+    end
+    return DEFAULT_KEYS[command] or ''
+end
+
 function AeternaCore.key(command, description)
     if type(command) ~= 'string' or command:sub(1, 9) ~= '+aeterna_' or #command <= 9 then
         AeternaCore.log.warn('refused key mapping: command must start with +aeterna_', { command = tostring(command) })
         return nil
     end
-    RegisterKeyMapping(command, AeternaCore.t(description), 'keyboard', '')
+    RegisterKeyMapping(command, AeternaCore.keyLabel(description), 'keyboard', AeternaCore.defaultKey(command))
     return nil
 end
 
@@ -787,25 +850,39 @@ if not IsDuplicityVersion() then
 
     if not AeternaCore._focusLostHandler then
         AeternaCore._focusLostHandler = AddEventHandler('aeterna_core:focusLost', function(owner, token, reason)
+            if GetInvokingResource() ~= 'aeterna_core' then return end
             if owner == GetCurrentResourceName() then
                 SetNuiFocusKeepInput(false)
                 SetNuiFocus(false, false)
             end
         end)
         -- Overlay: a paused holder clears its natives (its page stays) and gets its options back on resume.
+        -- Only core fires the focus events; any other invoker is ignored.
         AddEventHandler('aeterna_core:focusPaused', function(owner)
+            if GetInvokingResource() ~= 'aeterna_core' then return end
             if owner == GetCurrentResourceName() then
                 SetNuiFocusKeepInput(false)
                 SetNuiFocus(false, false)
             end
         end)
         AddEventHandler('aeterna_core:focusResumed', function(owner, token)
+            if GetInvokingResource() ~= 'aeterna_core' then return end
             local memo = AeternaCore._focusMemo
             if owner == GetCurrentResourceName() and memo and memo.token == token then
                 SetNuiFocus(memo.keyboard, memo.cursor)
                 SetNuiFocusKeepInput(memo.keepGameInput)
             end
         end)
+    end
+end
+
+-- Write guard for self-tests (server): call before any persistent write made inside a test. true only for a test
+-- declared destructive in a run whose gate is open; false when core cannot be reached.
+if IsDuplicityVersion() then
+    AeternaCore.selftest = AeternaCore.selftest or {}
+    function AeternaCore.selftest.mayWrite(runId, name)
+        local ok, allowed = pcall(function() return exports.aeterna_core:selftestMayWrite(runId, name) end)
+        return ok and allowed == true
     end
 end
 

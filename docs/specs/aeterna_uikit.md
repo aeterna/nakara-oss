@@ -89,8 +89,8 @@ If focus is lost (`aeterna_core:focusLost`), the prompt resolves as cancelled.
 | --- | --- | --- |
 | `confirm({ title, body?, confirm?, cancel?, danger? })` | boolean | Labels default to locale `uikit.confirm.ok` / `uikit.confirm.cancel`. |
 | `input({ title, fields = { {id, label, input, min?, max?, maxLen?, value?} } })` | table or nil | ≤ 6 fields; values checked as in panels. |
-| `progress({ label, duration, cancelable?, disable? })` | boolean (client-reported; see README § Payloads) | `duration` 300–60000 ms. `disable = { move, car, combat, mouse }` blocks those controls while it runs. Cancel key = the player's binding for `+aeterna_uikit_cancel` (no default) or ESC when the mouse is free. Returns `true` when it finished. Does not take focus. |
-| `skillCheck({ difficulty = 'easy'|'medium'|'hard', rounds = 1..5 })` | boolean (client-reported) | A moving marker and a target zone. The player presses the key bound to `+aeterna_uikit_skill` (no default), or Space (see the note below). |
+| `progress({ label, duration, cancelable?, disable? })` | boolean (client-reported; see README § Payloads) | `duration` 300–60000 ms. `disable = { move, car, combat, mouse }` blocks those controls while it runs. Cancel key = the player's binding for `+aeterna_uikit_cancel` (no default key) or ESC when the mouse is free. Returns `true` when it finished. Does not take focus. |
+| `skillCheck({ difficulty = 'easy'|'medium'|'hard', rounds = 1..5 })` | boolean (client-reported) | A moving marker and a target zone. The player presses the key bound to `+aeterna_uikit_skill` (no default key), or Space (see the note below). |
 | `keyHints(list)` / `clearKeyHints()` | nil | `list = { {key = 'command name', label = '≤ 30'} }`, ≤ 4 rows. Shows the player's real binding for that command via `GetControlInstructionalButton`; unbound shows locale `uikit.key.unbound`. |
 
 Note on `skillCheck`: while a check runs, Space is read through the jump control and jumping is disabled with
@@ -105,7 +105,7 @@ default input, so ADR 0004 decision 10 lists it as its one exception (with ESC, 
 | `removeMenuEntry(id)` | |
 | `showMenu(src)` | |
 
-The menu opens with the key mapping `+aeterna_uikit_menu` (no default) or the command `aeterna_uikit_menu`. It shows
+The menu opens with the key mapping `+aeterna_uikit_menu` (default key `F5`) or the command `aeterna_uikit_menu`. It shows
 only entries whose `ace` the player has. When the player picks one, the server checks again that the entry still
 exists and that the player has its `ace`, then fires the server-local event `aeterna_uikit:menu` → `(src, { owner, id })`;
 the owner opens its own panel.
@@ -133,8 +133,8 @@ validated with the same schemas before it is forwarded.
 
 ## Commands and keys
 
-`aeterna_uikit_menu` (chat or F8), `+aeterna_uikit_menu`, `+aeterna_uikit_cancel`, `+aeterna_uikit_skill` — all
-without a default key. Each `+`/`-` pair is registered with literal names in uikit's client code.
+`aeterna_uikit_menu` (chat or F8), `+aeterna_uikit_menu`, `+aeterna_uikit_cancel`, `+aeterna_uikit_skill` — only
+`+aeterna_uikit_menu` has a default key (`F5`). Each `+`/`-` pair is registered with literal names in uikit's client code.
 
 ## Icons
 
@@ -240,14 +240,14 @@ Rules (each failure makes `open` return `nil, '<path>: <rule>'` as in 0.1):
 | Block | Rule |
 | --- | --- |
 | `tabs` | One per spec. 2–6 `items`, ids follow the id rule and are unique in the whole spec. `value` must be one of them (default: the first). A block's `tab` must name an item of the spec's `tabs` block; `tab` on a spec without `tabs` fails. `tabs` itself cannot carry `tab`. |
-| `tabs` switching | Happens in the page, with no round trip. The active tab id comes back in `values[<tabs id>]`. With `report = true`, a switch also fires `aeterna_uikit:action` with `action = <tab item id>` so the owner can load that tab's content through `update`. |
-| `slider` | `min < max`, `step > 0`, `(max − min) / step ≤ 1000`, `value` inside the range (default `min`). Comes back as a number in `values`, re-checked on the server: outside the range or off the step grid (tolerance 1e-6 × step) is dropped. Keyboard: arrows move one step, Page Up / Page Down ten steps, Home / End jump to the ends. |
-| `table` | 1–6 `columns`, 0–50 `rows`, unique ids; `cells` keys must be column ids; a missing cell shows empty. `selectable = true` makes each row a button: picking it fires `action = <row id>` (row ids join the list of allowed actions). Header cells are not sortable in 0.2. |
+| `tabs` switching | Happens in the page, with no round trip. The active tab id comes back in `values[<tabs id>]`. Blocks on a tab that is not shown are only hidden, not removed: their values (field, toggle, select, slider) still come back in `values` on every action. With `report = true`, a switch also fires `aeterna_uikit:action` with `action = <tab item id>` so the owner can load that tab's content through `update`. |
+| `slider` | `min < max`, `step > 0`, `(max − min) / step ≤ 1000`, `value` inside the range (default `min`). A start `value` that is inside the range but off the step grid is accepted by `open`; the page snaps it to the nearest grid point (never past the last step) before it shows or sends it, so what comes back is always on the grid. Comes back as a number in `values`, re-checked on the server: outside the range or off the step grid (tolerance 1e-6 × step) is dropped. Keyboard: arrows move one step, Page Up / Page Down ten steps, Home / End jump to the ends. |
+| `table` | 1–6 `columns`, 0–50 `rows`, unique ids; `cells` keys must be column ids; a missing cell shows empty. `selectable = true` makes each row a button: picking it fires `action = <row id>` (row ids join the list of allowed actions). Column ids are unique inside the table and, like row ids, share the spec-wide id set, so a column id that repeats another id of the spec fails with `duplicate`. Header cells are not sortable in 0.2. |
 | `empty` (block) | `label` required. `action.id` joins the list of allowed actions. |
 | `list.search` | `search = { placeholder = '≤ 40, optional' }` or `true`. Filters the items in the page by `label` and `meta`, case-insensitive, no round trip. With search on, the item limit is 200 instead of 50; without it, 50 as in 0.1. |
 | `empty` (option) | `list` and `table` accept `empty = { icon?, label, body? }`, shown when `items` / `rows` is empty or the search matches nothing. |
 
-**Changed in 0.2 — `update`.** `patch` may also change `rows` (table), `value` of `tabs` and `slider`, and
+**Changed in 0.2 — `update`.** `patch` may also change `rows` (table), `value` of `tabs` and `slider` (out of range or off the step grid is refused), and
 `empty`. The 0.1 keys (`label`, `value`, `items`, `disabled`) behave as before. Reason: tables and tabs are useless
 if the owner cannot refresh them. Upgrade note: none; a 0.1 caller never sends the new keys.
 
@@ -302,7 +302,7 @@ eye card is an overlay and must be able to ask about a panel without closing it.
 
 | Text | Token |
 | --- | --- |
-| Table header, list `meta`, slider unit, key hints | `--fs-1` |
+| Table header, slider unit, key hints | `--fs-1` |
 | List item `meta`, empty-state body, field help | `--fs-2` |
 | Body text, list labels, table cells, buttons, tab labels | `--fs-3` |
 | Panel title, empty-state label | `--fs-4` |
@@ -313,6 +313,7 @@ The pixel value of each token lives in `theme.css` only.
 ### NUI messages (0.2)
 
 Lua → NUI: unchanged names; `panel:open` and `panel:update` carry the new block types.
+Lua → NUI: `focus:paused` with `paused = true | false` is new. It tells the page that a focus overlay holds focus (see Paused by a focus overlay): while `paused` is true the page drops every key and click, and a skill check's marker stops. It replaces the pause and resume actions that a 0.2 build first sent on `prompt:skill`. Both are internal NUI messages; no caller sees them.
 NUI → Lua: `panelAction` may carry `action = <tab item id>` (with `report = true`), `<row id>` (selectable table)
 or `<empty action id>`; the same validation applies.
 
@@ -354,7 +355,7 @@ test may report SKIP; a ped or eye test with no person to run it reports GAP, no
 | `panel_every_block` | eye | 1 | n | An `md` panel with tabs, a searchable list, a slider, a table and an empty state, in the active theme preset; text sizes follow the theme | — |
 | `tabs_switch` | ped | 1 | n | Switching tabs changes the blocks below without a flicker; the server receives the tab id when `report = true` | — |
 | `slider_keyboard` | ped | 1 | n | Arrow keys move the slider one step; the value shown next to it matches what the server receives | — |
-| `motion_reduced` | eye | 1 | n | With reduced motion on in Windows, the panel appears and disappears with no fade or rise | — |
+| `motion_reduced` | eye | 1 | n | The test turns reduced motion on for itself (it forces the page's reduced-motion rules for the run, since the Windows setting cannot be switched): the panel appears and disappears with no fade or rise | — |
 | `focus_lost_closes` | ped | 1 | n | A second resource takes focus without the overlay option; the panel closes and the owner receives `__close` | — |
 | `overlay_pauses` | eye | 1 | n | While this eye card (an overlay) is up, the test panel behind it stays open and ignores clicks; after answering, the panel works again | — |
 

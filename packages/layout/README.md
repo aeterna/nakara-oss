@@ -10,7 +10,7 @@ Coordinate-based HUD layout editor and client-side layout persistence for the AE
 
 - **Cross-resource coordinate protocol (โปรโตคอลพิกัดข้ามทรัพยากร):** Every FiveM NUI page runs in its own frame, so resources cannot drag each other's DOM directly. Owner resources describe their movable boxes (`id`, `w`, `h`, default `x`, `y`, `ax`, `ay`); `aeterna_layout` draws dashed stand-in boxes in its own frame while the editor is open and emits `aeterna_layout:apply` with `{ x, y, ax, ay, scale, hidden }` so each owner moves its own NUI or game-drawn element.
 - **Resolution-independent anchoring (การยึดตำแหน่งตามสัดส่วนหน้าจอ):** Positions are stored as screen fractions (`0–1`) relative to an anchor (`0`, `0.5`, `1` chosen from the nearest screen third on drop), clamped so the whole scaled element stays on screen across resolution changes.
-- **Client KVP persistence (บันทึกในเครื่องผู้เล่น):** Saved under `aeterna_layout:places:v1` via `AeternaCore.kvp` on **Done**, and only for elements moved from their default. Places of temporarily stopped resources are preserved.
+- **Client KVP persistence (บันทึกในเครื่องผู้เล่น):** Saved under `aeterna_layout:places:v1` via `AeternaCore.kvp` on **Done**, and only for elements moved from their default. Places of temporarily stopped resources are preserved. The snap step pick is kept in `aeterna_layout:prefs:v1`.
 - **Deliberate limits (ขอบเขตที่จำกัดไว้):** No element rotation, no separate width/height stretching, no server-side database or cross-machine sync, and no moving of base-game HUD components other than those managed by an owner resource (such as the minimap in `aeterna_hudkit`).
 
 ## Install / การติดตั้ง
@@ -37,6 +37,9 @@ Configured in `config.lua` (no convars):
 | `Config.scale.min` / `.max` / `.step` | `0.5` / `2.0` / `0.05` | Allowed scale range and increment in the editor / ช่วงขนาดต่ำสุด สูงสุด และขั้นการปรับขนาด |
 | `Config.maxElements` | `64` | Maximum registered elements before refusing with a `warn` / จำนวนองค์ประกอบสูงสุดที่ลงทะเบียนได้ |
 | `Config.menu` | `true` | Adds the "Edit HUD layout" entry to the `aeterna_uikit` menu / เพิ่มรายการแก้ไขเลย์เอาต์ในเมนู `aeterna_uikit` |
+| `Config.menuPanel` | `true` | The menu entry opens a panel with Edit, Reset all and Export / import; `false` = the 0.1 behaviour (opens the editor) / เปิดแผงเมนู แก้ไข · รีเซ็ตทั้งหมด · ส่งออก/นำเข้า |
+| `Config.snapSteps` | `{ 8, 16, 32 }` | Snap steps offered in the editor; `Config.snap` stays the default until the player picks / ระยะเส้นตารางที่เลือกได้ |
+| `Config.presets` | `default`, `compact`, `centered` | Preset layouts (up to 8): name (≤ 24, `^[%w_%-]+$`) → `{ ["<owner>/<id>"] = { x, y, ax, ay, scale } }`. Unnamed elements go to their default; a preset never sets `hidden`. Label: locale key `layout.preset.<name>` or the name / ชุดจัดวางสำเร็จรูป |
 
 Shared convars read via `aeterna_core`: `aeterna_locale` (`en` or `th`, set with `setr`), `aeterna_theme` (`nui://<resource>/<path>.css`, set with `setr`).
 
@@ -75,7 +78,7 @@ local top  = place.y * screenHeight - place.ay * height * place.scale
 
 ## Commands and keys / คำสั่งและปุ่มลัด
 
-All key mappings ship with **no default key** (ADR 0004 decision 10). Players bind them in **Settings → Key Bindings → FiveM**:
+The key mapping ships with **no default key**. Players bind it in **Settings → Key Bindings → FiveM**; the server owner can set a key for it with `setr aeterna_keys` (see the `aeterna_core` README):
 
 - `aeterna_layout` — Open the HUD layout editor (console / chat)
 - `+aeterna_layout_edit` / `-aeterna_layout_edit` — Open the HUD layout editor (key binding)
@@ -85,6 +88,14 @@ Inside the editor:
 - **Tab / Shift+Tab** cycles between elements; **Arrow keys** nudge by 1 px (**Shift + Arrow** by 10 px); **`+` / `-`** adjusts scale.
 - **Enter** confirms **Done** when no toolbar button has focus.
 - **ESC** or **Cancel** restores all elements to where they were when the editor opened.
+- **Preset** select applies a preset to the session; **Grid snap** select picks Off / 8 / 16 / 32 px (kept on the player's machine); the grid shows while dragging unless snap is off or Shift is held.
+- **Export / import** shows the saved places of the elements registered now as one line of text (`aeterna-layout:1:…`, select it and press Ctrl+C) and takes such a line back; an import moves the stand-ins, **Done** saves and **Cancel** undoes. The text never leaves the player's machine through this resource.
+
+The `aeterna_uikit` menu entry opens a small panel (**Edit**, **Reset all** after a confirm, saved at once, and **Export / import**). Pressing Reset all arms the client with a one-time token; the reset runs only when the confirm sends that token back within 30 s, so a local event or a replayed message cannot clear a layout. The command and the key mapping still open the editor directly.
+
+### Keeping elements on screen (0.2)
+
+The page reports its size; when an element grows (a new `w`/`h`, a bigger scale or a smaller screen) layout moves its anchor point just far enough to keep the whole box on screen and sends `aeterna_layout:apply` with that place. The clamped place is not saved, so the element returns to the saved place when it shrinks again. A box larger than the screen starts at its top-left corner.
 
 ## Support scope / ขอบเขตการรองรับ
 
@@ -104,7 +115,7 @@ What this resource is allowed to do to your server, from [`oss.json`](oss.json).
 | Convars read | none |
 | Convars written | none |
 | Server net events (accepted from clients) | none |
-| Client net events (accepted from the server) | `aeterna_layout:cl:open` |
+| Client net events (accepted from the server) | `aeterna_layout:cl:open` (optional `{ mode = 'editor' \| 'share' }`, or `{ mode = 'arm' \| 'reset', token }` for Reset all from the panel) |
 | NUI | yes |
 | Database tables | none (no DDL) |
 | Files written | none |
@@ -120,12 +131,38 @@ sha256sum -c SHA256SUMS --ignore-missing
 
 Then read the capability table above (or `oss.json` inside the zip).
 
+## Self-tests (0.2)
+
+Registered with `aeterna_core` as `aeterna_layout.<name>` and run from `aeterna_testkit` (or the core console command,
+where client tests are GAP). Spec: `docs/specs/aeterna_layout.md` § Self-tests (0.2).
+
+| Name | Kind | What it checks |
+| --- | --- | --- |
+| `placement_math` | headless | Clamp when an element grows (320 → 780 px), is larger than the screen, scales to 2.0 or the screen shrinks (3440 → 1280); the saved place never changes |
+| `import_validate` | headless | 8193 bytes, a wrong prefix, `v = 2`, 65 entries, a bad key, a scale out of range and extra fields are refused; an export round-trips |
+| `clamp_on_grow` | mock (client) | A test element at the right edge is added again twice as wide, checked on screen, then removed |
+| `preset_apply` | eye | The editor alternates every 3 s between `compact` and Cancel |
+| `grid_drag` | ped | The page drags a test element without and with Shift: grid shown and on it, then no grid and off it |
+| `export_import` | ped | The export box holds one line; a moved test element goes back after importing it |
+| `export_copy` | ped | The page runs the copy command on the export box, puts the export text into the import box from code and presses Import |
+| `reset_from_menu` | ped, destructive | Clears the presser's saved layout through the client half of Reset all (the server's panel and token are not exercised); every element is at its default |
+
+Client tests use test elements owned by `aeterna_layout` and refuse to run while the player has the editor open.
+While a test holds the editor, Done acts as Cancel and a snap pick is shown but not saved, and the test cancels the
+session when it ends, so no test except `reset_from_menu` writes the saved layout or the snap preference.
+`grid_drag` and `export_copy` have a 10 s timeout for the page drives. `reset_from_menu` runs only when
+`aeterna_core_allow_destructive` is on and the server is not listed publicly; it prints the layout as import text to
+the F8 console before it clears it.
+
+Core's local events (`aeterna_core:selftest`, `selftestEnd` and the focus events) count only when `aeterna_core`
+fired them, and open test state is torn down when `aeterna_core` stops.
+
 ## Tests
 
 From the repository root:
 
 ```sh
-busted --lpath='./packages/devkit/busted/?.lua;./?.lua;./?/init.lua' --pattern=_spec packages/layout/spec
+busted --config-file=.busted packages/layout/spec
 ```
 
 ## License

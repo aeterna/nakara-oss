@@ -1,5 +1,5 @@
 -- Pure self-test rules for aeterna_core 0.2: field checks, result states, merge, phase order, skips, gate,
--- run lock and MISSING rows. No natives.
+-- run lock, MISSING rows, the client-test started ctx and the write guard. No natives.
 
 AeternaCoreLogic = AeternaCoreLogic or {}
 
@@ -82,6 +82,7 @@ function M.skipFor(test, stateOf)
 end
 
 -- Judges one result. report: { ok, detail, restored, wrote, guard, timeout, stopped, answer, gap }.
+-- guard = true: the test called the write guard (judging rule 3).
 -- Returns state, reason.
 function M.fold(test, report)
     if type(report) ~= 'table' then return 'FAIL', 'no result' end
@@ -135,6 +136,25 @@ function M.order(tests)
         if #groups[p].tests > 0 then out[#out + 1] = groups[p] end
     end
     return out
+end
+
+-- True when the runner sends the test to players: ped, eye, side = 'client', and every two-player test.
+function M.toClients(t)
+    return t.side == 'client' or t.players == 2
+end
+
+-- ctx of the server-local aeterna_core:selftestStarted. b only for a two-player test.
+function M.startedCtx(t, a, b)
+    return { kind = t.kind, side = 'client', a = a, b = t.players == 2 and b or nil, destructive = t.destructive == true }
+end
+
+-- Write guard for one run item (fired = sent to its owner, done = ended). gateOpen is the run's gate.
+-- Returns allowed, failReason: failReason is set only when the in-flight test is not declared destructive.
+-- An unknown test, one not fired yet, or one that already ended returns false and no reason.
+function M.mayWrite(item, gateOpen)
+    if type(item) ~= 'table' or not item.fired or item.done then return false end
+    if item.destructive ~= true then return false, 'undeclared destructive' end
+    return gateOpen == true
 end
 
 -- Destructive gate. allowDestructive is the convar string; svMaster1 is the convar, nil when unset.

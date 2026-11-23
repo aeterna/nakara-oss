@@ -5,7 +5,10 @@
   "capabilities": {
     "http": [],
     "commands": [
-      "aeterna_layout"
+      "aeterna_layout",
+      "cycleproximity",
+      "+radiotalk",
+      "-radiotalk"
     ],
     "registeredCommands": [
       "aeterna_hudkit_settings",

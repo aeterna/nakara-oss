@@ -1,0 +1,4 @@
+/* Your overrides for aeterna_loading. Loaded after theme.css and style.css, and kept across upgrades.
+   Example (the second selector makes the override beat a preset too):
+   :root, :root[data-preset] { --accent: #c2410c; }
+   A font: put an OFL .woff2 and its licence under html/custom/ and add an @font-face here. */

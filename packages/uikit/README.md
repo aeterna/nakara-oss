@@ -8,8 +8,9 @@ Server-owned UI panels, client prompts (`confirm`, `input`, `progress`, `skillCh
 
 ## What it does / การทำงาน
 
-- **Server-owned panels (แผงข้อมูลฝั่งเซิร์ฟเวอร์):** The server sends a validated spec (`sm` / `md` / `lg`, up to 40 blocks: `text`, `list`, `field`, `toggle`, `select`, `progress`, `divider`, `buttons`). The client renders it in the Asphalt theme and returns only button/list actions and validated field values from that spec via the server-local event `aeterna_uikit:action`.
-- **Client prompts (หน้าต่างโต้ตอบฝั่งผู้เล่น):** `confirm`, `input`, `progress`, `skillCheck`, and `keyHints` / `clearKeyHints`. Focus is acquired and released through `aeterna_core`; losing focus automatically cancels the active panel or prompt.
+- **Server-owned panels (แผงข้อมูลฝั่งเซิร์ฟเวอร์):** The server sends a validated spec (`sm` / `md` / `lg`, up to 40 blocks: `text`, `list`, `field`, `toggle`, `select`, `progress`, `divider`, `buttons`, and since 0.2 `tabs`, `slider`, `table`, `empty`). The client renders it in the active theme and returns only button/list actions and validated field values from that spec via the server-local event `aeterna_uikit:action`.
+- **0.2 blocks (บล็อกใหม่ใน 0.2):** `tabs` (2–6 tabs, one per spec; any block may carry `tab = '<tab id>'`; with `report = true` a switch fires an action with the tab id), `slider` (`min`, `max`, `step`, `value`, `unit?`; arrows one step, Page Up / Page Down ten steps, Home / End), `table` (≤ 6 columns, ≤ 50 rows, `selectable = true` turns row ids into actions), `empty` (icon, label, body, one optional action button). `list` accepts `search = true | { placeholder }` (up to 200 items with search, 50 without) and `list`/`table` accept `empty = { icon?, label, body? }`. Top-level `detailOf` / `detailItem` mark a screen as the detail of a list item; uikit's own window ignores them. Panels and prompts fade in and out, with no movement under reduced motion; text sizes follow the theme type tokens.
+- **Client prompts (หน้าต่างโต้ตอบฝั่งผู้เล่น):** `confirm`, `input`, `progress`, `skillCheck`, and `keyHints` / `clearKeyHints`. Focus is acquired and released through `aeterna_core`; losing focus automatically cancels the active panel or prompt. Since 0.2, a focus overlay from another resource only pauses them: the panel or prompt stays on screen and ignores input until the overlay releases (a progress bar keeps running, a skill check's marker stops).
 - **Shared menu (เมนูรวม):** Other resources register menu entries with optional ACE permission filters via `addMenuEntry`. Entries are automatically removed if the owning resource stops.
 - **Deliberate limits (ขอบเขตที่จำกัดไว้):** No drag-and-drop layout editor (handled by `aeterna_layout`), no toast notifications (`aeterna_notify`), and no world markers or 3D text.
 
@@ -39,7 +40,7 @@ Shared convars read via `aeterna_core`: `aeterna_locale` (`en` or `th`, set with
 | Export | Returns | Description |
 |---|---|---|
 | `exports.aeterna_uikit:open(src, spec)` | `panelId` or `nil, err` | Validates `spec` and opens a panel for player `src` (replacing any open panel with reason `replaced`). |
-| `exports.aeterna_uikit:update(src, panelId, patch)` | `boolean` | Updates `label`, `value`, `items`, or `disabled` on blocks of an open panel. |
+| `exports.aeterna_uikit:update(src, panelId, patch)` | `boolean` | Updates `label`, `value`, `items`, or `disabled` on blocks of an open panel; since 0.2 also `rows` (table), `value` of `tabs` and `slider` (refused out of range or off the step grid), and `empty` (list, table). |
 | `exports.aeterna_uikit:close(src, panelId?)` | `boolean` | Closes the open panel for `src`. |
 | `exports.aeterna_uikit:isOpen(src)` | `panelId` or `nil` | Returns the currently open `panelId` for `src`. |
 | `exports.aeterna_uikit:addMenuEntry(entry)` | `boolean` | Registers `{ id, label, icon?, order?, group?, ace? }` for the calling resource. |
@@ -64,7 +65,8 @@ Server-local events (filter on `data.owner == GetCurrentResourceName()`):
 
 ## Commands and keys / คำสั่งและปุ่มลัด
 
-All key mappings ship with **no default key** (ADR 0004 decision 10) so they never conflict with existing bindings. Players bind them in **Settings → Key Bindings → FiveM**:
+`+aeterna_uikit_menu` suggests the default key `F5`; `+aeterna_uikit_cancel` and `+aeterna_uikit_skill` have no default key. A player's own binding always wins. Players bind or change keys in **Settings → Key Bindings → FiveM**. The server owner can change or turn off the defaults with `setr aeterna_keys` (see the `aeterna_core` README).
+
 
 - `aeterna_uikit_menu` / `+aeterna_uikit_menu` — Open the shared menu
 - `+aeterna_uikit_cancel` — Cancel an active progress bar
@@ -104,12 +106,37 @@ sha256sum -c SHA256SUMS --ignore-missing
 
 Then read the capability table above (or `oss.json` inside the zip).
 
+## Self-tests (0.2)
+
+Registered with `aeterna_core` as `aeterna_uikit.<name>` and run from `aeterna_testkit` (or the core console command,
+where ped and eye tests are GAP). Spec: `docs/specs/aeterna_uikit.md` § Self-tests (0.2).
+
+| Name | Kind | What it checks |
+| --- | --- | --- |
+| `spec_limits` | headless | `open` refuses every spec over a limit (41 blocks, two `tabs`, 1 or 7 tabs, 7 columns, 51 rows, 1001 slider steps, 51 items without search, 201 with search, a 61-character Thai title) and accepts the largest inside it |
+| `values_recheck` | headless | Values coming back with an action are checked again: a slider off the grid, out of range or as a string, an unknown tab and an unknown key are dropped; a hidden tab's field still comes back |
+| `forged_action` | headless | An action the spec does not offer (unknown id, tab id without `report`, row of a non-selectable table, disabled button, wrong `panelId`, no panel) is dropped |
+| `panel_every_block` | eye | An `md` panel with tabs, a searchable list, a slider, a table and an empty state |
+| `tabs_switch` | ped | The page clicks the second tab; the owner receives its id and the right blocks show |
+| `slider_keyboard` | ped | The page presses ArrowRight on the slider and OK; the owner receives one step more and the page shows the same number |
+| `motion_reduced` | eye | The test panel leaves and enters every 2 s, so the person sees whether it fades and rises |
+| `focus_lost_closes` | ped | A focus loss closes the panel and the owner receives `__close` |
+| `overlay_pauses` | eye | The panel stays open and ignores clicks behind the eye card; after the answer its button counts presses |
+
+Client tests open a test panel on the presser's client only. Its actions go to a client-side panel manager that runs
+the server's validation, never to the server; an open panel is replaced as if the server had opened a new one.
+`focus_lost_closes` fires core's `aeterna_core:focusLost` event itself, because one resource cannot be a second one.
+
+Core's local events (`aeterna_core:selftest`, `selftestEnd` and the focus events) count only when `aeterna_core`
+fired them, and open test state is torn down when `aeterna_core` stops.
+
 ## Tests
 
 From the repository root:
 
 ```sh
 busted --lpath='./packages/devkit/busted/?.lua;./?.lua;./?/init.lua' --pattern=_spec packages/uikit/spec
+node --test packages/uikit/spec/   # slider grid math of the page (html/slider-math.js)
 ```
 
 ## License

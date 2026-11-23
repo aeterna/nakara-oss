@@ -186,3 +186,35 @@ describe('MISSING rows', function()
         assert.are.equal('owner tool', rows[1].detail)
     end)
 end)
+
+describe('client test started and the write guard (cases 17 and 18)', function()
+    it('17. sends ped, eye, side = client and two-player tests to clients, and builds the started ctx', function()
+        assert.is_true(st.toClients(T('p', 'ped', 'client')))
+        assert.is_true(st.toClients(T('e', 'eye', 'client')))
+        assert.is_true(st.toClients(T('h', 'headless', 'client')))
+        assert.is_true(st.toClients(T('pair', 'headless', 'server', 2)))
+        assert.is_false(st.toClients(T('h', 'headless', 'server')))
+        assert.is_false(st.toClients(T('m', 'mock', 'server')))
+
+        local pair = { kind = 'ped', side = 'client', players = 2, destructive = true }
+        assert.are.same({ kind = 'ped', side = 'client', a = 1, b = 2, destructive = true }, st.startedCtx(pair, 1, 2))
+        local solo = { kind = 'eye', side = 'client', players = 1, destructive = false }
+        assert.are.same({ kind = 'eye', side = 'client', a = 1, destructive = false }, st.startedCtx(solo, 1, 2))
+    end)
+
+    it('18. allows a write only for an in-flight destructive test with the gate open', function()
+        local wipe = { destructive = true, fired = true }
+        assert.are.same({ true }, { st.mayWrite(wipe, true) })
+        assert.are.same({ false }, { st.mayWrite(wipe, false) })
+    end)
+
+    it('18. refuses an in-flight test that is not destructive and names the failure', function()
+        assert.are.same({ false, 'undeclared destructive' }, { st.mayWrite({ destructive = false, fired = true }, true) })
+    end)
+
+    it('18. refuses an unknown test, one not fired yet and one that already ended, with no failure', function()
+        assert.are.same({ false }, { st.mayWrite(nil, true) })
+        assert.are.same({ false }, { st.mayWrite({ destructive = false }, true) })
+        assert.are.same({ false }, { st.mayWrite({ destructive = false, fired = true, done = true }, true) })
+    end)
+end)

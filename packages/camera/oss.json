@@ -1,0 +1,47 @@
+{
+  "$schema": "../../oss.schema.json",
+  "name": "camera",
+  "resource": "aeterna_camera",
+  "capabilities": {
+    "http": [],
+    "commands": [],
+    "registeredCommands": [
+      "+aeterna_camera_shutter",
+      "-aeterna_camera_shutter",
+      "+aeterna_camera_switch",
+      "-aeterna_camera_switch",
+      "aeterna_camera_remove"
+    ],
+    "httpHandlers": [
+      "p/*"
+    ],
+    "convars": {
+      "read": [],
+      "write": []
+    },
+    "netEvents": {
+      "server": [
+        "aeterna_camera:sv:shoot",
+        "aeterna_camera:sv:close",
+        "aeterna_camera:sv:delete",
+        "aeterna_camera:sv:upload"
+      ],
+      "client": [
+        "aeterna_camera:cl:viewfinder",
+        "aeterna_camera:cl:capture",
+        "aeterna_camera:cl:shot",
+        "aeterna_camera:cl:gallery"
+      ]
+    },
+    "nui": true,
+    "db": {
+      "tables": [],
+      "ddl": false
+    },
+    "files": {
+      "write": [
+        "photos/*"
+      ]
+    }
+  }
+}

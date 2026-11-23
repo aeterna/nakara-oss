@@ -91,6 +91,9 @@ local function settle(run, item, res)
         state = res.state, ok = res.state ~= 'FAIL', detail = res.detail or (res.state == 'FAIL' and 'failed' or 'ok'),
         ms = GetGameTimer() - (item.startMs or GetGameTimer()), step = res.step, expected = res.expected,
     })
+    if item.fired then
+        TriggerEvent('aeterna_core:selftestEnd', run.id, item.name)
+    end
 end
 
 -- Waits until each test in the batch is final. A test that passes its own deadline settles as a timeout.
@@ -189,7 +192,7 @@ local function beginRun(by, starter, b, only)
         a = (by or 0) > 0 and by or nil, gone = {},
         b = (by or 0) > 0 and math.type(b) == 'integer' and b > 0 and b ~= by and GetPlayerName(b) ~= nil and b or nil,
     }
-    lock = ST.acquire(nil, run.id, by == 0 and 'console' or 'resource', starter, now)
+    lock = ST.acquire(nil, run.id, by == 0 and 'console' or 'resource', starter, now // 1000)
     run.gateOpen, run.gateReason = ST.gate(GetConvar('aeterna_core_allow_destructive', 'false'), GetConvar('sv_master1', '<unset>'))
     activeRuns[run.id] = run
     for i = 1, #registeredTests do
@@ -213,14 +216,20 @@ local function beginRun(by, starter, b, only)
 end
 
 -- Sends one client-side test to A (and B) and waits for it; the server judges every report.
+-- The owner's server hears selftestStarted first; a test it already ended there (write guard) is not sent.
 local function runOnClients(run, item)
+    item.fired = true
+    TriggerEvent('aeterna_core:selftestStarted', run.id, item.name, ST.startedCtx(item, run.a, run.b))
+    if item.done then
+        return
+    end
     item.roles = { A = run.a }
     if item.players == 2 then item.roles.B = run.b end
     item.results = {}
     for role, src in pairs(item.roles) do
         TriggerClientEvent('aeterna_core:cl:selftest', src, {
             runId = run.id, name = item.name, kind = item.kind, role = role, timeout = item.timeout,
-            destructive = item.destructive, expect = item.kind == 'eye' and item.expect or nil,
+            destructive = item.destructive, expect = item.expect,
             ask = item.kind == 'eye' and item.ask or nil,
         })
     end
@@ -241,11 +250,12 @@ local function drivePhases(run)
             elseif not item.done then
                 item.startMs = GetGameTimer()
                 item.deadline = item.startMs + item.timeout
-                if (item.side == 'client' or item.players == 2) and (run.gone[run.a] or (item.players == 2 and run.gone[run.b])) then
+                if ST.toClients(item) and (run.gone[run.a] or (item.players == 2 and run.gone[run.b])) then
                     settle(run, item, { state = 'GAP', detail = 'player left' })
-                elseif item.side == 'client' or item.players == 2 then
+                elseif ST.toClients(item) then
                     runOnClients(run, item)
                 else
+                    item.fired = true
                     TriggerEvent('aeterna_core:selftest', run.id, item.name,
                         { kind = item.kind, side = 'server', a = run.a, b = run.b, destructive = item.destructive })
                     if group.phase == 'headless' then
@@ -296,7 +306,7 @@ end
 local function executeSelftests()
     local run, held = beginRun(0, nil)
     if not run then
-        return { { name = 'aeterna_core.lock', ok = false, state = 'FAIL', detail = ST.busyReason(held, GetGameTimer()) } }
+        return { { name = 'aeterna_core.lock', ok = false, state = 'FAIL', detail = ST.busyReason(held, GetGameTimer() // 1000) } }
     end
     drive(run)
     return run.rows
@@ -360,7 +370,7 @@ exports('startRun', function(opts)
     end
     local run, held = beginRun(opts.by, GetInvokingResource() or GetCurrentResourceName(), opts.b, opts.only)
     if not run then
-        return nil, ST.busy(held, GetGameTimer())
+        return nil, ST.busy(held, GetGameTimer() // 1000)
     end
     CreateThread(function() drive(run) end)
     return run.id
@@ -387,6 +397,25 @@ exports('cancelRun', function(runId)
     end
     cancelInternal(run)
     return true
+end)
+
+-- Write guard: true only for an in-flight destructive test of the invoker in a run whose gate is open.
+-- An in-flight test that is not destructive is settled FAIL 'undeclared destructive'.
+exports('selftestMayWrite', function(runId, name)
+    local run = type(runId) == 'string' and activeRuns[runId]
+    if not run or type(name) ~= 'string' then
+        return false
+    end
+    local invoker = GetInvokingResource() or GetCurrentResourceName()
+    local item = run.byName[name] or run.byName[normalizeTestName(invoker, name)]
+    if not item or (invoker ~= GetCurrentResourceName() and invoker ~= item.owner) then
+        return false
+    end
+    local allowed, failReason = ST.mayWrite(item, run.gateOpen)
+    if failReason then
+        settle(run, item, judge(item, { guard = true }))
+    end
+    return allowed
 end)
 
 -- The in-flight client test `name` of run `runId` sent to `src`, and that player's role.
@@ -452,7 +481,11 @@ AddEventHandler('aeterna_core:sv:selftestResult', function(payload)
         item.deadline = GetGameTimer() + 120000
         return
     end
-    if item.kind == 'eye' then return end
+    -- An eye test is judged by the person, so its owner may only end it early with a skip (with a reason) or a fail
+    -- (it could not set up the view), and only before ready. pass and mock come from the person, never the owner.
+    if item.kind == 'eye' and ((item.ready and item.ready[role]) or (p.state ~= 'skip' and p.state ~= 'fail')) then
+        return
+    end
     item.results[role] = judge(item, {
         ok = p.state, detail = p.detail, restored = p.restored, wrote = p.wrote, step = p.step, expected = p.expected,
     })
@@ -491,7 +524,7 @@ AddEventHandler('playerDropped', function()
 end)
 
 exports('busy', function()
-    return ST.busy(lock, GetGameTimer())
+    return ST.busy(lock, GetGameTimer() // 1000)
 end)
 
 AddEventHandler('aeterna_core:selftest:report', function(owner, runId, name, ok, detail, extra)

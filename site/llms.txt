@@ -22,8 +22,9 @@ Every resource package declares its capabilities in oss.json (validated against 
 - Nakara Tickets (nakara_tickets + server image ghcr.io/aeterna/nakara-tickets:0.1.1): self-hosted Discord ticket system with a Thai/English dashboard and staff actions in game over a bridge that opens no port.
   Link: https://github.com/aeterna/nakara-oss/releases/tag/nakara-tickets%400.1.1
 
-- AETERNA Starter Kit (aeterna_core, aeterna_uikit, aeterna_notify, aeterna_layout, aeterna_hudkit, aeterna_phonekit, aeterna_invkit): MIT base resources for Qbox servers.
+- AETERNA Starter Kit (aeterna_core, aeterna_uikit, aeterna_notify, aeterna_layout, aeterna_hudkit, aeterna_phonekit, aeterna_invkit): MIT base resources for Qbox servers. Version 0.2 is not released yet; it adds aeterna_radial, aeterna_loading, aeterna_testkit, aeterna_phonecall and aeterna_camera, and three theme presets (asphalt, paper, night-market).
   Link: https://aeterna.github.io/nakara-oss/en/starter-kit/
+  Theme playground: https://aeterna.github.io/nakara-oss/en/starter-kit/theme/
 
 ## What the Scanner Cannot Catch
 

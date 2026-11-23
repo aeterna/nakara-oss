@@ -29,8 +29,8 @@ ensure aeterna_uikit
 ensure aeterna_radial
 ```
 
-The player binds a key in Settings → Key Bindings → FiveM → "Radial menu" (keyboard or gamepad). There is no default
-key (ADR 0004 decision 10).
+The player binds a key in Settings → Key Bindings → FiveM → "Radial menu" (keyboard or gamepad). The keyboard mapping suggests `F3` by
+default (ADR 0004 decision 10, amended 2026-11-22); the gamepad mapping has no default key.
 
 ## Configuration
 
@@ -123,8 +123,16 @@ stops.
   `owner == GetCurrentResourceName()`.
 - Server slot picked: the client sends `aeterna_radial:sv:select`. The server checks that the slot exists, that the
   player passes `vehicle`, `jobs`/`grade` and `ace` now, then fires server-local `aeterna_radial:select` →
-  `(src, { owner, id })`. A pick that fails a check is dropped with a `debug` log and the client shows the locale
-  line `radial.denied` in the centre for 1 s.
+  `(src, { owner, id })`. A pick that fails a check on the server is dropped with a `debug` log; the server sends
+  nothing back.
+- Before it sends a pick, the client checks the slot's `when` again (the player may have left the car or a flag may
+  have flipped since the ring was drawn). If that check fails, the pick is not sent, the centre shows the locale line
+  `radial.denied` for 1 s, and the ring stays open. In `hold` mode, when the key is already released, the ring closes
+  after that second. A server-side drop gives the player no such line.
+- **Not verified yet:** whether the server should tell the client about a dropped pick (an event, so the centre can show
+  `radial.denied` for server checks too). Today a pick that passes the client check and fails on the server (for
+  example a changed job) closes the ring with no sign. Left open for the owner to decide; no denial event exists in
+  0.2.
 
 ## Input
 
@@ -132,7 +140,7 @@ stops.
 | --- | --- | --- |
 | Open | The bound key (`+aeterna_radial_open`) | The bound button (same command, gamepad mapper) |
 | Hover | Pointer angle from the centre, outside the dead zone | Left stick angle, outside the dead zone |
-| Pick | Release the key (`hold`) or left click (`toggle`) | Release the button (`hold`) or accept (`toggle`) |
+| Pick | Release the key (`hold`) or left click (`toggle`); in `hold` mode a left click or Enter on the hovered slot, read by the page, also picks while the key is still held | Release the button (`hold`) or accept (`toggle`); accept is ignored while the button is held |
 | Back (child ring) | Right click, Backspace, or pick the centre | Cancel button |
 | Close | ESC, or release over the centre in the root ring | Cancel button in the root ring |
 
@@ -146,7 +154,14 @@ stops.
 - `AeternaCore.key` maps the keyboard. Radial also calls `RegisterKeyMapping('+aeterna_radial_open', …,
   'PAD_DIGITALBUTTON', '')` itself, with the same literal command and an empty default, so gamepad players can bind
   it too.
-- While open, radial shows uikit `keyHints` for pick and back, and clears them on close.
+- While open in `hold` mode, radial shows one uikit `keyHints` row for pick (the open command `+aeterna_radial_open`, label
+  `radial.hint.pick`) and clears it on close. In `toggle` mode it shows no hint, because a uikit hint names a command and
+  only the hold-mode pick (release the open key) has one. Back has no command either, so it has no hint row; the centre
+  shows `radial.back` (in a child ring) or `radial.close` under the label instead. The locale key `radial.hint.back`
+  is shipped but nothing uses it.
+- **Not verified yet:** whether a back hint belongs in the kit (it would need either a uikit hint with a fixed label and
+  no bound key, or a hint for the Back control). Not decided; 0.2 shows none.
+- Releasing the key over a group slot opens that group's ring and the menu stays open, as in `toggle` mode.
 
 ## Events (network)
 
@@ -162,7 +177,7 @@ stops.
 
 ## NUI messages
 
-Lua → NUI: `aeterna:theme`, `locale`, `ring:open {slots, mode, radius}`, `ring:child {groupId, slots}`,
+Lua → NUI: `aeterna:theme`, `locale`, `ring:open {slots, mode, radius, deadZone}` (`deadZone` is `Config.deadZone`, so the page and the stick use the same centre; a value outside 0–1 in `Config.deadZone` falls back to 0.35 with a `warn`), `ring:child {groupId, slots}`,
 `ring:hover {index}` (gamepad), `ring:denied`, `ring:close`.
 NUI → Lua callbacks: `hover {index: number 0–8}`, `pick {index: number 1–8}`, `back {}`, `escape {}`. Each is
 validated; an index that does not map to a visible slot is dropped.
@@ -170,7 +185,7 @@ validated; an index that does not map to a visible slot is dropped.
 ## Commands and keys
 
 Permanent names: `aeterna_radial_open` (chat or F8, opens in `toggle` mode), `+aeterna_radial_open`,
-`-aeterna_radial_open` (key mapping, keyboard and gamepad, no default key).
+`-aeterna_radial_open` (key mapping, keyboard default `F3`, gamepad no default key).
 
 ## Storage
 
@@ -229,9 +244,9 @@ Registered with `aeterna_core`'s self-test registry; `aeterna_testkit` only list
 | `aeterna_radial.registry` | headless | 1 | n | — | — |
 | `aeterna_radial.conditions` | headless | 1 | n | — | — |
 | `aeterna_radial.server_recheck` | ped | 1 | n | — | presser is in a vehicle (the test needs on foot; it asks to step out) |
-| `aeterna_radial.open_pick` | eye | 1 | n | A ring of 6 slots opens around the centre; hovering one highlights it and shows its label in the centre; picking "Test 3" closes the ring and a line "picked Test 3" appears | — |
-| `aeterna_radial.child_ring` | eye | 1 | n | Picking the group opens a second ring of 3; right click returns to the first ring with the group still highlighted | — |
-| `aeterna_radial.gamepad` | eye | 1 | n | Moving the left stick moves the highlight around the ring; accept picks; cancel closes | — (a presser with no gamepad presses "Skip": GAP) |
+| `aeterna_radial.open_pick` | eye | 1 | n | The test opens a ring of 6 slots and moves the highlight round (each label shows in the centre), then picks "Test 3": the ring closes and a line "picked Test 3" appears (hovers each test slot at 400 ms per step) | — |
+| `aeterna_radial.child_ring` | eye | 1 | n | The test picks the group: a second ring of 3 opens, then it goes back to the first ring with the group still highlighted (400 ms per step) | — |
+| `aeterna_radial.gamepad` | eye | 1 | n | With a gamepad: moving the left stick moves the highlight around the ring; accept picks; cancel closes (skipped without one) | no gamepad input after 3000 ms (`no gamepad input`) |
 
 `server_recheck` registers a temporary server slot with `when.vehicle = 'in'`, sends a pick while on foot and expects
 a drop, then removes the slot. Focus handover between resources is tested by `aeterna_core` itself. The eye tests register temporary slots under the owner `aeterna_radial` and remove them after.

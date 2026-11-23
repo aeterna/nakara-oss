@@ -1,0 +1,36 @@
+{
+  "$schema": "../../oss.schema.json",
+  "name": "radial",
+  "resource": "aeterna_radial",
+  "capabilities": {
+    "http": [],
+    "commands": [],
+    "registeredCommands": [
+      "aeterna_radial_open",
+      "+aeterna_radial_open",
+      "-aeterna_radial_open"
+    ],
+    "convars": {
+      "read": [],
+      "write": []
+    },
+    "netEvents": {
+      "server": [
+        "aeterna_radial:sv:hello",
+        "aeterna_radial:sv:select"
+      ],
+      "client": [
+        "aeterna_radial:cl:slots",
+        "aeterna_radial:cl:slot"
+      ]
+    },
+    "nui": true,
+    "db": {
+      "tables": [],
+      "ddl": false
+    },
+    "files": {
+      "write": []
+    }
+  }
+}

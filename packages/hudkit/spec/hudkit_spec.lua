@@ -424,6 +424,8 @@ describe('aeterna_hudkit', function()
             local targetPlayer = nil
 
             natives.spy('TriggerClientEvent')
+            -- 0.2: server/selftest.lua registers the self-tests with aeterna_core on start.
+            natives.stub_export('aeterna_core', 'addSelftest', function() return true end)
 
             resServer = resource.load_resource(DIR, 'server')
             assert.is_not_nil(resServer)
@@ -472,6 +474,8 @@ describe('aeterna_hudkit', function()
                 callbacks[name] = fn
             end)
             local uiMessages = natives.spy('SendNUIMessage')
+            natives.stub_export('aeterna_core', 'themeHref', function() return nil end)
+            natives.stub_export('aeterna_core', 'themePreset', function() return 'night-market' end)
             resClient = resource.load_resource(DIR, 'client')
             assert.is_function(callbacks['ready'])
 
@@ -482,6 +486,14 @@ describe('aeterna_hudkit', function()
                     street = { w = 240, h = 48 },
                 },
             }, function() end)
+
+            -- live W3 2026-11-23: the theme preset never reached the HUD page
+            local theme
+            for _, call in ipairs(uiMessages) do
+                if type(call[1]) == 'table' and call[1].type == 'aeterna:theme' then theme = call[1] end
+            end
+            assert.is_truthy(theme, 'expected aeterna:theme to be sent on ready')
+            assert.are.equal('night-market', theme.preset)
 
             local foundSettingsApply = false
             local foundBars = false

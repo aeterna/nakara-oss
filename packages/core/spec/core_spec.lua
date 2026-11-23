@@ -413,6 +413,7 @@ describe('aeterna_core', function()
             assert.are.same({ n = 1, false }, keepCalls[3])
 
             -- focusLost for another resource does NOT clear natives for aeterna_core
+            natives.stub('GetInvokingResource', function() return 'aeterna_core' end)
             natives.fire('aeterna_core:focusLost', 'other_resource', lostTok, 'preempted')
             assert.are.equal(3, #focusCalls)
             assert.are.equal(3, #keepCalls)
@@ -424,12 +425,43 @@ describe('aeterna_core', function()
             assert.are.equal(4, #keepCalls)
             assert.are.same({ n = 1, false }, keepCalls[4])
 
+            -- Client KVP: del removes the same key get/set use (aeterna_<pkg>:<name>:v<version>)
+            local deletedKeys = natives.spy('DeleteResourceKvp')
+            AeternaCore.kvp.del('notes', 2)
+            assert.are.same({ n = 1, 'aeterna_core:notes:v2' }, deletedKeys[1])
+
             -- Key mapping requires +aeterna_ prefix
             AeternaCore.key('bad_command', 'core.month.1')
             assert.are.equal(0, #mapCalls)
             AeternaCore.key('+aeterna_core_test', 'core.month.1')
             assert.are.equal(1, #mapCalls)
-            assert.are.same({ n = 4, '+aeterna_core_test', 'มกราคม', 'keyboard', '' }, mapCalls[1])
+            -- The label is English whatever aeterna_locale says: the GTA key settings menu has no Thai glyphs
+            -- (measured W3 2026-11-22: Thai labels showed as boxes), so key labels never follow the locale.
+            assert.are.same({ n = 4, '+aeterna_core_test', 'January', 'keyboard', '' }, mapCalls[1])
+            assert.are.equal('January', AeternaCore.keyLabel('core.month.1'))
+            assert.are.equal('มกราคม', AeternaCore.t('core.month.1'))
+
+            -- Default keys (ADR 0004 decision 10, amended 2026-11-22): a kit command gets its suggested key,
+            -- a command without one gets none, and the owner's aeterna_keys convar overrides or turns them off.
+            mapCalls = natives.spy('RegisterKeyMapping')
+            AeternaCore.key('+aeterna_phonekit_open', 'core.month.1')
+            AeternaCore.key('+aeterna_testkit_menu', 'core.month.1')
+            AeternaCore.key('+aeterna_core_test', 'core.month.1')
+            assert.are.same({ 'M', 'F9', '' }, { mapCalls[1][4], mapCalls[2][4], mapCalls[3][4] })
+            natives.set_convar('aeterna_keys', '+aeterna_phonekit_open=F1, +aeterna_testkit_menu=, +aeterna_core_test=K')
+            AeternaCore.key('+aeterna_phonekit_open', 'core.month.1')
+            AeternaCore.key('+aeterna_testkit_menu', 'core.month.1')
+            AeternaCore.key('+aeterna_core_test', 'core.month.1')
+            AeternaCore.key('+aeterna_radial_open', 'core.month.1')
+            assert.are.same({ 'F1', '', 'K', 'F3' }, { mapCalls[4][4], mapCalls[5][4], mapCalls[6][4], mapCalls[7][4] })
+            natives.set_convar('aeterna_keys', 'off')
+            AeternaCore.key('+aeterna_phonekit_open', 'core.month.1')
+            assert.are.equal('', mapCalls[8][4])
+            -- a malformed key name is ignored, with the suggested default kept
+            natives.set_convar('aeterna_keys', '+aeterna_phonekit_open=F1;rm, junk')
+            AeternaCore.key('+aeterna_phonekit_open', 'core.month.1')
+            assert.are.equal('M', mapCalls[9][4])
+            assert.are.equal('M', AeternaCore.defaultKey('+aeterna_phonekit_open'))
         end)
 
         it('server: runs selftests, checks ACE, rate limits and registers aeterna_core_selftest', function()
@@ -438,8 +470,11 @@ describe('aeterna_core', function()
             natives.spy('RegisterCommand', function(name, fn)
                 if name == 'aeterna_core_selftest' then cmdHandler = fn end
             end)
+            -- FXServer Enhanced b177 returns the number 1 for an allowed ACE and false otherwise (measured W3
+            -- 2026-11-22 with a probe); the kit must accept 1 as yes.
             natives.spy('IsPlayerAceAllowed', function(src, action)
-                return tonumber(src) == 1 and action == 'aeterna.core.selftest'
+                if tonumber(src) == 1 and action == 'aeterna.core.selftest' then return 1 end
+                return false
             end)
 
             resource.load_resource(DIR, 'server')
@@ -448,6 +483,11 @@ describe('aeterna_core', function()
             assert.is_true(AeternaCore.can(1, 'aeterna.core.selftest'))
             assert.is_false(AeternaCore.can(2, 'aeterna.core.selftest'))
             assert.is_false(AeternaCore.can(0, 'other.perm'))
+            assert.is_true(AeternaCore.yes(1))
+            assert.is_true(AeternaCore.yes(true))
+            assert.is_false(AeternaCore.yes(false))
+            assert.is_false(AeternaCore.yes(nil))
+            assert.is_false(AeternaCore.yes(0))
 
             -- Rate limit + playerDropped cleanup
             for _ = 1, 3 do
@@ -523,6 +563,7 @@ describe('aeterna_core', function()
             assert.are.equal(3, #focusCalls)
             assert.are.same({ n = 2, true, true }, focusCalls[3])
 
+            natives.stub('GetInvokingResource', function() return 'aeterna_core' end)
             natives.fire('aeterna_core:focusLost', 'some_other_res', tok, 'preempted')
             assert.are.equal(3, #focusCalls)
             assert.are.equal(3, #keepCalls)

@@ -34,9 +34,22 @@ loadscreen 'html/index.html'
 loadscreen_manual_shutdown 'yes'
 loadscreen_cursor 'yes'
 files { 'html/**' }
+shared_script 'shared/logic/loading.lua'
 client_script 'client/main.lua'
-server_script 'server/main.lua'
+server_scripts { 'locales/en.lua', 'locales/th.lua', 'server/main.lua' }
 ```
+
+How the shipped manifest differs from what this spec first said (all decided and built in 0.2):
+
+- **Shared logic.** `shared/logic/loading.lua` is a `shared_script`, so the client script and the server script use the
+  same config rules, stage reducer, tip and close timing (`LoadingLogic`). The page uses its JS twin, `html/logic.js`.
+- **Server-only locale files.** `locales/en.lua` and `locales/th.lua` are loaded by the server script only; they hold
+  the console `warn` line. The client script has no strings of its own, and the page reads `html/locale.json`.
+- **Hard cap.** The client script closes the page `shutdown.fallbackSeconds` after its own start even when the game
+  session never starts, so a manual-shutdown loading screen cannot stay up for ever (see Stages, step 4).
+- **Empty `tips`.** `"tips": {}` is accepted and means no tips, the same as `[]`: the Lua JSON decoder cannot tell an
+  empty object from an empty list, so both rule sets (`loading.lua` and `logic.js`) treat an empty object as an empty list.
+  A non-empty object is refused. An empty list hides the tip line.
 
 `loadscreen_manual_shutdown` keeps the page up after the game finishes loading, so it can show the character stage
 (below). `loadscreen_cursor` lets the player press the audio button. The server script exists only to validate the
@@ -108,7 +121,7 @@ The page listens to the loading messages FiveM posts to a loadscreen (`window` `
 | 1 | Map | `startDataFileEntries` | `onDataFileEntry` count / the total from `startDataFileEntries` |
 | 2 | Scripts | `startInitFunctionOrder` | `initFunctionInvoking` index / count, summed over init orders, as a whole percentage; `loadProgress.loadFraction` is used when it is higher |
 | 3 | Character | `{ type: 'aeterna_loading:stage', stage: 'character' }` from the client script, sent once its client script starts and the game reports the session started | none (an indeterminate bar) |
-| 4 | — (page closes) | Something calls `ShutdownLoadingScreenNui`: usually the framework's character screen; otherwise this resource's client script on `playerSpawned` or after `shutdown.fallbackSeconds` with the session started | |
+| 4 | — (page closes) | Something calls `ShutdownLoadingScreenNui`: usually the framework's character screen; otherwise this resource's client script on `playerSpawned`, or `shutdown.fallbackSeconds` after the session started, or, when the session never starts, `shutdown.fallbackSeconds` after the client script started (the hard cap) | |
 
 - A stage turns into a check mark when the next one starts; the current stage shows its percentage as text
   (`Scripts 64%`) and as a bar, so it reads without colour.
@@ -116,7 +129,17 @@ The page listens to the loading messages FiveM posts to a loadscreen (`window` `
 - With no messages for 20 s the page keeps the last stage and adds the locale line "Still loading" (no spinner that
   pretends progress).
 - The client script calls `ShutdownLoadingScreen()` and `ShutdownLoadingScreenNui()` only if the loading screen is
-  still active (`GetIsLoadingScreenActive()`), so it never interferes with a framework that has already closed it.
+  still active (`GetIsLoadingScreenActive()`), so it never interferes with a framework that has already closed it. It
+  first sends `aeterna_loading:closing`, waits 1 s for the audio fade, checks again, and then closes.
+- The client script reads `html/config.json` itself for `shutdown.fallbackSeconds`. If the file is unreadable or
+  `LoadingLogic` is missing, it uses 30 s; every failure still ends in a close.
+- **Not verified yet:** the meaning of `idx` in `initFunctionInvoking` (0-based or 1-based). The reducer takes `idx` as
+  the number of init functions done in the current order, clamped to 0..`count`, and the percentage is
+  `(done so far across orders) / (total so far)`. If FiveM sends 1-based values the percentage runs one step ahead; it
+  never decreases and never exceeds 100 either way.
+- **Not verified yet:** whether `GetIsLoadingScreenActive()` stays true under `loadscreen_manual_shutdown` while the
+  page is still up. If it returned false early, the client script would skip the close and the page would stay until
+  something else shuts it down. The smoke step 5 (stop the framework's character resource) checks this.
 - The exact message names and payloads come from FiveM's loadscreen messages; **on FXServer Enhanced they are not
   verified yet** (first W1 smoke step). A missing message leaves that stage without a percentage, never stuck.
 

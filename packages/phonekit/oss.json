@@ -10,7 +10,10 @@
     "registeredCommands": [
       "aeterna_phonekit_open",
       "+aeterna_phonekit_open",
-      "-aeterna_phonekit_open"
+      "-aeterna_phonekit_open",
+      "aeterna_phonekit_fold",
+      "+aeterna_phonekit_fold",
+      "-aeterna_phonekit_fold"
     ],
     "convars": {
       "read": [],
@@ -21,7 +24,12 @@
         "aeterna_phonekit:sv:open",
         "aeterna_phonekit:sv:close",
         "aeterna_phonekit:sv:tap",
-        "aeterna_phonekit:sv:action"
+        "aeterna_phonekit:sv:action",
+        "aeterna_phonekit:sv:screen",
+        "aeterna_phonekit:sv:fold",
+        "aeterna_phonekit:sv:device",
+        "aeterna_phonekit:sv:ring",
+        "aeterna_phonekit:sv:battery"
       ],
       "client": [
         "aeterna_phonekit:cl:open",
@@ -29,7 +37,13 @@
         "aeterna_phonekit:cl:update",
         "aeterna_phonekit:cl:badge",
         "aeterna_phonekit:cl:banner",
-        "aeterna_phonekit:cl:refused"
+        "aeterna_phonekit:cl:refused",
+        "aeterna_phonekit:cl:device",
+        "aeterna_phonekit:cl:battery",
+        "aeterna_phonekit:cl:power",
+        "aeterna_phonekit:cl:ring",
+        "aeterna_phonekit:cl:ringStop",
+        "aeterna_phonekit:cl:live"
       ]
     },
     "nui": true,

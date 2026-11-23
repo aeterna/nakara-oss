@@ -25,11 +25,14 @@
                 </div>
                 <div class="vehicle-sub">
                     <div id="gear-indicator" class="gear-badge">N</div>
+                    <span id="seatbelt-icon" class="seatbelt-icon hud-hidden" role="img"></span>
                     <div class="fuel-cluster">
                         <span id="fuel-icon" class="fuel-icon"></span>
                         <div class="fuel-bar-track">
                             <div id="fuel-bar-fill" class="fuel-bar-fill" style="width: 100%;"></div>
                         </div>
+                        <div id="fuel-ring" class="fuel-ring"></div>
+                        <span id="fuel-value" class="fuel-value hidden-numbers">100</span>
                     </div>
                 </div>
             </div>
@@ -43,6 +46,24 @@
                     <div id="street-name" class="street-primary"></div>
                     <div id="zone-name" class="street-secondary"></div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Compass tape part (0.2) -->
+        <div id="part-compass" class="hud-part hud-hidden" data-part="compass">
+            <div class="compass-panel">
+                <div id="compass-ticks" class="compass-tape"></div>
+                <div class="compass-centre"></div>
+                <div id="compass-deg" class="compass-deg">0&#176;</div>
+            </div>
+        </div>
+
+        <!-- Voice indicator part (0.2, only while pma-voice is started) -->
+        <div id="part-voice" class="hud-part hud-hidden" data-part="voice">
+            <div class="voice-panel">
+                <span id="voice-mic" class="voice-mic"></span>
+                <span id="voice-mode" class="voice-mode hud-hidden"></span>
+                <span id="voice-radio" class="voice-radio hud-hidden" role="img"></span>
             </div>
         </div>
 
@@ -75,6 +96,13 @@
                         <button type="button" id="mode-always" class="segment-btn active" data-mode="always">Always</button>
                         <button type="button" id="mode-vehicle" class="segment-btn" data-mode="vehicle">In vehicle</button>
                         <button type="button" id="mode-never" class="segment-btn" data-mode="never">Never</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <span id="lbl-bar-style" class="setting-label">Bar style</span>
+                    <div class="segmented-control" role="group" aria-label="Bar style">
+                        <button type="button" id="style-bar" class="segment-btn active" data-style="bar">Bar</button>
+                        <button type="button" id="style-ring" class="segment-btn" data-style="ring">Ring</button>
                     </div>
                 </div>
                 <div class="settings-actions">

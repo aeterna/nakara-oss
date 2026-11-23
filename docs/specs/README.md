@@ -34,7 +34,7 @@ These hold for every package unless its spec says otherwise.
   `owner == GetCurrentResourceName()`. A restarted resource therefore never leaves a stale callback behind.
 - Commands: `aeterna_<pkg>_<name>` or `aeterna_<name>` for console and chat commands; key mappings use
   `+aeterna_<pkg>_<name>` / `-aeterna_<pkg>_<name>`. Each package calls `RegisterCommand` for its own `+`/`-` pair with
-  literal names (the scanner only counts literal names), then `AeternaCore.key` maps them with no default key. Command
+  literal names (the scanner only counts literal names), then `AeternaCore.key` maps them; a few openers carry a suggested default key (ADR 0004 decision 10 amended 2026-11-22), the rest have none. Command
   names never change after release (players' bindings stick to them).
 - ACE permissions: `aeterna.<pkg>.<action>` (for example `aeterna.notify.announce`). The kit never grants ACE; the
   server owner adds `add_ace group.admin aeterna.notify.announce allow` in `server.cfg`.

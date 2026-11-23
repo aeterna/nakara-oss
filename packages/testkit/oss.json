@@ -1,0 +1,46 @@
+{
+  "$schema": "../../oss.schema.json",
+  "name": "testkit",
+  "resource": "aeterna_testkit",
+  "capabilities": {
+    "http": [],
+    "commands": [],
+    "registeredCommands": [
+      "aeterna_testkit_run",
+      "+aeterna_testkit_menu",
+      "-aeterna_testkit_menu",
+      "+aeterna_testkit_leave",
+      "-aeterna_testkit_leave"
+    ],
+    "convars": {
+      "read": [
+        "version"
+      ],
+      "write": []
+    },
+    "netEvents": {
+      "server": [
+        "aeterna_testkit:sv:open",
+        "aeterna_testkit:sv:inviteAnswer",
+        "aeterna_testkit:sv:leave",
+        "aeterna_testkit:sv:env"
+      ],
+      "client": [
+        "aeterna_testkit:cl:invite",
+        "aeterna_testkit:cl:role",
+        "aeterna_testkit:cl:askEnv"
+      ]
+    },
+    "nui": true,
+    "db": {
+      "tables": [],
+      "ddl": false
+    },
+    "files": {
+      "write": [
+        "reports/latest.json",
+        "reports/latest.md"
+      ]
+    }
+  }
+}

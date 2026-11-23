@@ -19,6 +19,11 @@ function PhoneAnim.isActive()
     return isPlaying
 end
 
+-- The held prop entity while the phone is out, or nil (self-test open_close_prop).
+function PhoneAnim.prop()
+    return currentProp
+end
+
 function PhoneAnim.start()
     if isPlaying then return end
     if type(PlayerPedId) ~= 'function' then return end

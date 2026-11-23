@@ -115,8 +115,19 @@ matches (`packages/devkit/src/safety/rules/util.js` `fnMatches`).
 
 ### Keys (client)
 
-`AeternaCore.key(command, description)` calls `RegisterKeyMapping(command, t(description), 'keyboard', '')`. The empty
-default means no key until the player binds one in Settings → Key Bindings → FiveM. The caller registers the command
+`AeternaCore.key(command, description)` calls `RegisterKeyMapping(command, keyLabel(description), 'keyboard', '')`.
+`AeternaCore.keyLabel(description)` returns the English text of the locale key whatever `aeterna_locale` is: the GTA
+key settings menu has no Thai glyphs, so a Thai label shows as boxes (measured on FXServer Enhanced, W3 2026-11-22).
+Every key mapping in the kit uses it, including a mapping a package registers itself (radial's gamepad mapping).
+
+Default keys (ADR 0004 decision 10, amended 2026-11-22): `AeternaCore.defaultKey(command)` returns the key passed to
+`RegisterKeyMapping`. The owner's `setr aeterna_keys` wins: `off` gives every mapping no default; entries
+`+aeterna_<cmd>=<KEY>` (comma-separated, key name `[A-Z0-9_]`, at most 16 characters, empty to clear) set single
+commands; a malformed entry is ignored. Otherwise the kit's table applies: `+aeterna_uikit_menu` F5,
+`+aeterna_phonekit_open` M, `+aeterna_radial_open` F3, `+aeterna_invkit_open` F2, `+aeterna_testkit_menu` F9,
+`+aeterna_notify_action1`/`2` Y/U, `+aeterna_phonecall_answer`/`hangup` PAGEUP/PAGEDOWN; every other command none.
+A default reaches only players who never bound the command. For a command with no default, the
+empty default means no key until the player binds one in Settings → Key Bindings → FiveM. The caller registers the command
 pair itself with literal names, because the scanner counts only literal `RegisterCommand` names:
 
 ```lua
@@ -264,7 +275,7 @@ explicit `set sv_master1 ""` counts as private.
 | `side` | `'server'` · `'client'` | `'server'` | `headless` and `mock` only. `'client'` runs the test on the presser's client through the client-side protocol below; a run with no presser makes it GAP `needs a person`. `ped` and `eye` always run on a client and refuse `side = 'server'` |
 | `players` | `1` · `2` | `1` | `2` = needs player A (the presser) and player B (invited) |
 | `destructive` | boolean | `false` | `true` = the test gives a real player items, or writes a real player's stored data (server KVP, item metadata, files) |
-| `expect` | string ≤ 240 | nil | What a person should see; required for `eye` (empty = FAIL, below). Shown after "Normally you will see" |
+| `expect` | string ≤ 240 | nil | `eye`: what a person should see; required (empty = FAIL, below), shown after "Normally you will see". `ped` and client-side `headless`/`mock`: what the presser must do for the test to finish ("Sit in a vehicle"), optional; core sends it to the client and passes it as `ctx.expect`, and `aeterna_testkit` shows it while the test runs |
 | `ask` | string ≤ 160 | nil | The question on the eye card (`eye` only). nil = the test name |
 | `timeout` | integer ms | `5000` | Clamped to 500–60000; a value outside logs one `warn` |
 | `skipWhen` | table | nil | `{ resources = { 'pma-voice', … } }` (≤ 8 names ≤ 64): SKIP when any listed resource is not `started`, reason `needs <name>` |
@@ -340,9 +351,26 @@ Server-local event `aeterna_core:selftest` → `(runId, name, ctx)`. The third a
 it: `ctx = { kind, side = 'server', a = src|nil, b = src|nil, destructive = boolean }`. Only `headless` and `mock`
 tests with `side = 'server'` are fired on the server; `side = 'client'`, `ped` and `eye` tests go to clients.
 
+**Only core fires these events.** Every owner handler of core's local events (`aeterna_core:selftest`,
+`selftestStarted`, `selftestEnd`, `eyeAsk`, `hello`, and the focus events) returns early unless
+`GetInvokingResource() == 'aeterna_core'`, so another resource cannot fake a test start to make an owner give items,
+open a viewfinder or start a call for a player. When `aeterna_core` stops, owners undo any test preparation they made,
+because no `selftestEnd` will follow.
+
+**Client test started (server).** When core sends a test to a client (`ped`, `eye`, `side = 'client'`, or any test with `players = 2`),
+it first fires the server-local event `aeterna_core:selftestStarted` → `(runId, name, ctx)` with
+`ctx = { kind, side = 'client', a = src, b = src|nil, destructive = boolean }`. The owner's server script filters on its
+own name prefix and may prepare server state the client test needs (give an item, set a value, open a slot), and
+tears it down on the server-local `aeterna_core:selftestEnd` → `(runId, name)`, which core fires for every test that
+ends, whatever its side. Results still come only from the client report; the server owner never reports for a client
+test. A preparation that writes stored data still goes through the write guard below. This replaces any package-own
+net event for "my client test began" (added in W2, 2026-11-21, because invkit, radial, phonekit and phonecall rows
+needed server set-up for client tests).
+
 **Write guard.** `AeternaCore.selftest.mayWrite(runId, name) -> boolean` (server, from `import.lua`) calls the export
 `selftestMayWrite`. It returns `true` only for a test declared `destructive` in a run whose gate is open. Called by a
-test that is not declared destructive, it returns `false` and marks that test FAIL `undeclared destructive`. Kit
+test that is not declared destructive, it returns `false` and marks that test FAIL `undeclared destructive`. Called by a
+resource that does not own the test, it returns `false` and changes nothing. Kit
 packages call it before any persistent write made inside a test.
 
 ### Client-side protocol (`ped`, `eye`, and `side = 'client'`)
@@ -352,7 +380,7 @@ before its timeout, and every report passes the judging rules above.
 
 1. Server → client `aeterna_core:cl:selftest` to player A (and to B for `players = 2`).
 2. Core's client fires the client-local event `aeterna_core:selftest` → `(runId, name, ctx)` with
-   `ctx = { kind, side = 'client', role = 'A' | 'B', destructive }`. The owner's client script filters on the name
+   `ctx = { kind, side = 'client', role = 'A' | 'B', destructive, expect? }` (`expect` for every client test that sets it). The owner's client script filters on the name
    prefix of its own resource.
 3. `ped`, client-side `headless` and client-side `mock`: the owner does its work and calls client export
    `reportSelftest(runId, name, ok, detail, extra)` (same arguments as the server export, plus `'ready'` below). Core's
@@ -364,7 +392,9 @@ before its timeout, and every report passes the judging rules above.
    comes back through client export `answerEye(runId, name, answer)` with `answer = 'pass' | 'mismatch' | 'skip'`,
    sent as `aeterna_core:sv:eyeAnswer`. `pass` → PASS, `mismatch` → FAIL `tester saw something else`, `skip` → GAP
    `skipped by the tester`, no answer in 120 s → GAP `no answer`. Without `aeterna_testkit` nobody listens to
-   `eyeAsk`, so eye tests end as GAP.
+   `eyeAsk`, so eye tests end as GAP. Before `ready`, the owner may end an eye test itself with `'skip'` (with a reason,
+   for example a config that turns the feature off) or `'fail'` (it could not set up the view); `pass` and `mock` from
+   the owner, and anything after `ready`, are dropped: only the person judges what they see.
 5. When a test ends for any reason, server → client `aeterna_core:cl:selftestEnd` and client-local
    `aeterna_core:selftestEnd` → `(runId, name)` let the owner tear down what it opened (close the phone, delete the
    prop). Owners must tear down on this event even when they never reported.
@@ -466,7 +496,7 @@ applies after the package restarts or the player reconnects.
 
 | Event | Direction | Schema | Rate limit |
 | --- | --- | --- | --- |
-| `aeterna_core:cl:selftest` | server → client | `{ runId: string ≤ 24, name: string ≤ 96, kind: enum headless/mock/ped/eye, role: enum A/B, timeout: integer, destructive: boolean, expect?: string ≤ 240 (eye only), ask?: string ≤ 160 (eye only) }` | — |
+| `aeterna_core:cl:selftest` | server → client | `{ runId: string ≤ 24, name: string ≤ 96, kind: enum headless/mock/ped/eye, role: enum A/B, timeout: integer, destructive: boolean, expect?: string ≤ 240 (client tests that set it), ask?: string ≤ 160 (eye only) }` | — |
 | `aeterna_core:cl:selftestEnd` | server → client | `{ runId, name }` | — |
 | `aeterna_core:sv:selftestResult` | client → server | `{ runId: string ≤ 24, name: string ≤ 96, state: enum pass/fail/skip/mock/ready, detail: string ≤ 300 optional, restored: boolean optional, wrote: boolean optional, step: integer 1–99 optional, expected: string ≤ 80 optional }` | 20 / 10000 ms |
 | `aeterna_core:sv:eyeAnswer` | client → server | `{ runId: string ≤ 24, name: string ≤ 96, answer: enum pass/mismatch/skip }` | 5 / 5000 ms |
@@ -552,6 +582,12 @@ busted (pure module `shared/logic/selftest.lua`: registry, judging rules, merge 
 16. Focus overlay (pure state machine): holder H, overlay O → H gets `focusPaused`, keeps its token, owner = O; O
     releases → H gets `focusResumed`, owner = H; overlay O2 while O is up → O gets `focusLost`, H stays paused; normal
     request N while O is up → O and H get `focusLost`; O's resource stops → H resumes.
+17. `selftestStarted`: a `ped` test with `players = 2` fires the server-local event once with `a` and `b` before the
+    client payloads go out; a server-side `headless` test does not fire it; `selftestEnd` fires on the server for both
+    after the test ends (pass, timeout, owner stopped, player left).
+18. Write guard: `selftestMayWrite` returns `true` for an in-flight destructive test in a run whose gate is open,
+    `false` for a closed gate, and `false` plus FAIL `undeclared destructive` for an in-flight non-destructive test;
+    an unknown run id or a test not in flight returns `false` and changes nothing.
 
 Smoke (clean qbx server):
 

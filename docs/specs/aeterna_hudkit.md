@@ -234,6 +234,8 @@ only. Seatbelt logic, engine damage, weapon display and cinematic mode stay out 
   `--accent` for health, `--text-2` for the others, `--bad` at or below `Config.low`), icon in the centre, the
   percentage under it when "Show numbers" is on.
 - Extra bars from other resources follow the same style. The vehicle part's fuel follows it too.
+- The fuel figure (a whole number 0–100, no percent sign) shows beside the fuel gauge only when "Show numbers" is on,
+  in both styles, like the numbers on the status bars. With it off, the gauge shows alone.
 - The `status` element's size changes with the style, so hudkit sends `aeterna_layout:add` again with the new
   `w`/`h`; layout keeps it on screen (see `aeterna_layout.md`, 0.2 clamp on size change).
 
@@ -267,13 +269,14 @@ Runtime detection, never a dependency:
 - On start, and on `onClientResourceStart` / `onClientResourceStop` for `pma-voice`, it checks
   `GetResourceState('pma-voice') == 'started'`. Started → it registers the `voice` element and starts reading.
   Stopped → it sends `aeterna_layout:remove` for `voice` and stops reading.
+  `pma-voice` is also checked once a second, because the resource can still read `starting` when `onClientResourceStart` fires.
 
 What it reads (all on the client):
 
 | Value | Source |
 | --- | --- |
 | Talking | `NetworkIsPlayerTalking(PlayerId())` (a game native; works for any voice resource that uses the game's voice chat) |
-| Proximity mode | state bag `LocalPlayer.state.proximity` = `{ index, distance, mode }`, read with `AddStateBagChangeHandler`. Label = locale `hudkit.voice.mode.<index>` for index 1–3, else `distance` in metres |
+| Proximity mode | state bag `LocalPlayer.state.proximity` = `{ index, distance, mode }`, read with `AddStateBagChangeHandler`. Label = locale `hudkit.voice.mode.<index>` for index 1–3, else `distance` in metres followed by the locale unit `hudkit.unit.m` |
 | On a radio channel | state bag `LocalPlayer.state.radioChannel` (number; `0` or `nil` = none) |
 | Transmitting on radio | the client-local event `pma-voice:radioActive` → `(boolean)` |
 
@@ -287,6 +290,14 @@ on Enhanced (talking still shows: it comes from a game native).
 Reading another resource's state bag keys and listening to its local event needs no `oss.json` capability
 (no `RegisterNetEvent`, no export).
 
+### Extra bar `label` length
+
+**Changed in 0.2 (fixes a 0.1 bug).** The `label` limit of 24 in `aeterna_hudkit:bar` was counted in bytes in 0.1, so a
+Thai label was refused after 8 characters (3 bytes each). 0.2 counts UTF-8 characters (`utf8.len`): up to 24 characters
+of any script are accepted, and a label that is not valid UTF-8 is refused (one `warn`, the bar is not added). Reason:
+the limit was meant as characters, and Thai is the kit's main language. Upgrade note: no action; a label that passed
+in 0.1 still passes, and labels that 0.1 wrongly refused now pass.
+
 ### Seatbelt state (local event)
 
 The kit has no seatbelt system. hudkit only shows a state that another resource sets:
@@ -297,8 +308,10 @@ The kit has no seatbelt system. hudkit only shows a state that another resource 
 
 - The icon appears in the `vehicle` part only while the player is in a vehicle and only after some resource has
   fired the event. A seatbelt resource fires it when the state changes and when the player enters a vehicle.
-- The last resource that fired it owns the state; when that resource stops, the icon is hidden. Owner detection
-  follows the extra-bar rule above.
+- The last resource that fired it owns the state; when that resource stops, the icon is hidden. The owner is the
+  invoking resource only (`GetInvokingResource()`); a name inside the payload is not trusted, and an event with no
+  invoking resource is refused with one `warn`. A `nil` payload hides the icon only when it comes from the owner; from
+  any other resource it is refused. A payload that is not `{ on = boolean }` or `nil` is refused.
 - hudkit does not fire this event itself, never blocks leaving the vehicle and never adds ejection.
 
 ### Settings (0.2)
@@ -317,8 +330,9 @@ KVP `aeterna_hudkit:settings:v1` gains the field `barStyle`. A saved 0.1 value h
 ### NUI messages (0.2)
 
 Lua → NUI adds `hud:compass {deg}`, `hud:voice {available, talking, mode, radio, radioActive}`,
-`hud:seatbelt {state}` (`true`, `false` or `null`); `settings:open` carries `barStyle`.
-NUI → Lua: `settings {key = 'barStyle', value}`; `ready` reports sizes for `compass` and `voice` too.
+`hud:seatbelt {state}` (`true`, `false` or `null`); `settings:open` and `settings:apply` carry `barStyle` and `span`
+(the compass span from `Config.compass.span`, clamped to 60–180) next to `settings` and `low`.
+NUI → Lua: `settings {key = 'barStyle', value}`; `ready` reports sizes for `compass` and `voice` too; sizes for ids that are not hudkit's own parts are ignored.
 
 ### Type tokens
 
@@ -337,7 +351,7 @@ NUI → Lua: `settings {key = 'barStyle', value}`; `ready` reports sizes for `co
 
 `hudkit.settings.barStyle`, `hudkit.settings.barStyle.bar`, `hudkit.settings.barStyle.ring`, `hudkit.part.compass`,
 `hudkit.part.voice`, `hudkit.voice.mode.1`, `hudkit.voice.mode.2`, `hudkit.voice.mode.3`, `hudkit.voice.radio`,
-`hudkit.vehicle.seatbelt.on`, `hudkit.vehicle.seatbelt.off`.
+`hudkit.vehicle.seatbelt.on`, `hudkit.vehicle.seatbelt.off`, `hudkit.unit.m` (the metre unit after a voice distance: `m` in English, `ม.` in Thai).
 
 ### `oss.json` (0.2)
 
@@ -368,9 +382,9 @@ when there is no presser (ADR 0005 decision 7, W0 fix D3). Plain `headless` / `m
 | `compass_math` | headless | 1 | n | — | never |
 | `bar_style` | eye | 1 | n | Switching Bar → Ring redraws every status bar as a ring; the status part stays on screen and its layout stand-in matches the new size | — |
 | `compass_tape` | ped | 1 | n | Turning the camera a full circle moves the tape smoothly; N is at the centre mark when facing north | `Config.compass.enabled = false` |
-| `voice_indicator` | ped | 1 | n | The microphone lights while the player talks; changing the proximity mode changes the label | `pma-voice` not started, or `Config.voice.enabled = false` |
-| `voice_radio` | ped | 1 | n | The presser joins a radio channel: the radio icon shows; while the presser transmits it is highlighted | `pma-voice` not started, or `Config.voice.enabled = false` |
-| `seatbelt_event` | mock (client) | 1 | n | — (the test fires `true`, `false` and `nil` on the presser's client in a vehicle, checks the NUI state, then fires `nil` to restore) | `Config.seatbelt.enabled = false` |
+| `voice_indicator` | ped | 1 | n | The test presses pma-voice's `cycleproximity` once round (the range ends where it started) and passes on the mode label changing; the microphone light is reported, not required (`microphone lit while talking` or `microphone not checked (nobody talked)`). Locale: "The test changes your voice range by itself; talk into your microphone if you like" | `pma-voice` not started, or `Config.voice.enabled = false` |
+| `voice_radio` | ped | 1 | n | The test joins pma-voice channel 987 with the `setRadioChannel` export, transmits with `+radiotalk` / `-radiotalk`, then returns to the presser's channel: the radio icon shows and is highlighted while transmitting. Locale: "The test joins a radio channel and transmits for a moment by itself" | `pma-voice` not started, or `Config.voice.enabled = false` |
+| `seatbelt_event` | mock (client) | 1 | n | The test seats you in a vehicle for a moment, then puts you back (a presser on foot is seated in a local test vehicle, `blista`, waiting up to 5000 ms for the model; it is deleted and the presser put back after; if it cannot be placed the row FAILS `could not seat the presser in a test vehicle`; timeout 30000; then fires `true`, `false` and `nil` on the presser's client in a vehicle, checks the NUI state, then fires `nil` to restore) | `Config.seatbelt.enabled = false` |
 | `minimap_follows` | ped | 1 | n | The radar stays under its stand-in after dragging it to the top-right and back | — |
 
 ### Done when (0.2)

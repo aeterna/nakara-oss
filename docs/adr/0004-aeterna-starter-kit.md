@@ -103,7 +103,13 @@ A review of the plan against this repo (`1b16577`) found facts that shape the de
    "term #k at file:line", never the term. A pull request from a fork that cannot run the scan waits for a
    maintainer to run it. Each release is also read in full by a second model before the owner's gate.
 10. **No default keys.** Packages register commands with `RegisterKeyMapping` and no default key, so they never clash
-    with `ox_inventory` (TAB, 1–5) or the `qbx`/`ox_lib` menus. Command names are permanent once released, because
+    with `ox_inventory` (TAB, 1–5) or the `qbx`/`ox_lib` menus. *Amended 2026-11-22 (owner, after the Starter Kit
+    0.2 live test, where the tester had to bind every key before testing anything): the openers get a suggested
+    default key through `AeternaCore.key` (menu F5, phone M, radial F3, inventory panel F2, test menu F9,
+    notification actions Y and U, call answer and hang up PAGEUP and PAGEDOWN), picked to stay clear of the keys
+    above. A player's own binding always wins, and the owner changes or clears any of them, or turns all of them
+    off, with `setr aeterna_keys` (aeterna_core README). Key labels are always English: the GTA key settings menu
+    has no Thai glyphs.* Command names are permanent once released, because
     players' bindings stick to them. Two inputs work without binding: ESC closes any open panel, and Space answers a
     skill check while one runs (jumping is disabled during it), because a check nobody can answer is useless.
 11. **Every NUI callback and net event** validates its payload against a schema in the spec, is rate limited on the

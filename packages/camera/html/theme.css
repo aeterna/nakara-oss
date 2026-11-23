@@ -1,0 +1,143 @@
+/* AETERNA Starter Kit default theme: Asphalt (ADR 0004 decision 6).
+   Every package ships this file unchanged as html/theme.css. Override it with the convar aeterna_theme. */
+@font-face {
+    font-family: 'IBM Plex Sans Thai';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('fonts/ibm-plex-sans-thai-thai-400-normal.woff2') format('woff2');
+    unicode-range: U+02D7,U+0303,U+0331,U+0E01-0E5B,U+200C-200D,U+25CC;
+}
+
+@font-face {
+    font-family: 'IBM Plex Sans Thai';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('fonts/ibm-plex-sans-thai-thai-500-normal.woff2') format('woff2');
+    unicode-range: U+02D7,U+0303,U+0331,U+0E01-0E5B,U+200C-200D,U+25CC;
+}
+
+@font-face {
+    font-family: 'IBM Plex Sans Thai';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('fonts/ibm-plex-sans-thai-thai-600-normal.woff2') format('woff2');
+    unicode-range: U+02D7,U+0303,U+0331,U+0E01-0E5B,U+200C-200D,U+25CC;
+}
+
+@font-face {
+    font-family: 'IBM Plex Sans Thai';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('fonts/ibm-plex-sans-thai-latin-400-normal.woff2') format('woff2');
+    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+    font-family: 'IBM Plex Sans Thai';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('fonts/ibm-plex-sans-thai-latin-500-normal.woff2') format('woff2');
+    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+    font-family: 'IBM Plex Sans Thai';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('fonts/ibm-plex-sans-thai-latin-600-normal.woff2') format('woff2');
+    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+:root {
+    --surface: #1d2024;
+    --raised: #262a2f;
+    --text: #eceff2;
+    --text-2: #aab1b9;
+    --text-3: #8a929b;
+    --line: rgba(232, 236, 240, .09);
+    --track: rgba(232, 236, 240, .12);
+    --accent: #2f6feb;
+    --on-accent: #ffffff;
+    --good: #3fae6e;
+    --warn: #d9a03a;
+    --bad: #e0574f;
+    --radius-s: 6px;
+    --radius-m: 10px;
+    --radius-l: 14px;
+    --pad: 14px;
+    --ease: cubic-bezier(.3, .8, .4, 1);
+    --fast: 140ms;
+    --enter: 200ms;
+    --font: 'IBM Plex Sans Thai', 'Noto Sans Thai', system-ui, sans-serif;
+    /* Type scale for in-game UI at 1080p: --fs-1 smallest (captions), --fs-3 body, --fs-5 titles (ADR 0005 decision 9). */
+    --fs-1: 11px;
+    --fs-2: 12px;
+    --fs-3: 14px;
+    --fs-4: 16px;
+    --fs-5: 20px;
+    --lh: 1.45;
+}
+
+/* Presets (ADR 0005 decision 9). Each page sets data-preset on <html>. A preset redefines colour tokens only. */
+
+/* asphalt: the default, written out so the name always works. Same values as :root. */
+:root[data-preset="asphalt"] {
+    --surface: #1d2024;
+    --raised: #262a2f;
+    --text: #eceff2;
+    --text-2: #aab1b9;
+    --text-3: #8a929b;
+    --line: rgba(232, 236, 240, .09);
+    --track: rgba(232, 236, 240, .12);
+    --accent: #2f6feb;
+    --on-accent: #ffffff;
+    --good: #3fae6e;
+    --warn: #d9a03a;
+    --bad: #e0574f;
+}
+
+/* paper (light). Measured contrast: --text on --surface 14.80 : 1; --on-accent on --accent 6.28 : 1
+   (WCAG AA needs 4.5 : 1). --text-3 on --raised 4.73 : 1. The accent is the asphalt blue, darkened so white passes. */
+:root[data-preset="paper"] {
+    --surface: #f5f2ec;
+    --raised: #ebe6dc;
+    --text: #1c1f23;
+    --text-2: #4b5159;
+    --text-3: #5f656d;
+    --line: rgba(28, 31, 35, .10);
+    --track: rgba(28, 31, 35, .14);
+    --accent: #1d5bc4;
+    --on-accent: #ffffff;
+    --good: #1f7a4a;
+    --warn: #8a5a00;
+    --bad: #b3322b;
+}
+
+/* night-market (dark graphite, orange accent). Measured contrast: --text on --surface 14.62 : 1;
+   --on-accent on --accent 6.22 : 1. White on this orange measures only 2.71 : 1, so the on-accent text is dark. */
+:root[data-preset="night-market"] {
+    --surface: #1b1d21;
+    --raised: #262a2f;
+    --text: #eceff2;
+    --text-2: #aab1b9;
+    --text-3: #8a929b;
+    --line: rgba(232, 236, 240, .09);
+    --track: rgba(232, 236, 240, .12);
+    --accent: #e8833a;
+    --on-accent: #1b1d21;
+    --good: #3fae6e;
+    --warn: #d9a03a;
+    --bad: #e0574f;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root { --fast: 0ms; --enter: 0ms; }
+}
+
+:root.reduce-motion { --fast: 0ms; --enter: 0ms; }
