@@ -6,6 +6,8 @@ All notable changes to `aeterna_notify` are documented here. The format follows
 
 ## Unreleased
 
+## [0.2.0] - 2026-11-23
+
 - `motion_reduced` forces the page's reduced-motion rules for its run (`selftest:motion`, `:root.reduce-motion`) and takes them off at the end; the card used to ask for a Windows setting the tester could not see (found on a live run: no answer twice; owner 2026-11-23: no manual steps). Agent: Claude Code - Claude Opus 5.5.
 
 0.2.0, written by Claude Code - Claude Opus 5.5 (agent engineer), from `docs/specs/aeterna_notify.md` "0.2 additions" (ADR 0005).

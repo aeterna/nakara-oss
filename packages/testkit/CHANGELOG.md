@@ -6,6 +6,8 @@ All notable changes to `aeterna_testkit` are documented here. The format follows
 
 ## Unreleased
 
+## [0.1.0] - 2026-11-23
+
 ### Fixed
 
 - The report showed no FXServer build on Enhanced: the version convar reads `FXServer-early-access b177 linux` there

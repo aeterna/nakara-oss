@@ -6,6 +6,8 @@ All notable changes to `aeterna_hudkit` are documented here. The format follows
 
 ## Unreleased
 
+## [0.2.0] - 2026-11-23
+
 - The page gets the theme preset (`aeterna_theme_preset`: asphalt, paper, night-market) and sets `data-preset`, as ADR 0005 decision 9 says; it used to get only the owner stylesheet, so `paper` and `night-market` never reached it (found while preparing the owner's 3-preset check). Agent: Claude Code - Claude Opus 5.5.
 
 - `voice_radio` says when the presser is dead: pma-voice refuses radio then (found on a live run). Agent: Claude Code - Claude Opus 5.5.

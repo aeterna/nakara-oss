@@ -6,6 +6,8 @@ All notable changes to `aeterna_phonecall` are documented here. The format follo
 
 ## Unreleased
 
+## [0.1.0] - 2026-11-23
+
 ### Added
 
 - Initial `aeterna_phonecall` 0.1.0 package for the AETERNA Starter Kit 0.2 (ADR 0005 decisions 2, 3, 4 and 6, spec `docs/specs/aeterna_phonecall.md`).

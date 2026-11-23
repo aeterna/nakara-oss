@@ -6,6 +6,8 @@ All notable changes to `aeterna_invkit` are documented here. The format follows
 
 ## Unreleased
 
+## [0.2.0] - 2026-11-23
+
 - Self-test phones are removed through their slot, found by `phoneId` (ox_inventory matches metadata as a whole, and phonekit may have written battery or fold since); `stash_open` reads a game vector3 point the way invkit does (found on a live run: "the test phone item was not removed", "not checked at a stash point"). Agent: Claude Code - Claude Opus 5.5.
 
 - Self-tests run with no manual steps (owner 2026-11-23): the server gives the presser tagged test phones for `phone_two_items` and `phone_drop_active` (taking one back after 4 s) and puts the presser's own phone items aside for `phone_no_item`, giving everything back on `selftestEnd`; the three rows are now destructive. `stash_open` moves the presser to the first stash point and away, then back. Agent: Claude Code - Claude Opus 5.5.

@@ -6,6 +6,8 @@ All notable changes to `aeterna_layout` are documented here. The format follows
 
 ## Unreleased
 
+## [0.2.0] - 2026-11-23
+
 ### Added (0.2.0)
 
 - Self-tests (0.2) registered with `aeterna_core`: `placement_math`, `import_validate` (server), `clamp_on_grow` (client mock), `preset_apply` (eye) and `grid_drag`, `export_import`, `export_copy`, `reset_from_menu` (ped; `reset_from_menu` is destructive). While a self-test holds the editor, Done acts as Cancel and a snap pick is not saved. Written by Claude Code - Claude Opus 5.5 (agent engineer).

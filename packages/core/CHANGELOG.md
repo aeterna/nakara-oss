@@ -6,6 +6,8 @@ All notable changes to `aeterna_core` are documented here. The format follows
 
 ## Unreleased
 
+## [0.2.0] - 2026-11-23
+
 ### Added
 
 - Suggested default keys for the kit's openers (ADR 0004 decision 10, amended 2026-11-22) through

@@ -6,6 +6,8 @@ All notable changes to `aeterna_loading` are documented here. The format follows
 
 ## Unreleased
 
+## [0.1.0] - 2026-11-23
+
 ### Added
 
 - Initial `aeterna_loading` package for the AETERNA Starter Kit 0.2 (ADR 0005).

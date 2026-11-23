@@ -6,6 +6,8 @@ All notable changes to `aeterna_camera` are documented here. The format follows
 
 ## Unreleased
 
+## [0.1.0] - 2026-11-23
+
 ### Added
 
 - Initial `aeterna_camera` package for the AETERNA Starter Kit 0.2 (ADR 0005, spec `docs/specs/aeterna_camera.md`).

@@ -6,6 +6,8 @@ All notable changes to `aeterna_radial` are documented here. The format follows
 
 ## Unreleased
 
+## [0.1.0] - 2026-11-23
+
 - Self-tests run with no manual steps (owner 2026-11-23): `open_pick` and `child_ring` drive the ring themselves (hover, pick, back) through the same paths as the page callbacks, then ask for the eye card; `gamepad` skips with `no gamepad input` after 3 s without pad input. Agent: Claude Code - Claude Opus 5.5.
 
 ### Added
