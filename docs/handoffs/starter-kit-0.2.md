@@ -1,17 +1,18 @@
 # Starter Kit 0.2 handoff
 
-Status 2026-11-23 (W3 day 2). Written by Claude Code - Claude Opus 5.5 (Orchestrator). Plan and live status table:
+Status 2026-11-23: **released and closed.** All 12 packages and `aeterna-starter-kit@0.2.0` are published from
+`main` `8daafec5`, each with checksums and a provenance attestation. There is no open work on this release. Written by Claude Code - Claude Opus 5.5 (Orchestrator). Plan and live status table:
 the owner's plan artifact (Kit 0.2 plan, v16+). ADR: [0005](../adr/0005-starter-kit-0-2.md); ADR 0004 decision 10 amended 2026-11-22.
 
 ## Where it stands
 
 | Wave | What | State | Evidence |
 |---|---|---|---|
-| W0 | ADR 0005, specs, spikes on kit-test | done, waits owner merge | #92, #95 |
-| W1 | uikit, notify, layout, hudkit, phonekit, invkit 0.2; testkit, radial, loading 0.1.0 | done, waits owner merge | #97 |
-| W2 | self-tests in every package, phonecall + camera 0.1.0, site + README | done, waits owner merge | #99 (draft, stacked on #97 ← #95 ← #92) |
-| W3 | one combined live test on kit-test + fixes | **menu run FAIL 0, no GAP but player B** (`r1-kku4`, 120 s); 3-preset visual pass done (owner, 2026-11-23); left: player B | #99 head `e206ad88`+, reports below |
-| W4 | release (CHANGELOG version sections, core 0.1.0 → 0.2.0, combined zip, notes) | **prepared** on `feat/kit-02-w2`; releasing waits for the owner's merges | `2d0853a4` versions · `09ea4f41` combined zip job · `bf43f671` docs |
+| W0 | ADR 0005, specs, spikes on kit-test | done | #92, #95 merged |
+| W1 | uikit, notify, layout, hudkit, phonekit, invkit 0.2; testkit, radial, loading 0.1.0 | done | #97 (went in with #99) |
+| W2 | self-tests in every package, phonecall + camera 0.1.0, site + README | done | #99 merged (`febad729`) |
+| W3 | one combined live test on kit-test + fixes | done: menu run FAIL 0 (`r1-kku4`); 3-preset visual pass (owner); player-B rows not run (owner's call) | reports below |
+| W4 | release | **released** 2026-11-23: promotion #112 (`8daafec5`), 12 `release.yml` runs + `starter-kit`, all `success` | tags `aeterna_*@0.2.0` / `@0.1.0`, `aeterna-starter-kit@0.2.0` |
 
 ### W3 runs on kit-test (FXServer Enhanced b177, game build 3788, private, destructive gate on)
 
@@ -52,16 +53,13 @@ the owner's plan artifact (Kit 0.2 plan, v16+). ADR: [0005](../adr/0005-starter-
 - `05f949f5` invkit removes test phones by slot (ox matches metadata whole); stash point read as vector3; hudkit
   `voice_radio` names a dead tester.
 
-## Next (owner)
+## For the next version
 
-1. Merge #92 → #95 → #97 → #99 into `dev` (each retargets the next), then the `dev` → `main` promotion PR.
-2. On `main`, run `release.yml` once per kit package (`core`, `uikit`, `notify`, `layout`, `hudkit`, `phonekit`,
-   `invkit`, `radial`, `phonecall`, `camera`, `loading`, `testkit`), all from the same `main` commit, approving each.
-3. Then `release.yml` with `package = starter-kit`: it refuses unless all 12 tags are on that commit.
-4. Not verified live (written in `kits/starter/CHANGELOG.md`): the four two-player rows.
-5. After release: take the W3 setup off kit-test (`kw3run`, `aeterna_w3probe`, the `# W3` cfg block and
-   `setr aeterna_theme_preset` line, `.w3bak` configs, the stash point in invkit's config); closeout of the lane
-   worktrees and branches.
+- Not verified on a live server: the four two-player rows (phonecall SMS and call between two players, a busy line,
+  testkit's player-B card). Run them with a second account first.
+- Release evidence: the combined zip and `aeterna_core-0.2.0.zip` pass `gh attestation verify` and `sha256sum -c`;
+  the combined zip holds the 12 resources and `resources.cfg` under `[aeterna_kit]/`, and core's files in it match
+  core's own zip.
 
 Measured on kit-test: pma-voice works on Enhanced b177 (range, radio channel, radio transmit, the
 `pma-voice:radioActive` event), but refuses radio while `LocalPlayer.state.isDead` (qbx_medical sets it; an idle
@@ -69,26 +67,18 @@ tester dies of hunger in about an hour, `/revive`). ox_inventory `RemoveItem` ma
 
 ## Rules for other sessions
 
-- kit-test (pik-windows :30150) carries the W3 setup: `[kit]` holds the 12 test builds plus `kw3run` (throwaway runner:
-  writes to `resources/[kit]/kw3run/trigger.txt` run `<id> core`, `<id> testkit [name]`, `<id> reload aeterna_x`;
-  no rcon). server.cfg ends with the `# W3 2026-11-22` block (3 kit ACEs, `add_ace resource.kw3run command allow`,
-  `set aeterna_core_allow_destructive true`). Do not remove them while W3 is open; ask this session first.
-  Since 2026-11-23 also `aeterna_w3probe` (voice probe, gives each player a phone_slab and a phone_fold once) and
-  `.w3bak` copies of the configs the coverage run changed (ox items, invkit phone mode + stash point, phonekit items
-  mode + lock screen).
-- Book kit-test with this session before a restart; check players.json is empty before any restart.
+- kit-test (pik-windows :30150) is back to a plain kit server: the W3 helpers (`kw3run`, `aeterna_w3probe`) are in
+  `C:\aeterna-kit-test\parked\`, the coverage configs are restored, the W3-only cfg lines and the theme preset line
+  are gone. It keeps the three kit ACE lines 0.2 needs and the 0.2 test builds in `[kit]`.
+- Check players.json is empty before any restart.
 - Measured FXServer facts live in [live-test.md](../maintainers/live-test.md) (BOOL natives return `1`, Enhanced
   version string, no Thai glyphs in the key menu).
-
-## Owner's pending decisions
-
-- Merge order #92 → #95 → #97 → #99 (each retargets the next to dev).
 
 ## Way back
 
 - kit-test: `C:\aeterna-kit-test\backup-kit-20261122-131146` holds the 0.1 `[kit]`; `parked\` holds the 0.1 demo harness
-  and the W3 key helper. Undo: robocopy the backup over `[kit]`, delete `kw3run`, remove the `# W3` block.
-- Code: every W3 fix is its own commit on `feat/kit-02-w2`; revert one by sha.
+  and the W3 helpers.
+- Withdraw a bad package by marking its GitHub release as withdrawn and publishing a fixed patch version. Tags stay.
 
 ## Log
 
@@ -100,3 +90,5 @@ tester dies of hunger in about an hour, `/revive`). ox_inventory `RemoveItem` ma
 - 2026-11-23: coverage config on; voice probe; owner "too manual, make it auto" → every action row drives itself;
   runs `r2-1zd3` → `r5-ibfn` (FAIL 4 → 0); motion_reduced fixed → `r1-kku4` FAIL 0, GAP only player B. Owner passed asphalt (in game) and paper +
   night-market (local preview of the real NUI pages with the self-tests' messages) after the preset fix `e4dd6bd4`.
+- 2026-11-23: owner merged by order: #92, #95, #99 (with #97) into `dev`, promotion #112 into `main`; 12 packages and
+  `aeterna-starter-kit@0.2.0` released and checked; kit-test cleaned; lane worktrees and branches closed out.

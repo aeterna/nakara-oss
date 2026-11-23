@@ -1,6 +1,6 @@
 # Starter Kit v0.1 handoff
 
-Status 2026-11-18: **released.** All seven `aeterna_*` packages are published as `0.1.0` from `main`, with checksums and
+Status 2026-11-18: **released.** Superseded by 0.2 (2026-11-23, [starter-kit-0.2.md](starter-kit-0.2.md)). All seven `aeterna_*` packages are published as `0.1.0` from `main`, with checksums and
 build attestations verified after publishing. The published zips were then installed on the clean kit-test server and
 passed the in-game full test. There is no open work on this release.
 
