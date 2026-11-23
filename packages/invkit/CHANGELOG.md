@@ -6,6 +6,8 @@ All notable changes to `aeterna_invkit` are documented here. The format follows
 
 ## Unreleased
 
+- `phone_device_save` gives its test phone with a battery set (100), so aeterna_phonekit does not write its start battery after the test's own save (found on a live run, Enhanced b177). Agent: Claude Code - Claude Opus 5.5.
+
 ### Added
 
 - 0.2.0: phone item mode for `aeterna_phonekit` `Config.devices = 'items'` (ADR 0005). `Config.phone.enabled` (default `false`) and `Config.phone.items` (ox item name → phonekit model, at most 32, bad entries skipped with one `warn`).

@@ -6,6 +6,8 @@ All notable changes to `aeterna_hudkit` are documented here. The format follows
 
 ## Unreleased
 
+- The `voice_indicator` and `voice_radio` instructions name pma-voice's default keys (F11 range, Left Alt radio talk); a live run failed because the tester did not know the range key. Agent: Claude Code - Claude Opus 5.5.
+
 ### Added
 
 - Version 0.2.0 (ADR 0005). Agent: Claude Code - Claude Opus 5.5 (agent engineer).

@@ -340,6 +340,15 @@ describe('aeterna_invkit self-tests', function()
             assert.is_nil(ST.testPhoneItem({}))
         end)
 
+        -- kit-test W3 2026-11-23: a phone given without a battery gets phonekit's start battery written once,
+        -- and that write landed after the test's own save (got 100, expected 42).
+        it('gives the test phone with a battery already set, unlike the saved one', function()
+            local md = ST.testPhoneMetadata('abcd1234')
+            assert.are.equal('abcd1234', md.phoneId)
+            assert.is_number(md.battery)
+            assert.are_not.equal(ST.SAVE.battery, md.battery)
+        end)
+
         it('reports mock with restored when the metadata was written and the item removed', function()
             local state, _, extra = ST.deviceSaveVerdict({ given = true, metadata = { phoneId = 'abcd1234',
                 battery = 42, fold = 'closed' }, id = 'abcd1234', gone = true })

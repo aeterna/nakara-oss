@@ -267,6 +267,12 @@ end
 
 InvkitSelftest.SAVE = { battery = 42, fold = 'closed' }
 
+--- phone_device_save: metadata of the phone it gives. The battery is set so aeterna_phonekit does not write its
+--- start battery for a new phone, a write that can land after the test's own save.
+function InvkitSelftest.testPhoneMetadata(id)
+    return { phoneId = id, battery = 100 }
+end
+
 --- r = { guard, given, item, id, metadata (of the test item after the save), gone (the test item count is back
 --- to what it was before) }. guard = false: the write guard refused, nothing was given.
 function InvkitSelftest.deviceSaveVerdict(r)

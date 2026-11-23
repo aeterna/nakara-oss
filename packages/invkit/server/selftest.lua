@@ -52,7 +52,7 @@ local function phoneDeviceSave(runId, name, src)
         return ST.deviceSaveVerdict({ guard = false })
     end
     local countBefore = item and A.itemCount(src, item)
-    if not item or not id or countBefore == nil or not A.addItem(src, item, 1, { phoneId = id }) then
+    if not item or not id or countBefore == nil or not A.addItem(src, item, 1, ST.testPhoneMetadata(id)) then
         return ST.deviceSaveVerdict({ given = false, item = item })
     end
 
